@@ -48,6 +48,15 @@ var updateExecutionInfo = function(executionNumber, infoObject) {
   return pregel.update(executionNumber, infoObject);
 };
 
+var startNextStep = function(executionNumber) {
+
+  return undefined;
+};
+
+var cleanUp = function(executionNumber) {
+  return undefined;
+};
+
 var initNextStep = function(executionNumber) {
   var info = getExecutionInfo();
   info[step] = info[step]++;
@@ -57,15 +66,6 @@ var initNextStep = function(executionNumber) {
   } else {
     cleanUp(executionNumber);
   }
-};
-
-var startNextStep = function(executionNumber) {
-
-  return undefined;
-};
-
-var cleanUp = function(executionNumber) {
-  return undefined;
 };
 
 var startExecution = function(graphName, algorithm, options) {
@@ -100,8 +100,6 @@ var getInfo = function(executionNumber) {
 var finishedStep = function(executionNumber, serverName, info) {
   /*
    * Callback from server
-   * should update the active number in next step
-   * should remove server from list
    */
   var runInfo = getExecutionInfo(executionNumber);
   var stepInfo = runInfo[stepContent][runInfo[step]];

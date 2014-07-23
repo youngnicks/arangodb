@@ -80,6 +80,36 @@ describe("Pregel Conductor", function () {
       expect(stepInfo.messages).toEqual(10);
     });
 
+  });
+
+  describe("reacting to last server call", function () {
+    var execNr, dbServer;
+
+    beforeEach(function () {
+      execNr = "UnitTestPregel";
+      dbServer = "Pjotr";
+      db._collection("_pregel").save({
+        _key: execNr,
+        step: 1,
+        stepContent: [
+          {
+            active: 100,
+            messages: 0
+          },
+          {
+            active: 20,
+            messages: 5
+          }
+        ],
+        waitForAnswer: [
+          dbServer
+        ]
+      });
+    });
+
+    afterEach(function () {
+      db._collection("_pregel").remove(execNr);
+    });
 
 
   });
