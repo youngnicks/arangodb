@@ -50,25 +50,12 @@ var updateExecutionInfo = function(executionNumber, infoObject) {
 var initNextStep = function(executionNumber) {
   var info = getExecutionInfo();
   info[step] = info[step]++;
-  var isActive = info[active];
-
-
-  var pregel = db._pregel;
-  var info = pregel.document(executionNumber);
-  db._pregel()
-  /* TODO
-  stepNr ++
-  getInfo(exNr)
-  if()active || messages {
-  startNextStep
-  else
-  cleanUp
-   */
-
-
-
-
-  return undefined;
+  updateExecutionInfo(executionNumber, info);
+  if( info[active] > 0 || hasMessages > 0) {
+    startNextStep(executionNumber);
+  } else {
+    cleanUp(executionNumber);
+  }
 };
 
 var startNextStep = function(executionNumber) {
