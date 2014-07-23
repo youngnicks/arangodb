@@ -104,13 +104,16 @@ var finishedStep = function(executionNumber, serverName, info) {
    * should remove server from list
    */
   var runInfo = getExecutionInfo(executionNumber);
+  var stepInfo = runInfo[stepContent][runInfo[step]];
+  stepInfo.messages += info.messages;
+  stepInfo.active += info.active;
   var awaiting = runInfo[waitForAnswer];
   var index = awaiting.indexOf(serverName);
   if (index === -1) {
     return; // Error Handling
   }
   awaiting.splice(index, 1);
-  updateExecutionInfo(executionNumber, {waitForAnswer: awaiting});
+  updateExecutionInfo(executionNumber, runInfo);
   return undefined;
 };
 

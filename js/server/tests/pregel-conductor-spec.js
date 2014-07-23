@@ -72,6 +72,16 @@ describe("Pregel Conductor", function () {
       expect(runDoc.waitForAnswer.sort()).toEqual(["Pavel", "Pancho"].sort());
     });
 
+    it("should update the step information", function () {
+      conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10 });
+      var runDoc = db._pregel.document(execNr);
+      var stepInfo = runDoc.stepContent[runDoc.step];
+      expect(stepInfo.active).toEqual(30);
+      expect(stepInfo.messages).toEqual(10);
+    });
+
+
+
   });
 
 });
