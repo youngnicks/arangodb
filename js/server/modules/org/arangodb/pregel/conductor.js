@@ -41,12 +41,12 @@ var messages = "messages";
 var getExecutionInfo = function(executionNumber) {
   var pregel = db._pregel;
   return pregel.document(executionNumber);
-}
+};
 
 var updateExecutionInfo = function(executionNumber, infoObject) {
   var pregel = db._pregel;
   return pregel.update(executionNumber, infoObject);
-}
+};
 
 var initNextStep = function(executionNumber) {
   var info = getExecutionInfo();
@@ -103,7 +103,14 @@ var finishedStep = function(executionNumber, serverName, info) {
    * should update the active number in next step
    * should remove server from list
    */
-
+  var runInfo = getExecutionInfo(executionNumber);
+  var awaiting = runInfo[waitForAnswer];
+  var index = awaiting.indexOf(serverName);
+  if (index === -1) {
+    return; // Error Handling
+  }
+  awaiting.splice(index, 1);
+  updateExecutionInfo(executionNumber, {waitForAnswer: awaiting});
   return undefined;
 };
 
