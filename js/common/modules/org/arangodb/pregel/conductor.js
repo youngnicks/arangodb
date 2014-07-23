@@ -60,6 +60,11 @@ var getInfo = function(executionNumber) {
 };
 
 var finishedStep = function(executionNumber, serverName, info) {
+  /*
+   * Callback from server
+   * should update the active number in next step
+   * should remove server from list
+   */
 
   return undefined;
 };
