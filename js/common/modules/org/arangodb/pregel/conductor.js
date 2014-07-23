@@ -30,8 +30,32 @@
 
 var db = require("internal").db;
 
+var step = "step";
+var stepContent = "stepContent";
+var waitForAnswer = "waitForAnswer";
+var active = "active";
+var messages = "messages";
+
+
+var getExecutionInfo = function(executionNumber) {
+  var pregel = db._pregel;
+  return pregel.document(executionNumber);
+}
+
+var updateExecutionInfo = function(executionNumber, infoObject) {
+  var pregel = db._pregel;
+  return pregel.update(executionNumber, infoObject);
+}
+
 var initNextStep = function(executionNumber) {
-  return undefined;
+  var info = getExecutionInfo();
+  info[step] = info[step]++;
+  updateExecutionInfo(executionNumber, info);
+  if( info[active] > 0 || hasMessages > 0) {
+    startNextStep(executionNumber);
+  } else {
+    cleanUp(executionNumber);
+  }
 };
 
 var startNextStep = function(executionNumber) {
