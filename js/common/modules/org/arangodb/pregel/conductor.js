@@ -29,6 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var db = require("internal").db;
+var graphModule = require("org/arangodb/general-graph");
 
 var step = "step";
 var stepContent = "stepContent";
@@ -68,6 +69,19 @@ var cleanUp = function(executionNumber) {
 };
 
 var startExecution = function(graphName, algorithm, options) {
+
+  var graph = graphModule._graph(graphName),
+    countVertices = graph._countVertices();
+
+  var Communication = require("org/arangodb/cluster/agency-communication"),
+    comm = new Communication.Communication(),
+    beats = comm.sync.Heartbeats(),
+    diff = comm.diff.current,
+    servers = comm.current.DBServers();
+
+  // get dbserver
+  // store request
+
   var executionNumber = "1";
   return executionNumber;
 };
