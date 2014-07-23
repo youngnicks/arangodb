@@ -30,7 +30,44 @@
 
 var db = require("internal").db;
 
+var step = "step";
+var stepContent = "stepContent";
+var waitForAnswer = "waitForAnswer";
+var active = "active";
+var messages = "messages";
+
+
+var getExecutionInfo = function(executionNumber) {
+  var pregel = db._pregel;
+  return pregel.document(executionNumber);
+}
+
+var updateExecutionInfo = function(executionNumber, infoObject) {
+  var pregel = db._pregel;
+  return pregel.update(executionNumber, infoObject);
+}
+
 var initNextStep = function(executionNumber) {
+  var info = getExecutionInfo();
+  info[step] = info[step]++;
+  var isActive = info[active];
+
+
+  var pregel = db._pregel;
+  var info = pregel.document(executionNumber);
+  db._pregel()
+  /* TODO
+  stepNr ++
+  getInfo(exNr)
+  if()active || messages {
+  startNextStep
+  else
+  cleanUp
+   */
+
+
+
+
   return undefined;
 };
 
