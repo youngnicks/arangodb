@@ -29,9 +29,34 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var db = require("internal").db;
+var graphModule = require("org/arangodb/general-graph");
+
+var step = "step";
+var stepContent = "stepContent";
+var waitForAnswer = "waitForAnswer";
+var active = "active";
+var messages = "messages";
+
+
+var getExecutionInfo = function(executionNumber) {
+  var pregel = db._pregel;
+  return pregel.document(executionNumber);
+}
+
+var updateExecutionInfo = function(executionNumber, infoObject) {
+  var pregel = db._pregel;
+  return pregel.update(executionNumber, infoObject);
+}
 
 var initNextStep = function(executionNumber) {
-  return undefined;
+  var info = getExecutionInfo();
+  info[step] = info[step]++;
+  updateExecutionInfo(executionNumber, info);
+  if( info[active] > 0 || hasMessages > 0) {
+    startNextStep(executionNumber);
+  } else {
+    cleanUp(executionNumber);
+  }
 };
 
 var startNextStep = function(executionNumber) {
@@ -44,6 +69,19 @@ var cleanUp = function(executionNumber) {
 };
 
 var startExecution = function(graphName, algorithm, options) {
+
+  var graph = graphModule._graph(graphName),
+    countVertices = graph._countVertices();
+
+  var Communication = require("org/arangodb/cluster/agency-communication"),
+    comm = new Communication.Communication(),
+    beats = comm.sync.Heartbeats(),
+    diff = comm.diff.current,
+    servers = comm.current.DBServers();
+
+  // get dbserver
+  // store request
+
   var executionNumber = "1";
   return executionNumber;
 };

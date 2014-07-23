@@ -2756,6 +2756,10 @@ function MeasurementsSuite() {
       }
     },
 
+    testCountVertices : function () {
+      assertEqual(g._countVertices(), 10);
+    },
+
     test_absoluteEccentricity : function () {
       var a = g._absoluteEccentricity({});
       assertEqual(Object.keys(a[0]).length , 10);
