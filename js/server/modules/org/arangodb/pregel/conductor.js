@@ -48,7 +48,12 @@ var updateExecutionInfo = function(executionNumber, infoObject) {
   return pregel.update(executionNumber, infoObject);
 };
 
-var startNextStep = function(executionNumber) {
+var saveExecutionInfo = function(infoObject) {
+  var pregel = db._pregel;
+  return pregel.save(infoObject);
+};
+
+var  startNextStep = function(executionNumber, setup) {
 
   return undefined;
 };
@@ -56,6 +61,10 @@ var startNextStep = function(executionNumber) {
 var cleanUp = function(executionNumber) {
   return undefined;
 };
+
+var generateResultCollectionName = function (collectionName, executionNumber) {
+  return "P_" + executionNumber + "_RESULT_" + collectionName;
+}
 
 var initNextStep = function(executionNumber) {
   var info = getExecutionInfo();
@@ -69,21 +78,45 @@ var initNextStep = function(executionNumber) {
 };
 
 var startExecution = function(graphName, algorithm, options) {
+  var graph = graphModule._graph(graphName), dbServers, infoObject = {},
+    stepContentObject = {} , setup;
+  if (ArangoServerState.isCoordinator()) {
+    dbServers = ArangoClusterInfo.getDBServers();
+  } else {
+    dbServers = ["localhost"];
+  }
+  infoObject[waitForAnswer] = dbServers;
+  infoObject[step] = 0;
+  stepContentObject[active] = graph._countVertices();
+  stepContentObject[messages] = 0;
+  infoObject[stepContent] = [stepContentObject];
 
-  var graph = graphModule._graph(graphName),
-    countVertices = graph._countVertices();
+  var key = saveExecutionInfo(infoObject)._key;
+  try {
+    require("internal").print(algorithm);
+    Function(algorithm)
+    require("internal").print("algorithm");
+  } catch (err) {
+    var err = new ArangoError();
+    err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
+    err.errorMessage = arangodb.errors.ERROR_BAD_PARAMETER.message;
+    throw err;
+  }
 
-  var Communication = require("org/arangodb/cluster/agency-communication"),
-    comm = new Communication.Communication(),
-    beats = comm.sync.Heartbeats(),
-    diff = comm.diff.current,
-    servers = comm.current.DBServers();
+  setup = options  || {};
+  setup.algorithm = algorithm;
 
-  // get dbserver
-  // store request
+  var properties = graph._getVertexCollectionsProperties();
+  Object.keys(properties).forEach(function (collection) {
+      var props = {
+        numberOfShards : properties[collection].numberOfShards,
+        shardKeys : properties[collection].shardKeys
+      };
+      db._create(generateResultCollectionName(collection, key) , props);
+  });
 
-  var executionNumber = "1";
-  return executionNumber;
+
+  startNextStep(key, setup);
 };
 
 var getResult = function (executionNumber) {
