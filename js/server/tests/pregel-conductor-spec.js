@@ -60,6 +60,10 @@ describe("Pregel Conductor", function () {
           {
             active: 20,
             messages: 5
+          },
+          {
+            active: 5,
+            messages: 2
           }
         ],
         waitForAnswer: [
@@ -81,12 +85,20 @@ describe("Pregel Conductor", function () {
       expect(runDoc.waitForAnswer.sort()).toEqual(["Pavel", "Pancho"].sort());
     });
 
-    it("should update the step information", function () {
+    it("should update the step information for the next step", function () {
+      conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
+      var runDoc = db._pregel.document(execNr);
+      var stepInfo = runDoc.stepContent[runDoc.step + 1];
+      expect(stepInfo.active).toEqual(15);
+      expect(stepInfo.messages).toEqual(7);
+    });
+
+    it("should not overwrite the current step information", function () {
       conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
       var runDoc = db._pregel.document(execNr);
       var stepInfo = runDoc.stepContent[runDoc.step];
-      expect(stepInfo.active).toEqual(30);
-      expect(stepInfo.messages).toEqual(10);
+      expect(stepInfo.active).toEqual(20);
+      expect(stepInfo.messages).toEqual(5);
     });
 
     it("should throw an error if the server calling back is not awaited", function () {
@@ -139,8 +151,12 @@ describe("Pregel Conductor", function () {
             messages: 0
           },
           {
-            active: 20,
-            messages: 5
+            active: 30,
+            messages: 10
+          },
+          {
+            active: 0,
+            messages: 0
           }
         ],
         waitForAnswer: [
@@ -153,6 +169,27 @@ describe("Pregel Conductor", function () {
       db._collection("_pregel").remove(execNr);
     });
 
+    it("should update the step number", function () {
+      conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
+      var runDoc = db._pregel.document(execNr);
+      expect(runDoc.step).toEqual(2);
+    });
+
+    it("should use the next step content", function () {
+      conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
+      var runDoc = db._pregel.document(execNr);
+      var stepInfo = runDoc.stepContent[runDoc.step];
+      expect(stepInfo.active).toEqual(10);
+      expect(stepInfo.messages).toEqual(5);
+    });
+
+    it("should create the step content for the after next step", function () {
+      conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
+      var runDoc = db._pregel.document(execNr);
+      var stepInfo = runDoc.stepContent[runDoc.step + 1];
+      expect(stepInfo.active).toEqual(0);
+      expect(stepInfo.messages).toEqual(0);
+    });
 
   });
 

@@ -82,23 +82,28 @@ var startNextStep = function(executionNumber, options) {
   }
 };
 
-var cleanUp = function(executionNumber) {
+var cleanUp = function (executionNumber) {
   return undefined;
 };
 
 var generateResultCollectionName = function (collectionName, executionNumber) {
   return "P_" + executionNumber + "_RESULT_" + collectionName;
-}
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief initializes the next iteration of the Pregel- algorithm
 ///
 ////////////////////////////////////////////////////////////////////////////////
-var initNextStep = function(executionNumber) {
-  var info = getExecutionInfo();
-  info[step] = info[step]++;
+var initNextStep = function (executionNumber) {
+  var info = getExecutionInfo(executionNumber);
+  info[step]++;
+  info[stepContent].push({
+    active: 0,
+    messages: 0
+  });
   updateExecutionInfo(executionNumber, info);
-  if( info[active] > 0 || info[messages] > 0) {
+  var stepInfo = info[stepContent][info[step]];
+  if( stepInfo[active] > 0 || stepInfo[messages] > 0) {
     startNextStep(executionNumber);
   } else {
     cleanUp(executionNumber);
@@ -122,7 +127,7 @@ var startExecution = function(graphName, algorithm, options) {
   var key = saveExecutionInfo(infoObject)._key;
   try {
     new Function("(" + algorithm + "())");
-  } catch (err) {
+  } catch (e) {
     var err = new ArangoError();
     err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
     err.errorMessage = arangodb.errors.ERROR_BAD_PARAMETER.message;
@@ -151,7 +156,7 @@ var getResult = function (executionNumber) {
 
 
 var getInfo = function(executionNumber) {
-  var info = getExecutionInfo();
+  var info = getExecutionInfo(executionNumber);
   var result = {};
   result.step = info[step];
   if (info[error]) {
@@ -175,7 +180,7 @@ var finishedStep = function(executionNumber, serverName, info) {
     err.errMessage = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.message;
     throw err;
   }
-  var stepInfo = runInfo[stepContent][runInfo[step]];
+  var stepInfo = runInfo[stepContent][runInfo[step] + 1];
   if (info.messages === undefined || info.active === undefined) {
     err = new ArangoError();
     err.errNum = ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.code;
@@ -194,6 +199,10 @@ var finishedStep = function(executionNumber, serverName, info) {
   }
   awaiting.splice(index, 1);
   updateExecutionInfo(executionNumber, runInfo);
+  if (awaiting.length === 0) {
+    require("console").log("next step");
+    initNextStep(executionNumber);
+  }
 };
 
 // -----------------------------------------------------------------------------
