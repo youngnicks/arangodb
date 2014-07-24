@@ -243,6 +243,9 @@ void TRI_InitialiseErrorMessages (void) {
   REG_ERROR(ERROR_ARANGO_INDEX_BITARRAY_INSERT_ITEM_UNSUPPORTED_VALUE, "bitarray index insert failure - document attribute value unsupported in index");
   REG_ERROR(ERROR_ARANGO_INDEX_BITARRAY_CREATION_FAILURE_DUPLICATE_ATTRIBUTES, "bitarray index creation failure - one or more index attributes are duplicated.");
   REG_ERROR(ERROR_ARANGO_INDEX_BITARRAY_CREATION_FAILURE_DUPLICATE_VALUES, "bitarray index creation failure - one or more index attribute values are duplicated.");
+  REG_ERROR(ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH, "message was recieved from server that was not expected");
+  REG_ERROR(ERROR_PREGEL_MESSAGE_STEP_MISMATCH, "message was recieved with an unexpected step number");
+  REG_ERROR(ERROR_PREGEL_MESSAGE_MALFORMED, "malformed message recieved");
   REG_ERROR(RESULT_KEY_EXISTS, "element not inserted into structure, because key already exists");
   REG_ERROR(RESULT_ELEMENT_EXISTS, "element not inserted into structure, because it already exists");
   REG_ERROR(RESULT_KEY_NOT_FOUND, "key not found in structure");

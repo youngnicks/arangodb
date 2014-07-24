@@ -340,6 +340,14 @@ ERROR_ARANGO_INDEX_BITARRAY_INSERT_ITEM_UNSUPPORTED_VALUE,3413,"bitarray index i
 ERROR_ARANGO_INDEX_BITARRAY_CREATION_FAILURE_DUPLICATE_ATTRIBUTES,3415,"bitarray index creation failure - one or more index attributes are duplicated.","Will be raised when an attempt to create an index with two or more index attributes repeated."
 ERROR_ARANGO_INDEX_BITARRAY_CREATION_FAILURE_DUPLICATE_VALUES,3417,"bitarray index creation failure - one or more index attribute values are duplicated.","Will be raised when an attempt to create an index with two or more index attribute values repeated."
 
+################################################################################
+## ArangoDB pregel errors (4000-4999)
+## Errors that occur during pregel execution
+################################################################################
+ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH,4000,"message was recieved from server that was not expected","Will be raised whenever a communication request was recieved from a server that was not expected to send any message."
+ERROR_PREGEL_MESSAGE_STEP_MISMATCH,4001,"message was recieved with an unexpected step number","Will be raised whenever a message containing another step number is recieved."
+ERROR_PREGEL_MESSAGE_MALFORMED,4002,"malformed message recieved","Will be raised whenever a message with invalid content was revieved."
+
 
 ################################################################################
 ## results, which are not errors

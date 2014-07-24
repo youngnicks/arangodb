@@ -575,6 +575,14 @@ extern "C" {
 /// - 3417: @LIT{bitarray index creation failure - one or more index attribute values are duplicated.}
 ///   Will be raised when an attempt to create an index with two or more index
 ///   attribute values repeated.
+/// - 4000: @LIT{message was recieved from server that was not expected}
+///   Will be raised whenever a communication request was recieved from a
+///   server that was not expected to send any message.
+/// - 4001: @LIT{message was recieved with an unexpected step number}
+///   Will be raised whenever a message containing another step number is
+///   recieved.
+/// - 4002: @LIT{malformed message recieved}
+///   Will be raised whenever a message with invalid content was revieved.
 /// - 10000: @LIT{element not inserted into structure, because key already exists}
 ///   Will be returned if the element was not insert because the key already
 ///   exists.
@@ -3016,6 +3024,38 @@ void TRI_InitialiseErrorMessages (void);
 ////////////////////////////////////////////////////////////////////////////////
 
 #define TRI_ERROR_ARANGO_INDEX_BITARRAY_CREATION_FAILURE_DUPLICATE_VALUES (3417)
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief 4000: ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH
+///
+/// message was recieved from server that was not expected
+///
+/// Will be raised whenever a communication request was recieved from a server
+/// that was not expected to send any message.
+////////////////////////////////////////////////////////////////////////////////
+
+#define TRI_ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH                     (4000)
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief 4001: ERROR_PREGEL_MESSAGE_STEP_MISMATCH
+///
+/// message was recieved with an unexpected step number
+///
+/// Will be raised whenever a message containing another step number is
+/// recieved.
+////////////////////////////////////////////////////////////////////////////////
+
+#define TRI_ERROR_PREGEL_MESSAGE_STEP_MISMATCH                            (4001)
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief 4002: ERROR_PREGEL_MESSAGE_MALFORMED
+///
+/// malformed message recieved
+///
+/// Will be raised whenever a message with invalid content was revieved.
+////////////////////////////////////////////////////////////////////////////////
+
+#define TRI_ERROR_PREGEL_MESSAGE_MALFORMED                                (4002)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief 10000: RESULT_KEY_EXISTS
