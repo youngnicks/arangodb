@@ -90,7 +90,7 @@ describe("Pregel Conductor", function () {
 
     it("should throw an error if the server calling back is not awaited", function () {
       try {
-        conductor.finishedStep(conductor, execNr, "unkownServer", { messages: 5, active: 10, step: 1 });
+        conductor.finishedStep(execNr, "unkownServer", { messages: 5, active: 10, step: 1 });
         this.fail(Error("should never be reached"));
       } catch (e) {
         expect(e instanceof ArangoError).toBeTruthy();
@@ -101,7 +101,7 @@ describe("Pregel Conductor", function () {
 
     it("should throw an error if the message is malformed", function () {
       try {
-        conductor.finishedStep(conductor, execNr, dbServer, { step: 1 });
+        conductor.finishedStep(execNr, dbServer, { step: 1 });
         this.fail(Error("should never be reached"));
       } catch (e) {
         expect(e instanceof ArangoError).toBeTruthy();
@@ -112,7 +112,7 @@ describe("Pregel Conductor", function () {
 
     it("should throw an error if a false step number is sent", function () {
       try {
-        conductor.finishedStep(conductor, execNr, dbServer, { step: 3, message: 5, active: 10 });
+        conductor.finishedStep(execNr, dbServer, { step: 3, message: 5, active: 10 });
         this.fail(Error("should never be reached"));
       } catch (e) {
         expect(e instanceof ArangoError).toBeTruthy();

@@ -117,7 +117,6 @@ var getInfo = function(executionNumber) {
 var finishedStep = function(executionNumber, serverName, info) {
   var err;
   var runInfo = getExecutionInfo(executionNumber);
-  require("console").log(info.step, runInfo[step]);
   if (info.step === undefined || info.step !== runInfo[step]) {
     err = new ArangoError();
     err.errNum = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.code;
@@ -125,6 +124,12 @@ var finishedStep = function(executionNumber, serverName, info) {
     throw err;
   }
   var stepInfo = runInfo[stepContent][runInfo[step]];
+  if (info.messages === undefined || info.active === undefined) {
+    err = new ArangoError();
+    err.errNum = ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.code;
+    err.errMessage = ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.message;
+    throw err;
+  }
   stepInfo.messages += info.messages;
   stepInfo.active += info.active;
   var awaiting = runInfo[waitForAnswer];
@@ -137,7 +142,6 @@ var finishedStep = function(executionNumber, serverName, info) {
   }
   awaiting.splice(index, 1);
   updateExecutionInfo(executionNumber, runInfo);
-  return undefined;
 };
 
 // -----------------------------------------------------------------------------
