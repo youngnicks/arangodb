@@ -3884,6 +3884,18 @@ Graph.prototype._diameter = function(options) {
 };
 
 
+
+
+Graph.prototype._countVertices = function() {
+
+  var sum = 0, self = this;
+  Object.keys(this.__vertexCollections).forEach(function (c) {
+    sum += self.__vertexCollections[c].count();
+  })
+  return sum;
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_general_graph__extendEdgeDefinitions
 /// @brief Add another edge definition to the graph
