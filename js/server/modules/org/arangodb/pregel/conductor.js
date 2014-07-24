@@ -65,10 +65,11 @@ var startNextStep = function(executionNumber, options) {
   } else {
     dbServers = ["localhost"];
   }
+  var httpOptions = {};
   dbServers.forEach(
     function(dbServer) {
       var op = ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
-        "/_api/pregel",JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: {}}),{},options);
+        "/_api/pregel",JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options}),{},httpOptions);
     }
   );
 
