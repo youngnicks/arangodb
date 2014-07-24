@@ -30,6 +30,9 @@
 
 var db = require("internal").db;
 var graphModule = require("org/arangodb/general-graph");
+var arangodb = require("org/arangodb");
+var ERRORS = arangodb.errors;
+var ArangoError = arangodb.ArangoError;
 
 var step = "step";
 var stepContent = "stepContent";
@@ -98,17 +101,25 @@ var getInfo = function(executionNumber) {
 };
 
 var finishedStep = function(executionNumber, serverName, info) {
-  /*
-   * Callback from server
-   */
+  var err;
   var runInfo = getExecutionInfo(executionNumber);
+  require("console").log(info.step, runInfo[step]);
+  if (info.step === undefined || info.step !== runInfo[step]) {
+    err = new ArangoError();
+    err.errNum = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.code;
+    err.errMessage = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.message;
+    throw err;
+  }
   var stepInfo = runInfo[stepContent][runInfo[step]];
   stepInfo.messages += info.messages;
   stepInfo.active += info.active;
   var awaiting = runInfo[waitForAnswer];
   var index = awaiting.indexOf(serverName);
   if (index === -1) {
-    return; // Error Handling
+    err = new ArangoError();
+    err.errNum = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.code;
+    err.errMessage = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message;
+    throw err;
   }
   awaiting.splice(index, 1);
   updateExecutionInfo(executionNumber, runInfo);

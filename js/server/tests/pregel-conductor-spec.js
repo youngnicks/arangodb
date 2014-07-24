@@ -29,6 +29,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 var conductor = require("org/arangodb/pregel").Conductor;
 var db = require("internal").db;
+var arangodb = require("org/arangodb");
+var ArangoError = arangodb.ArangoError;
+var ERRORS = arangodb.errors;
 
 describe("Pregel Conductor", function () {
   "use strict";
@@ -40,6 +43,11 @@ describe("Pregel Conductor", function () {
     beforeEach(function () {
       execNr = "UnitTestPregel";
       dbServer = "Pjotr";
+      try {
+        db._collection("_pregel").remove(execNr);
+      } catch (ignore) {
+        // Has already been removed
+      }
       db._collection("_pregel").save({
         _key: execNr,
         step: 1,
@@ -66,18 +74,51 @@ describe("Pregel Conductor", function () {
     });
 
     it("should remove the reporting server from the awaited list", function () {
-      conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10 });
+      conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
       var runDoc = db._pregel.document(execNr);
       expect(runDoc.waitForAnswer.length).toEqual(2);
       expect(runDoc.waitForAnswer.sort()).toEqual(["Pavel", "Pancho"].sort());
     });
 
     it("should update the step information", function () {
-      conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10 });
+      conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
       var runDoc = db._pregel.document(execNr);
       var stepInfo = runDoc.stepContent[runDoc.step];
       expect(stepInfo.active).toEqual(30);
       expect(stepInfo.messages).toEqual(10);
+    });
+
+    it("should throw an error if the server calling back is not awaited", function () {
+      try {
+        conductor.finishedStep(conductor, execNr, "unkownServer", { messages: 5, active: 10, step: 1 });
+        this.fail(Error("should never be reached"));
+      } catch (e) {
+        expect(e instanceof ArangoError).toBeTruthy();
+        expect(e.errNum).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.code);
+        expect(e.errMessage).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message);
+      }
+    });
+
+    it("should throw an error if the message is malformed", function () {
+      try {
+        conductor.finishedStep(conductor, execNr, dbServer, { step: 1 });
+        this.fail(Error("should never be reached"));
+      } catch (e) {
+        expect(e instanceof ArangoError).toBeTruthy();
+        expect(e.errNum).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.code);
+        expect(e.errMessage).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.message);
+      }
+    });
+
+    it("should throw an error if a false step number is sent", function () {
+      try {
+        conductor.finishedStep(conductor, execNr, dbServer, { step: 3, message: 5, active: 10 });
+        this.fail(Error("should never be reached"));
+      } catch (e) {
+        expect(e instanceof ArangoError).toBeTruthy();
+        expect(e.errNum).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.code);
+        expect(e.errMessage).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.message);
+      }
     });
 
   });
