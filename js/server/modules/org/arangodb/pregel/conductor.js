@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, Graph, arguments */
+/*global require, exports, Graph, arguments, ArangoClusterComm */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Graph functionality
@@ -36,7 +36,10 @@ var stepContent = "stepContent";
 var waitForAnswer = "waitForAnswer";
 var active = "active";
 var messages = "messages";
-
+var error = "error";
+var stateFinished = "finished";
+var stateRunning = "running";
+var stateError = "error";
 
 var getExecutionInfo = function(executionNumber) {
   var pregel = db._pregel;
@@ -53,7 +56,22 @@ var saveExecutionInfo = function(infoObject) {
   return pregel.save(infoObject);
 };
 
-var  startNextStep = function(executionNumber, setup) {
+var startNextStep = function(executionNumber) {
+  var info = getExecutionInfo(executionNumber);
+  var stepNo = info[step];
+
+
+  if (ArangoServerState.isCoordinator()) {
+    dbServers = ArangoClusterInfo.getDBServers();
+  } else {
+    dbServers = ["localhost"];
+  }
+  dbServers.forEach(
+    function(dbServer) {
+      var op = ArangoClusterComm.asyncRequest("POST","server:"+DBserver, db._name(),
+        "/_api/pregel",JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: {}}),{},options);
+    }
+  );
 
   return undefined;
 };
@@ -66,11 +84,15 @@ var generateResultCollectionName = function (collectionName, executionNumber) {
   return "P_" + executionNumber + "_RESULT_" + collectionName;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief initializes the next iteration of the Pregel- algorithm
+///
+////////////////////////////////////////////////////////////////////////////////
 var initNextStep = function(executionNumber) {
   var info = getExecutionInfo();
   info[step] = info[step]++;
   updateExecutionInfo(executionNumber, info);
-  if( info[active] > 0 || hasMessages > 0) {
+  if( info[active] > 0 || info[messages] > 0) {
     startNextStep(executionNumber);
   } else {
     cleanUp(executionNumber);
@@ -126,8 +148,19 @@ var getResult = function (executionNumber) {
 
 
 var getInfo = function(executionNumber) {
+  var info = getExecutionInfo();
+  var result = {};
+  result.step = info[step];
+  if (info[error]) {
+    result.state = stateError;
+  } else if( info[active] === 0 && info[messages] === 0) {
+    result.state = stateFinished;
+  } else {
+    result.state = stateRunning;
+  }
+  result.globals = {}
 
-  return undefined;
+  return result;
 };
 
 var finishedStep = function(executionNumber, serverName, info) {
