@@ -64,6 +64,7 @@ var startNextStep = function(executionNumber, options) {
   var dbServers;
   var info = getExecutionInfo(executionNumber);
   var stepNo = info[step];
+  var httpOptions = {};
   var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
 
   if (ArangoServerState.isCoordinator()) {
@@ -77,7 +78,7 @@ var startNextStep = function(executionNumber, options) {
   } else {
     dbServers = ["localhost"];
     httpOptions.type = "POST";
-    internal.download("/_api/pregel", body, httpOptions);
+    internal.download("/_db/" + db._name() + "/_api/pregel", body, httpOptions);
   }
 };
 
