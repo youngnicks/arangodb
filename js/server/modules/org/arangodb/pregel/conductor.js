@@ -78,7 +78,7 @@ var startNextStep = function(executionNumber, options) {
   } else {
     dbServers = ["localhost"];
     httpOptions.type = "POST";
-    internal.download("/_db/" + db._name() + "/_api/pregel", body, httpOptions);
+    // internal.download("/_db/" + db._name() + "/_api/pregel", body, httpOptions);
   }
 };
 
