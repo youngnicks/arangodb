@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, Graph, arguments, ArangoClusterComm */
+/*global require, exports, Graph, arguments, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Graph functionality
@@ -28,7 +28,8 @@
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
-var db = require("internal").db;
+var internal = require("internal");
+var db = internal.db;
 var graphModule = require("org/arangodb/general-graph");
 var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
@@ -60,22 +61,24 @@ var saveExecutionInfo = function(infoObject) {
 };
 
 var startNextStep = function(executionNumber, options) {
+  var dbServers;
   var info = getExecutionInfo(executionNumber);
   var stepNo = info[step];
+  var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
 
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
+    dbServers.forEach(
+      function(dbServer) {
+        var op = ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
+          "/_api/pregel", body,{},options);
+      }
+    );
   } else {
     dbServers = ["localhost"];
+    httpOptions.type = "POST";
+    internal.download("/_api/pregel", body, httpOptions);
   }
-  dbServers.forEach(
-    function(dbServer) {
-      var op = ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
-        "/_api/pregel",JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: {}}),{},options);
-    }
-  );
-
-  return undefined;
 };
 
 var cleanUp = function(executionNumber) {

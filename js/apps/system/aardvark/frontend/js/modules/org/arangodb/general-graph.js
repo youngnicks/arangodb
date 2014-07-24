@@ -3891,8 +3891,17 @@ Graph.prototype._countVertices = function() {
   var sum = 0, self = this;
   Object.keys(this.__vertexCollections).forEach(function (c) {
     sum += self.__vertexCollections[c].count();
-  })
+  });
   return sum;
+};
+
+Graph.prototype._getVertexCollectionsProperties = function() {
+
+  var result = {}, self = this;
+  Object.keys(this.__vertexCollections).forEach(function (c) {
+    result[c] = self.__vertexCollections[c].properties();
+  });
+  return result;
 };
 
 
