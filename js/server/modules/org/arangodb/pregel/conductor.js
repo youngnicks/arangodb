@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, Graph, arguments */
+/*global require, exports, Graph, arguments, ArangoClusterComm */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Graph functionality
@@ -52,6 +52,21 @@ var updateExecutionInfo = function(executionNumber, infoObject) {
 };
 
 var startNextStep = function(executionNumber) {
+  var info = getExecutionInfo(executionNumber);
+  var stepNo = info[step];
+
+
+  if (ArangoServerState.isCoordinator()) {
+    dbServers = ArangoClusterInfo.getDBServers();
+  } else {
+    dbServers = ["localhost"];
+  }
+  dbServers.forEach(
+    function(dbServer) {
+      var op = ArangoClusterComm.asyncRequest("POST","server:"+DBserver, db._name(),
+        "/_api/pregel",JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: {}}),{},options);
+    }
+  );
 
   return undefined;
 };
@@ -60,6 +75,10 @@ var cleanUp = function(executionNumber) {
   return undefined;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief initializes the next iteration of the Pregel- algorithm
+///
+////////////////////////////////////////////////////////////////////////////////
 var initNextStep = function(executionNumber) {
   var info = getExecutionInfo();
   info[step] = info[step]++;
