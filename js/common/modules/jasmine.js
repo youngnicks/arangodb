@@ -47,6 +47,9 @@ exports.executeTestSuite = function (specFileNames, options) {
 
   // Explicitly add require
   sandbox.require = require;
+  sandbox.ArangoServerState = ArangoServerState;
+  sandbox.ArangoClusterInfo = ArangoClusterInfo;
+  sandbox.ArangoClusterComm = ArangoClusterComm;
   sandbox.createSpy = jasmine.createSpy;
   sandbox.createSpyObj = jasmine.createSpyObj;
 

@@ -59,10 +59,9 @@ var saveExecutionInfo = function(infoObject) {
   return pregel.save(infoObject);
 };
 
-var startNextStep = function(executionNumber) {
+var startNextStep = function(executionNumber, options) {
   var info = getExecutionInfo(executionNumber);
   var stepNo = info[step];
-
 
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
@@ -71,7 +70,7 @@ var startNextStep = function(executionNumber) {
   }
   dbServers.forEach(
     function(dbServer) {
-      var op = ArangoClusterComm.asyncRequest("POST","server:"+DBserver, db._name(),
+      var op = ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
         "/_api/pregel",JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: {}}),{},options);
     }
   );
@@ -118,9 +117,7 @@ var startExecution = function(graphName, algorithm, options) {
 
   var key = saveExecutionInfo(infoObject)._key;
   try {
-    require("internal").print(algorithm);
-    Function(algorithm)
-    require("internal").print("algorithm");
+    new Function("(" + algorithm + "())");
   } catch (err) {
     var err = new ArangoError();
     err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
@@ -139,7 +136,6 @@ var startExecution = function(graphName, algorithm, options) {
       };
       db._create(generateResultCollectionName(collection, key) , props);
   });
-
 
   startNextStep(key, setup);
 };
