@@ -33,6 +33,9 @@ var arangodb = require("org/arangodb");
 var graph = require("org/arangodb/general-graph");
 var ArangoError = arangodb.ArangoError;
 var ERRORS = arangodb.errors;
+var vc1 = "UnitTestsAhuacatlVertex1";
+var vc2 = "UnitTestsAhuacatlVertex2";
+var ec1 = "UnitTestsAhuacatlEdge2";
 
 describe("Pregel Conductor", function () {
   "use strict";
@@ -200,25 +203,16 @@ describe("Pregel Conductor", function () {
         graph._drop("bla3", true);
       } catch (err) {
       }
-      var vc1 = "UnitTestsAhuacatlVertex1";
-      var vc2 = "UnitTestsAhuacatlVertex2";
-      var ec1 = "UnitTestsAhuacatlEdge2";
-      try {
-        require("internal").print(Object.keys(db._pregel));
-        db._pregel.truncate();
-      } catch (err) {
-        require("internal").print(err);
-      }
+
+      db._pregel.truncate();
       db._drop(vc1);
       db._drop(vc2);
       db._drop(ec1);
       if (ArangoServerState.isCoordinator()) {
-        require("internal").print("i am a coordinator");
         var vertex1 = db._create(vc1 , {numberOfShards : 4});
         var vertex2 = db._create(vc2, {numberOfShards : 4});
         var edge2 = db._createEdgeCollection(ec1, {numberOfShards : 4});
       } else {
-        require("internal").print("i am NO coordinator");
         var vertex1 = db._create(vc1);
         var vertex2 = db._create(vc2);
         var edge2 = db._createEdgeCollection(ec1);
@@ -252,15 +246,12 @@ describe("Pregel Conductor", function () {
 
     it("should start execution", function () {
       conductor.startExecution("bla3", "algorithm");
-      //expect(db._pregel.toArray().length).toEqual(1);
-      //expect(db._pregel.toArray()[1].step).toEqual(0);
-      //expect(db._pregel.toArray()[1].stepContent[0].active).toEqual(4);
-      //var id = db._pregel.toArray()[1]._key;
-      //expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
-      //expect(db["P_" + id + "_RESULT_" + vc3]).not.toEqual(undefined);
-      //expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
-
-
+      expect(db._pregel.toArray().length).toEqual(1);
+      expect(db._pregel.toArray()[0].step).toEqual(0);
+      expect(db._pregel.toArray()[0].stepContent[0].active).toEqual(4);
+      var id = db._pregel.toArray()[0]._key;
+      expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
+      expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
     });
 
   });

@@ -66,7 +66,6 @@ var startNextStep = function(executionNumber, options) {
   var stepNo = info[step];
   var httpOptions = {};
   var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
-
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
     dbServers.forEach(
@@ -145,7 +144,6 @@ var startExecution = function(graphName, algorithm, options) {
       };
       db._create(generateResultCollectionName(collection, key) , props);
   });
-
   startNextStep(key, setup);
 };
 
