@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, Graph, arguments */
+/*global require, exports, Graph, arguments, ArangoClusterComm */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Graph functionality
@@ -54,7 +54,27 @@ var updateExecutionInfo = function(executionNumber, infoObject) {
   return pregel.update(executionNumber, infoObject);
 };
 
+var saveExecutionInfo = function(infoObject) {
+  var pregel = db._pregel;
+  return pregel.save(infoObject);
+};
+
 var startNextStep = function(executionNumber) {
+  var info = getExecutionInfo(executionNumber);
+  var stepNo = info[step];
+
+
+  if (ArangoServerState.isCoordinator()) {
+    dbServers = ArangoClusterInfo.getDBServers();
+  } else {
+    dbServers = ["localhost"];
+  }
+  dbServers.forEach(
+    function(dbServer) {
+      var op = ArangoClusterComm.asyncRequest("POST","server:"+DBserver, db._name(),
+        "/_api/pregel",JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: {}}),{},options);
+    }
+  );
 
   return undefined;
 };
@@ -63,6 +83,14 @@ var cleanUp = function(executionNumber) {
   return undefined;
 };
 
+var generateResultCollectionName = function (collectionName, executionNumber) {
+  return "P_" + executionNumber + "_RESULT_" + collectionName;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief initializes the next iteration of the Pregel- algorithm
+///
+////////////////////////////////////////////////////////////////////////////////
 var initNextStep = function(executionNumber) {
   var info = getExecutionInfo();
   info[step] = info[step]++;
@@ -75,21 +103,45 @@ var initNextStep = function(executionNumber) {
 };
 
 var startExecution = function(graphName, algorithm, options) {
+  var graph = graphModule._graph(graphName), dbServers, infoObject = {},
+    stepContentObject = {} , setup;
+  if (ArangoServerState.isCoordinator()) {
+    dbServers = ArangoClusterInfo.getDBServers();
+  } else {
+    dbServers = ["localhost"];
+  }
+  infoObject[waitForAnswer] = dbServers;
+  infoObject[step] = 0;
+  stepContentObject[active] = graph._countVertices();
+  stepContentObject[messages] = 0;
+  infoObject[stepContent] = [stepContentObject];
 
-  var graph = graphModule._graph(graphName),
-    countVertices = graph._countVertices();
+  var key = saveExecutionInfo(infoObject)._key;
+  try {
+    require("internal").print(algorithm);
+    Function(algorithm)
+    require("internal").print("algorithm");
+  } catch (err) {
+    var err = new ArangoError();
+    err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
+    err.errorMessage = arangodb.errors.ERROR_BAD_PARAMETER.message;
+    throw err;
+  }
 
-  var Communication = require("org/arangodb/cluster/agency-communication"),
-    comm = new Communication.Communication(),
-    beats = comm.sync.Heartbeats(),
-    diff = comm.diff.current,
-    servers = comm.current.DBServers();
+  setup = options  || {};
+  setup.algorithm = algorithm;
 
-  // get dbserver
-  // store request
+  var properties = graph._getVertexCollectionsProperties();
+  Object.keys(properties).forEach(function (collection) {
+      var props = {
+        numberOfShards : properties[collection].numberOfShards,
+        shardKeys : properties[collection].shardKeys
+      };
+      db._create(generateResultCollectionName(collection, key) , props);
+  });
 
-  var executionNumber = "1";
-  return executionNumber;
+
+  startNextStep(key, setup);
 };
 
 var getResult = function (executionNumber) {
