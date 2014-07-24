@@ -131,7 +131,6 @@ describe("Pregel Conductor", function () {
       } catch (err) {
         require("internal").print(err);
       }
-
       db._drop(vc1);
       db._drop(vc2);
       db._drop(ec1);
@@ -186,17 +185,5 @@ describe("Pregel Conductor", function () {
 
     });
 
-    it("should not start execution as graph does not exist", function () {
-      conductor.startExecution("bla3", "algorithm");
-      //expect(db._pregel.toArray().length).toEqual(1);
-      //expect(db._pregel.toArray()[1].step).toEqual(0);
-      //expect(db._pregel.toArray()[1].stepContent[0].active).toEqual(4);
-      //var id = db._pregel.toArray()[1]._key;
-      //expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
-      //expect(db["P_" + id + "_RESULT_" + vc3]).not.toEqual(undefined);
-      //expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
-
-
-    });
   });
 });
