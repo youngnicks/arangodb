@@ -39,7 +39,10 @@ var stepContent = "stepContent";
 var waitForAnswer = "waitForAnswer";
 var active = "active";
 var messages = "messages";
-
+var error = "error";
+var stateFinished = "finished";
+var stateRunning = "running";
+var stateError = "error";
 
 var getExecutionInfo = function(executionNumber) {
   var pregel = db._pregel;
@@ -64,7 +67,7 @@ var initNextStep = function(executionNumber) {
   var info = getExecutionInfo();
   info[step] = info[step]++;
   updateExecutionInfo(executionNumber, info);
-  if( info[active] > 0 || hasMessages > 0) {
+  if( info[active] > 0 || info[messages] > 0) {
     startNextStep(executionNumber);
   } else {
     cleanUp(executionNumber);
@@ -96,8 +99,19 @@ var getResult = function (executionNumber) {
 
 
 var getInfo = function(executionNumber) {
+  var info = getExecutionInfo();
+  var result = {};
+  result.step = info[step];
+  if (info[error]) {
+    result.state = stateError;
+  } else if( info[active] === 0 && info[messages] === 0) {
+    result.state = stateFinished;
+  } else {
+    result.state = stateRunning;
+  }
+  result.globals = {}
 
-  return undefined;
+  return result;
 };
 
 var finishedStep = function(executionNumber, serverName, info) {
