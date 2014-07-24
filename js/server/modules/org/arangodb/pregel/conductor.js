@@ -198,7 +198,6 @@ var finishedStep = function(executionNumber, serverName, info) {
   awaiting.splice(index, 1);
   updateExecutionInfo(executionNumber, runInfo);
   if (awaiting.length === 0) {
-    require("console").log("next step");
     initNextStep(executionNumber);
   }
 };
