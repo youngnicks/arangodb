@@ -1,5 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, todo: true, white: false, sloppy: false */
 /*global require, describe, beforeEach, it, expect, spyOn, createSpy, createSpyObj, afterEach */
+/*global ArangoServerState */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief test the general-graph class
@@ -33,9 +34,14 @@ var arangodb = require("org/arangodb");
 var graph = require("org/arangodb/general-graph");
 var ArangoError = arangodb.ArangoError;
 var ERRORS = arangodb.errors;
-var vc1 = "UnitTestsAhuacatlVertex1";
-var vc2 = "UnitTestsAhuacatlVertex2";
-var ec1 = "UnitTestsAhuacatlEdge2";
+var vc1 = "UnitTestsPregelVertex1";
+var vc2 = "UnitTestsPregelVertex2";
+var ec1 = "UnitTestsPregelEdge2";
+
+var getRunInfo = function (execNr) {
+  "use strict";
+  return db._pregel.document(execNr);
+};
 
 describe("Pregel Conductor", function () {
   "use strict";
@@ -83,14 +89,14 @@ describe("Pregel Conductor", function () {
 
     it("should remove the reporting server from the awaited list", function () {
       conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
-      var runDoc = db._pregel.document(execNr);
+      var runDoc = getRunInfo(execNr);
       expect(runDoc.waitForAnswer.length).toEqual(2);
       expect(runDoc.waitForAnswer.sort()).toEqual(["Pavel", "Pancho"].sort());
     });
 
     it("should update the step information for the next step", function () {
       conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
-      var runDoc = db._pregel.document(execNr);
+      var runDoc = getRunInfo(execNr);
       var stepInfo = runDoc.stepContent[runDoc.step + 1];
       expect(stepInfo.active).toEqual(15);
       expect(stepInfo.messages).toEqual(7);
@@ -98,7 +104,7 @@ describe("Pregel Conductor", function () {
 
     it("should not overwrite the current step information", function () {
       conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
-      var runDoc = db._pregel.document(execNr);
+      var runDoc = getRunInfo(execNr);
       var stepInfo = runDoc.stepContent[runDoc.step];
       expect(stepInfo.active).toEqual(20);
       expect(stepInfo.messages).toEqual(5);
@@ -174,13 +180,13 @@ describe("Pregel Conductor", function () {
 
     it("should update the step number", function () {
       conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
-      var runDoc = db._pregel.document(execNr);
+      var runDoc = getRunInfo(execNr);
       expect(runDoc.step).toEqual(2);
     });
 
     it("should use the next step content", function () {
       conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
-      var runDoc = db._pregel.document(execNr);
+      var runDoc = getRunInfo(execNr);
       var stepInfo = runDoc.stepContent[runDoc.step];
       expect(stepInfo.active).toEqual(10);
       expect(stepInfo.messages).toEqual(5);
@@ -188,7 +194,7 @@ describe("Pregel Conductor", function () {
 
     it("should create the step content for the after next step", function () {
       conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
-      var runDoc = db._pregel.document(execNr);
+      var runDoc = getRunInfo(execNr);
       var stepInfo = runDoc.stepContent[runDoc.step + 1];
       expect(stepInfo.active).toEqual(0);
       expect(stepInfo.messages).toEqual(0);
@@ -198,41 +204,47 @@ describe("Pregel Conductor", function () {
 
   describe("start execution", function () {
 
+    var graphName = "UnitTestPregelGraph";
+
     beforeEach(function () {
       try {
-        graph._drop("bla3", true);
-      } catch (err) {
+        graph._drop(graphName, true);
+      } catch (ignore) {
       }
 
       db._pregel.truncate();
       db._drop(vc1);
       db._drop(vc2);
       db._drop(ec1);
+      var vertex1;
+      var vertex2;
+      var edge2;
       if (ArangoServerState.isCoordinator()) {
-        var vertex1 = db._create(vc1 , {numberOfShards : 4});
-        var vertex2 = db._create(vc2, {numberOfShards : 4});
-        var edge2 = db._createEdgeCollection(ec1, {numberOfShards : 4});
+        vertex1 = db._create(vc1, {numberOfShards : 4});
+        vertex2 = db._create(vc2, {numberOfShards : 4});
+        edge2 = db._createEdgeCollection(ec1, {numberOfShards : 4});
       } else {
-        var vertex1 = db._create(vc1);
-        var vertex2 = db._create(vc2);
-        var edge2 = db._createEdgeCollection(ec1);
+        vertex1 = db._create(vc1);
+        vertex2 = db._create(vc2);
+        edge2 = db._createEdgeCollection(ec1);
       }
       vertex1.save({ _key: "v1", hugo: true});
       vertex1.save({ _key: "v2", hugo: true});
       vertex2.save({ _key: "v3", heinz: 1});
       vertex2.save({ _key: "v4" });
 
-      function makeEdge(from, to, collection) {
+      var makeEdge = function (from, to, collection) {
         collection.save(from, to, { what: from.split("/")[1] + "->" + to.split("/")[1] });
-      }
+      };
 
       makeEdge(vc1 + "/v1", vc2 + "/v3", edge2);
       makeEdge(vc1 + "/v1", vc2 + "/v4", edge2);
       makeEdge(vc1 + "/v2", vc2 + "/v3", edge2);
       graph._create(
-        "bla3",
+        graphName,
         graph._edgeDefinitions(
-          graph._directedRelation(ec1,
+          graph._directedRelation(
+            ec1,
             [vc1],
             [vc2]
           )
@@ -241,11 +253,11 @@ describe("Pregel Conductor", function () {
     });
 
     afterEach(function () {
-      graph._drop("bla3", true);
+      graph._drop(graphName, true);
     });
 
     it("should start execution", function () {
-      conductor.startExecution("bla3", "algorithm");
+      conductor.startExecution(graphName, "algorithm");
       expect(db._pregel.toArray().length).toEqual(1);
       expect(db._pregel.toArray()[0].step).toEqual(0);
       expect(db._pregel.toArray()[0].stepContent[0].active).toEqual(4);
