@@ -109,6 +109,47 @@ var initNextStep = function (executionNumber) {
   }
 };
 
+
+var createResultGraph = function (graph, executionNumber) {
+  var properties = graph._getCollectionsProperties();
+  Object.keys(properties).forEach(function (collection) {
+    var props = {
+      numberOfShards : properties[collection].numberOfShards,
+      shardKeys : properties[collection].shardKeys
+    };
+    db._create(generateResultCollectionName(collection, executionNumber) , props);
+  });
+  var resultEdgeDefinitions = [], resultEdgeDefinition;
+  var edgeDefinitions = graph.__edgeDefinitions;
+  edgeDefinitions.forEach(
+    function(edgeDefinition) {
+      resultEdgeDefinition = {
+        from : [],
+        to : [],
+        collection : generateResultCollectionName(edgeDefinition.collection, executionNumber)
+      };
+      edgeDefinition.from.forEach(
+        function(col) {
+          resultEdgeDefinition.from.push(generateResultCollectionName(col, executionNumber));
+        }
+      );
+      edgeDefinition.to.forEach(
+        function(col) {
+          resultEdgeDefinition.to.push(generateResultCollectionName(col, executionNumber));
+        }
+      );
+      resultEdgeDefinitions.push(resultEdgeDefinition);
+    }
+  );
+  var orphanCollections = [];
+  graph.__orphanCollections.forEach(function (o) {
+    orphanCollections.push(generateResultCollectionName(o, executionNumber));
+  });
+  graphModule._create(generateResultCollectionName(graph.__name, executionNumber),
+    resultEdgeDefinitions, orphanCollections);
+};
+
+
 var startExecution = function(graphName, algorithm, options) {
   var graph = graphModule._graph(graphName), dbServers, infoObject = {},
     stepContentObject = {} , setup;
@@ -125,7 +166,9 @@ var startExecution = function(graphName, algorithm, options) {
 
   var key = saveExecutionInfo(infoObject)._key;
   try {
-    new Function("(" + algorithm + "())");
+    /*jslint evil : true */
+    var x = new Function("(" + algorithm + "())");
+    /*jslint evil : false */
   } catch (e) {
     var err = new ArangoError();
     err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
@@ -136,14 +179,9 @@ var startExecution = function(graphName, algorithm, options) {
   setup = options  || {};
   setup.algorithm = algorithm;
 
-  var properties = graph._getVertexCollectionsProperties();
-  Object.keys(properties).forEach(function (collection) {
-      var props = {
-        numberOfShards : properties[collection].numberOfShards,
-        shardKeys : properties[collection].shardKeys
-      };
-      db._create(generateResultCollectionName(collection, key) , props);
-  });
+
+  createResultGraph(graph, key);
+
   startNextStep(key, setup);
 };
 
@@ -164,7 +202,7 @@ var getInfo = function(executionNumber) {
   } else {
     result.state = stateRunning;
   }
-  result.globals = {}
+  result.globals = {};
 
   return result;
 };

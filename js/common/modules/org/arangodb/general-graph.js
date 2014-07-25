@@ -3891,14 +3891,23 @@ Graph.prototype._countVertices = function() {
   Object.keys(this.__vertexCollections).forEach(function (c) {
     sum += self.__vertexCollections[c].count();
   });
+  Object.keys(this.__orphanCollections).forEach(function (c) {
+    sum += self.__orphanCollections[c].count();
+  });
   return sum;
 };
 
-Graph.prototype._getVertexCollectionsProperties = function() {
+Graph.prototype._getCollectionsProperties = function() {
 
   var result = {}, self = this;
   Object.keys(this.__vertexCollections).forEach(function (c) {
     result[c] = self.__vertexCollections[c].properties();
+  });
+  Object.keys(this.__edgeCollections).forEach(function (c) {
+    result[c] = self.__edgeCollections[c].properties();
+  });
+  Object.keys(this.__orphanCollections).forEach(function (c) {
+    result[c] = self.__orphanCollections[c].properties();
   });
   return result;
 };
