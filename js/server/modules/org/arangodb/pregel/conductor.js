@@ -64,14 +64,16 @@ var startNextStep = function(executionNumber, options) {
   var dbServers;
   var info = getExecutionInfo(executionNumber);
   var stepNo = info[step];
+  options = options || {};
   var httpOptions = {};
   var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
   if (ArangoServerState.isCoordinator()) {
+    require("console").log("Sending");
     dbServers = ArangoClusterInfo.getDBServers();
     dbServers.forEach(
       function(dbServer) {
-        var op = ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
-          "/_api/pregel", body,{},options);
+        ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
+          "/_api/pregel", body,{}, httpOptions);
       }
     );
   } else {

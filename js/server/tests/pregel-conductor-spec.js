@@ -1,6 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, todo: true, white: false, sloppy: false */
 /*global require, describe, beforeEach, it, expect, spyOn, createSpy, createSpyObj, afterEach */
-/*global ArangoServerState */
+/*global ArangoServerState, ArangoClusterComm, ArangoClusterInfo */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief test the general-graph class
@@ -29,14 +29,15 @@
 /// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 var conductor = require("org/arangodb/pregel").Conductor;
-var db = require("org/arangodb").db;
 var arangodb = require("org/arangodb");
+var db = arangodb.db;
 var graph = require("org/arangodb/general-graph");
 var ArangoError = arangodb.ArangoError;
 var ERRORS = arangodb.errors;
 var vc1 = "UnitTestsPregelVertex1";
 var vc2 = "UnitTestsPregelVertex2";
 var ec1 = "UnitTestsPregelEdge2";
+var coordinator = ArangoServerState.isCoordinator();
 
 var getRunInfo = function (execNr) {
   "use strict";
@@ -146,11 +147,23 @@ describe("Pregel Conductor", function () {
   });
 
   describe("reacting to last server call", function () {
-    var execNr, dbServer;
+    var execNr, dbServer, clusterServer;
 
     beforeEach(function () {
       execNr = "UnitTestPregel";
       dbServer = "Pjotr";
+      if (coordinator) {
+        clusterServer = ["Pavel", "Pancho", "Pjotr"];
+        spyOn(ArangoClusterInfo, "getDBServers").and.returnValue(clusterServer);
+        spyOn(ArangoClusterComm, "asyncRequest");
+      } else {
+        clusterServer = ["localhost"];
+      }
+      try {
+        db._collection("_pregel").remove(execNr);
+      } catch (ignore) {
+        // Has already been removed
+      }
       db._collection("_pregel").save({
         _key: execNr,
         step: 1,
@@ -200,11 +213,38 @@ describe("Pregel Conductor", function () {
       expect(stepInfo.messages).toEqual(0);
     });
 
+    if (coordinator) {
+
+      it("should call next pregel execution on all database servers", function () {
+        var body = JSON.stringify({step: 2, executionNumber: execNr, setup: {}});
+        conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
+        clusterServer.forEach(function (server) {
+          expect(ArangoClusterComm.asyncRequest).toHaveBeenCalledWith(
+            "POST",
+            "server:" + server,
+            db._name(),
+            "/_api/pregel",
+            body,
+            {},
+            {}
+          );
+        });
+      });
+
+    } else {
+
+      it("should call next pregel execution locally", function () {
+        expect(false).toBeTruthy();
+      });
+
+    }
+
   });
 
   describe("start execution", function () {
 
     var graphName = "UnitTestPregelGraph";
+    var clusterServer;
 
     beforeEach(function () {
       try {
@@ -219,7 +259,7 @@ describe("Pregel Conductor", function () {
       var vertex1;
       var vertex2;
       var edge2;
-      if (ArangoServerState.isCoordinator()) {
+      if (coordinator) {
         vertex1 = db._create(vc1, {numberOfShards : 4});
         vertex2 = db._create(vc2, {numberOfShards : 4});
         edge2 = db._createEdgeCollection(ec1, {numberOfShards : 4});
@@ -250,6 +290,18 @@ describe("Pregel Conductor", function () {
           )
         )
       );
+      if (coordinator) {
+        clusterServer = ["Pavel", "Pancho", "Pjotr"];
+        spyOn(ArangoClusterInfo, "getDBServers").and.returnValue(clusterServer);
+        var asyncRequest = ArangoClusterComm.asyncRequest;
+        spyOn(ArangoClusterComm, "asyncRequest").and.callFake(function (a, b, c, endpoint, d, e, f) {
+          if (endpoint.indexOf("_api/pregel") === -1) {
+            asyncRequest(a, b, c, endpoint, d, e, f);
+          }
+        });
+      } else {
+        clusterServer = ["localhost"];
+      }
     });
 
     afterEach(function () {
