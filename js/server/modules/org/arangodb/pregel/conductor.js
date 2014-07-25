@@ -39,6 +39,7 @@ var step = "step";
 var stepContent = "stepContent";
 var waitForAnswer = "waitForAnswer";
 var active = "active";
+var state = "state";
 var messages = "messages";
 var error = "error";
 var stateFinished = "finished";
@@ -84,7 +85,25 @@ var startNextStep = function(executionNumber, options) {
 };
 
 var cleanUp = function (executionNumber) {
-  return undefined;
+  var dbServers;
+  var httpOptions = {};
+  updateExecutionInfo(
+    executionNumber, {state : stateFinished}
+  );
+  if (ArangoServerState.isCoordinator()) {
+    dbServers = ArangoClusterInfo.getDBServers();
+    dbServers.forEach(
+      function(dbServer) {
+        var op = ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
+          "/_api/pregel/cleanup/" + executionNumber, {},{},httpOptions);
+
+      }
+    );
+  } else {
+    dbServers = ["localhost"];
+    httpOptions.type = "POST";
+    // internal.download("/_db/" + db._name() + "/_api/pregel", body, httpOptions);
+  }
 };
 
 var generateResultCollectionName = function (collectionName, executionNumber) {
@@ -149,6 +168,10 @@ var createResultGraph = function (graph, executionNumber) {
   });
   graphModule._create(generateResultCollectionName(graph.__name, executionNumber),
     resultEdgeDefinitions, orphanCollections);
+
+  updateExecutionInfo(
+    executionNumber, {graphName : generateResultCollectionName(graph.__name, executionNumber)}
+  );
 };
 
 
@@ -162,9 +185,10 @@ var startExecution = function(graphName, algorithm, options) {
   }
   infoObject[waitForAnswer] = dbServers;
   infoObject[step] = 0;
+  infoObject[state] = stateRunning;
   stepContentObject[active] = graph._countVertices();
   stepContentObject[messages] = 0;
-  infoObject[stepContent] = [stepContentObject];
+  infoObject[stepContent] = [stepContentObject, {active: 0 , messages: 0}];
 
   var key = saveExecutionInfo(infoObject)._key;
   try {
@@ -198,13 +222,7 @@ var getInfo = function(executionNumber) {
   var info = getExecutionInfo(executionNumber);
   var result = {};
   result.step = info[step];
-  if (info[error]) {
-    result.state = stateError;
-  } else if( info[active] === 0 && info[messages] === 0) {
-    result.state = stateFinished;
-  } else {
-    result.state = stateRunning;
-  }
+  result.state = info[state];
   result.globals = {};
 
   return result;

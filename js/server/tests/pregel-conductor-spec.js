@@ -324,7 +324,19 @@ describe("Pregel Conductor", function () {
         expect(db._graphs.document("P_" + id + "_RESULT_" + graphName)).not.toEqual(undefined);
       });
 
-
+      it("should start execution and finish steps", function () {
+        conductor.startExecution(graphName, "algorithm");
+        expect(db._pregel.toArray().length).toEqual(1);
+        expect(db._pregel.toArray()[0].step).toEqual(0);
+        expect(db._pregel.toArray()[0].stepContent[0].active).toEqual(4);
+        var id = db._pregel.toArray()[0]._key;
+        expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
+        expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
+        expect(db._graphs.document("P_" + id + "_RESULT_" + graphName)).not.toEqual(undefined);
+        db._pregel.toArray()[0].waitForAnswer.forEach(function (dbserv) {
+          conductor.finishedStep(id, dbserv, {step : 0, messages : 0, active : 0});
+        });
+      });
     });
 
     describe("executing a complete game", function () {
@@ -355,8 +367,10 @@ describe("Pregel Conductor", function () {
       });
 
       describe("in a case without error", function () {
-        beforeEach( function(done) {
-          var counter = 0;
+
+        var tasks = require("org/arangodb/tasks");
+
+        beforeEach(function (done) {
           sendAnswer = function (server, body) {
             var info = {
               step: body.step,
@@ -367,17 +381,29 @@ describe("Pregel Conductor", function () {
               info.messages = 0;
               info.active = 0;
             }
-            setTimeout(function () {
-              if (body.step === 3) {
-                counter++;
+            require("internal").wait(10);
+            tasks.register({
+              id: server + "::" + body.step,
+              name: server + "step answer",
+              offset: 10,
+              command: function (params) {
+                var e = params.execNr;
+                var s = params.server;
+                var i = params.info;
+                require("org/arangodb/pregel").conductor.finishedStep(e, s, i);
+              },
+              params: {
+                execNr: execNr,
+                server: server,
+                info: info
               }
-              conductor.finishedStep(execNr, server, info);
-              if (counter === 3) {
-                done();
-              }
-            }, 100);
+            });
           };
           execNr = conductor.startExecution(graphName, "algorithm");
+          require("console").log(execNr);
+          require("internal").wait(2000);
+          require("console").log("Waited");
+          done();
         });
 
         it("should return the resulting graph name", function () {
@@ -388,7 +414,6 @@ describe("Pregel Conductor", function () {
           expect(conductor.getInfo(execNr).state).toEqual("finished");
         });
       });
-
 
     });
 
