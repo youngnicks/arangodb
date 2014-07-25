@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, todo: true, white: false, sloppy: false */
-/*global require, describe, beforeEach, it, expect, spyOn, createSpy, createSpyObj, afterEach */
+/*global require, describe, beforeEach, it, expect, spyOn, createSpy, createSpyObj, afterEach, runs, waitsFor */
 /*global ArangoServerState, ArangoClusterComm, ArangoClusterInfo */
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -241,7 +241,7 @@ describe("Pregel Conductor", function () {
 
   });
 
-  describe("start execution", function () {
+  describe("using a graph", function () {
 
     var graphName = "UnitTestPregelGraph";
     var clusterServer;
@@ -290,35 +290,108 @@ describe("Pregel Conductor", function () {
           )
         )
       );
-      if (coordinator) {
-        clusterServer = ["Pavel", "Pancho", "Pjotr"];
-        spyOn(ArangoClusterInfo, "getDBServers").and.returnValue(clusterServer);
-        var asyncRequest = ArangoClusterComm.asyncRequest;
-        spyOn(ArangoClusterComm, "asyncRequest").and.callFake(function (a, b, c, endpoint, d, e, f) {
-          if (endpoint.indexOf("_api/pregel") === -1) {
-            asyncRequest(a, b, c, endpoint, d, e, f);
-          }
+    });
+
+    describe("start execution", function () {
+
+      beforeEach(function () {
+        if (coordinator) {
+          clusterServer = ["Pavel", "Pancho", "Pjotr"];
+          spyOn(ArangoClusterInfo, "getDBServers").and.returnValue(clusterServer);
+          var asyncRequest = ArangoClusterComm.asyncRequest;
+          spyOn(ArangoClusterComm, "asyncRequest").and.callFake(function (a, b, c, endpoint, d, e, f) {
+            if (endpoint.indexOf("_api/pregel") === -1) {
+              asyncRequest(a, b, c, endpoint, d, e, f);
+            }
+          });
+        } else {
+          clusterServer = ["localhost"];
+        }
+      });
+
+      afterEach(function () {
+        graph._drop(graphName, true);
+      });
+
+      it("should start execution", function () {
+        conductor.startExecution(graphName, "algorithm");
+        expect(db._pregel.toArray().length).toEqual(1);
+        expect(db._pregel.toArray()[0].step).toEqual(0);
+        expect(db._pregel.toArray()[0].stepContent[0].active).toEqual(4);
+        var id = db._pregel.toArray()[0]._key;
+        expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
+        expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
+        expect(db._graphs.document("P_" + id + "_RESULT_" + graphName)).not.toEqual(undefined);
+      });
+
+
+    });
+
+    describe("executing a complete game", function () {
+
+      var sendAnswer;
+      var execNr;
+
+      beforeEach(function () {
+        if (coordinator) {
+          clusterServer = ["Pavel", "Pancho", "Pjotr"];
+          spyOn(ArangoClusterInfo, "getDBServers").and.returnValue(clusterServer);
+          var asyncRequest = ArangoClusterComm.asyncRequest;
+          spyOn(ArangoClusterComm, "asyncRequest").and.callFake(function (a, target, c, endpoint, body, e, f) {
+            if (endpoint.indexOf("_api/pregel") === -1) {
+              asyncRequest(a, target, c, endpoint, body, e, f);
+            } else {
+              var server = target.split(":")[1];
+              sendAnswer(server, JSON.parse(body));
+            }
+          });
+        } else {
+          clusterServer = ["localhost"];
+        }
+      });
+
+      afterEach(function () {
+        db._collection("_pregel").remove(execNr);
+      });
+
+      describe("in a case without error", function () {
+        beforeEach( function(done) {
+          var counter = 0;
+          sendAnswer = function (server, body) {
+            var info = {
+              step: body.step,
+              messages: 2,
+              active: 5
+            };
+            if (body.step === 3) {
+              info.messages = 0;
+              info.active = 0;
+            }
+            setTimeout(function () {
+              if (body.step === 3) {
+                counter++;
+              }
+              conductor.finishedStep(execNr, server, info);
+              if (counter === 3) {
+                done();
+              }
+            }, 100);
+          };
+          execNr = conductor.startExecution(graphName, "algorithm");
         });
-      } else {
-        clusterServer = ["localhost"];
-      }
-    });
 
-    afterEach(function () {
-      graph._drop(graphName, true);
-    });
+        it("should return the resulting graph name", function () {
+          expect(conductor.getResult(execNr)).toEqual("P_" + execNr + "_RESULT_" + graphName);
+        });
 
-    it("should start execution", function () {
-      conductor.startExecution(graphName, "algorithm");
-      expect(db._pregel.toArray().length).toEqual(1);
-      expect(db._pregel.toArray()[0].step).toEqual(0);
-      expect(db._pregel.toArray()[0].stepContent[0].active).toEqual(4);
-      var id = db._pregel.toArray()[0]._key;
-      expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
-      expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
-      expect(db._graphs.document("P_" + id + "_RESULT_" + graphName)).not.toEqual(undefined);
-    });
+        it("should return finished execution state", function () {
+          expect(conductor.getInfo(execNr).state).toEqual("finished");
+        });
+      });
 
+
+    });
 
   });
+
 });

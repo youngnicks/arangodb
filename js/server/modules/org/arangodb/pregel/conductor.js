@@ -185,6 +185,7 @@ var startExecution = function(graphName, algorithm, options) {
   createResultGraph(graph, key);
 
   startNextStep(key, setup);
+  return key;
 };
 
 var getResult = function (executionNumber) {
