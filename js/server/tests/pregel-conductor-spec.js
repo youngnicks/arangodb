@@ -316,8 +316,9 @@ describe("Pregel Conductor", function () {
       var id = db._pregel.toArray()[0]._key;
       expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
       expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
-      expect(db._graphs.document("P_" + id + "_RESULT_bla3")).not.toEqual(undefined);
+      expect(db._graphs.document("P_" + id + "_RESULT_" + graphName)).not.toEqual(undefined);
     });
+
 
   });
 });
