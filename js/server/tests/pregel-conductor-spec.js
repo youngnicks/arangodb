@@ -308,7 +308,7 @@ describe("Pregel Conductor", function () {
       graph._drop(graphName, true);
     });
 
-    it("should start execution", function () {
+    it("should start execution and finish steps", function () {
       conductor.startExecution(graphName, "algorithm");
       expect(db._pregel.toArray().length).toEqual(1);
       expect(db._pregel.toArray()[0].step).toEqual(0);
@@ -317,6 +317,9 @@ describe("Pregel Conductor", function () {
       expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
       expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
       expect(db._graphs.document("P_" + id + "_RESULT_" + graphName)).not.toEqual(undefined);
+      db._pregel.toArray()[0].waitForAnswer.forEach(function (dbserv) {
+        conductor.finishedStep(id, dbserv, {step : 0, messages : 0, active : 0});
+      });
     });
 
 
