@@ -69,7 +69,6 @@ var startNextStep = function(executionNumber, options) {
   var httpOptions = {};
   var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
   if (ArangoServerState.isCoordinator()) {
-    require("console").log("Sending");
     dbServers = ArangoClusterInfo.getDBServers();
     dbServers.forEach(
       function(dbServer) {

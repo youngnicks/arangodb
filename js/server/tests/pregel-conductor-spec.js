@@ -345,6 +345,7 @@ describe("Pregel Conductor", function () {
       var execNr;
 
       beforeEach(function () {
+        require("console").log("firsteach 1 ");
         if (coordinator) {
           clusterServer = ["Pavel", "Pancho", "Pjotr"];
           spyOn(ArangoClusterInfo, "getDBServers").and.returnValue(clusterServer);
@@ -360,10 +361,14 @@ describe("Pregel Conductor", function () {
         } else {
           clusterServer = ["localhost"];
         }
+        require("console").log("firsteach");
       });
 
       afterEach(function () {
-        db._collection("_pregel").remove(execNr);
+        require("console").log("removorn");
+        if (execNr) {
+          db._collection("_pregel").remove(execNr);
+        }
       });
 
       describe("in a case without error", function () {
@@ -371,6 +376,7 @@ describe("Pregel Conductor", function () {
         var tasks = require("org/arangodb/tasks");
 
         beforeEach(function (done) {
+          require("console").print("startor");
           sendAnswer = function (server, body) {
             var info = {
               step: body.step,
