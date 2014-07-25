@@ -139,7 +139,7 @@ var createResultGraph = function (graph, executionNumber) {
   Object.keys(properties).forEach(function (collection) {
     if (ArangoServerState.isCoordinator()) {
       map[collection] = {};
-      map[collection]["originalShards"] =
+      map[collection].originalShards =
       ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
     }
     var props = {
@@ -148,7 +148,7 @@ var createResultGraph = function (graph, executionNumber) {
     };
     db._create(generateResultCollectionName(collection, executionNumber) , props);
     if (ArangoServerState.isCoordinator()) {
-      map[collection]["resultShards"] =
+      map[collection].resultShards =
         ArangoClusterInfo.getCollectionInfo(
           db._name(), generateResultCollectionName(collection, executionNumber)
         ).shards;
