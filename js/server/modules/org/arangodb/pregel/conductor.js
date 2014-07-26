@@ -68,6 +68,7 @@ var startNextStep = function(executionNumber, options) {
   options = options || {};
   var httpOptions = {};
   var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
+  require("console").log(body);
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
     dbServers.forEach(
@@ -120,6 +121,7 @@ var initNextStep = function (executionNumber) {
     active: 0,
     messages: 0
   });
+  info[waitForAnswer] = ArangoClusterInfo.getDBServers();
   updateExecutionInfo(executionNumber, info);
   var stepInfo = info[stepContent][info[step]];
   if( stepInfo[active] > 0 || stepInfo[messages] > 0) {
@@ -232,15 +234,15 @@ var finishedStep = function(executionNumber, serverName, info) {
   var runInfo = getExecutionInfo(executionNumber);
   if (info.step === undefined || info.step !== runInfo[step]) {
     err = new ArangoError();
-    err.errNum = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.code;
-    err.errMessage = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.message;
+    err.errorNum = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.code;
+    err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.message;
     throw err;
   }
   var stepInfo = runInfo[stepContent][runInfo[step] + 1];
   if (info.messages === undefined || info.active === undefined) {
     err = new ArangoError();
-    err.errNum = ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.code;
-    err.errMessage = ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.message;
+    err.errorNum = ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.code;
+    err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.message;
     throw err;
   }
   stepInfo.messages += info.messages;
@@ -249,8 +251,8 @@ var finishedStep = function(executionNumber, serverName, info) {
   var index = awaiting.indexOf(serverName);
   if (index === -1) {
     err = new ArangoError();
-    err.errNum = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.code;
-    err.errMessage = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message;
+    err.errorNum = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.code;
+    err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message;
     throw err;
   }
   awaiting.splice(index, 1);

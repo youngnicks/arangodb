@@ -117,8 +117,7 @@ describe("Pregel Conductor", function () {
         this.fail(Error("should never be reached"));
       } catch (e) {
         expect(e instanceof ArangoError).toBeTruthy();
-        expect(e.errNum).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.code);
-        expect(e.errMessage).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message);
+        expect(e.errorNum).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.code);
       }
     });
 
@@ -128,8 +127,7 @@ describe("Pregel Conductor", function () {
         this.fail(Error("should never be reached"));
       } catch (e) {
         expect(e instanceof ArangoError).toBeTruthy();
-        expect(e.errNum).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.code);
-        expect(e.errMessage).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.message);
+        expect(e.errorNum).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.code);
       }
     });
 
@@ -139,8 +137,7 @@ describe("Pregel Conductor", function () {
         this.fail(Error("should never be reached"));
       } catch (e) {
         expect(e instanceof ArangoError).toBeTruthy();
-        expect(e.errNum).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.code);
-        expect(e.errMessage).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.message);
+        expect(e.errorNum).toEqual(ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.code);
       }
     });
 
@@ -339,15 +336,33 @@ describe("Pregel Conductor", function () {
       });
     });
 
-    describe("executing a complete game", function () {
+    describe("executing a complete successful game", function () {
 
       var sendAnswer;
       var execNr;
+      var counter;
 
       beforeEach(function () {
-        require("console").log("firsteach 1 ");
+        counter = {};
+        sendAnswer = function (server, body) {
+          if (!execNr) {
+            execNr = body.executionNumber;
+          }
+          expect(execNr).toEqual(body.executionNumber);
+          var info = {
+            step: body.step,
+            messages: 2,
+            active: 5
+          };
+          if (body.step === 3) {
+            info.messages = 0;
+            info.active = 0;
+          }
+          counter[server]++;
+          conductor.finishedStep(execNr, server, info);
+        };
         if (coordinator) {
-          clusterServer = ["Pavel", "Pancho", "Pjotr"];
+          clusterServer = ["Pavel", "Paolo", "Pjotr"];
           spyOn(ArangoClusterInfo, "getDBServers").and.returnValue(clusterServer);
           var asyncRequest = ArangoClusterComm.asyncRequest;
           spyOn(ArangoClusterComm, "asyncRequest").and.callFake(function (a, target, c, endpoint, body, e, f) {
@@ -355,69 +370,37 @@ describe("Pregel Conductor", function () {
               asyncRequest(a, target, c, endpoint, body, e, f);
             } else {
               var server = target.split(":")[1];
-              sendAnswer(server, JSON.parse(body));
+              if (endpoint.indexOf("cleanup") === -1) {
+                sendAnswer(server, JSON.parse(body));
+              }
             }
           });
         } else {
           clusterServer = ["localhost"];
         }
-        require("console").log("firsteach");
+        clusterServer.forEach(function (s) {
+          counter[s] = 0;
+        });
+        conductor.startExecution(graphName, "algorithm");
       });
 
       afterEach(function () {
-        require("console").log("removorn");
         if (execNr) {
           db._collection("_pregel").remove(execNr);
         }
       });
 
-      describe("in a case without error", function () {
+      it("should return the resulting graph name", function () {
+        expect(conductor.getResult(execNr)).toEqual("P_" + execNr + "_RESULT_" + graphName);
+      });
 
-        var tasks = require("org/arangodb/tasks");
+      it("should return finished execution state", function () {
+        expect(conductor.getInfo(execNr).state).toEqual("finished");
+      });
 
-        beforeEach(function (done) {
-          require("console").print("startor");
-          sendAnswer = function (server, body) {
-            var info = {
-              step: body.step,
-              messages: 2,
-              active: 5
-            };
-            if (body.step === 3) {
-              info.messages = 0;
-              info.active = 0;
-            }
-            require("internal").wait(10);
-            tasks.register({
-              id: server + "::" + body.step,
-              name: server + "step answer",
-              offset: 10,
-              command: function (params) {
-                var e = params.execNr;
-                var s = params.server;
-                var i = params.info;
-                require("org/arangodb/pregel").conductor.finishedStep(e, s, i);
-              },
-              params: {
-                execNr: execNr,
-                server: server,
-                info: info
-              }
-            });
-          };
-          execNr = conductor.startExecution(graphName, "algorithm");
-          require("console").log(execNr);
-          require("internal").wait(2000);
-          require("console").log("Waited");
-          done();
-        });
-
-        it("should return the resulting graph name", function () {
-          expect(conductor.getResult(execNr)).toEqual("P_" + execNr + "_RESULT_" + graphName);
-        });
-
-        it("should return finished execution state", function () {
-          expect(conductor.getInfo(execNr).state).toEqual("finished");
+      it("should call all servers equally often", function () {
+        clusterServer.forEach(function (s) {
+          expect(counter[s]).toEqual(4);
         });
       });
 
