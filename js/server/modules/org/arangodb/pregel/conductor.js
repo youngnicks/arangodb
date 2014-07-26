@@ -68,7 +68,6 @@ var startNextStep = function(executionNumber, options) {
   options = options || {};
   var httpOptions = {};
   var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
-  require("console").log(body);
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
     dbServers.forEach(
@@ -94,9 +93,8 @@ var cleanUp = function (executionNumber) {
     dbServers = ArangoClusterInfo.getDBServers();
     dbServers.forEach(
       function(dbServer) {
-        var op = ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
+        ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
           "/_api/pregel/cleanup/" + executionNumber, {},{},httpOptions);
-
       }
     );
   } else {
@@ -214,8 +212,8 @@ var startExecution = function(graphName, algorithm, options) {
 };
 
 var getResult = function (executionNumber) {
-  var resultingGraph = "graphName";
-  return resultingGraph;
+  var info = getExecutionInfo(executionNumber);
+  return info.graphName;
 };
 
 
