@@ -67,7 +67,6 @@ var startNextStep = function(executionNumber, options) {
   var stepNo = info[step];
   options = options || {};
   var httpOptions = {};
-  require("internal").print(options);
   var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
