@@ -67,6 +67,7 @@ var startNextStep = function(executionNumber, options) {
   var stepNo = info[step];
   options = options || {};
   var httpOptions = {};
+  require("internal").print(options);
   var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
@@ -132,12 +133,24 @@ var initNextStep = function (executionNumber) {
 
 var createResultGraph = function (graph, executionNumber) {
   var properties = graph._getCollectionsProperties();
+  var map = {};
   Object.keys(properties).forEach(function (collection) {
+    if (ArangoServerState.isCoordinator()) {
+      map[collection] = {};
+      map[collection].originalShards =
+      ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
+    }
     var props = {
       numberOfShards : properties[collection].numberOfShards,
       shardKeys : properties[collection].shardKeys
     };
     db._create(generateResultCollectionName(collection, executionNumber) , props);
+    if (ArangoServerState.isCoordinator()) {
+      map[collection].resultShards =
+        ArangoClusterInfo.getCollectionInfo(
+          db._name(), generateResultCollectionName(collection, executionNumber)
+        ).shards;
+    }
   });
   var resultEdgeDefinitions = [], resultEdgeDefinition;
   var edgeDefinitions = graph.__edgeDefinitions;
@@ -171,6 +184,7 @@ var createResultGraph = function (graph, executionNumber) {
   updateExecutionInfo(
     executionNumber, {graphName : generateResultCollectionName(graph.__name, executionNumber)}
   );
+  return map;
 };
 
 
@@ -205,7 +219,7 @@ var startExecution = function(graphName, algorithm, options) {
   setup.algorithm = algorithm;
 
 
-  createResultGraph(graph, key);
+  setup.map = createResultGraph(graph, key);
 
   startNextStep(key, setup);
   return key;

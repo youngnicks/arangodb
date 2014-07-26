@@ -36,7 +36,7 @@ var actions = require("org/arangodb/actions");
 ////////////////////////////////////////////////////////////////////////////////
 
 function post_pregel (req, res) {
-  require("internal").print(req.suffix);
+  require("internal").print("XXXXXXXXXXXXXXXXXXX" + req.suffix);
   /*if (req.suffix.length === 0) {
     // POST /_api/graph
     post_graph_graph(req, res);
