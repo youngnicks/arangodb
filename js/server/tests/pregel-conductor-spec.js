@@ -39,6 +39,7 @@ var vc2 = "UnitTestsPregelVertex2";
 var ec1 = "UnitTestsPregelEdge2";
 var coordinator = ArangoServerState.isCoordinator();
 
+
 var getRunInfo = function (execNr) {
   "use strict";
   return db._pregel.document(execNr);
@@ -343,6 +344,7 @@ describe("Pregel Conductor", function () {
       var counter;
 
       beforeEach(function () {
+        execNr = false;
         counter = {};
         sendAnswer = function (server, body) {
           if (!execNr) {
