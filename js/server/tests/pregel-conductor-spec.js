@@ -29,6 +29,7 @@
 /// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 var conductor = require("org/arangodb/pregel").Conductor;
+var worker = require("org/arangodb/pregel").Worker;
 var arangodb = require("org/arangodb");
 var db = arangodb.db;
 var graph = require("org/arangodb/general-graph");
@@ -232,7 +233,9 @@ describe("Pregel Conductor", function () {
     } else {
 
       it("should call next pregel execution locally", function () {
-        expect(false).toBeTruthy();
+        spyOn(worker, "executeStep");
+        conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
+        expect(worker.executeStep).toHaveBeenCalledWith(execNr, 2, {});
       });
 
     }
@@ -379,6 +382,24 @@ describe("Pregel Conductor", function () {
           });
         } else {
           clusterServer = ["localhost"];
+          spyOn(worker, "executeStep").and.callFake(function (executionNumber, step) {
+            if (!execNr) {
+              execNr = executionNumber;
+            }
+            expect(execNr).toEqual(executionNumber);
+            var server = "localhost";
+            counter[server]++;
+            var info = {
+              step: step,
+              messages: 2,
+              active: 5
+            };
+            if (step === 3) {
+              info.messages = 0;
+              info.active = 0;
+            }
+            conductor.finishedStep(executionNumber, server, info);
+          });
         }
         clusterServer.forEach(function (s) {
           counter[s] = 0;

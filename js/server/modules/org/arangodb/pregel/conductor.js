@@ -67,9 +67,9 @@ var startNextStep = function(executionNumber, options) {
   var stepNo = info[step];
   options = options || {};
   var httpOptions = {};
-  var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
+    var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
     dbServers.forEach(
       function(dbServer) {
         ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
@@ -78,8 +78,7 @@ var startNextStep = function(executionNumber, options) {
     );
   } else {
     dbServers = ["localhost"];
-    httpOptions.type = "POST";
-    // internal.download("/_db/" + db._name() + "/_api/pregel", body, httpOptions);
+    require("org/arangodb/pregel").Worker.executeStep(executionNumber, stepNo, options);
   }
 };
 
@@ -119,7 +118,11 @@ var initNextStep = function (executionNumber) {
     active: 0,
     messages: 0
   });
-  info[waitForAnswer] = ArangoClusterInfo.getDBServers();
+  if (ArangoServerState.isCoordinator()) {
+    info[waitForAnswer] = ArangoClusterInfo.getDBServers();
+  } else {
+    info[waitForAnswer] = ["localhost"];
+  }
   updateExecutionInfo(executionNumber, info);
   var stepInfo = info[stepContent][info[step]];
   if( stepInfo[active] > 0 || stepInfo[messages] > 0) {
