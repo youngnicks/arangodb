@@ -32,6 +32,8 @@ var internal = require("internal");
 var db = internal.db;
 var graphModule = require("org/arangodb/general-graph");
 var arangodb = require("org/arangodb");
+var pregel = require("org/arangodb/pregel");
+var taskManager = require("org/arangodb/tasks");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
@@ -65,7 +67,7 @@ var registerFunction = function(executionNumber, algorithm) {
     + "}";
 
     // This has to be replaced by worker registry
-    var col = getWorkCollection(executionNumber);
+    var col = pregel.getWorkCollection(executionNumber);
     col.save({_key: "task", task: taskToExecute});
 
 };
@@ -75,11 +77,42 @@ var addTask = function (executionNumber, vertexid, options) {
 };
 
 var setup = function(executionNumber, options) {
+  // create global collection
+  db._create(pregel.genWorkCollectionName(executionNumber));
+  db._create(pregel.genMsgCollectionName(executionNumber)).ensureHashIndex("toServer");
 
-  db._create(genWorkCollectionName(executionNumber));
-  db._create(genMsgCollectionName(executionNumber)).ensureHashIndex("toServer");
+  var collectionMapping = {};
+  Object.keys(options.map).forEach(function (collection) {
+    collectionMapping[collection] = options.map[collection].resultCollection;
+  });
 
-  //save original vertices and edges to result collections
+  Object.keys(options.map).forEach(function (collection) {
+    var shards = Object.keys(options.map[collection].originalShards);
+    var resultShards = Object.keys(options.map[collection].resultShards);
+    for (var i = 0; i < shards.length; i++) {
+      if (options.map[collection].originalShards[shards[i]] === ArangoServerState.id()) {
+        var bindVars = {
+          '@original' : shards[i],
+          '@result' : resultShards[i]
+        };
+        if (options.map[collection].type === 3) {
+          bindVars.collectionMapping = collectionMapping;
+          db._query("FOR v IN @@original INSERT {" +
+            "'_key' : v._key, 'activated' : true, 'deleted' : false, 'result' : {}, " +
+            "'_from' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._from).collection, @collectionMapping), '/', PARSE_IDENTIFIER(v._from).key), " +
+            "'_to' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._to).collection, @collectionMapping), '/', PARSE_IDENTIFIER(v._to).key)" +
+            "} INTO  @@result", bindVars);
+        } else {
+          db._query("FOR v IN @@original INSERT {" +
+            "'_key' : v._key, 'activated' : true, 'deleted' : false, 'result' : {} " +
+            "} INTO  @@result", bindVars);
+        }
+      }
+    }
+  });
+
+
+  // save mapping
 
   registerFunction(executionNumber, options.algorithm);
 };
@@ -93,7 +126,11 @@ var activateVertices = function() {
 /// @brief Creates a cursor containing all active vertices
 ///////////////////////////////////////////////////////////
 var getActiveVerticesQuery = function (executionNumber) {
-  return undefined;
+  return {
+    hasNext : function () {
+      return false;
+    }
+  };
 };
 
 var executeStep = function(executionNumber, step, options) {
@@ -104,6 +141,7 @@ var executeStep = function(executionNumber, step, options) {
 
   activateVertices();
   var q = getActiveVerticesQuery();
+  // read full count from result and write to work
   while (q.hasNext()) {
     addTask(executionNumber, step, q.next(), options);
   }
