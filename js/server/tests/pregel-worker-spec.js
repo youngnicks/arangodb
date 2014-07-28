@@ -119,28 +119,30 @@ describe("Pregel Worker", function () {
 
   describe("using a graph", function () {
 
+    var executionNumber;
 
     beforeEach(function () {
+      executionNumber = "UnitTestPregel";
     });
 
     describe("executeStep", function () {
 
       beforeEach(function () {
+        try {
+          db._drop(pregel.genWorkCollectionName(executionNumber));
+        } catch (ignore) { }
+        try {
+          db._drop(pregel.genMsgCollectionName(executionNumber));
+        } catch (ignore) { }
+        try {
+          db._drop(pregel.genGlobalCollectionName(executionNumber));
+        } catch (ignore) { }
         spyOn(ArangoServerState, "id").and.returnValue("Pavel");
         Object.keys(mapping).forEach(function (collection) {
           var shards = Object.keys(mapping[collection].originalShards);
           var resultShards = Object.keys(mapping[collection].resultShards);
           for (var i = 0; i < shards.length; i++) {
             if (mapping[collection].originalShards[shards[i]] === ArangoServerState.id()) {
-              try {
-                db._drop("work_" + 1)
-              } catch (ignore) {
-              }
-              try {
-                db._drop("messages_" + 1)
-              } catch (ignore) {
-              }
-
               try {
                 db._create(shards[i]);
               } catch (ignore) {
@@ -169,21 +171,22 @@ describe("Pregel Worker", function () {
 
           }
         });
-
+        db._drop(pregel.genWorkCollectionName(executionNumber));
+        db._drop(pregel.genMsgCollectionName(executionNumber));
+        db._drop(pregel.genGlobalCollectionName(executionNumber));
       });
 
       it("should first executeStep", function () {
-        worker.executeStep(1, 0, {map : mapping})
+        worker.executeStep(executionNumber, 0, {map : mapping})
       });
 
     });
 
     describe("task done for vertex", function () {
 
-      var executionNumber, globalCol, COUNTER, vertex1, vertex2, vertex3, vC, step;
+      var globalCol, COUNTER, vertex1, vertex2, vertex3, vC, step;
 
       beforeEach(function () {
-        executionNumber = "UnitTestPregel";
         vC = "UnitTestVertices";
         step = 2;
         try {
@@ -241,7 +244,7 @@ describe("Pregel Worker", function () {
           spyOn(ArangoServerState, "role").and.returnValue("PRIMARY");
           spyOn(ArangoClusterComm, "asyncRequest");
           worker.vertexDone(executionNumber, vertex3, {step: step});
-          expect(ArangoClusterComm).toHaveBeenCalledWith();
+          expect(ArangoClusterComm.asyncRequest).toHaveBeenCalledWith();
         });
 
         it("should call the conductor in single server case", function () {
