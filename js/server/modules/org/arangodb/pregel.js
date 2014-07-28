@@ -30,20 +30,25 @@
 
 var db = require("internal").db;
 
-var genWorkCollectionName = function (executionNumber) {
+exports.genWorkCollectionName = function (executionNumber) {
   return "work_" + executionNumber;
 };
 
-var genMsgCollectionName = function (executionNumber) {
+exports.genMsgCollectionName = function (executionNumber) {
   return "messages_" + executionNumber;
 };
 
-var getWorkCollection = function (executionNumber) {
-  return db._collection(genWorkCollectionName(executionNumber));
+exports.getWorkCollection = function (executionNumber) {
+  return db._collection(exports.genWorkCollectionName(executionNumber));
 };
 
+
+exports.getMsgCollection = function (executionNumber) {
+  return db._collection(exports.genMsgCollectionName(executionNumber));
+};
 
 
 exports.Conductor = require("org/arangodb/pregel/conductor");
 exports.Worker = require("org/arangodb/pregel/worker");
 exports.Vertex = require("org/arangodb/pregel/vertex").Vertex;
+exports.MessageQueue = require("org/arangodb/pregel/vertex").MessageQueue;
