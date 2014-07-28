@@ -149,7 +149,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       shardKeys : properties[collection].shardKeys
     };
     if (!noCreation) {
-      db._create(generateResultCollectionName(collection, executionNumber) , props);
+      db._create(generateResultCollectionName(collection, executionNumber) , props).ensureHashIndex("active");
     }
     if (ArangoServerState.isCoordinator()) {
       map[collection].resultShards =

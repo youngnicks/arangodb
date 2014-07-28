@@ -101,14 +101,14 @@ var setup = function(executionNumber, options) {
         if (options.map[collection].type === 3) {
           bindVars.collectionMapping = collectionMapping;
           db._query("FOR v IN @@original INSERT {" +
-            "'_key' : v._key, 'activated' : true, 'deleted' : false, 'result' : {}, " +
+            "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {}, " +
             "'_from' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._from).collection, @collectionMapping), '/', PARSE_IDENTIFIER(v._from).key), " +
             "'_to' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._to).collection, @collectionMapping), '/', PARSE_IDENTIFIER(v._to).key)" +
-            "} INTO  @@result", bindVars);
+            "} INTO  @@result", bindVars).execute();
         } else {
           db._query("FOR v IN @@original INSERT {" +
-            "'_key' : v._key, 'activated' : true, 'deleted' : false, 'result' : {} " +
-            "} INTO  @@result", bindVars);
+            "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {} " +
+            "} INTO  @@result", bindVars).execute();
         }
       }
     }
@@ -128,12 +128,24 @@ var activateVertices = function() {
 ///////////////////////////////////////////////////////////
 /// @brief Creates a cursor containing all active vertices
 ///////////////////////////////////////////////////////////
-var getActiveVerticesQuery = function (executionNumber) {
-  return {
-    hasNext : function () {
-      return false;
+var getActiveVerticesQuery = function (options) {
+  var count = 0;
+  var bindVars = {};
+  var query = "FOR i in [";
+  Object.keys(options.map).forEach(function (collection) {
+    var resultShards = Object.keys(options.map[collection].resultShards);
+    for (var i = 0; i < resultShards.length; i++) {
+      if (options.map[collection].resultShards[resultShards[i]] === ArangoServerState.id()) {
+        count++;
+        if (options.map[collection].type === 2) {
+          query += " @@collection" + count + ",";
+          bindVars["@collection" + count] = resultShards[i];
+        }
+      }
     }
-  };
+  });
+  query = query.substring(0, query.length-1).concat("] FILTER i.active == true RETURN i");
+  return db._query(query, bindVars);
 };
 
 var executeStep = function(executionNumber, step, options) {
@@ -143,7 +155,7 @@ var executeStep = function(executionNumber, step, options) {
   }
 
   activateVertices();
-  var q = getActiveVerticesQuery();
+  var q = getActiveVerticesQuery(options);
   // read full count from result and write to work
   var col = pregel.getGlobalCollection(executionNumber);
   col.update(COUNTER, {count: q.count()});

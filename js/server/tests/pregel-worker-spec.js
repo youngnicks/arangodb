@@ -34,38 +34,83 @@ var ArangoError = arangodb.ArangoError;
 var pregel = require("org/arangodb/pregel");
 var worker = pregel.Worker;
 var conductor = pregel.Conductor;
+var s1 = "s305000059";
+var s2 = "s305000060";
+var s3 = "s305000061";
+var s4 = "s305000062";
+var s5 = "s305000079";
+var s6 = "s305000080";
+var s7 = "s305000081";
+var s8 = "s305000082";
+var s9 = "s305000064";
+var s10 = "s305000065";
+var s11 = "s305000066";
+var s12 = "s305000067";
+var s13 = "s305000084";
+var s14 = "s305000085";
+var s15 = "s305000086";
+var s16 = "s305000087";
+var s17 = "s305000069";
+var s18 = "s305000070";
+var s19 = "s305000071";
+var s20 = "s305000072";
+var s21 = "s305000089";
+var s22 = "s305000090";
+var s23 = "s305000091";
+var s24 = "s305000092";
 
 var mapping = {
-  "UnitTestsPregelVertex1" : {
-    "type" : 2,
-    "resultCollection" : "P_305000077_RESULT_UnitTestsPregelVertex1",
-    "originalShards" : {
-      "s305000059" : "Pancho", "s305000060" : "Perry", "s305000061" : "Pavel", "s305000062" : "Pancho"
-    },
-    "resultShards" :
-      { "s305000079" : "Pancho", "s305000080" : "Perry", "s305000081" : "Pavel", "s305000082" : "Pancho" }
+  "UnitTestsPregelVertex1": {
+    "type": 2,
+    "resultCollection": "P_305000077_RESULT_UnitTestsPregelVertex1",
+    "originalShards": {},
+    "resultShards": {}
   },
-  "UnitTestsPregelVertex2" :
-    { "type" : 2,
-      "resultCollection" : "P_305000077_RESULT_UnitTestsPregelVertex2",
-      "originalShards" : {
-        "s305000064" : "Perry", "s305000065" : "Pancho", "s305000066" : "Pavel", "s305000067" : "Perry"
-      },
-      "resultShards" : {
-        "s305000084" : "Perry", "s305000085" : "Pancho", "s305000086" : "Pavel", "s305000087" : "Perry"
-      }
+  "UnitTestsPregelVertex2": {
+    "type": 2,
+    "resultCollection": "P_305000077_RESULT_UnitTestsPregelVertex2",
+    "originalShards": {},
+    "resultShards": {}
   },
-  "UnitTestsPregelEdge2" : {
-    "type" : 3,
-    "resultCollection" : "P_305000077_RESULT_UnitTestsPregelEdge2",
-    "originalShards" : {
-      "s305000069" : "Pavel", "s305000070" : "Pancho", "s305000071" : "Perry", "s305000072" : "Pavel"
-    },
-    "resultShards" : {
-      "s305000089" : "Pavel", "s305000090" : "Pancho", "s305000091" : "Perry", "s305000092" : "Pavel"
-    }
+  "UnitTestsPregelEdge2": {
+    "type": 3,
+    "resultCollection": "P_305000077_RESULT_UnitTestsPregelEdge2",
+    "originalShards": {},
+    "resultShards": {}
   }
-}
+};
+mapping.UnitTestsPregelVertex1.originalShards[s1] = "Pancho";
+mapping.UnitTestsPregelVertex1.originalShards[s2] = "Perry";
+mapping.UnitTestsPregelVertex1.originalShards[s3] = "Pavel";
+mapping.UnitTestsPregelVertex1.originalShards[s4] = "Pancho";
+
+
+mapping.UnitTestsPregelVertex1.resultShards[s5] = "Pancho";
+mapping.UnitTestsPregelVertex1.resultShards[s6] = "Perry";
+mapping.UnitTestsPregelVertex1.resultShards[s7] = "Pavel";
+mapping.UnitTestsPregelVertex1.resultShards[s8] = "Pancho";
+
+mapping.UnitTestsPregelVertex2.originalShards[s9] = "Pancho";
+mapping.UnitTestsPregelVertex2.originalShards[s10] = "Perry";
+mapping.UnitTestsPregelVertex2.originalShards[s11] = "Pavel";
+mapping.UnitTestsPregelVertex2.originalShards[s12] = "Pancho";
+
+
+mapping.UnitTestsPregelVertex2.resultShards[s13] = "Pancho";
+mapping.UnitTestsPregelVertex2.resultShards[s14] = "Perry";
+mapping.UnitTestsPregelVertex2.resultShards[s15] = "Pavel";
+mapping.UnitTestsPregelVertex2.resultShards[s16] = "Pancho";
+
+mapping.UnitTestsPregelEdge2.originalShards[s17] = "Pancho";
+mapping.UnitTestsPregelEdge2.originalShards[s18] = "Perry";
+mapping.UnitTestsPregelEdge2.originalShards[s19] = "Pavel";
+mapping.UnitTestsPregelEdge2.originalShards[s20] = "Pancho";
+
+
+mapping.UnitTestsPregelEdge2.resultShards[s21] = "Pancho";
+mapping.UnitTestsPregelEdge2.resultShards[s22] = "Perry";
+mapping.UnitTestsPregelEdge2.resultShards[s23] = "Pavel";
+mapping.UnitTestsPregelEdge2.resultShards[s24] = "Pancho";
 
 
 
@@ -74,8 +119,6 @@ describe("Pregel Worker", function () {
 
   describe("using a graph", function () {
 
-    var graphName = "UnitTestPregelGraph";
-    var clusterServer;
 
     beforeEach(function () {
     });
@@ -83,69 +126,55 @@ describe("Pregel Worker", function () {
     describe("executeStep", function () {
 
       beforeEach(function () {
+        spyOn(ArangoServerState, "id").and.returnValue("Pavel");
+        Object.keys(mapping).forEach(function (collection) {
+          var shards = Object.keys(mapping[collection].originalShards);
+          var resultShards = Object.keys(mapping[collection].resultShards);
+          for (var i = 0; i < shards.length; i++) {
+            if (mapping[collection].originalShards[shards[i]] === ArangoServerState.id()) {
+              try {
+                db._drop("work_" + 1)
+              } catch (ignore) {
+              }
+              try {
+                db._drop("messages_" + 1)
+              } catch (ignore) {
+              }
 
+              try {
+                db._create(shards[i]);
+              } catch (ignore) {
+              }
+
+              try {
+                db._create(resultShards[i]);
+              } catch (ignore) {
+              }
+
+            }
+
+          }
+        });
       });
 
       afterEach(function () {
+        Object.keys(mapping).forEach(function (collection) {
+          var shards = Object.keys(mapping[collection].originalShards);
+          var resultShards = Object.keys(mapping[collection].resultShards);
+          for (var i = 0; i < shards.length; i++) {
+            if (mapping[collection].originalShards[shards[i]] === ArangoServerState.id()) {
+              db._drop(shards[i]);
+              db._drop(resultShards[i]);
+            }
+
+          }
+        });
 
       });
 
-      /*
       it("should first executeStep", function () {
-        var dbSpy = {
-          ensureHashIndex : function () {
-
-          },
-          save: function() {}
-        }, collectionSpy = {
-          save : function () {
-
-          }
-        };
-        spyOn(db, "_create").and.returnValue(dbSpy);
-        spyOn(db, "_query");
-        spyOn(collectionSpy, "save");
-        spyOn(pregel, "getWorkCollection").and.returnValue(collectionSpy);
-        spyOn(pregel, "getGlobalCollection").and.returnValue(collectionSpy);
-        spyOn(dbSpy, "ensureHashIndex");
-        spyOn(ArangoServerState, "id").and.returnValue("Pavel");
         worker.executeStep(1, 0, {map : mapping})
-        expect(db._create).toHaveBeenCalledWith("work_1");
-        expect(db._create).toHaveBeenCalledWith("messages_1");
-        expect(db._query).toHaveBeenCalledWith("FOR v IN @@original INSERT {'_key' : v._key, 'activated' : true, " +
-          "'deleted' : false, 'result' : {} } INTO  @@result", { '@original' : 's305000061', '@result' : 's305000081' }
-        );
-        expect(db._query).toHaveBeenCalledWith("FOR v IN @@original INSERT {'_key' : v._key, 'activated' : true, " +
-          "'deleted' : false, 'result' : {} } INTO  @@result", { '@original' : 's305000066', '@result' : 's305000086' }
-        );
-        expect(db._query).toHaveBeenCalledWith("FOR v IN @@original INSERT {'_key' : v._key, 'activated' : true, " +
-          "'deleted' : false, 'result' : {}, '_from' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._from).collection, @collectionMapping), " +
-          "'/', PARSE_IDENTIFIER(v._from).key), '_to' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._to).collection, @collectionMapping), " +
-          "'/', PARSE_IDENTIFIER(v._to).key)} INTO  @@result", { '@original' : 's305000069', '@result' : 's305000089',
-            collectionMapping : {
-              UnitTestsPregelVertex1 : 'P_305000077_RESULT_UnitTestsPregelVertex1',
-              UnitTestsPregelVertex2 : 'P_305000077_RESULT_UnitTestsPregelVertex2',
-              UnitTestsPregelEdge2 : 'P_305000077_RESULT_UnitTestsPregelEdge2'
-            }
-          }
-        );
-        expect(db._query).toHaveBeenCalledWith("FOR v IN @@original INSERT {'_key' : v._key, 'activated' : true, " +
-          "'deleted' : false, 'result' : {}, '_from' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._from).collection, @collectionMapping), " +
-          "'/', PARSE_IDENTIFIER(v._from).key), '_to' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._to).collection, @collectionMapping), " +
-          "'/', PARSE_IDENTIFIER(v._to).key)} INTO  @@result", { '@original' : 's305000072', '@result' : 's305000092',
-            collectionMapping : {
-              UnitTestsPregelVertex1 : 'P_305000077_RESULT_UnitTestsPregelVertex1',
-              UnitTestsPregelVertex2 : 'P_305000077_RESULT_UnitTestsPregelVertex2',
-              UnitTestsPregelEdge2 : 'P_305000077_RESULT_UnitTestsPregelEdge2'
-            }
-          }
-        );
-        expect(dbSpy.ensureHashIndex).toHaveBeenCalledWith("toServer");
-        expect(collectionSpy.save).toHaveBeenCalled();
-
       });
-      */
-
 
     });
 
