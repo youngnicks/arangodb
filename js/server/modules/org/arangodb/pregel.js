@@ -38,6 +38,10 @@ exports.genMsgCollectionName = function (executionNumber) {
   return "messages_" + executionNumber;
 };
 
+exports.genGlobalCollectionName = function (executionNumber) {
+  return "global_" + executionNumber;
+};
+
 exports.getWorkCollection = function (executionNumber) {
   return db._collection(exports.genWorkCollectionName(executionNumber));
 };
@@ -52,7 +56,10 @@ exports.getOriginalCollection = function (id) {
 };
 
 exports.getResultCollection = function (id) {
+};
 
+exports.getGlobalCollection = function (executionNumber) {
+  return db._collection(exports.genGlobalCollectionName(executionNumber));
 };
 
 exports.getResponsibleShard = function (docId) {

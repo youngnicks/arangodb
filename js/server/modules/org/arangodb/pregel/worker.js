@@ -48,6 +48,7 @@ var error = "error";
 var stateFinished = "finished";
 var stateRunning = "running";
 var stateError = "error";
+var COUNTER = "counter";
 
 var registerFunction = function(executionNumber, algorithm) {
 
@@ -63,11 +64,11 @@ var registerFunction = function(executionNumber, algorithm) {
     +   "step: step"
     + "};"
     + algorithm + "(vertex, messages, global);"
-    + "worker.vertexDone(executionNumber, step, vertexid);"
+    + "worker.vertexDone(executionNumber, vertex, global);"
     + "}";
 
     // This has to be replaced by worker registry
-    var col = pregel.getWorkCollection(executionNumber);
+    var col = pregel.getGlobalCollection(executionNumber);
     col.save({_key: "task", task: taskToExecute});
 
 };
@@ -79,7 +80,9 @@ var addTask = function (executionNumber, vertexid, options) {
 var setup = function(executionNumber, options) {
   // create global collection
   db._create(pregel.genWorkCollectionName(executionNumber));
-  db._create(pregel.genMsgCollectionName(executionNumber)).ensureHashIndex("toServer");
+  db._create(pregel.genMsgCollectionName(executionNumber)).ensureHashIndex("toShard");
+  var global = db._create(pregel.genGlobalCollectionName(executionNumber));
+  global.save({_key: COUNTER, count: -1});
 
   var collectionMapping = {};
   Object.keys(options.map).forEach(function (collection) {
@@ -142,10 +145,23 @@ var executeStep = function(executionNumber, step, options) {
   activateVertices();
   var q = getActiveVerticesQuery();
   // read full count from result and write to work
+  var col = pregel.getGlobalCollection(executionNumber);
+  col.update(COUNTER, {count: q.count()});
   while (q.hasNext()) {
     addTask(executionNumber, step, q.next(), options);
   }
 };
+
+var vertexDone = function (executionNumber, vertex, global) {
+  vertex._save();
+  var globalCol = pregel.getGlobalCollection(executionNumber);
+  var counter = globalCol.document(COUNTER).count;
+  counter--;
+  globalCol.update(COUNTER, {count: counter});
+
+  
+};
+
 
 // -----------------------------------------------------------------------------
 // --SECTION--                                                    MODULE EXPORTS
@@ -153,3 +169,4 @@ var executeStep = function(executionNumber, step, options) {
 
 // Public functions
 exports.executeStep = executeStep;
+exports.vertexDone = vertexDone;
