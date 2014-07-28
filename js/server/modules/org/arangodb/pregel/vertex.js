@@ -29,11 +29,32 @@
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
+var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 
 var Vertex = function (executionNumber, vertexId) {
-
+  this.active = true;
+  this.vertexId = vertexId;
+  this.execNumber = executionNumber;
+  this.messages = null;
 };
 
+Vertex.prototype._deactivate = function () {
+  var collection = pregel.getOriginalCollection(this.vertexId);
+  db[collection].update(this.vertexId, {active: false});
+};
+
+Vertex.prototype._delete = function () {
+  var collection = pregel.getOriginalCollection();
+  db[collection].remove(vertexId);
+};
+
+Vertex.prototype._getEdges = function () {
+  return 1;
+};
+
+Vertex.prototype._save = function () {
+
+};
 
 exports.Vertex = Vertex;
