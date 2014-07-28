@@ -133,12 +133,14 @@ var initNextStep = function (executionNumber) {
 };
 
 
-var createResultGraph = function (graph, executionNumber) {
+var createResultGraph = function (graph, executionNumber, noCreation) {
   var properties = graph._getCollectionsProperties();
   var map = {};
   Object.keys(properties).forEach(function (collection) {
     if (ArangoServerState.isCoordinator()) {
       map[collection] = {};
+      map[collection].type = properties[collection].type;
+      map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
       map[collection].originalShards =
       ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
     }
@@ -146,7 +148,9 @@ var createResultGraph = function (graph, executionNumber) {
       numberOfShards : properties[collection].numberOfShards,
       shardKeys : properties[collection].shardKeys
     };
-    db._create(generateResultCollectionName(collection, executionNumber) , props);
+    if (!noCreation) {
+      db._create(generateResultCollectionName(collection, executionNumber) , props);
+    }
     if (ArangoServerState.isCoordinator()) {
       map[collection].resultShards =
         ArangoClusterInfo.getCollectionInfo(
@@ -154,6 +158,9 @@ var createResultGraph = function (graph, executionNumber) {
         ).shards;
     }
   });
+  if (noCreation) {
+    return map;
+  }
   var resultEdgeDefinitions = [], resultEdgeDefinition;
   var edgeDefinitions = graph.__edgeDefinitions;
   edgeDefinitions.forEach(
