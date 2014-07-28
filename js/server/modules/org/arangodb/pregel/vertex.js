@@ -57,8 +57,4 @@ Vertex.prototype._save = function () {
 
 };
 
-Vertex.prototype.type = function () {
-  return "vertex";
-}
-
 exports.Vertex = Vertex;
