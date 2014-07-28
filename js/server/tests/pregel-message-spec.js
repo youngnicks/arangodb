@@ -1,5 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, todo: true, white: false, sloppy: false */
 /*global require, describe, beforeEach, it, expect, spyOn, afterEach*/
+/*global ArangoClusterInfo */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief test pregels message object offered to the user
@@ -36,7 +37,7 @@ describe("Pregel MessageQueue", function () {
   "use strict";
 
   var testee, executionNumber, senderId, receiverId, step, msgCollectionName, vertexCollectionName,
-    msgCollection;
+    msgCollection, shardName;
 
   beforeEach(function () {
     executionNumber = "UnitTest123";
@@ -45,6 +46,7 @@ describe("Pregel MessageQueue", function () {
     step = 2;
     senderId = vertexCollectionName + "/sender";
     receiverId = vertexCollectionName + "/receiver";
+    shardName = "UnitTestShard";
     try {
       db._drop(vertexCollectionName);
     } catch (ignore) { }
@@ -52,9 +54,15 @@ describe("Pregel MessageQueue", function () {
       db._drop(msgCollectionName);
     } catch (ignore) { }
     db._create(vertexCollectionName);
-    db._createEdgeCollection(msgCollectionName).ensureHashIndex("toServer");
+    db._createEdgeCollection(msgCollectionName).ensureHashIndex("toShard");
     msgCollection = pregel.getMsgCollection(executionNumber);
     testee = new Queue(executionNumber, senderId, step);
+    if (!ArangoClusterInfo.getResponsibleShard) {
+      ArangoClusterInfo.getResponsibleShard = function () {
+        return undefined;
+      };
+    }
+    spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(shardName);
   });
 
   afterEach(function () {
@@ -92,6 +100,15 @@ describe("Pregel MessageQueue", function () {
       expect(sended.step).toEqual(step + 1);
     });
 
+    it("should store the responsible shard", function () {
+      var text = "This is a message";
+      testee.sendTo(receiverId, text);
+      var sended = msgCollection.any();
+      expect(sended.toShard).toEqual(shardName);
+      expect(ArangoClusterInfo.getResponsibleShard).not.toHaveBeenCalledWith(senderId);
+      expect(ArangoClusterInfo.getResponsibleShard).toHaveBeenCalledWith(receiverId);
+    });
+
   });
 
   describe("incomming", function () {
@@ -101,9 +118,9 @@ describe("Pregel MessageQueue", function () {
       var secondText = "bbb";
       var thirdText = "ccc";
 
-      msgCollection.save(receiverId, senderId, {data: firstText, step: step, toServer: "localhost"});
-      msgCollection.save(receiverId, senderId, {data: secondText, step: step, toServer: "localhost"});
-      msgCollection.save(receiverId, senderId, {data: thirdText, step: step, toServer: "localhost"});
+      msgCollection.save(receiverId, senderId, {data: firstText, step: step, toShard: shardName});
+      msgCollection.save(receiverId, senderId, {data: secondText, step: step, toShard: shardName});
+      msgCollection.save(receiverId, senderId, {data: thirdText, step: step, toShard: shardName});
       var incomming = testee.getMessages();
       expect(incomming.count()).toEqual(3);
       expect(incomming.toArray().sort()).toEqual([firstText, secondText, thirdText].sort());
@@ -113,9 +130,9 @@ describe("Pregel MessageQueue", function () {
       var firstText = "aaa";
       var otherStep = "Other step";
 
-      msgCollection.save(receiverId, senderId, {data: firstText, step: step, toServer: "localhost"});
-      msgCollection.save(receiverId, senderId, {data: otherStep, step: step - 1, toServer: "localhost"});
-      msgCollection.save(receiverId, senderId, {data: otherStep, step: step + 1, toServer: "localhost"});
+      msgCollection.save(receiverId, senderId, {data: firstText, step: step, toShard: shardName});
+      msgCollection.save(receiverId, senderId, {data: otherStep, step: step - 1, toShard: shardName});
+      msgCollection.save(receiverId, senderId, {data: otherStep, step: step + 1, toShard: shardName});
       var incomming = testee.getMessages();
       expect(incomming.count()).toEqual(1);
       expect(incomming.toArray()).toEqual([firstText]);
@@ -125,8 +142,8 @@ describe("Pregel MessageQueue", function () {
       var firstText = "aaa";
       var otherText = "Not for your eyes";
 
-      msgCollection.save(receiverId, senderId, {data: firstText, step: step, toServer: "localhost"});
-      msgCollection.save(senderId, receiverId, {data: otherText, step: step, toServer: "localhost"});
+      msgCollection.save(receiverId, senderId, {data: firstText, step: step, toShard: shardName});
+      msgCollection.save(senderId, receiverId, {data: otherText, step: step, toShard: shardName});
       var incomming = testee.getMessages();
       expect(incomming.count()).toEqual(1);
       expect(incomming.toArray()).toEqual([firstText]);

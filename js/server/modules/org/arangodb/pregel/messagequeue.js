@@ -40,7 +40,8 @@ var Queue = function (executionNumber, vertexId, step) {
 };
 
 Queue.prototype.sendTo = function(target, data) {
-  this.__collection.save(this.__from, target, {data: data, step: this.__nextStep});
+  var shard = pregel.getResponsibleShard(target);
+  this.__collection.save(this.__from, target, {data: data, step: this.__nextStep, toShard: shard});
 };
 
 Queue.prototype.getMessages = function () {

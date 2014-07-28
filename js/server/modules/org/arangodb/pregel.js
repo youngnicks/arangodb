@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports*/
+/*global require, exports, ArangoClusterInfo*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel module. Offers all submodules of pregel.
@@ -47,6 +47,9 @@ exports.getMsgCollection = function (executionNumber) {
   return db._collection(exports.genMsgCollectionName(executionNumber));
 };
 
+exports.getResponsibleShard = function (docId) {
+  return ArangoClusterInfo.getResponsibleShard(docId);
+};
 
 exports.Conductor = require("org/arangodb/pregel/conductor");
 exports.Worker = require("org/arangodb/pregel/worker");
