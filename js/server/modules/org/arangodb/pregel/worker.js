@@ -42,24 +42,10 @@ var stepContent = "stepContent";
 var waitForAnswer = "waitForAnswer";
 var active = "active";
 var state = "state";
-var messages = "messages";
-var work = "work";
 var error = "error";
 var stateFinished = "finished";
 var stateRunning = "running";
 var stateError = "error";
-
-var genWorkCollectionName = function (executionNumber) {
-  return work + "_" + executionNumber;
-};
-
-var genMsgCollectionName = function (executionNumber) {
-  return messages + "_" + executionNumber;
-};
-
-var getWorkCollection = function (executionNumber) {
-  return db._collection(genWorkCollectionName(executionNumber));
-};
 
 var registerFunction = function(executionNumber, algorithm) {
 
@@ -70,7 +56,7 @@ var registerFunction = function(executionNumber, algorithm) {
     + "var pregel = require('org/arangodb/pregel');"
     + "var worker = pregel.worker;"
     + "var vertex = pregel.Vertex(executionNumber, vertexid);"
-    + "var messages = pregel.MessageQueue(executionNumber, vertexid);"
+    + "var messages = pregel.MessageQueue(executionNumber, vertexid, step);"
     + "var global = {"
     +   "step: step"
     + "};"
