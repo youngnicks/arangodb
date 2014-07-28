@@ -35,6 +35,8 @@ var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
+var tasks = require("org/arangodb/tasks");
+
 var step = "step";
 var stepContent = "stepContent";
 var waitForAnswer = "waitForAnswer";
@@ -47,16 +49,49 @@ var stateFinished = "finished";
 var stateRunning = "running";
 var stateError = "error";
 
+var genWorkCollectionName = function (executionNumber) {
+  return work + "_" + executionNumber;
+};
+
+var genMsgCollectionName = function (executionNumber) {
+  return messages + "_" + executionNumber;
+};
+
+var getWorkCollection = function (executionNumber) {
+  return db._collection(genWorkCollectionName(executionNumber));
+};
+
 var registerFunction = function(executionNumber, algorithm) {
+
+  var taskToExecute = "function (params) {"
+    + "var executionNumber = params.executionNumber;"
+    + "var step = params.step;"
+    + "var vertexid = params.vertexid;"
+    + "var pregel = require('org/arangodb/pregel');"
+    + "var worker = pregel.worker;"
+    + "var vertex = pregel.Vertex(executionNumber, vertexid);"
+    + "var messages = pregel.MessageQueue(executionNumber, vertexid);"
+    + "var global = {"
+    +   "step: step"
+    + "};"
+    + algorithm + "(vertex, messages, global);"
+    + "worker.vertexDone(executionNumber, step, vertexid);"
+    + "}";
+
+    // This has to be replaced by worker registry
+    var col = getWorkCollection(executionNumber);
+    col.save({_key: "task", task: taskToExecute});
+
+};
+
+var addTask = function (executionNumber, vertexid, options) {
 
 };
 
 var setup = function(executionNumber, options) {
 
-  db._create(work + "_" + executionNumber);
-  db._create(messages + "_" + executionNumber);
-  db[messages + "_" + executionNumber].ensureHashIndex("toServer");
-
+  db._create(genWorkCollectionName(executionNumber));
+  db._create(genMsgCollectionName(executionNumber)).ensureHashIndex("toServer");
 
   //save original vertices and edges to result collections
 
@@ -68,8 +103,11 @@ var activateVertices = function() {
 
 };
 
-var startJob = function() {
-
+///////////////////////////////////////////////////////////
+/// @brief Creates a cursor containing all active vertices
+///////////////////////////////////////////////////////////
+var getActiveVerticesQuery = function (executionNumber) {
+  return undefined;
 };
 
 var executeStep = function(executionNumber, step, options) {
@@ -79,8 +117,10 @@ var executeStep = function(executionNumber, step, options) {
   }
 
   activateVertices();
-
-
+  var q = getActiveVerticesQuery();
+  while (q.hasNext()) {
+    addTask(executionNumber, step, q.next(), options);
+  }
 };
 
 // -----------------------------------------------------------------------------
