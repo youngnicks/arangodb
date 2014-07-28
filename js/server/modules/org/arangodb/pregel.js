@@ -47,6 +47,13 @@ exports.getMsgCollection = function (executionNumber) {
   return db._collection(exports.genMsgCollectionName(executionNumber));
 };
 
+exports.getOriginalCollection = function (id) {
+    return id.split('/');
+};
+
+exports.getResultCollection = function (id) {
+
+};
 
 exports.Conductor = require("org/arangodb/pregel/conductor");
 exports.Worker = require("org/arangodb/pregel/worker");
