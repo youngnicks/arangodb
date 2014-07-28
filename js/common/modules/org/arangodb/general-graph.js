@@ -3902,12 +3902,15 @@ Graph.prototype._getCollectionsProperties = function() {
   var result = {}, self = this;
   Object.keys(this.__vertexCollections).forEach(function (c) {
     result[c] = self.__vertexCollections[c].properties();
+    result[c].type = 2;
   });
   Object.keys(this.__edgeCollections).forEach(function (c) {
     result[c] = self.__edgeCollections[c].properties();
+    result[c].type = 3;
   });
   Object.keys(this.__orphanCollections).forEach(function (c) {
     result[c] = self.__orphanCollections[c].properties();
+    result[c].type = 2;
   });
   return result;
 };
