@@ -28,6 +28,7 @@
 /// @author Florian Bartels, Michael Hackstein
 /// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
+
 var conductor = require("org/arangodb/pregel").Conductor;
 var worker = require("org/arangodb/pregel").Worker;
 var arangodb = require("org/arangodb");
@@ -157,6 +158,7 @@ describe("Pregel Conductor", function () {
         spyOn(ArangoClusterComm, "asyncRequest");
       } else {
         clusterServer = ["localhost"];
+        spyOn(worker, "executeStep");
       }
       try {
         db._collection("_pregel").remove(execNr);
@@ -233,7 +235,6 @@ describe("Pregel Conductor", function () {
     } else {
 
       it("should call next pregel execution locally", function () {
-        spyOn(worker, "executeStep");
         conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
         expect(worker.executeStep).toHaveBeenCalledWith(execNr, 2, {});
       });
@@ -306,6 +307,7 @@ describe("Pregel Conductor", function () {
             }
           });
         } else {
+          spyOn(worker, "executeStep");
           clusterServer = ["localhost"];
         }
       });
