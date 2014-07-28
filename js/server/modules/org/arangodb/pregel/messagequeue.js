@@ -24,31 +24,35 @@
 ///
 /// Copyright holder is triAGENS GmbH, Cologne, Germany
 ///
-/// @author Florian Bartels, Michael Hackstein, Guido Schwab
+/// @author Michael Hackstein
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
 var db = require("internal").db;
+var pregel = require("org/arangodb/pregel");
+var query = "FOR m IN @@collection FILTER m._to == @vertex && m.step == @step RETURN m.data";
 
-exports.genWorkCollectionName = function (executionNumber) {
-  return "work_" + executionNumber;
+var Queue = function (executionNumber, vertexId, step) {
+  this.__collection = pregel.getMsgCollection(executionNumber);
+  this.__from = vertexId;
+  this.__nextStep = step + 1;
+  this.__step = step;
 };
 
-exports.genMsgCollectionName = function (executionNumber) {
-  return "messages_" + executionNumber;
+Queue.prototype.sendTo = function(target, data) {
+  this.__collection.save(this.__from, target, {data: data, step: this.__nextStep});
 };
 
-exports.getWorkCollection = function (executionNumber) {
-  return db._collection(exports.genWorkCollectionName(executionNumber));
+Queue.prototype.getMessages = function () {
+  return db._createStatement({
+    query: query,
+    bindVars: {
+      step: this.__step,
+      vertex: this.__from,
+      "@collection": this.__collection.name()
+    },
+    count: true
+  }).execute();
 };
 
-
-exports.getMsgCollection = function (executionNumber) {
-  return db._collection(exports.genMsgCollectionName(executionNumber));
-};
-
-
-exports.Conductor = require("org/arangodb/pregel/conductor");
-exports.Worker = require("org/arangodb/pregel/worker");
-exports.Vertex = require("org/arangodb/pregel/vertex").Vertex;
-exports.MessageQueue = require("org/arangodb/pregel/messagequeue").MessageQueue;
+exports.MessageQueue = Queue;
