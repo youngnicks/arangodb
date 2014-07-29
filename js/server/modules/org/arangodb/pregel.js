@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, ArangoClusterInfo*/
+/*global require, exports, ArangoClusterInfo, ArangoServerState*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel module. Offers all submodules of pregel.
@@ -30,6 +30,9 @@
 
 var db = require("internal").db;
 
+exports.getServerName = function () {
+  return ArangoServerState.id() || "localhost";
+};
 exports.genWorkCollectionName = function (executionNumber) {
   return "work_" + executionNumber;
 };

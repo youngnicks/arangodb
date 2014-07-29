@@ -185,15 +185,33 @@ describe("Pregel Worker", function () {
 
     describe("task done for vertex", function () {
 
-      var globalCol, messageCol, COUNTER, CONDUCTOR, MAP, vertex1, vertex2, vertex3,
+      var globalCol, messageCol, COUNTER, CONDUCTOR, MAP,
+        vertex1, vertex2, vertex3, vertex4, vertex5,
         vC, vCRes, step, conductorName,
         setActiveAndMessages = function () {
           var queue = new pregel.MessageQueue(executionNumber, vC + "/v1", step);
           queue.sendTo(vC + "/v2", "My message");
           queue.sendTo(vC + "/v3", "My message");
+          db[vCRes].updateByExample({active: false}, {active: true});
           // var queue = new pregel.MessageQueue(vertex1._id);
           // queue.sendTo(vertex2._id, "My message");
           // queue.sendTo(vertex3._id, "My message");
+        },
+
+        saveVertex = function(key) {
+          var vid = db[vC].save({_key: key})._id;
+          db[vCRes].save({
+            _key: key,
+            active: false,
+            deleted: false,
+            result: {}
+          });
+          var v = new pregel.Vertex(
+            executionNumber,
+            vid
+          );
+          spyOn(v, "_save");
+          return v;
         };
 
       beforeEach(function () {
@@ -215,13 +233,14 @@ describe("Pregel Worker", function () {
         MAP = "map";
 
         var map = {};
-        var vCMap = map[vC] = {};
+        map[vC] = {};
+        var vCMap = map[vC];
         vCMap.type = 2;
         vCMap.resultCollection = vCRes;
         vCMap.originalShards = {};
         vCMap.originalShards[vC] = "localhost";
         vCMap.resultShards = {};
-        vCMap.resultShards[vC] = "localhost";
+        vCMap.resultShards[vCRes] = "localhost";
 
         globalCol = db._create(pregel.genGlobalCollectionName(executionNumber));
         messageCol = db._createEdgeCollection(pregel.genMsgCollectionName(executionNumber));
@@ -230,21 +249,11 @@ describe("Pregel Worker", function () {
         globalCol.save({_key: MAP, map: map});
         db._create(vC);
         db._create(vCRes);
-        vertex1 = new pregel.Vertex(
-          executionNumber,
-          db[vC].save({_key: "v1"})._id
-        );
-        spyOn(vertex1, "_save");
-        vertex2 = new pregel.Vertex(
-          executionNumber,
-          db[vC].save({_key: "v2"})._id
-        );
-        spyOn(vertex2, "_save");
-        vertex3 = new pregel.Vertex(
-          executionNumber,
-          db[vC].save({_key: "v3"})._id
-        );
-        spyOn(vertex3, "_save");
+        vertex1 = saveVertex("v1");
+        vertex2 = saveVertex("v2");
+        vertex3 = saveVertex("v3");
+        vertex4 = saveVertex("v4");
+        vertex5 = saveVertex("v5");
         if (!ArangoClusterInfo.getResponsibleShard) {
           ArangoClusterInfo.getResponsibleShard = function () {
             return undefined;

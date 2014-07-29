@@ -116,7 +116,7 @@ var setup = function(executionNumber, options) {
     var i;
     var bindVars;
     for (i = 0; i < shards.length; i++) {
-      if (mapping.originalShards[shards[i]] === ArangoServerState.id()) {
+      if (mapping.originalShards[shards[i]] === pregel.getServerName()) {
         bindVars = {
           '@original' : shards[i],
           '@result' : resultShards[i]
@@ -145,24 +145,24 @@ var getActiveVerticesQuery = function (executionNumber) {
   var map = loadMapping(executionNumber);
   var count = 0;
   var bindVars = {};
-  var query = "FOR i in [";
+  var server = pregel.getServerName();
+  var query = "FOR u in UNION([]";
   Object.keys(map).forEach(function (collection) {
     var resultShards = Object.keys(map[collection].resultShards);
     var i;
     for (i = 0; i < resultShards.length; i++) {
-      if (map[collection].resultShards[resultShards[i]] === ArangoServerState.id()) {
+      if (map[collection].resultShards[resultShards[i]] === server) {
         if (map[collection].type === 2) {
-          if (count > 0) {
-            query += ",";
-          }
-          query += " @@collection" + count;
+          query += ",(FOR i in @@collection" + count
+            + " FILTER i.active == true && i.deleted == false"
+            + " RETURN i._id)";
           bindVars["@collection" + count] = resultShards[i];
         }
         count++;
       }
     }
   });
-  query += "] FILTER i.active == true && i.deleted == false RETURN i";
+  query += ") RETURN u";
   return db._query(query, bindVars);
 };
 
@@ -191,11 +191,12 @@ var vertexDone = function (executionNumber, vertex, global) {
 
   if (counter === 0) {
     var messages = pregel.getMsgCollection(executionNumber).count(); 
-    var active = getActiveVerticesQuery(executionNumber).count();
+    var q = getActiveVerticesQuery(executionNumber);
+    var active = q.count();
     if (ArangoServerState.role() === "PRIMARY") {
       // In clusteur
     } else {
-      pregel.Conductor.finishedStep(executionNumber, "localhost", {
+      pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
         step: global.step,
         messages: messages,
         active: active
