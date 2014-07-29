@@ -25,36 +25,61 @@
 ///
 /// Copyright holder is triAGENS GmbH, Cologne, Germany
 ///
-/// @author Florian Bartels, Michael Hackstein, Guido Schwab
+/// @author Florian Bartels, Michael Hackstein, Heiko Kernbach
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
+var _ = require("underscore");
 
 var Vertex = function (executionNumber, vertexId) {
-  this.active = true;
-  this.vertexId = vertexId;
-  this.execNumber = executionNumber;
-  this.messages = null;
+  var self = this;
+  this._executionNumber = executionNumber;
+
+  //get attributes from original collection
+  var collectionName = pregel.getOriginalCollection(vertexId);
+  var collection = pregel.getResponsibleShard(collectionName);
+  var data = db._document(vertexId);
+
+  //write attributes to vertex
+  _.each(data, function(val, key) {
+    self[key] = val;
+  });
+
 };
 
 Vertex.prototype._deactivate = function () {
-  var collection = pregel.getOriginalCollection(this.vertexId);
-  db[collection].update(this.vertexId, {active: false});
+  var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
+  var resultCollection = pregel.getResponsibleShard(resultCollectionName);
+  var myResDocId = resultCollection + "/" + this._key;
+
+  var doc = db[resultCollection].document(myResDocId);
+  db[resultCollection].update(doc, {"active": false});
+};
+
+Vertex.prototype._getResult = function () {
+  var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
+  var resultCollection = pregel.getResponsibleShard(resultCollectionName);
+  var myResDocId = resultCollection + "/" + this._key;
+
+  return db[resultCollection].document(myResDocId);
 };
 
 Vertex.prototype._delete = function () {
-  var collection = pregel.getOriginalCollection();
-  db[collection].remove(vertexId);
+  var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
+  var resultCollection = pregel.getResponsibleShard(resultCollectionName);
+  var myResDocId = resultCollection + "/" + this._key;
+
+  var doc = db[resultCollection].document(myResDocId);
+  db[resultCollection].update(doc, {"deleted": true});
 };
 
 Vertex.prototype._getEdges = function () {
-  return 1;
+  return false;
 };
 
 Vertex.prototype._save = function () {
-
 };
 
 exports.Vertex = Vertex;

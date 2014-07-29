@@ -29,6 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var db = require("internal").db;
+var _ = require("underscore");
 
 exports.genWorkCollectionName = function (executionNumber) {
   return "work_" + executionNumber;
@@ -46,7 +47,6 @@ exports.getWorkCollection = function (executionNumber) {
   return db._collection(exports.genWorkCollectionName(executionNumber));
 };
 
-
 exports.getMsgCollection = function (executionNumber) {
   return db._collection(exports.genMsgCollectionName(executionNumber));
 };
@@ -55,8 +55,20 @@ exports.getOriginalCollection = function (id) {
   return id.split('/')[0];
 };
 
-exports.getResultCollection = function (id) {
-  var origCollection = db[this.getOriginalCollection(id)].document(id);
+exports.getResultCollection = function (id, executionNumber) {
+  var mapping = exports.getGlobalCollection(executionNumber).document("map").map;
+  var collectionName = exports.getOriginalCollection(id), resultCollectionName;
+
+  _.each(mapping, function(value, key) {
+      if (key === collectionName) {
+        resultCollectionName = value.resultCollection;
+      }
+  });
+
+  if (resultCollectionName === undefined) {
+    return false;
+  }
+  return resultCollectionName;
 };
 
 exports.getGlobalCollection = function (executionNumber) {
