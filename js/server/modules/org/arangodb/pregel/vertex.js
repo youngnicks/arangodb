@@ -54,7 +54,7 @@ Vertex.prototype._deactivate = function () {
   var resultCollection = pregel.getResponsibleShard(resultCollectionName);
   var myResDocId = resultCollection + "/" + this._key;
 
-  var doc = db[resultCollection].document(myResDocId);
+  var doc = db._document(myResDocId);
   db[resultCollection].update(doc, {"active": false});
 };
 

@@ -111,7 +111,7 @@ describe("Pregel Vertex tests", function () {
       e2 = mapping.UnitTestsPregelEdge2;
 
       try {
-        db.unittest_vertex1.drop();
+        db.UnitTestsPregelVertex1.drop();
         db.unittest_vertex2.drop();
         db.unittest_edge2.drop();
 
@@ -135,7 +135,7 @@ describe("Pregel Vertex tests", function () {
       }
 
       //create main collections
-      db._createDocumentCollection("unittest_vertex1");
+      db._createDocumentCollection("UnitTestsPregelVertex1");
       db._createDocumentCollection("unittest_vertex2");
       db._createEdgeCollection("unittest_edge2");
 
@@ -153,7 +153,7 @@ describe("Pregel Vertex tests", function () {
       db._createEdgeCollection("P_305000077_RESULT_UnitTestsPregelEdge2");
 
       //create a dummy document for every collection
-      firstDoc = db.unittest_vertex1.save({
+      firstDoc = db.UnitTestsPregelVertex1.save({
         text: "here is some random text",
         movies: ["matrix", "star wars", "harry potter"],
         sum: 1337,
@@ -184,7 +184,7 @@ describe("Pregel Vertex tests", function () {
     });
 
     afterEach(function () {
-      db.unittest_vertex1.drop();
+      db.UnitTestsPregelVertex1.drop();
       db.unittest_vertex2.drop();
       db.unittest_edge2.drop();
 
@@ -210,7 +210,7 @@ describe("Pregel Vertex tests", function () {
           return undefined;
         };
       }
-      spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue("unittest_vertex1");
+      spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue("UnitTestsPregelVertex1");
 
       var Vertex = new vertex(execNr, firstDoc._id);
       expect(Vertex._executionNumber).toEqual(execNr);
@@ -220,38 +220,66 @@ describe("Pregel Vertex tests", function () {
       expect(Vertex.usable).toEqual(true);
     });
 
-    it("should deactivate a vertex object", function () {
+    it("should mark the result of a vertex as deactivated", function () {
+      var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
+
       if (!ArangoClusterInfo.getResponsibleShard) {
         ArangoClusterInfo.getResponsibleShard = function () {
           return undefined;
         };
       }
-      spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue("s305000062");
+      spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(resName);
 
       var Vertex = new vertex(execNr, firstDoc._id);
-      db.s305000062.save({"_key": Vertex._key, "active": true});
-
+      db[resName].save({"_key": Vertex._key, "active": true});
       Vertex._deactivate();
 
-      var resultDocument = db.s305000062.document("s305000062/" + Vertex._key);
+      var resultDocument = db[resName].document(resName + "/" + Vertex._key);
       expect(resultDocument.active).toBe(false);
     });
 
-    it("should deactivate a vertex object", function () {
+    it("should mark the result of a vertex as deleted", function () {
+      var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
+
       if (!ArangoClusterInfo.getResponsibleShard) {
         ArangoClusterInfo.getResponsibleShard = function () {
           return undefined;
         };
       }
-      spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue("s305000062");
+      spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(resName);
 
       var Vertex = new vertex(execNr, firstDoc._id);
-      db.s305000062.save({"_key": Vertex._key, "deleted": false});
-
+      db[resName].save({"_key": Vertex._key, "deleted": false});
       Vertex._delete();
 
-      var resultDocument = db.s305000062.document("s305000062/" + Vertex._key);
+      var resultDocument = db[resName].document(resName + "/" + Vertex._key);
       expect(resultDocument.deleted).toBe(true);
+    });
+
+    it("should return the result attribute of the result", function () {
+      var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
+
+      if (!ArangoClusterInfo.getResponsibleShard) {
+        ArangoClusterInfo.getResponsibleShard = function () {
+          return undefined;
+        };
+      }
+      spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(resName);
+
+      var myResult = {
+        test: true,
+        hallo: [123, 123, true, "false"],
+        welt: {key: "asd"},
+        number: 123123
+      };
+
+      var Vertex = new vertex(execNr, firstDoc._id);
+      db[resName].save({"_key": Vertex._key, "result": myResult});
+
+      Vertex._getResult();
+
+      var resultDocument = db[resName].document(resName + "/" + Vertex._key);
+      expect(resultDocument.result).toEqual(myResult);
     });
 
   });
