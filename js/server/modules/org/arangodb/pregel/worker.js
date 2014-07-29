@@ -163,7 +163,6 @@ var getActiveVerticesQuery = function (executionNumber) {
     }
   });
   query += "] FILTER i.active == true && i.deleted == false RETURN i";
-  require("console").log(query);
   return db._query(query, bindVars);
 };
 
