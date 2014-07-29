@@ -291,6 +291,7 @@ describe("Pregel Worker", function () {
 
         it("should callback the conductor in cluster case", function () {
           var body = JSON.stringify({
+            server: pregel.getServerName(),
             step: step,
             executionNumber: executionNumber,
             messages: 0,
@@ -303,7 +304,7 @@ describe("Pregel Worker", function () {
             "POST",
             "server:" + conductorName,
             db._name(),
-            "/_api/pregel",
+            "/_api/pregel/finishedStep",
             body,
             {},
             {}
@@ -313,10 +314,11 @@ describe("Pregel Worker", function () {
         it("should send messages and active in cluster case", function () {
           setActiveAndMessages();
           var body = JSON.stringify({
+            server: pregel.getServerName(),
             step: step,
             executionNumber: executionNumber,
-            messages: 5,
-            active: 2
+            messages: 2,
+            active: 5
           });
           spyOn(ArangoServerState, "role").and.returnValue("PRIMARY");
           spyOn(ArangoClusterComm, "asyncRequest");
@@ -325,7 +327,7 @@ describe("Pregel Worker", function () {
             "POST",
             "server:" + conductorName,
             db._name(),
-            "/_api/pregel",
+            "/_api/pregel/finishedStep",
             body,
             {},
             {}

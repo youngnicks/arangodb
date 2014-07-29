@@ -100,6 +100,10 @@ var loadMapping = function(executionNumber) {
   return pregel.getGlobalCollection(executionNumber).document(MAP).map;
 };
 
+var getConductor = function(executionNumber) {
+  return pregel.getGlobalCollection(executionNumber).document(CONDUCTOR).name;
+};
+
 var setup = function(executionNumber, options) {
   // create global collection
   db._create(pregel.genWorkCollectionName(executionNumber));
@@ -191,10 +195,18 @@ var vertexDone = function (executionNumber, vertex, global) {
 
   if (counter === 0) {
     var messages = pregel.getMsgCollection(executionNumber).count(); 
-    var q = getActiveVerticesQuery(executionNumber);
-    var active = q.count();
+    var active = getActiveVerticesQuery(executionNumber).count();
     if (ArangoServerState.role() === "PRIMARY") {
-      // In clusteur
+      var conductor = getConductor(executionNumber);
+      var body = JSON.stringify({
+        server: pregel.getServerName(),
+        step: global.step,
+        executionNumber: executionNumber,
+        messages: messages,
+        active: active
+      });
+      ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
+        "/_api/pregel/finishedStep", body, {}, {});
     } else {
       pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
         step: global.step,
