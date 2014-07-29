@@ -62,8 +62,8 @@ exports.getGlobalCollection = function (executionNumber) {
   return db._collection(exports.genGlobalCollectionName(executionNumber));
 };
 
-exports.getResponsibleShard = function (docId) {
-  return ArangoClusterInfo.getResponsibleShard(docId);
+exports.getResponsibleShard = function (doc) {
+  return ArangoClusterInfo.getResponsibleShard(doc);
 };
 
 exports.Conductor = require("org/arangodb/pregel/conductor");
