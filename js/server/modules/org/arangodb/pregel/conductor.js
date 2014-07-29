@@ -69,7 +69,12 @@ var startNextStep = function(executionNumber, options) {
   var httpOptions = {};
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
-    var body = JSON.stringify({step: stepNo, executionNumber: executionNumber, setup: options});
+    var body = JSON.stringify({
+      step: stepNo,
+      executionNumber: executionNumber,
+      setup: options,
+      conductor: ArangoServerState.id()
+    });
     dbServers.forEach(
       function(dbServer) {
         ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),

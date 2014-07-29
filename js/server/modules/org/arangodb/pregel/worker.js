@@ -29,6 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var internal = require("internal");
+var _ = require("underscore");
 var db = internal.db;
 var graphModule = require("org/arangodb/general-graph");
 var arangodb = require("org/arangodb");
@@ -49,6 +50,20 @@ var stateFinished = "finished";
 var stateRunning = "running";
 var stateError = "error";
 var COUNTER = "counter";
+var CONDUCTOR = "conductor";
+var MAP = "map";
+
+var queryInsertDefaultEdge = "FOR v IN @@original INSERT {"
+  + "'_key' : v._key, 'deleted' : false, 'result' : {}, "
+  + "'_from' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._from).collection, @collectionMapping), "
+  + "'/', PARSE_IDENTIFIER(v._from).key), "
+  + "'_to' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._to).collection, @collectionMapping), "
+  + "'/', PARSE_IDENTIFIER(v._to).key)"
+  + "} INTO  @@result";
+
+var queryInsertDefaultVertex = "FOR v IN @@original INSERT {"
+  + "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {} "
+  + "} INTO  @@result";
 
 var registerFunction = function(executionNumber, algorithm) {
 
@@ -77,46 +92,44 @@ var addTask = function (executionNumber, vertexid, options) {
 
 };
 
+var saveMapping = function(executionNumber, map) {
+  pregel.getGlobalCollection(executionNumber).save({_key: MAP, map: map});
+};
+
+var loadMapping = function(executionNumber) {
+  return pregel.getGlobalCollection(executionNumber).document(MAP).map;
+};
+
 var setup = function(executionNumber, options) {
   // create global collection
   db._create(pregel.genWorkCollectionName(executionNumber));
   db._create(pregel.genMsgCollectionName(executionNumber)).ensureHashIndex("toShard");
   var global = db._create(pregel.genGlobalCollectionName(executionNumber));
   global.save({_key: COUNTER, count: -1});
-
+  global.save({_key: CONDUCTOR, name: options.conductor});
+  saveMapping(executionNumber, options.map);
   var collectionMapping = {};
-  Object.keys(options.map).forEach(function (collection) {
-    collectionMapping[collection] = options.map[collection].resultCollection;
-  });
-
-  Object.keys(options.map).forEach(function (collection) {
-    var shards = Object.keys(options.map[collection].originalShards);
-    var resultShards = Object.keys(options.map[collection].resultShards);
-    for (var i = 0; i < shards.length; i++) {
-      if (options.map[collection].originalShards[shards[i]] === ArangoServerState.id()) {
-        var bindVars = {
+  _.each(options.map, function(mapping, collection) {
+    collectionMapping[collection] = mapping.resultCollection;
+    var shards = Object.keys(mapping.originalShards);
+    var resultShards = Object.keys(mapping.resultShards);
+    var i;
+    var bindVars;
+    for (i = 0; i < shards.length; i++) {
+      if (mapping.originalShards[shards[i]] === ArangoServerState.id()) {
+        bindVars = {
           '@original' : shards[i],
           '@result' : resultShards[i]
         };
-        if (options.map[collection].type === 3) {
+        if (mapping.type === 3) {
           bindVars.collectionMapping = collectionMapping;
-          db._query("FOR v IN @@original INSERT {" +
-            "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {}, " +
-            "'_from' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._from).collection, @collectionMapping), '/', PARSE_IDENTIFIER(v._from).key), " +
-            "'_to' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._to).collection, @collectionMapping), '/', PARSE_IDENTIFIER(v._to).key)" +
-            "} INTO  @@result", bindVars).execute();
+          db._query(queryInsertDefaultEdge, bindVars).execute();
         } else {
-          db._query("FOR v IN @@original INSERT {" +
-            "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {} " +
-            "} INTO  @@result", bindVars).execute();
+          db._query(queryInsertDefaultVertex, bindVars).execute();
         }
       }
     }
   });
-
-
-  // save mapping
-
   registerFunction(executionNumber, options.algorithm);
 };
 
@@ -128,23 +141,29 @@ var activateVertices = function() {
 ///////////////////////////////////////////////////////////
 /// @brief Creates a cursor containing all active vertices
 ///////////////////////////////////////////////////////////
-var getActiveVerticesQuery = function (options) {
+var getActiveVerticesQuery = function (executionNumber) {
+  var map = loadMapping(executionNumber);
   var count = 0;
   var bindVars = {};
   var query = "FOR i in [";
-  Object.keys(options.map).forEach(function (collection) {
-    var resultShards = Object.keys(options.map[collection].resultShards);
-    for (var i = 0; i < resultShards.length; i++) {
-      if (options.map[collection].resultShards[resultShards[i]] === ArangoServerState.id()) {
-        count++;
-        if (options.map[collection].type === 2) {
-          query += " @@collection" + count + ",";
+  Object.keys(map).forEach(function (collection) {
+    var resultShards = Object.keys(map[collection].resultShards);
+    var i;
+    for (i = 0; i < resultShards.length; i++) {
+      if (map[collection].resultShards[resultShards[i]] === ArangoServerState.id()) {
+        if (map[collection].type === 2) {
+          if (count > 0) {
+            query += ",";
+          }
+          query += " @@collection" + count;
           bindVars["@collection" + count] = resultShards[i];
         }
+        count++;
       }
     }
   });
-  query = query.substring(0, query.length-1).concat("] FILTER i.active == true RETURN i");
+  query += "] FILTER i.active == true && i.deleted == false RETURN i";
+  require("console").log(query);
   return db._query(query, bindVars);
 };
 
@@ -155,7 +174,7 @@ var executeStep = function(executionNumber, step, options) {
   }
 
   activateVertices();
-  var q = getActiveVerticesQuery(options);
+  var q = getActiveVerticesQuery(executionNumber);
   // read full count from result and write to work
   var col = pregel.getGlobalCollection(executionNumber);
   col.update(COUNTER, {count: q.count()});
@@ -170,6 +189,20 @@ var vertexDone = function (executionNumber, vertex, global) {
   var counter = globalCol.document(COUNTER).count;
   counter--;
   globalCol.update(COUNTER, {count: counter});
+
+  if (counter === 0) {
+    var messages = pregel.getMsgCollection(executionNumber).count(); 
+    var active = getActiveVerticesQuery(executionNumber).count();
+    if (ArangoServerState.role() === "PRIMARY") {
+      // In clusteur
+    } else {
+      pregel.Conductor.finishedStep(executionNumber, "localhost", {
+        step: global.step,
+        messages: messages,
+        active: active
+      });
+    }
+  }
 
   
 };
