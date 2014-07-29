@@ -205,6 +205,9 @@ describe("Pregel Vertex tests", function () {
     });
 
     it("should create a vertex object", function () {
+
+      var docBefore = db.UnitTestsPregelVertex1.document(firstDoc._id);
+
       if (!ArangoClusterInfo.getResponsibleShard) {
         ArangoClusterInfo.getResponsibleShard = function () {
           return undefined;
@@ -213,14 +216,19 @@ describe("Pregel Vertex tests", function () {
       spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue("UnitTestsPregelVertex1");
 
       var Vertex = new vertex(execNr, firstDoc._id);
+
       expect(Vertex._executionNumber).toEqual(execNr);
       expect(Vertex.text).toEqual("here is some random text");
       expect(Vertex.movies).toEqual(["matrix", "star wars", "harry potter"]);
       expect(Vertex.sum).toEqual(1337);
       expect(Vertex.usable).toEqual(true);
+
+      var docAfter = db.UnitTestsPregelVertex1.document(firstDoc._id);
+      expect(docBefore).toEqual(docAfter);
     });
 
     it("should mark the result of a vertex as deactivated", function () {
+      var docBefore = db.UnitTestsPregelVertex1.document(firstDoc._id);
       var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
 
       if (!ArangoClusterInfo.getResponsibleShard) {
@@ -236,9 +244,13 @@ describe("Pregel Vertex tests", function () {
 
       var resultDocument = db[resName].document(resName + "/" + Vertex._key);
       expect(resultDocument.active).toBe(false);
+
+      var docAfter = db.UnitTestsPregelVertex1.document(firstDoc._id);
+      expect(docBefore).toEqual(docAfter);
     });
 
     it("should mark the result of a vertex as deleted", function () {
+      var docBefore = db.UnitTestsPregelVertex1.document(firstDoc._id);
       var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
 
       if (!ArangoClusterInfo.getResponsibleShard) {
@@ -254,9 +266,13 @@ describe("Pregel Vertex tests", function () {
 
       var resultDocument = db[resName].document(resName + "/" + Vertex._key);
       expect(resultDocument.deleted).toBe(true);
+
+      var docAfter = db.UnitTestsPregelVertex1.document(firstDoc._id);
+      expect(docBefore).toEqual(docAfter);
     });
 
     it("should save the vertex _result attribute its result collection", function () {
+      var docBefore = db.UnitTestsPregelVertex1.document(firstDoc._id);
       var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
 
       if (!ArangoClusterInfo.getResponsibleShard) {
@@ -272,9 +288,13 @@ describe("Pregel Vertex tests", function () {
 
       var resultDocument = db[resName].document(resName + "/" + Vertex._key);
       expect(resultDocument.result).toEqual({});
+
+      var docAfter = db.UnitTestsPregelVertex1.document(firstDoc._id);
+      expect(docBefore).toEqual(docAfter);
     });
 
     it("should return the result attribute of the result", function () {
+      var docBefore = db.UnitTestsPregelVertex1.document(firstDoc._id);
       var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
 
       if (!ArangoClusterInfo.getResponsibleShard) {
@@ -299,6 +319,9 @@ describe("Pregel Vertex tests", function () {
       var resultDocument = db[resName].document(resName + "/" + Vertex._key);
       expect(resultDocument.result).toEqual(myResult);
       expect(result).toEqual(myResult);
+
+      var docAfter = db.UnitTestsPregelVertex1.document(firstDoc._id);
+      expect(docBefore).toEqual(docAfter);
     });
 
   });
