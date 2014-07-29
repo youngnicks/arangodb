@@ -217,7 +217,7 @@ describe("Pregel Conductor", function () {
     if (coordinator) {
 
       it("should call next pregel execution on all database servers", function () {
-        var body = JSON.stringify({step: 2, executionNumber: execNr, setup: {}});
+        var body = JSON.stringify({step: 2, executionNumber: execNr, setup: {}, conductor: ArangoServerState.id()});
         conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
         clusterServer.forEach(function (server) {
           expect(ArangoClusterComm.asyncRequest).toHaveBeenCalledWith(
