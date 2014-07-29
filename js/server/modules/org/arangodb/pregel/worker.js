@@ -207,6 +207,15 @@ var executeStep = function(executionNumber, step, options) {
   }
 };
 
+
+var cleanUp = function(executionNumber) {
+
+  db._drop(pregel.genWorkCollectionName(executionNumber));
+  db._drop(pregel.genMsgCollectionName(executionNumber));
+  db._drop(pregel.genGlobalCollectionName(executionNumber));
+};
+
+
 var vertexDone = function (executionNumber, vertex, global) {
   vertex._save();
   var globalCol = pregel.getGlobalCollection(executionNumber);
@@ -238,4 +247,5 @@ var vertexDone = function (executionNumber, vertex, global) {
 
 // Public functions
 exports.executeStep = executeStep;
+exports.cleanUp = cleanUp;
 exports.vertexDone = vertexDone;

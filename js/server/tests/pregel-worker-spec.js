@@ -132,9 +132,13 @@ describe("Pregel Worker", function () {
 
           }
         });
-        db._drop(pregel.genWorkCollectionName(executionNumber));
-        db._drop(pregel.genMsgCollectionName(executionNumber));
-        db._drop(pregel.genGlobalCollectionName(executionNumber));
+        try {
+          db._drop(pregel.genWorkCollectionName(executionNumber));
+          db._drop(pregel.genMsgCollectionName(executionNumber));
+          db._drop(pregel.genGlobalCollectionName(executionNumber));
+        } catch (ignore) {
+
+        }
       });
 
       it("should first executeStep", function () {
@@ -158,6 +162,19 @@ describe("Pregel Worker", function () {
             }
           }
         });
+      });
+      it("should cleanup", function () {
+        var id = ArangoServerState.id() || "localhost";
+        worker.executeStep(executionNumber, 0, {map : mapping});
+        expect(db[pregel.genWorkCollectionName(executionNumber)]).not.toEqual(undefined);
+        expect(db[pregel.genMsgCollectionName(executionNumber)]).not.toEqual(undefined);
+        expect(db[pregel.genGlobalCollectionName(executionNumber)]).not.toEqual(undefined);
+        worker.cleanUp(executionNumber);
+        expect(db[pregel.genWorkCollectionName(executionNumber)]).toEqual(undefined);
+        expect(db[pregel.genMsgCollectionName(executionNumber)]).toEqual(undefined);
+        expect(db[pregel.genGlobalCollectionName(executionNumber)]).toEqual(undefined);
+
+
       });
 
     });
