@@ -70,20 +70,20 @@ var queryActivateVertices = "FOR v IN @@work UPDATE PARSE_IDENTIFIER(v._to).key 
 
 var registerFunction = function(executionNumber, algorithm) {
 
-  var taskToExecute = "function (params) {"
+  var taskToExecute = "(function (params) {"
     + "var executionNumber = params.executionNumber;"
     + "var step = params.step;"
     + "var vertexid = params.vertexid;"
     + "var pregel = require('org/arangodb/pregel');"
-    + "var worker = pregel.worker;"
-    + "var vertex = pregel.Vertex(executionNumber, vertexid);"
-    + "var messages = pregel.MessageQueue(executionNumber, vertexid, step);"
+    + "var worker = pregel.Worker;"
+    + "var vertex = new pregel.Vertex(executionNumber, vertexid);"
+    + "var messages = new pregel.MessageQueue(executionNumber, vertexid, step);"
     + "var global = {"
     +   "step: step"
     + "};"
-    + algorithm + "(vertex, messages, global);"
+    + "(" + algorithm + "(vertex, messages, global));"
     + "worker.vertexDone(executionNumber, vertex, global);"
-    + "}";
+    + "})";
 
     // This has to be replaced by worker registry
     var col = pregel.getGlobalCollection(executionNumber);
@@ -95,10 +95,10 @@ var addTask = function (executionNumber, stepNumber, vertex, options) {
   var col = pregel.getGlobalCollection(executionNumber);
   var task = col.document("task").task;
   tasks.register({
-    id: executionNumber + "_" + stepNumber + "_" + vertex._id,
+    id: executionNumber + "_" + stepNumber + "_" + vertex,
     name: "Pregel",
     command: task,
-    params: { executionNumber: executionNumber, step: stepNumber,  vertexid : vertex._id}
+    params: { executionNumber: executionNumber, step: stepNumber,  vertexid : vertex}
   });
 };
 
@@ -153,6 +153,7 @@ var activateVertices = function(executionNumber) {
   Object.keys(map).forEach(function (collection) {
     var resultShards = Object.keys(map[collection].resultShards);
     var i;
+    var bindVars;
     for (i = 0; i < resultShards.length; i++) {
       if (map[collection].resultShards[resultShards[i]] === id) {
         if (map[collection].type === 2) {
@@ -219,6 +220,21 @@ var cleanUp = function(executionNumber) {
   db._drop(pregel.genGlobalCollectionName(executionNumber));
 };
 
+var sendMessages = function (executionNumber) {
+  var msgCol = pregel.getMsgCollection(executionNumber);
+  var workCol = pregel.getWorkCollection(executionNumber);
+  if (ArangoServerState.role() === "PRIMARY") {
+    // Clusteur
+  } else {
+    var cursor = msgCol.all();
+    var next;
+    while(cursor.hasNext()) {
+      next = cursor.next();
+      workCol.save(next._from, next._to, next);
+    }
+    msgCol.truncate();
+  }
+};
 
 var vertexDone = function (executionNumber, vertex, global) {
   vertex._save();
@@ -230,6 +246,7 @@ var vertexDone = function (executionNumber, vertex, global) {
   if (counter === 0) {
     var messages = pregel.getMsgCollection(executionNumber).count(); 
     var active = getActiveVerticesQuery(executionNumber).count();
+    sendMessages(executionNumber);
     if (ArangoServerState.role() === "PRIMARY") {
       var conductor = getConductor(executionNumber);
       var body = JSON.stringify({

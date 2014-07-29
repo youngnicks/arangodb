@@ -143,7 +143,10 @@ describe("Pregel Worker", function () {
 
       it("should first executeStep", function () {
         var id = ArangoServerState.id() || "localhost";
-        worker.executeStep(executionNumber, 0, {map : mapping});
+        worker.executeStep(executionNumber, 0, {
+          map: mapping,
+          algorithm: "function(){}"
+        });
         expect(db["work_" + executionNumber]).not.toEqual(undefined);
         expect(db["messages_" + executionNumber]).not.toEqual(undefined);
         Object.keys(mapping).forEach(function (collection) {
@@ -163,9 +166,10 @@ describe("Pregel Worker", function () {
           }
         });
       });
+
       it("should cleanup", function () {
         var id = ArangoServerState.id() || "localhost";
-        worker.executeStep(executionNumber, 0, {map : mapping});
+        worker.executeStep(executionNumber, 0, {map: mapping, algorithm: "function(){}"});
         expect(db[pregel.genWorkCollectionName(executionNumber)]).not.toEqual(undefined);
         expect(db[pregel.genMsgCollectionName(executionNumber)]).not.toEqual(undefined);
         expect(db[pregel.genGlobalCollectionName(executionNumber)]).not.toEqual(undefined);
@@ -173,15 +177,13 @@ describe("Pregel Worker", function () {
         expect(db[pregel.genWorkCollectionName(executionNumber)]).toEqual(undefined);
         expect(db[pregel.genMsgCollectionName(executionNumber)]).toEqual(undefined);
         expect(db[pregel.genGlobalCollectionName(executionNumber)]).toEqual(undefined);
-
-
       });
 
     });
 
     describe("task done for vertex", function () {
 
-      var globalCol, messageCol, COUNTER, CONDUCTOR, MAP,
+      var globalCol, messageCol, workCol, COUNTER, CONDUCTOR, MAP,
         vertex1, vertex2, vertex3, vertex4, vertex5,
         vC, vCRes, step, conductorName,
         setActiveAndMessages = function () {
@@ -224,6 +226,12 @@ describe("Pregel Worker", function () {
         try {
           db._drop(pregel.genGlobalCollectionName(executionNumber));
         } catch (ignore) { }
+        try {
+          db._drop(pregel.genMsgCollectionName(executionNumber));
+        } catch (ignore) { }
+        try {
+          db._drop(pregel.genWorkCollectionName(executionNumber));
+        } catch (ignore) { }
         COUNTER = "counter";
         CONDUCTOR = "conductor";
         MAP = "map";
@@ -240,6 +248,7 @@ describe("Pregel Worker", function () {
 
         globalCol = db._create(pregel.genGlobalCollectionName(executionNumber));
         messageCol = db._createEdgeCollection(pregel.genMsgCollectionName(executionNumber));
+        workCol = db._createEdgeCollection(pregel.genWorkCollectionName(executionNumber));
         globalCol.save({_key: COUNTER, count: 3});
         globalCol.save({_key: CONDUCTOR, name: conductorName});
         globalCol.save({_key: MAP, map: map});
@@ -262,8 +271,10 @@ describe("Pregel Worker", function () {
 
       afterEach(function () {
         db._drop(vC);
+        db._drop(vCRes);
         globalCol.drop();
         messageCol.drop();
+        workCol.drop();
       });
 
       it("should decrease the global counter by one", function () {
@@ -359,6 +370,17 @@ describe("Pregel Worker", function () {
               messages: 2
             }
           );
+        });
+
+        it("should move all messages in single server case", function () {
+          setActiveAndMessages();
+          spyOn(ArangoServerState, "role").and.returnValue("UNDEFINED");
+          spyOn(conductor, "finishedStep");
+          expect(messageCol.count()).toEqual(2);
+          expect(workCol.count()).toEqual(0);
+          worker.vertexDone(executionNumber, vertex3, {step: step});
+          expect(messageCol.count()).toEqual(0);
+          expect(workCol.count()).toEqual(2);
         });
 
       });

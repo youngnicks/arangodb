@@ -29,6 +29,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var actions = require("org/arangodb/actions");
+var executionNumber = "executionNumber";
+var pregel = require("org/arangodb/pregel");
+var worker = pregel.Worker;
+var conductor = pregel.Conductor;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -36,56 +40,47 @@ var actions = require("org/arangodb/actions");
 ////////////////////////////////////////////////////////////////////////////////
 
 function post_pregel (req, res) {
-  require("internal").print("XXXXXXXXXXXXXXXXXXX" + req.suffix);
-  /*if (req.suffix.length === 0) {
-    // POST /_api/graph
-    post_graph_graph(req, res);
+  switch (req.suffix[0]) {
+    case ("cleanup") :
+      if (!req.suffix[1]) {
+        actions.badParameter (req, res, executionNumber);
+        return;
+      }
+      worker.cleanUp(req.suffix[1]);
+      actions.resultOk(req, res, actions.HTTP_OK);
+      break;
+
+    case ("finishedStep") :
+      var body = JSON.parse(req.requestBody);
+      conductor.finishedStep(
+        body.executionNumber,
+        body.server,
+        {
+          step : body.step,
+          messages : body.messages,
+          active : body.active
+        }
+      );
+      actions.resultOk(req, res, actions.HTTP_OK);
+      break;
+
+    case ("nextStep") :
+      var body = JSON.parse(req.requestBody);
+      worker.executeStep(body.executionNumber, body.step, body.setup);
+      actions.resultOk(req, res, actions.HTTP_OK);
+      break;
+
+    default:
+      actions.resultUnsupported(req, res);
   }
-  else if (req.suffix.length > 1) {
-    var g;
-
-    // POST /_api/graph/<key>/...
-    try {
-      g = graph_by_request(req);
-    }
-    catch (err) {
-      actions.resultNotFound(req, res, arangodb.ERROR_GRAPH_INVALID_GRAPH, err);
-      return;
-    }
-
-    switch (req.suffix[1]) {
-      case ("vertex") :
-        post_graph_vertex(req, res, g);
-        break;
-
-      case ("edge") :
-        post_graph_edge(req, res, g);
-        break;
-
-      case ("vertices") :
-        post_graph_vertices(req, res, g);
-        break;
-
-      case ("edges") :
-        post_graph_edges(req, res, g);
-        break;
-
-      default:
-        actions.resultUnsupported(req, res);
-    }
-
-  }
-  else {
-    actions.resultUnsupported(req, res);
-  }*/
 }
 
 
 
 actions.defineHttp({
   url : "_api/pregel",
-  context : "pregel",
-  prefix : "false",
+  context : "api",
+  prefix : true,
   callback : function (req, res) {
     try {
        if (req.requestType === actions.POST) {
