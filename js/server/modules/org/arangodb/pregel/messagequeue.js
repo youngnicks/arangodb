@@ -30,7 +30,7 @@
 
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
-var query = "FOR m IN @@collection FILTER m._to == @vertex && m.step == @step RETURN m.data";
+var query = "FOR m IN @@collection FILTER m._to == @vertex && m.step == @step RETURN m";
 
 var Queue = function (executionNumber, vertexId, step) {
   this.__collection = pregel.getMsgCollection(executionNumber);
