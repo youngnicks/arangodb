@@ -40,6 +40,7 @@ var conductor = pregel.Conductor;
 ////////////////////////////////////////////////////////////////////////////////
 
 function post_pregel (req, res) {
+  var body;
   switch (req.suffix[0]) {
     case ("cleanup") :
       if (!req.suffix[1]) {
@@ -51,7 +52,7 @@ function post_pregel (req, res) {
       break;
 
     case ("finishedStep") :
-      var body = JSON.parse(req.requestBody);
+      body = JSON.parse(req.requestBody);
       conductor.finishedStep(
         body.executionNumber,
         body.server,
@@ -65,7 +66,7 @@ function post_pregel (req, res) {
       break;
 
     case ("nextStep") :
-      var body = JSON.parse(req.requestBody);
+      body = JSON.parse(req.requestBody);
       worker.executeStep(body.executionNumber, body.step, body.setup);
       actions.resultOk(req, res, actions.HTTP_OK);
       break;
