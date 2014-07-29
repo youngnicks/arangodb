@@ -256,6 +256,24 @@ describe("Pregel Vertex tests", function () {
       expect(resultDocument.deleted).toBe(true);
     });
 
+    it("should save the vertex _result attribute its result collection", function () {
+      var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
+
+      if (!ArangoClusterInfo.getResponsibleShard) {
+        ArangoClusterInfo.getResponsibleShard = function () {
+          return undefined;
+        };
+      }
+      spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(resName);
+
+      var Vertex = new vertex(execNr, firstDoc._id);
+      db[resName].save({"_key": Vertex._key, "result": "this must change"});
+      Vertex._save();
+
+      var resultDocument = db[resName].document(resName + "/" + Vertex._key);
+      expect(resultDocument.result).toEqual({});
+    });
+
     it("should return the result attribute of the result", function () {
       var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
 
