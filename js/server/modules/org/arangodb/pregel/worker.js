@@ -153,6 +153,7 @@ var activateVertices = function(executionNumber) {
   Object.keys(map).forEach(function (collection) {
     var resultShards = Object.keys(map[collection].resultShards);
     var i;
+    var bindVars;
     for (i = 0; i < resultShards.length; i++) {
       if (map[collection].resultShards[resultShards[i]] === id) {
         if (map[collection].type === 2) {
