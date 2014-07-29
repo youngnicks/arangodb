@@ -78,7 +78,7 @@ var startNextStep = function(executionNumber, options) {
     dbServers.forEach(
       function(dbServer) {
         ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
-          "/_api/pregel", body,{}, httpOptions);
+          "/_api/pregel/nextStep", body,{}, httpOptions);
       }
     );
   } else {
@@ -104,7 +104,7 @@ var cleanUp = function (executionNumber) {
   } else {
     dbServers = ["localhost"];
     httpOptions.type = "POST";
-    // internal.download("/_db/" + db._name() + "/_api/pregel", body, httpOptions);
+    require("org/arangodb/pregel").Worker.cleanUp(executionNumber);
   }
 };
 

@@ -1,6 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, todo: true, white: false, sloppy: false */
 /*global require, describe, beforeEach, it, expect, spyOn, afterEach*/
-/*global ArangoClusterInfo */
+/*global ArangoClusterInfo, ArangoServerState */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief test pregels message object offered to the user
@@ -46,7 +46,11 @@ describe("Pregel MessageQueue", function () {
     step = 2;
     senderId = vertexCollectionName + "/sender";
     receiverId = vertexCollectionName + "/receiver";
-    shardName = "UnitTestShard";
+    if (ArangoServerState.role() === "PRIMARY") {
+      shardName = "UnitTestShard";
+    } else {
+      shardName = vertexCollectionName;
+    }
     try {
       db._drop(vertexCollectionName);
     } catch (ignore) { }
@@ -63,6 +67,7 @@ describe("Pregel MessageQueue", function () {
       };
     }
     spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(shardName);
+    spyOn(pregel, "getResponsibleShard").and.callThrough();
   });
 
   afterEach(function () {
@@ -105,8 +110,8 @@ describe("Pregel MessageQueue", function () {
       testee.sendTo(receiverId, text);
       var sended = msgCollection.any();
       expect(sended.toShard).toEqual(shardName);
-      expect(ArangoClusterInfo.getResponsibleShard).not.toHaveBeenCalledWith(senderId);
-      expect(ArangoClusterInfo.getResponsibleShard).toHaveBeenCalledWith(receiverId);
+      expect(pregel.getResponsibleShard).not.toHaveBeenCalledWith(senderId);
+      expect(pregel.getResponsibleShard).toHaveBeenCalledWith(receiverId);
     });
 
   });
@@ -123,7 +128,9 @@ describe("Pregel MessageQueue", function () {
       msgCollection.save(receiverId, senderId, {data: thirdText, step: step, toShard: shardName});
       var incomming = testee.getMessages();
       expect(incomming.count()).toEqual(3);
-      expect(incomming.toArray().sort()).toEqual([firstText, secondText, thirdText].sort());
+      expect(incomming.toArray().map(function (d) {
+        return d.data;
+      }).sort()).toEqual([firstText, secondText, thirdText].sort());
     });
 
     it("should not contain messages for other steps", function () {
@@ -135,7 +142,9 @@ describe("Pregel MessageQueue", function () {
       msgCollection.save(receiverId, senderId, {data: otherStep, step: step + 1, toShard: shardName});
       var incomming = testee.getMessages();
       expect(incomming.count()).toEqual(1);
-      expect(incomming.toArray()).toEqual([firstText]);
+      expect(incomming.toArray().map(function (d) {
+        return d.data;
+      })).toEqual([firstText]);
     });
 
     it("should not contain messages for other vertices", function () {
@@ -146,7 +155,9 @@ describe("Pregel MessageQueue", function () {
       msgCollection.save(senderId, receiverId, {data: otherText, step: step, toShard: shardName});
       var incomming = testee.getMessages();
       expect(incomming.count()).toEqual(1);
-      expect(incomming.toArray()).toEqual([firstText]);
+      expect(incomming.toArray().map(function(d) {
+        return d.data;
+      })).toEqual([firstText]);
     });
 
   });
