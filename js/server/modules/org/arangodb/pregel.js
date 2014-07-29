@@ -55,10 +55,11 @@ exports.getMsgCollection = function (executionNumber) {
 };
 
 exports.getOriginalCollection = function (id) {
-    return id.split('/');
+  return id.split('/')[0];
 };
 
 exports.getResultCollection = function (id) {
+  var origCollection = db[this.getOriginalCollection(id)].document(id);
 };
 
 exports.getGlobalCollection = function (executionNumber) {

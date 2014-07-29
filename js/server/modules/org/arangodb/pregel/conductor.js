@@ -148,6 +148,11 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
       map[collection].originalShards =
       ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
+    } else {
+      map[collection] = {};
+      map[collection].type = properties[collection].type;
+      map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
+      map[collection].originalShards ={collection : "localhost"};
     }
     var props = {
       numberOfShards : properties[collection].numberOfShards,
@@ -161,6 +166,10 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
         ArangoClusterInfo.getCollectionInfo(
           db._name(), generateResultCollectionName(collection, executionNumber)
         ).shards;
+    } else {
+      var c = {};
+      c[generateResultCollectionName(collection, executionNumber)] = "localhost";
+      map[collection].resultShards = c;
     }
   });
   if (noCreation) {
