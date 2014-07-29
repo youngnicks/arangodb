@@ -280,6 +280,7 @@ describe("Pregel Vertex tests", function () {
 
       var resultDocument = db[resName].document(resName + "/" + Vertex._key);
       expect(resultDocument.result).toEqual(myResult);
+      expect(result).toEqual(myResult);
     });
 
   });
