@@ -89,11 +89,14 @@ var setup = function(executionNumber, options) {
     collectionMapping[collection] = options.map[collection].resultCollection;
   });
 
+  var id = ArangoServerState.id() || "localhost";
+
   Object.keys(options.map).forEach(function (collection) {
     var shards = Object.keys(options.map[collection].originalShards);
     var resultShards = Object.keys(options.map[collection].resultShards);
     for (var i = 0; i < shards.length; i++) {
-      if (options.map[collection].originalShards[shards[i]] === ArangoServerState.id()) {
+      require("internal").print(shards);
+      if (options.map[collection].originalShards[shards[i]] === id) {
         var bindVars = {
           '@original' : shards[i],
           '@result' : resultShards[i]
@@ -101,14 +104,16 @@ var setup = function(executionNumber, options) {
         if (options.map[collection].type === 3) {
           bindVars.collectionMapping = collectionMapping;
           db._query("FOR v IN @@original INSERT {" +
-            "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {}, " +
+            "'_key' : v._key, 'deleted' : false, 'result' : {}, " +
             "'_from' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._from).collection, @collectionMapping), '/', PARSE_IDENTIFIER(v._from).key), " +
             "'_to' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._to).collection, @collectionMapping), '/', PARSE_IDENTIFIER(v._to).key)" +
             "} INTO  @@result", bindVars).execute();
+          require("internal").print(bindVars);
         } else {
           db._query("FOR v IN @@original INSERT {" +
             "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {} " +
             "} INTO  @@result", bindVars).execute();
+          require("internal").print(bindVars);
         }
       }
     }
@@ -131,11 +136,12 @@ var activateVertices = function() {
 var getActiveVerticesQuery = function (options) {
   var count = 0;
   var bindVars = {};
+  var id = ArangoServerState.id() || "localhost";
   var query = "FOR i in [";
   Object.keys(options.map).forEach(function (collection) {
     var resultShards = Object.keys(options.map[collection].resultShards);
     for (var i = 0; i < resultShards.length; i++) {
-      if (options.map[collection].resultShards[resultShards[i]] === ArangoServerState.id()) {
+      if (options.map[collection].resultShards[resultShards[i]] === id) {
         count++;
         if (options.map[collection].type === 2) {
           query += " @@collection" + count + ",";
@@ -144,7 +150,8 @@ var getActiveVerticesQuery = function (options) {
       }
     }
   });
-  query = query.substring(0, query.length-1).concat("] FILTER i.active == true RETURN i");
+  query = query.substring(0, query.length-1).concat("] FILTER i.active == true && i.deleted == false RETURN i");
+  require("internal").print(query);
   return db._query(query, bindVars);
 };
 
