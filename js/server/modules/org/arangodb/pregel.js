@@ -29,6 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var db = require("internal").db;
+var _ = require("underscore");
 
 exports.getServerName = function () {
   return ArangoServerState.id() || "localhost";
@@ -49,7 +50,6 @@ exports.getWorkCollection = function (executionNumber) {
   return db._collection(exports.genWorkCollectionName(executionNumber));
 };
 
-
 exports.getMsgCollection = function (executionNumber) {
   return db._collection(exports.genMsgCollectionName(executionNumber));
 };
@@ -58,8 +58,20 @@ exports.getOriginalCollection = function (id) {
   return id.split('/')[0];
 };
 
-exports.getResultCollection = function (id) {
-  var origCollection = db[this.getOriginalCollection(id)].document(id);
+exports.getResultCollection = function (id, executionNumber) {
+  var mapping = exports.getGlobalCollection(executionNumber).document("map").map;
+  var collectionName = exports.getOriginalCollection(id), resultCollectionName;
+
+  _.each(mapping, function(value, key) {
+      if (key === collectionName) {
+        resultCollectionName = value.resultCollection;
+      }
+  });
+
+  if (resultCollectionName === undefined) {
+    return false;
+  }
+  return resultCollectionName;
 };
 
 exports.getGlobalCollection = function (executionNumber) {
@@ -67,7 +79,53 @@ exports.getGlobalCollection = function (executionNumber) {
 };
 
 exports.getResponsibleShard = function (doc) {
-  return ArangoClusterInfo.getResponsibleShard(doc);
+  var info = doc.split("/");
+  var col = info[0];
+  if (ArangoServerState.role() === "PRIMARY") {
+    var key = info[1];
+    return ArangoClusterInfo.getResponsibleShard(col, {_key: key});
+  }
+  return col;
+};
+
+exports.getResponsibleEdgeShards = function (executionNumber, doc) {
+  var globalCol = exports.getGlobalCollection(executionNumber);
+  var col = doc.split("/");
+  var map = globalCol.document("map").map;
+  var example = {
+    _from: doc
+  };
+  var result = [];
+  if(map[col] !== undefined) {
+    if (ArangoServerState.role() === "PRIMARY") {
+      _.each(map, function (c, key) {
+        if (c.type === 3) {
+          result.push(ArangoClusterInfo.getResponsibleShard(key, example));
+        }
+      });
+      return result;
+    }
+    _.each(map, function (c, key) {
+      if (c.type === 3) {
+        result.push(key);
+      }
+    });
+    return result;
+  }
+  if (ArangoServerState.role() === "PRIMARY") {
+    _.each(map, function (c) {
+      if (c.type === 3) {
+        result.push(ArangoClusterInfo.getResponsibleShard(c.resultCollection, example));
+      }
+    });
+    return result;
+  }
+  _.each(map, function (c) {
+    if (c.type === 3) {
+      result.push(c.resultCollection);
+    }
+  });
+  return result;
 };
 
 exports.Conductor = require("org/arangodb/pregel/conductor");

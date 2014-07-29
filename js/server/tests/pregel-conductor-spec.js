@@ -317,7 +317,7 @@ describe("Pregel Conductor", function () {
       });
 
       it("should start execution", function () {
-        conductor.startExecution(graphName, "algorithm");
+        conductor.startExecution(graphName, "function(){}");
         expect(db._pregel.toArray().length).toEqual(1);
         expect(db._pregel.toArray()[0].step).toEqual(0);
         expect(db._pregel.toArray()[0].stepContent[0].active).toEqual(4);
@@ -328,7 +328,7 @@ describe("Pregel Conductor", function () {
       });
 
       it("should start execution and finish steps", function () {
-        conductor.startExecution(graphName, "algorithm");
+        conductor.startExecution(graphName, "function(){}");
         expect(db._pregel.toArray().length).toEqual(1);
         expect(db._pregel.toArray()[0].step).toEqual(0);
         expect(db._pregel.toArray()[0].stepContent[0].active).toEqual(4);
@@ -406,7 +406,7 @@ describe("Pregel Conductor", function () {
         clusterServer.forEach(function (s) {
           counter[s] = 0;
         });
-        conductor.startExecution(graphName, "algorithm");
+        conductor.startExecution(graphName, "function(){}");
       });
 
       afterEach(function () {
