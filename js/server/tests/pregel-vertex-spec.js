@@ -276,7 +276,7 @@ describe("Pregel Vertex tests", function () {
       var Vertex = new vertex(execNr, firstDoc._id);
       db[resName].save({"_key": Vertex._key, "result": myResult});
 
-      Vertex._getResult();
+      var result = Vertex._getResult();
 
       var resultDocument = db[resName].document(resName + "/" + Vertex._key);
       expect(resultDocument.result).toEqual(myResult);

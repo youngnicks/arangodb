@@ -63,7 +63,7 @@ Vertex.prototype._getResult = function () {
   var resultCollection = pregel.getResponsibleShard(resultCollectionName);
   var myResDocId = resultCollection + "/" + this._key;
 
-  return db[resultCollection].document(myResDocId);
+  return db[resultCollection].document(myResDocId).result;
 };
 
 Vertex.prototype._delete = function () {
