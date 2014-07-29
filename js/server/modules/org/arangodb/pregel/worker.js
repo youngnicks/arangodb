@@ -102,6 +102,7 @@ var loadMapping = function(executionNumber) {
 
 var setup = function(executionNumber, options) {
   // create global collection
+  var id = ArangoServerState.id() || "localhost";
   db._create(pregel.genWorkCollectionName(executionNumber));
   db._create(pregel.genMsgCollectionName(executionNumber)).ensureHashIndex("toShard");
   var global = db._create(pregel.genGlobalCollectionName(executionNumber));
@@ -116,7 +117,7 @@ var setup = function(executionNumber, options) {
     var i;
     var bindVars;
     for (i = 0; i < shards.length; i++) {
-      if (mapping.originalShards[shards[i]] === ArangoServerState.id()) {
+      if (mapping.originalShards[shards[i]] === id) {
         bindVars = {
           '@original' : shards[i],
           '@result' : resultShards[i]

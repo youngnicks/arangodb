@@ -85,29 +85,25 @@ describe("Pregel Worker", function () {
           var resultShards = Object.keys(mapping[collection].resultShards);
           var i;
           for (i = 0; i < shards.length; i++) {
-            if (mapping[collection].originalShards[shards[i]] === ArangoServerState.id()) {
+            if (mapping[collection].originalShards[shards[i]] === id) {
               try {
-                require("internal").print("dropping", resultShards[i])
                 db._drop(resultShards[i]);
               } catch (ignore) {
-                require("internal").print(ignore)
               }
               try {
-                require("internal").print("dropping", shards[i])
                 db._drop(shards[i]);
               } catch (ignore) {
-                require("internal").print(ignore)
               }
               try {
                 if (mapping[collection].type === 3) {
                   db._createEdgeCollection(shards[i]);
-                  db[shards[i]].insert({_key : "active", deleted : false, _to : "UnitTestsPregelVertex1/1", _from : "UnitTestsPregelVertex2/2"});
-                  db[shards[i]].insert({_key : "deleted",deleted : true, _to : "UnitTestsPregelVertex1/1", _from : "UnitTestsPregelVertex2/3"});
+                  db[shards[i]].insert("UnitTestsPregelVertex2/2", "UnitTestsPregelVertex1/1", {_key : "edgeA"});
+                  db[shards[i]].insert("UnitTestsPregelVertex2/3", "UnitTestsPregelVertex1/1", {_key : "edgeB"});
                 } else {
                   db._create(shards[i]);
-                  db[shards[i]].insert({active : true, _key : "active", deleted : false});
-                  db[shards[i]].insert({active : true, _key : "activeButDeleted",deleted : true});
-                  db[shards[i]].insert({active : false, _key : "inactive", deleted : false});
+                  db[shards[i]].insert({_key : "vertexA"});
+                  db[shards[i]].insert({_key : "vertexB"});
+                  db[shards[i]].insert({_key : "vertexC"});
                 }
               } catch (ignore) {
               }
@@ -151,11 +147,14 @@ describe("Pregel Worker", function () {
           var resultShards = Object.keys(mapping[collection].resultShards);
           for (var i = 0; i < shards.length; i++) {
             if (mapping[collection].originalShards[shards[i]] === id) {
-              require("internal").print(resultShards[i]);
-              require("internal").print(db[resultShards[i]].toArray());
-              expect(db[resultShards[i]].document("active")).not.toEqual(undefined);
-              expect(db[resultShards[i]].document("activeButDeleted")).toEqual(undefined);
-              expect(db[resultShards[i]].document("inactive")).toEqual(undefined);
+              if (mapping[collection].type === 3) {
+                expect(db[resultShards[i]].document("edgeA")).not.toEqual(undefined);
+                expect(db[resultShards[i]].document("edgeB")).not.toEqual(undefined);
+              } else {
+                expect(db[resultShards[i]].document("vertexA")).not.toEqual(undefined);
+                expect(db[resultShards[i]].document("vertexB")).not.toEqual(undefined);
+                expect(db[resultShards[i]].document("vertexC")).not.toEqual(undefined);
+              }
             }
           }
         });
