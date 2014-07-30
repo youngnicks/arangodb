@@ -43,9 +43,12 @@ describe("Full Pregel execution", function () {
       v = "UnitTestVertices";
       e = "UnitTestEdges";
 
+      if (graph._exists(gN)) {
+        graph._drop(gN, true);
+      }
       g = graph._create(
         gN,
-        graph._undirectedRelation(e, [v])
+        [graph._undirectedRelation(e, [v])]
       );
 
       var saveVertex = function (key) {
@@ -79,6 +82,7 @@ describe("Full Pregel execution", function () {
 
     it("should identify all distinct graphs", function () {
       var myPregel = function (vertex, message, global) {
+        require("console").log("idaho", vertex._id);
         var inc = message.getMessages();
         var next;
         if (global.step === 0) {
@@ -115,7 +119,9 @@ describe("Full Pregel execution", function () {
         }
         vertex._deactivate();
       };
-      conductor.startExecution(gN, myPregel.toString());
+      var id = conductor.startExecution(gN, myPregel.toString());
+      require("console").log(id);
+      require("internal").wait(100);
     });
 
 
