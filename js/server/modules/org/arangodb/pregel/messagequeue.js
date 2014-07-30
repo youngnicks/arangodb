@@ -34,7 +34,10 @@ var query = "FOR m IN @@collection FILTER m._to == @vertex && m.step == @step RE
 
 var Queue = function (executionNumber, vertexId, step) {
   this.__collection = pregel.getMsgCollection(executionNumber);
-  this.__from = vertexId;
+  this.__workCollection = pregel.getWorkCollection(executionNumber);
+  var vertexCollectionName = pregel.getOriginalCollection(vertexId, executionNumber);
+  var key = vertexId.split("/")[1];
+  this.__from = vertexCollectionName + "/" + key;
   this.__nextStep = step + 1;
   this.__step = step;
 };
@@ -47,15 +50,16 @@ Queue.prototype.sendTo = function(target, data) {
 };
 
 Queue.prototype.getMessages = function () {
-  return db._createStatement({
-    query: query,
-    bindVars: {
+  return db._query(
+    query,
+    {
       step: this.__step,
       vertex: this.__from,
-      "@collection": this.__collection.name()
-    },
-    count: true
-  }).execute();
+      "@collection": this.__workCollection.name()
+    },{
+      count: true
+    }
+  );
 };
 
 exports.MessageQueue = Queue;

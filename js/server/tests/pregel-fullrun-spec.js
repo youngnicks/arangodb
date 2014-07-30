@@ -82,7 +82,6 @@ describe("Full Pregel execution", function () {
 
     it("should identify all distinct graphs", function () {
       var myPregel = function (vertex, message, global) {
-        require("console").log(JSON.stringify(vertex));
         var inc = message.getMessages();
         var next;
 
@@ -111,7 +110,7 @@ describe("Full Pregel execution", function () {
         }
         if (global.step < 2 || min < vertex._result.inGraph) {
           vertex._result.inGraph = min;
-          var outBound = vertex._outEdges().map(function (e) {
+          var outBound = vertex._outEdges.map(function (e) {
             return e._to;
           });
           outBound.concat(vertex._result.inBound).forEach(function (t) {

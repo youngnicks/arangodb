@@ -54,24 +54,24 @@ exports.getMsgCollection = function (executionNumber) {
   return db._collection(exports.genMsgCollectionName(executionNumber));
 };
 
-exports.getOriginalCollection = function (id) {
-  return id.split('/')[0];
-};
-
-exports.getResultCollection = function (id, executionNumber) {
+exports.getOriginalCollection = function (id, executionNumber) {
   var mapping = exports.getGlobalCollection(executionNumber).document("map").map;
-  var collectionName = exports.getOriginalCollection(id), resultCollectionName;
+  var collectionName = exports.getResultCollection(id), originalCollectionName;
 
   _.each(mapping, function(value, key) {
-    if (key === collectionName) {
-      resultCollectionName = value.resultCollection;
+    if (value.resultCollection === collectionName) {
+      originalCollectionName = key;
     }
   });
 
-  if (resultCollectionName === undefined) {
+  if (originalCollectionName === undefined) {
     return collectionName;
   }
-  return resultCollectionName;
+  return originalCollectionName;
+};
+
+exports.getResultCollection = function (id) {
+  return id.split('/')[0];
 };
 
 exports.getGlobalCollection = function (executionNumber) {
@@ -111,16 +111,16 @@ exports.getResponsibleEdgeShards = function (executionNumber, vertex) {
     return result;
   }
   if (ArangoServerState.role() === "PRIMARY") {
-    _.each(map, function (c) {
+    _.each(map, function (c, col) {
       if (c.type === 3) {
-        result.push(ArangoClusterInfo.getResponsibleShard(c.resultCollection, example));
+        result.push(ArangoClusterInfo.getResponsibleShard(col, example));
       }
     });
     return result;
   }
-  _.each(map, function (c) {
+  _.each(map, function (c, col) {
     if (c.type === 3) {
-      result.push(c.resultCollection);
+      result.push(col);
     }
   });
   return result;
