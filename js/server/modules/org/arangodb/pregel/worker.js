@@ -83,7 +83,7 @@ var registerFunction = function(executionNumber, algorithm) {
     + "};"
     + "(" + algorithm + "(vertex, messages, global));"
     + "worker.vertexDone(executionNumber, vertex, global);"
-    + "})";
+    + "})(params)";
 
     // This has to be replaced by worker registry
     var col = pregel.getGlobalCollection(executionNumber);
