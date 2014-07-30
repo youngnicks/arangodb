@@ -39,9 +39,11 @@ var Queue = function (executionNumber, vertexId, step) {
   this.__step = step;
 };
 
+// Target is id now, has to be modified to contian vertex data
 Queue.prototype.sendTo = function(target, data) {
-  var shard = pregel.getResponsibleShard(target);
-  this.__collection.save(this.__from, target, {data: data, step: this.__nextStep, toShard: shard});
+  var id = target;
+  var shard = pregel.getResponsibleShard(id.split("/")[0], {_id: id});
+  this.__collection.save(this.__from, id, {data: data, step: this.__nextStep, toShard: shard});
 };
 
 Queue.prototype.getMessages = function () {
