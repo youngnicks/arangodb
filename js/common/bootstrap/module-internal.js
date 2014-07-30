@@ -1100,12 +1100,9 @@
       context.output += context.names[p];
     }
     else {
-      if (value instanceof Object) {
+      if (value && (value instanceof Object || value.__proto__ === null)) {
         context.seen.push(value);
         context.names.push(context.path);
-      }
-
-      if (value instanceof Object) {
         if (customInspect && typeof value._PRINT === "function") {
           value._PRINT(context);
 
@@ -1117,7 +1114,7 @@
         else if (value instanceof Array) {
           printArray(value, context);
         }
-        else if (value.__proto__ === Object.prototype) {
+        else if (value.toString === Object.prototype.toString || value.__proto__ === null) {
           printObject(value, context);
 
           if (context.emit && context.output.length >= context.emit) {

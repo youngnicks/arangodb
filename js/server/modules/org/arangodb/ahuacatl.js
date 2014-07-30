@@ -1052,9 +1052,10 @@ function GET_DOCUMENTS_INCREMENTAL_INIT (collection, offset, limit) {
     limit = null;
   }
 
-  var batchSize = 2000;
+  var batchSize = 2000; // default value
+
   var c = COLLECTION(collection);
-  var state = c.OFFSET(0, batchSize, offset, null);
+  var state = c.OFFSET(0, batchSize, offset, limit);
   state.collection = c;
   state.batchSize  = batchSize;
   state.offset     = 0;
@@ -4850,7 +4851,9 @@ function RESOLVE_GRAPH_TO_COLLECTIONS(graph, options) {
       THROW(INTERNAL.errors.ERROR_QUERY_FUNCTION_ARGUMENT_TYPE_MISMATCH, "GRAPH_EDGES");
     }
   });
-
+  collections.orphanCollections = FILTER_RESTRICTION(
+    graph.orphanCollections, options.orphanCollectionRestriction
+  );
   return collections;
 }
 
@@ -4865,7 +4868,9 @@ function RESOLVE_GRAPH_TO_FROM_VERTICES (graphname, options) {
   var removeDuplicates = function(elem, pos, self) {
     return self.indexOf(elem) === pos;
   };
-
+  if (options.includeOrphans) {
+    collections.fromCollections = collections.fromCollections.concat(collections.orphanCollections);
+  }
   return DOCUMENTS_BY_EXAMPLE(
       collections.fromCollections.filter(removeDuplicates), options.fromVertexExample
   );
@@ -6120,17 +6125,22 @@ function GENERAL_GRAPH_VERTICES (
   if (! options.direction) {
     options.direction =  'any';
   }
-
+  if (options.direction ===  'any') {
+    options.includeOrphans = true;
+  }
   if (options.vertexCollectionRestriction) {
     if (options.direction === "inbound") {
       options.endVertexCollectionRestriction = options.vertexCollectionRestriction;
-    } else {
+    } else if (options.direction === "outbound")  {
       options.startVertexCollectionRestriction = options.vertexCollectionRestriction;
+    } else {
+      options.endVertexCollectionRestriction = options.vertexCollectionRestriction;
+      options.startVertexCollectionRestriction = options.vertexCollectionRestriction;
+      options.orphanCollectionRestriction = options.vertexCollectionRestriction;
     }
   }
 
   options.fromVertexExample = vertexExamples;
-
   return RESOLVE_GRAPH_TO_FROM_VERTICES(graphName, options);
 }
 

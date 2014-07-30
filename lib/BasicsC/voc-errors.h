@@ -8,7 +8,7 @@ extern "C" {
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @page ArangoErrors Error codes and meanings
-///
+/// @startDocuBlock errorCodes
 /// The following errors might be raised when running ArangoDB:
 ///
 /// - 0: @LIT{no error}
@@ -594,6 +594,7 @@ extern "C" {
 ///   Will be returned if the element was not found in the structure.
 /// - 20000: @LIT{newest version of app already installed}
 ///   newest version of app already installed
+/// @endDocuBlock
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
