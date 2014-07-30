@@ -36,6 +36,7 @@ var _ = require("underscore");
 var Vertex = function (executionNumber, vertexId) {
   var self = this;
   this._executionNumber = executionNumber;
+  this._result = {};
 
   //get attributes from original collection
   var collectionName = pregel.getOriginalCollection(vertexId);
@@ -54,7 +55,7 @@ Vertex.prototype._deactivate = function () {
   var resultCollection = pregel.getResponsibleShard(resultCollectionName);
   var myResDocId = resultCollection + "/" + this._key;
 
-  var doc = db[resultCollection].document(myResDocId);
+  var doc = db._document(myResDocId);
   db[resultCollection].update(doc, {"active": false});
 };
 
@@ -63,7 +64,7 @@ Vertex.prototype._getResult = function () {
   var resultCollection = pregel.getResponsibleShard(resultCollectionName);
   var myResDocId = resultCollection + "/" + this._key;
 
-  return db[resultCollection].document(myResDocId);
+  return db[resultCollection].document(myResDocId).result;
 };
 
 Vertex.prototype._delete = function () {
@@ -80,6 +81,12 @@ Vertex.prototype._getEdges = function () {
 };
 
 Vertex.prototype._save = function () {
+  var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
+  var resultCollection = pregel.getResponsibleShard(resultCollectionName);
+  var myResDocId = resultCollection + "/" + this._key;
+
+  var doc = db[resultCollection].document(myResDocId);
+  db[resultCollection].update(doc, {"result": this._result});
 };
 
 exports.Vertex = Vertex;

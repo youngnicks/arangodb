@@ -63,13 +63,13 @@ exports.getResultCollection = function (id, executionNumber) {
   var collectionName = exports.getOriginalCollection(id), resultCollectionName;
 
   _.each(mapping, function(value, key) {
-      if (key === collectionName) {
-        resultCollectionName = value.resultCollection;
-      }
+    if (key === collectionName) {
+      resultCollectionName = value.resultCollection;
+    }
   });
 
   if (resultCollectionName === undefined) {
-    return false;
+    return collectionName;
   }
   return resultCollectionName;
 };
