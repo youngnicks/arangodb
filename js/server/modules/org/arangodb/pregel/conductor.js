@@ -152,7 +152,8 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       map[collection] = {};
       map[collection].type = properties[collection].type;
       map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
-      map[collection].originalShards ={collection : "localhost"};
+      map[collection].originalShards = {};
+      map[collection].originalShards[collection]= "localhost";
     }
     var props = {
       numberOfShards : properties[collection].numberOfShards,
