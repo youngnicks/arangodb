@@ -201,7 +201,6 @@ var executeStep = function(executionNumber, step, options) {
   if (step === 0) {
     setup(executionNumber, options);
   }
-
   activateVertices(executionNumber);
   var q = getActiveVerticesQuery(executionNumber);
   // read full count from result and write to work
