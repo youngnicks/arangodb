@@ -112,27 +112,49 @@ describe("Pregel Vertex Object Testing", function () {
 
       try {
         db.UnitTestsPregelVertex1.drop();
+      } catch (ignore) {}
+      try {
         db.unittest_vertex2.drop();
+      } catch (ignore) {}
+      try {
         db.unittest_edge2.drop();
-
+      } catch (ignore) {}
+      try {
         db.global_unittest_nr_1337.drop();
-
+      } catch (ignore) {}
+      try {
         db.P_305000077_RESULT_UnitTestsPregelVertex1.drop();
+      } catch (ignore) {}
+      try {
         db.P_305000077_RESULT_UnitTestsPregelVertex2.drop();
+      } catch (ignore) {}
+      try {
         db.P_305000077_RESULT_UnitTestsPregelEdge2.drop();
-
+      } catch (ignore) {}
+      try {
         db.s305000059.drop();
+      } catch (ignore) {}
+      try {
         db.s305000062.drop();
+      } catch (ignore) {}
+      try {
         db.s305000079.drop();
+      } catch (ignore) {}
+      try {
         db.s305000082.drop();
+      } catch (ignore) {}
+      try {
         db.s305000065.drop();
+      } catch (ignore) {}
+      try {
         db.s305000085.drop();
+      } catch (ignore) {}
+      try {
         db.s305000070.drop();
+      } catch (ignore) {}
+      try {
         db.s305000090.drop();
-      }
-      catch (e) {
-        //collection available
-      }
+      } catch (ignore) {}
 
       //create main collections
       db._createDocumentCollection("UnitTestsPregelVertex1");
@@ -140,12 +162,7 @@ describe("Pregel Vertex Object Testing", function () {
       db._createEdgeCollection("unittest_edge2");
 
       //global collections
-      try {
-        db._createDocumentCollection("global_unittest_nr_1337");
-      }
-      catch (e) {
-        //collection available
-      }
+      db._createDocumentCollection("global_unittest_nr_1337");
 
       //create result collections
       db._createDocumentCollection("P_305000077_RESULT_UnitTestsPregelVertex1");
@@ -322,6 +339,12 @@ describe("Pregel Vertex Object Testing", function () {
 
       var docAfter = db.UnitTestsPregelVertex1.document(firstDoc._id);
       expect(docBefore).toEqual(docAfter);
+    });
+
+    it("should return a list containing connected edge objects", function () {
+      var Vertex = new vertex(execNr, firstDoc._id);
+
+      Vertex._getEdges();
     });
 
   });

@@ -79,6 +79,8 @@ exports.getGlobalCollection = function (executionNumber) {
 };
 
 exports.getResponsibleShard = function (col, doc) {
+  require("console").log("######## collection: "+col);
+  require("console").log("######## document: "+doc);
   if (ArangoServerState.role() === "PRIMARY") {
     return ArangoClusterInfo.getResponsibleShard(col, doc);
   }
