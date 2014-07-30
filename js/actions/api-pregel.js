@@ -92,6 +92,13 @@ actions.defineHttp({
     try {
        if (req.requestType === actions.POST) {
         post_pregel(req, res);
+       } else if (req.requestType === actions.GET) {
+         if (!req.suffix[0]) {
+           actions.badParameter (req, res, executionNumber);
+           return;
+         }
+         var result = conductor.getResult(req.suffix[0]);
+         actions.resultOk(req, res, actions.HTTP_OK, {graphName : result});
        } else {
         actions.resultUnsupported(req, res);
       }
