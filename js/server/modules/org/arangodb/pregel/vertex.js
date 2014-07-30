@@ -32,6 +32,7 @@
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
+var edge = require("org/arangodb/pregel").Edge;
 
 var Vertex = function (executionNumber, vertexId) {
   var self = this;
@@ -78,13 +79,14 @@ Vertex.prototype._delete = function () {
 
 Vertex.prototype._getEdges = function () {
   var respEdges = pregel.getResponsibleEdgeShards(this._executionNumber, this);
+  var self = this, edges = [];
 
-  _.each(respEdges, function(value, key) {
-    require("console").log("################" + key);
-    require("console").log("################" + value);
+  _.each(respEdges, function(collection) {
+    require("console").log("collection ############## : " + collection);
+    edges.push(new edge(self._executionNumber, db[collection].outEdges(self)));
   });
 
-  return false;
+  return edges;
 };
 
 Vertex.prototype._save = function () {
