@@ -116,8 +116,8 @@ var getConductor = function(executionNumber) {
 
 var setup = function(executionNumber, options) {
   // create global collection
-  db._create(pregel.genWorkCollectionName(executionNumber));
-  db._create(pregel.genMsgCollectionName(executionNumber)).ensureHashIndex("toShard");
+  db._createEdgeCollection(pregel.genWorkCollectionName(executionNumber));
+  db._createEdgeCollection(pregel.genMsgCollectionName(executionNumber)).ensureHashIndex("toShard");
   var global = db._create(pregel.genGlobalCollectionName(executionNumber));
   global.save({_key: COUNTER, count: -1});
   global.save({_key: CONDUCTOR, name: options.conductor});

@@ -160,7 +160,13 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       shardKeys : properties[collection].shardKeys
     };
     if (!noCreation) {
-      db._create(generateResultCollectionName(collection, executionNumber) , props).ensureHashIndex("active");
+      if (map[collection].type === 2) {
+        db._create(generateResultCollectionName(collection, executionNumber) , props).ensureHashIndex("active");
+      } else {
+        db._createEdgeCollection(
+          generateResultCollectionName(collection, executionNumber) , props
+        );
+      }
     }
     if (ArangoServerState.isCoordinator()) {
       map[collection].resultShards =
