@@ -122,6 +122,8 @@ describe ArangoDB do
       after do
         cmd = "/_api/gharial/pregelTest?dropCollections=true"
         doc = ArangoDB.log_delete("#{prefix}", cmd)
+	cmd = "/_api/gharial/P_" + docId + "_RESULT_pregelTest?dropCollections=true"
+        doc = ArangoDB.log_delete("#{prefix}", cmd)
         cmd = "/_api/document/_pregel/" + docId
         doc = ArangoDB.log_delete("#{prefix}", cmd)
       end
@@ -132,9 +134,53 @@ describe ArangoDB do
         doc = ArangoDB.log_post("#{prefix}-startExecution", cmd , :body => body)
         doc.code.should eq(200)
         docId = doc.parsed_response['executionNumber']
+        docId.should be_kind_of(String)
         doc.parsed_response['error'].should eq(false)
         
       end
+    end
+
+   context "getResult:" do
+      before do
+        cmd = "/_api/gharial"
+        body = "{ \"name\" : \"pregelTest\" , \"edgeDefinitions\" : [{\"collection\": \"pregelTestEdges\", \"from\": [ \"pregelTestStartVertices\" ], \"to\": [ \"pregelTestEndVertices\" ]}]}"
+        doc = ArangoDB.log_post("#{prefix}-accept", cmd, :body => body)
+      end
+      
+      after do
+        cmd = "/_api/gharial/pregelTest?dropCollections=true"
+        doc = ArangoDB.log_delete("#{prefix}", cmd)
+        cmd = "/_api/gharial/P_" + docId + "_RESULT_pregelTest?dropCollections=true"
+        doc = ArangoDB.log_delete("#{prefix}", cmd)
+        cmd = "/_api/document/_pregel/" + docId
+        doc = ArangoDB.log_delete("#{prefix}", cmd)
+      end
+
+      it "succesful getResult" do
+        cmd = api + '/startExecution'
+        body = "{\"graphName\" : \"pregelTest\", \"algorithm\" : \"function () {}\", \"options\" : {}}"
+        doc = ArangoDB.log_post("#{prefix}-startExecution", cmd , :body => body)
+        doc.code.should eq(200)
+        docId = doc.parsed_response['executionNumber']
+        docId.should be_kind_of(String)
+        cmd = api + '/' + docId
+        doc = ArangoDB.log_get("#{prefix}-startExecution", cmd)
+        doc.code.should eq(200)
+        graphname = doc.parsed_response['graphName']
+        graphname.should eq("P_" + docId + "_RESULT_pregelTest")
+        doc.parsed_response['error'].should eq(false)
+        
+      end
+      
+      it "bad getResult with missing executionNumber" do
+        cmd = api 
+        doc = ArangoDB.log_get("#{prefix}-cleanup-bad", cmd)
+        doc.parsed_response['error'].should eq(true)
+        doc.parsed_response['code'].should eq(400)
+        doc.parsed_response['errorMessage'].should eq("invalid value for parameter 'executionNumber'")
+
+      end
+      
     end
 
   end
