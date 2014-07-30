@@ -255,7 +255,7 @@ var startExecution = function(graphName, algorithm, options) {
 
 var getResult = function (executionNumber) {
   var info = getExecutionInfo(executionNumber);
-  return info.graphName;
+  return {graphName : info.state === stateFinished ? info.graphName : "", state : info.state};
 };
 
 

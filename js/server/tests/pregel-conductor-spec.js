@@ -416,7 +416,7 @@ describe("Pregel Conductor", function () {
       });
 
       it("should return the resulting graph name", function () {
-        expect(conductor.getResult(execNr)).toEqual("P_" + execNr + "_RESULT_" + graphName);
+        expect(conductor.getResult(execNr).graphName).toEqual("P_" + execNr + "_RESULT_" + graphName);
       });
 
       it("should return finished execution state", function () {

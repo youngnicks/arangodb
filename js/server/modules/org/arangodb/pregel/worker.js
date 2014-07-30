@@ -103,7 +103,6 @@ var addTask = function (executionNumber, stepNumber, vertex, options) {
       params: { executionNumber: executionNumber, step: stepNumber,  vertexid : vertex}
     });
   } catch (e) {
-   require("console").log(e);
   }
 };
 
@@ -211,8 +210,12 @@ var executeStep = function(executionNumber, step, options) {
   // read full count from result and write to work
   var col = pregel.getGlobalCollection(executionNumber);
   col.update(COUNTER, {count: q.count()});
-  while (q.hasNext()) {
-    addTask(executionNumber, step, q.next(), options);
+  if (q.count() === 0) {
+    finishedStep(executionNumber, {step : step});
+  } else {
+    while (q.hasNext()) {
+      addTask(executionNumber, step, q.next(), options);
+    }
   }
 };
 
@@ -246,30 +249,32 @@ var vertexDone = function (executionNumber, vertex, global) {
   db._query(queryUpdateCounter, {"@global": globalCol.name()});
   var counter = globalCol.document(COUNTER).count;
   if (counter === 0) {
-    var messages = pregel.getMsgCollection(executionNumber).count(); 
-    var active = getActiveVerticesQuery(executionNumber).count();
-    sendMessages(executionNumber);
-    if (ArangoServerState.role() === "PRIMARY") {
-      var conductor = getConductor(executionNumber);
-      var body = JSON.stringify({
-        server: pregel.getServerName(),
-        step: global.step,
-        executionNumber: executionNumber,
-        messages: messages,
-        active: active
-      });
-      ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
-        "/_api/pregel/finishedStep", body, {}, {});
-    } else {
-      pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
-        step: global.step,
-        messages: messages,
-        active: active
-      });
-    }
+    finishedStep(executionNumber, global);
   }
+};
 
-  
+var finishedStep = function (executionNumber, global) {
+  var messages = pregel.getMsgCollection(executionNumber).count();
+  var active = getActiveVerticesQuery(executionNumber).count();
+  sendMessages(executionNumber);
+  if (ArangoServerState.role() === "PRIMARY") {
+    var conductor = getConductor(executionNumber);
+    var body = JSON.stringify({
+      server: pregel.getServerName(),
+      step: global.step,
+      executionNumber: executionNumber,
+      messages: messages,
+      active: active
+    });
+    ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
+      "/_api/pregel/finishedStep", body, {}, {});
+  } else {
+    pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
+      step: global.step,
+      messages: messages,
+      active: active
+    });
+  }
 };
 
 

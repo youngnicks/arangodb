@@ -98,7 +98,7 @@ actions.defineHttp({
            return;
          }
          var result = conductor.getResult(req.suffix[0]);
-         actions.resultOk(req, res, actions.HTTP_OK, {graphName : result});
+         actions.resultOk(req, res, actions.HTTP_OK, result);
        } else {
         actions.resultUnsupported(req, res);
       }

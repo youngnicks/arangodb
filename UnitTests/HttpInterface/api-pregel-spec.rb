@@ -82,7 +82,7 @@ describe ArangoDB do
     context "nextStep:" do
       before do
         cmd = "/_api/document?collection=_pregel"
-        body = "{ \"waitForAnswer\" : [\"Pavel\", \"Peter\"] , \"step\" : 0, \"state\" : \"running\", \"stepContent\" : [{\"active\" : 2 , \"messages\" : 8}, {\"active\" : 0 , \"messages\" : 0}]}"
+        body = "{ \"waitForAnswer\" : [\"localhost\"] , \"step\" : 0, \"state\" : \"running\", \"stepContent\" : [{\"active\" : 2 , \"messages\" : 8}, {\"active\" : 0 , \"messages\" : 0}]}"
         doc = ArangoDB.log_post("#{prefix}-accept", cmd, :body => body)
         docId = doc.parsed_response['_key']
         for cn in ["vertex1" , "vertex2", "edge2", "P_" + docId + "_RESULT_vertex1" , "P_" + docId + "_RESULT_vertex2", "P_" + docId + "_RESULT_edge2" ] do
@@ -106,7 +106,7 @@ describe ArangoDB do
             "\"vertex2\": {\"type\": 2,\"resultCollection\": \"P_" + docId +  "_RESULT_vertex2\",\"originalShards\": {\"vertex2\" : \"localhost\"},\"resultShards\": {\"P_" + docId +  "_RESULT_vertex2\" : \"localhost\"}}," + 
             "\"edge2\": {\"type\": 3,\"resultCollection\": \"P_" + docId +  "\_RESULT_edge2\",\"originalShards\": {\"edge2\" : \"localhost\"},\"resultShards\": {\"P_" + docId +  "_RESULT_edge2\" : \"localhost\"}}} } }"
         doc = ArangoDB.log_post("#{prefix}-nextStep", cmd , :body => body)
-        doc.code.should eq(200)
+	doc.code.should eq(200)
         doc.parsed_response['error'].should eq(false)
         
       end
@@ -163,9 +163,11 @@ describe ArangoDB do
         doc.code.should eq(200)
         docId = doc.parsed_response['executionNumber']
         docId.should be_kind_of(String)
+	sleep(1.0)
         cmd = api + '/' + docId
         doc = ArangoDB.log_get("#{prefix}-startExecution", cmd)
         doc.code.should eq(200)
+	puts doc
         graphname = doc.parsed_response['graphName']
         graphname.should eq("P_" + docId + "_RESULT_pregelTest")
         doc.parsed_response['error'].should eq(false)
