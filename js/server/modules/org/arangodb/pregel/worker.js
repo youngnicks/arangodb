@@ -83,7 +83,7 @@ var registerFunction = function(executionNumber, algorithm) {
     + "};"
     + "(" + algorithm + "(vertex, messages, global));"
     + "worker.vertexDone(executionNumber, vertex, global);"
-    + "})";
+    + "})(params)";
 
     // This has to be replaced by worker registry
     var col = pregel.getGlobalCollection(executionNumber);
@@ -201,7 +201,6 @@ var executeStep = function(executionNumber, step, options) {
   if (step === 0) {
     setup(executionNumber, options);
   }
-
   activateVertices(executionNumber);
   var q = getActiveVerticesQuery(executionNumber);
   // read full count from result and write to work

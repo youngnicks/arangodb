@@ -88,7 +88,8 @@ exports.getResponsibleShard = function (doc) {
   return col;
 };
 
-exports.getResponsibleEdgeShards = function (executionNumber, doc) {
+exports.getResponsibleEdgeShards = function (executionNumber, vertex) {
+  var doc = vertex._id;
   var globalCol = exports.getGlobalCollection(executionNumber);
   var col = doc.split("/");
   var map = globalCol.document("map").map;
@@ -131,4 +132,5 @@ exports.getResponsibleEdgeShards = function (executionNumber, doc) {
 exports.Conductor = require("org/arangodb/pregel/conductor");
 exports.Worker = require("org/arangodb/pregel/worker");
 exports.Vertex = require("org/arangodb/pregel/vertex").Vertex;
+exports.Edge = require("org/arangodb/pregel/edge").Edge;
 exports.MessageQueue = require("org/arangodb/pregel/messagequeue").MessageQueue;
