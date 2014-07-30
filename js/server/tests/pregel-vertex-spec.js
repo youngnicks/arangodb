@@ -249,7 +249,7 @@ describe("Pregel Vertex Object Testing", function () {
     it("should mark the result of a vertex as deactivated", function () {
       var docBefore = db.UnitTestsPregelVertex1.document(firstDoc._id);
       var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
-      db[resName].save({"_key": firstDoc._key, "active": true});
+      var resDoc = db[resName].save({"_key": firstDoc._key, "active": true});
 
       if (!ArangoClusterInfo.getResponsibleShard) {
         ArangoClusterInfo.getResponsibleShard = function () {
@@ -258,7 +258,7 @@ describe("Pregel Vertex Object Testing", function () {
       }
       spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(resName);
 
-      var Vertex = new vertex(execNr, firstDoc._id);
+      var Vertex = new vertex(execNr, resDoc._id);
       Vertex._deactivate();
 
       var resultDocument = db[resName].document(resName + "/" + Vertex._key);
@@ -271,7 +271,7 @@ describe("Pregel Vertex Object Testing", function () {
     it("should mark the result of a vertex as deleted", function () {
       var docBefore = db.UnitTestsPregelVertex1.document(firstDoc._id);
       var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
-      db[resName].save({"_key": firstDoc._key, "deleted": false});
+      var resDoc = db[resName].save({"_key": firstDoc._key, "active": true});
 
       if (!ArangoClusterInfo.getResponsibleShard) {
         ArangoClusterInfo.getResponsibleShard = function () {
@@ -280,7 +280,7 @@ describe("Pregel Vertex Object Testing", function () {
       }
       spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(resName);
 
-      var Vertex = new vertex(execNr, firstDoc._id);
+      var Vertex = new vertex(execNr, resDoc._id);
       Vertex._delete();
 
       var resultDocument = db[resName].document(resName + "/" + Vertex._key);
@@ -293,7 +293,7 @@ describe("Pregel Vertex Object Testing", function () {
     it("should modify the _result attribute of the vertex", function () {
       var docBefore = db.UnitTestsPregelVertex1.document(firstDoc._id);
       var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
-      db[resName].save({"_key": firstDoc._key, "result": "this must change"});
+      var resDoc = db[resName].save({"_key": firstDoc._key, "active": true});
 
       if (!ArangoClusterInfo.getResponsibleShard) {
         ArangoClusterInfo.getResponsibleShard = function () {
@@ -302,7 +302,7 @@ describe("Pregel Vertex Object Testing", function () {
       }
       spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(resName);
 
-      var Vertex = new vertex(execNr, firstDoc._id);
+      var Vertex = new vertex(execNr, resDoc._id);
       Vertex._result = {};
       Vertex._save();
 
@@ -316,7 +316,7 @@ describe("Pregel Vertex Object Testing", function () {
     it("should get the _result attribute of the result collection", function () {
       var docBefore = db.UnitTestsPregelVertex1.document(firstDoc._id);
       var resName = "P_305000077_RESULT_UnitTestsPregelVertex1";
-      db[resName].save({"_key": firstDoc._key, "result": "this must stay"});
+      var resDoc = db[resName].save({"_key": firstDoc._key, "active": true, "result": "myResult"});
 
       if (!ArangoClusterInfo.getResponsibleShard) {
         ArangoClusterInfo.getResponsibleShard = function () {
@@ -325,10 +325,10 @@ describe("Pregel Vertex Object Testing", function () {
       }
       spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(resName);
 
-      var Vertex = new vertex(execNr, firstDoc._id);
+      var Vertex = new vertex(execNr, resDoc._id);
 
       var resultDocument = db[resName].document(resName + "/" + Vertex._key);
-      expect(resultDocument.result).toEqual("this must stay");
+      expect(resultDocument.result).toEqual(Vertex._result);
 
       var docAfter = db.UnitTestsPregelVertex1.document(firstDoc._id);
       expect(docBefore).toEqual(docAfter);
