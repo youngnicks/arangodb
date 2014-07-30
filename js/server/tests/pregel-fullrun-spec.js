@@ -82,9 +82,10 @@ describe("Full Pregel execution", function () {
 
     it("should identify all distinct graphs", function () {
       var myPregel = function (vertex, message, global) {
-        require("console").log("idaho", vertex._id);
+        require("console").log(JSON.stringify(vertex));
         var inc = message.getMessages();
         var next;
+
         if (global.step === 0) {
           vertex._result = {
             inGraph: vertex._key,
@@ -121,7 +122,16 @@ describe("Full Pregel execution", function () {
       };
       var id = conductor.startExecution(gN, myPregel.toString());
       require("console").log(id);
-      require("internal").wait(100);
+      var count = 0;
+      while (count < 100) {
+        require("internal").wait(1);
+        if (conductor.getInfo(id).state === "finished") {
+          count = 2000;
+          break;
+        }
+        count++;
+      }
+      expect(count).toEqual(2000);
     });
 
 

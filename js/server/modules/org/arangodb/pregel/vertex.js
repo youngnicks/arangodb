@@ -32,12 +32,10 @@
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
-var edge = require("org/arangodb/pregel").Edge;
 
 var Vertex = function (executionNumber, vertexId) {
   var self = this;
   this._executionNumber = executionNumber;
-  this._result = {};
 
   //get attributes from original collection
   var collectionName = pregel.getOriginalCollection(vertexId);
@@ -48,6 +46,10 @@ var Vertex = function (executionNumber, vertexId) {
   _.each(data, function(val, key) {
     self[key] = val;
   });
+  var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
+  var resultCollection = pregel.getResponsibleShard(resultCollectionName, this);
+  var myResDocId = resultCollection + "/" + this._key;
+  this._result = db[resultCollection].document(myResDocId).result;
 
 };
 
@@ -60,14 +62,6 @@ Vertex.prototype._deactivate = function () {
   db[resultCollection].update(myResDocId, {"active": false});
 };
 
-Vertex.prototype._getResult = function () {
-  var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
-  var resultCollection = pregel.getResponsibleShard(resultCollectionName, this);
-  var myResDocId = resultCollection + "/" + this._key;
-
-  return db[resultCollection].document(myResDocId).result;
-};
-
 Vertex.prototype._delete = function () {
   var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
   var resultCollection = pregel.getResponsibleShard(resultCollectionName, this);
@@ -77,13 +71,17 @@ Vertex.prototype._delete = function () {
   db[resultCollection].update(myResDocId, {"deleted": true});
 };
 
-Vertex.prototype._getEdges = function () {
+Vertex.prototype._outEdges = function () {
+  var Edge = require("org/arangodb/pregel").Edge;
   var respEdges = pregel.getResponsibleEdgeShards(this._executionNumber, this);
   var self = this, edges = [];
 
   _.each(respEdges, function(collection) {
-    require("console").log("collection ############## : " + collection);
-    edges.push(new edge(self._executionNumber, db[collection].outEdges(self)));
+    var outEdges = db[collection].outEdges(self._id);
+    _.each(outEdges, function (json) {
+      var e = new Edge(self._executionNumber, json);
+      edges.push(e);
+    });
   });
 
   return edges;

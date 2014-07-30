@@ -54,6 +54,7 @@ var Buffer = require("buffer").Buffer;
     // statistics are turned off
     return;
   }
+  return;
 
   var internal = require("internal");
   var interval = require('org/arangodb/statistics').STATISTICS_INTERVAL;

@@ -64,8 +64,11 @@ var queryInsertDefaultVertex = "FOR v IN @@original INSERT {"
   + "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {} "
   + "} INTO  @@result";
 
-var queryActivateVertices = "FOR v IN @@work UPDATE PARSE_IDENTIFIER(v._to).key WITH " +
-  "{'active' : true} IN @@result";
+var queryActivateVertices = "FOR v IN @@work UPDATE PARSE_IDENTIFIER(v._to).key WITH "
+  + "{'active' : true} IN @@result";
+
+var queryUpdateCounter = "LET oldCount = DOCUMENT(@@global, 'counter').count "
+  + "UPDATE 'counter' WITH {count: oldCount - 1} IN @@global";
 
 
 var registerFunction = function(executionNumber, algorithm) {
@@ -94,12 +97,14 @@ var registerFunction = function(executionNumber, algorithm) {
 var addTask = function (executionNumber, stepNumber, vertex, options) {
   var col = pregel.getGlobalCollection(executionNumber);
   var task = col.document("task").task;
-  tasks.register({
-    id: executionNumber + "_" + stepNumber + "_" + vertex,
-    name: "Pregel",
-    command: task,
-    params: { executionNumber: executionNumber, step: stepNumber,  vertexid : vertex}
-  });
+  try {
+    tasks.register({
+      command: task,
+      params: { executionNumber: executionNumber, step: stepNumber,  vertexid : vertex}
+    });
+  } catch (e) {
+   require("console").log(e);
+  }
 };
 
 var saveMapping = function(executionNumber, map) {
@@ -238,10 +243,8 @@ var sendMessages = function (executionNumber) {
 var vertexDone = function (executionNumber, vertex, global) {
   vertex._save();
   var globalCol = pregel.getGlobalCollection(executionNumber);
+  db._query(queryUpdateCounter, {"@global": globalCol.name()});
   var counter = globalCol.document(COUNTER).count;
-  counter--;
-  globalCol.update(COUNTER, {count: counter});
-
   if (counter === 0) {
     var messages = pregel.getMsgCollection(executionNumber).count(); 
     var active = getActiveVerticesQuery(executionNumber).count();

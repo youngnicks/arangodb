@@ -344,7 +344,7 @@ describe("Pregel Vertex Object Testing", function () {
     it("should return a list containing connected edge objects", function () {
       var Vertex = new vertex(execNr, firstDoc._id);
 
-      Vertex._getEdges();
+      Vertex._outEdges();
     });
 
   });
