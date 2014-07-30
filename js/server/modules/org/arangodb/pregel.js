@@ -78,12 +78,9 @@ exports.getGlobalCollection = function (executionNumber) {
   return db._collection(exports.genGlobalCollectionName(executionNumber));
 };
 
-exports.getResponsibleShard = function (doc) {
-  var info = doc.split("/");
-  var col = info[0];
+exports.getResponsibleShard = function (col, doc) {
   if (ArangoServerState.role() === "PRIMARY") {
-    var key = info[1];
-    return ArangoClusterInfo.getResponsibleShard(col, {_key: key});
+    return ArangoClusterInfo.getResponsibleShard(col, doc);
   }
   return col;
 };
