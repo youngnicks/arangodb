@@ -33,8 +33,26 @@ var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Edge = function (executionNumber, edgeId) {
+var Edge = function (executionNumber, edgeJSON) {
+  var self = this;
+  _.each(edgeJSON, function(v, k) {
+    self[k] = v;
+  });
+  var resultCollectionName = pregel.getResultCollection(this._id, executionNumber);
+  this._resultShard = db._collection(pregel.getResponsibleShard(resultCollectionName, this));
+  this._result = this._resultShard.document(this._key).result;
+};
 
+Edge.prototype._delete = function () {
+  this._resultShard.update(this._key, {deleted: true});
+};
+
+Edge.prototype._isDeleted = function () {
+  return this._resultShard.document(this._key).deleted;
+};
+
+Edge.prototype._save = function () {
+  return this._resultShard.update(this._key, {result: this._result});
 };
 
 exports.Edge = Edge;
