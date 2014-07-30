@@ -25,7 +25,7 @@
 ///
 /// Copyright holder is triAGENS GmbH, Cologne, Germany
 ///
-/// @author Florian Bartels, Michael Hackstein
+/// @author Florian Bartels, Michael Hackstein, Heiko Kernbach
 /// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -43,10 +43,10 @@ var vc2 = "UnitTestsPregelVertex2";
 var ec1 = "UnitTestsPregelEdge2";
 var coordinator = ArangoServerState.isCoordinator();
 
-describe("Pregel Vertex tests", function () {
+describe("Pregel Vertex Object Testing", function () {
   "use strict";
 
-  describe("pregel vertex testing", function () {
+  describe("testing vertex methods", function () {
 
     var mapping, v1, v2, e2, firstDoc, secondDoc,
     execNr = "unittest_nr_1337",

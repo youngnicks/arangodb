@@ -226,7 +226,6 @@ var startExecution = function(graphName, algorithm, options) {
   stepContentObject[active] = graph._countVertices();
   stepContentObject[messages] = 0;
   infoObject[stepContent] = [stepContentObject, {active: 0 , messages: 0}];
-
   var key = saveExecutionInfo(infoObject)._key;
   try {
     /*jslint evil : true */
@@ -241,7 +240,6 @@ var startExecution = function(graphName, algorithm, options) {
 
   setup = options  || {};
   setup.algorithm = algorithm;
-
 
   setup.map = createResultGraph(graph, key);
 

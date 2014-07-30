@@ -94,7 +94,7 @@ describe ArangoDB do
       after do
         cmd = "/_api/document/_pregel/" + docId
         doc = ArangoDB.log_delete("#{prefix}", cmd)
-	for cn in ["vertex1" , "vertex2", "edge2", "P_" + docId + "_RESULT_vertex1" , "P_" + docId + "_RESULT_vertex2", "P_" + docId + "_RESULT_edge2" ] do
+        for cn in ["vertex1" , "vertex2", "edge2", "P_" + docId + "_RESULT_vertex1" , "P_" + docId + "_RESULT_vertex2", "P_" + docId + "_RESULT_edge2" ] do
          ArangoDB.drop_collection(cn)
         end
       end
@@ -107,6 +107,31 @@ describe ArangoDB do
             "\"edge2\": {\"type\": 3,\"resultCollection\": \"P_" + docId +  "\_RESULT_edge2\",\"originalShards\": {\"edge2\" : \"localhost\"},\"resultShards\": {\"P_" + docId +  "_RESULT_edge2\" : \"localhost\"}}} } }"
         doc = ArangoDB.log_post("#{prefix}-nextStep", cmd , :body => body)
         doc.code.should eq(200)
+        doc.parsed_response['error'].should eq(false)
+        
+      end
+    end
+    
+    context "startExecution:" do
+      before do
+        cmd = "/_api/gharial"
+        body = "{ \"name\" : \"pregelTest\" , \"edgeDefinitions\" : [{\"collection\": \"pregelTestEdges\", \"from\": [ \"pregelTestStartVertices\" ], \"to\": [ \"pregelTestEndVertices\" ]}]}"
+        doc = ArangoDB.log_post("#{prefix}-accept", cmd, :body => body)
+      end
+      
+      after do
+        cmd = "/_api/gharial/pregelTest?dropCollections=true"
+        doc = ArangoDB.log_delete("#{prefix}", cmd)
+        cmd = "/_api/document/_pregel/" + docId
+        doc = ArangoDB.log_delete("#{prefix}", cmd)
+      end
+
+      it "succesful startExecution" do
+        cmd = api + '/startExecution'
+        body = "{\"graphName\" : \"pregelTest\", \"algorithm\" : \"function () {}\", \"options\" : {}}"
+        doc = ArangoDB.log_post("#{prefix}-startExecution", cmd , :body => body)
+        doc.code.should eq(200)
+        docId = doc.parsed_response['executionNumber']
         doc.parsed_response['error'].should eq(false)
         
       end

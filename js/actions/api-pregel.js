@@ -71,6 +71,12 @@ function post_pregel (req, res) {
       actions.resultOk(req, res, actions.HTTP_OK);
       break;
 
+    case ("startExecution") :
+      body = JSON.parse(req.requestBody);
+      var result = conductor.startExecution(body.graphName, body.algorithm, body.options);
+      actions.resultOk(req, res, actions.HTTP_OK, {executionNumber : result});
+      break;
+
     default:
       actions.resultUnsupported(req, res);
   }
