@@ -40,7 +40,7 @@ var Vertex = function (executionNumber, vertexId) {
 
   //get attributes from original collection
   var collectionName = pregel.getOriginalCollection(vertexId);
-  var collection = pregel.getResponsibleShard(collectionName);
+  var collection = pregel.getResponsibleShard(collectionName, this);
   var data = db._document(vertexId);
 
   //write attributes to vertex
@@ -52,16 +52,16 @@ var Vertex = function (executionNumber, vertexId) {
 
 Vertex.prototype._deactivate = function () {
   var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
-  var resultCollection = pregel.getResponsibleShard(resultCollectionName);
+  var resultCollection = pregel.getResponsibleShard(resultCollectionName, this);
   var myResDocId = resultCollection + "/" + this._key;
 
-  var doc = db._document(myResDocId);
-  db[resultCollection].update(doc, {"active": false});
+  //var doc = db._document(myResDocId);
+  db[resultCollection].update(myResDocId, {"active": false});
 };
 
 Vertex.prototype._getResult = function () {
   var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
-  var resultCollection = pregel.getResponsibleShard(resultCollectionName);
+  var resultCollection = pregel.getResponsibleShard(resultCollectionName, this);
   var myResDocId = resultCollection + "/" + this._key;
 
   return db[resultCollection].document(myResDocId).result;
@@ -69,24 +69,31 @@ Vertex.prototype._getResult = function () {
 
 Vertex.prototype._delete = function () {
   var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
-  var resultCollection = pregel.getResponsibleShard(resultCollectionName);
+  var resultCollection = pregel.getResponsibleShard(resultCollectionName, this);
   var myResDocId = resultCollection + "/" + this._key;
 
-  var doc = db[resultCollection].document(myResDocId);
-  db[resultCollection].update(doc, {"deleted": true});
+  //var doc = db[resultCollection].document(myResDocId);
+  db[resultCollection].update(myResDocId, {"deleted": true});
 };
 
 Vertex.prototype._getEdges = function () {
+  var respEdges = pregel.getResponsibleEdgeShards(this._executionNumber, this);
+
+  _.each(respEdges, function(value, key) {
+    require("console").log("################" + key);
+    require("console").log("################" + value);
+  });
+
   return false;
 };
 
 Vertex.prototype._save = function () {
   var resultCollectionName = pregel.getResultCollection(this._id, this._executionNumber);
-  var resultCollection = pregel.getResponsibleShard(resultCollectionName);
+  var resultCollection = pregel.getResponsibleShard(resultCollectionName, this);
   var myResDocId = resultCollection + "/" + this._key;
 
-  var doc = db[resultCollection].document(myResDocId);
-  db[resultCollection].update(doc, {"result": this._result});
+  //var doc = db[resultCollection].document(myResDocId);
+  db[resultCollection].update(myResDocId, {"result": this._result});
 };
 
 exports.Vertex = Vertex;
