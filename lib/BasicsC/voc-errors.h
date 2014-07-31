@@ -585,6 +585,8 @@ extern "C" {
 ///   Will be raised whenever a message with invalid content was revieved.
 /// - 4003: @LIT{target vertex is unknown in the graph.}
 ///   Will be raised whenever a target vertex is not part of the graph.
+/// - 4004: @LIT{syntax error in provided pregel algorithm.}
+///   Will be raised whenever a pregel algorithm throws a syntax error.
 /// - 10000: @LIT{element not inserted into structure, because key already exists}
 ///   Will be returned if the element was not insert because the key already
 ///   exists.
@@ -3068,6 +3070,16 @@ void TRI_InitialiseErrorMessages (void);
 ////////////////////////////////////////////////////////////////////////////////
 
 #define TRI_ERROR_PREGEL_INVALID_TARGET_VERTEX                            (4003)
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief 4004: ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR
+///
+/// syntax error in provided pregel algorithm.
+///
+/// Will be raised whenever a pregel algorithm throws a syntax error.
+////////////////////////////////////////////////////////////////////////////////
+
+#define TRI_ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR                           (4004)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief 10000: RESULT_KEY_EXISTS

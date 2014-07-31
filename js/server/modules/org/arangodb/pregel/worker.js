@@ -275,6 +275,24 @@ var finishedStep = function (executionNumber, global) {
   }
 };
 
+var vertexDone = function (executionNumber, vertex, global, err) {
+  vertex._save();
+  if (err && !err instanceof ArangoError) {
+    err = new ArangoError();
+    err.errorNum = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.code;
+    err.errorMessage = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.message;
+  }
+  var globalCol = pregel.getGlobalCollection(executionNumber);
+  if (err && !getError(executionNumber)) {
+    globalCol.update(ERR, {error: err});
+  }
+  db._query(queryUpdateCounter, {"@global": globalCol.name()});
+  var counter = globalCol.document(COUNTER).count;
+  if (counter === 0) {
+    finishedStep(executionNumber, global);
+  }
+};
+
 var executeStep = function(executionNumber, step, options) {
   require("internal").print("Starting with step: " + step);
   id = ArangoServerState.id() || "localhost";
@@ -294,19 +312,6 @@ var executeStep = function(executionNumber, step, options) {
     while (q.hasNext()) {
       addTask(executionNumber, step, q.next(), options);
     }
-  }
-};
-
-var vertexDone = function (executionNumber, vertex, global, err) {
-  vertex._save();
-  var globalCol = pregel.getGlobalCollection(executionNumber);
-  if (err && !getError(executionNumber)) {
-    globalCol.update(ERR, {error: err});
-  }
-  db._query(queryUpdateCounter, {"@global": globalCol.name()});
-  var counter = globalCol.document(COUNTER).count;
-  if (counter === 0) {
-    finishedStep(executionNumber, global);
   }
 };
 
