@@ -53,12 +53,14 @@ var CONDUCTOR = "conductor";
 var MAP = "map";
 var id;
 
-var queryInsertDefaultEdge = "FOR v IN @@original INSERT {"
-  + "'_key' : v._key, 'deleted' : false, 'result' : {}, "
-  + "'_from' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._from).collection, @collectionMapping), "
-  + "'/', PARSE_IDENTIFIER(v._from).key), "
-  + "'_to' : CONCAT(TRANSLATE(PARSE_IDENTIFIER(v._to).collection, @collectionMapping), "
-  + "'/', PARSE_IDENTIFIER(v._to).key)"
+ var queryInsertDefaultEdge = "FOR v IN @@original "
+  + "LET from = PARSE_IDENTIFIER(v._from) "
+  + "LET to = PARSE_IDENTIFIER(v._to) "
+  + "INSERT {'_key' : v._key, 'deleted' : false, 'result' : {}, "
+  + "'_from' : CONCAT(TRANSLATE(from.collection, @collectionMapping), "
+  + "'/', from.key), "
+  + "'_to' : CONCAT(TRANSLATE(to.collection, @collectionMapping), "
+  + "'/', to.key)"
   + "} INTO  @@result";
 
 var queryInsertDefaultVertex = "FOR v IN @@original INSERT {"
@@ -108,8 +110,7 @@ var addTask = function (executionNumber, stepNumber, vertex, options) {
       command: task,
       params: { executionNumber: executionNumber, step: stepNumber,  vertexid : vertex}
     });
-  } catch (e) {
-  }
+  } catch (ignore) { }
 };
 
 var saveMapping = function(executionNumber, map) {
@@ -137,11 +138,15 @@ var setup = function(executionNumber, options) {
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
   saveMapping(executionNumber, options.map);
+  require("internal").print("Saved Mapping");
   var collectionMapping = {};
+
   _.each(options.map, function(mapping, collection) {
     collectionMapping[collection] = mapping.resultCollection;
   });
-  _.each(options.map, function(mapping, collection) {
+  require("internal").print(JSON.stringify(collectionMapping));
+
+  _.each(options.map, function(mapping) {
     var shards = Object.keys(mapping.originalShards);
     var resultShards = Object.keys(mapping.resultShards);
     var i;
@@ -152,15 +157,18 @@ var setup = function(executionNumber, options) {
           '@original' : shards[i],
           '@result' : resultShards[i]
         };
+        require("internal").print("Send query", JSON.stringify(bindVars));
         if (mapping.type === 3) {
           bindVars.collectionMapping = collectionMapping;
           db._query(queryInsertDefaultEdge, bindVars).execute();
         } else {
           db._query(queryInsertDefaultVertex, bindVars).execute();
         }
+        require("internal").print("queryDone");
       }
     }
   });
+  require("internal").print("Registering");
   registerFunction(executionNumber, options.algorithm);
 };
 
@@ -213,38 +221,20 @@ var getActiveVerticesQuery = function (executionNumber) {
   return db._query(query, bindVars);
 };
 
-var executeStep = function(executionNumber, step, options) {
-  id = ArangoServerState.id() || "localhost";
-  if (step === 0) {
-    setup(executionNumber, options);
-  }
-  activateVertices(executionNumber);
-  var q = getActiveVerticesQuery(executionNumber);
-  // read full count from result and write to work
-  var col = pregel.getGlobalCollection(executionNumber);
-  col.update(COUNTER, {count: q.count()});
-  if (q.count() === 0) {
-    finishedStep(executionNumber, {step : step});
-  } else {
-    while (q.hasNext()) {
-      addTask(executionNumber, step, q.next(), options);
-    }
-  }
-};
-
-
-var cleanUp = function(executionNumber) {
-
-  db._drop(pregel.genWorkCollectionName(executionNumber));
-  db._drop(pregel.genMsgCollectionName(executionNumber));
-  db._drop(pregel.genGlobalCollectionName(executionNumber));
-};
-
 var sendMessages = function (executionNumber) {
   var msgCol = pregel.getMsgCollection(executionNumber);
   var workCol = pregel.getWorkCollection(executionNumber);
   if (ArangoServerState.role() === "PRIMARY") {
-    // Clusteur
+    var map = loadMapping(executionNumber);
+    var shardList = _.flatten(
+      _.map(
+      _.filter(map, function (c) {
+        return c.type === 2;
+      }), function (c) {
+        return Object.keys(c.originalShards);
+      })
+    );
+    require("internal").print(shardList);
   } else {
     var cursor = msgCol.all();
     var next;
@@ -253,19 +243,6 @@ var sendMessages = function (executionNumber) {
       workCol.save(next._from, next._to, next);
     }
     msgCol.truncate();
-  }
-};
-
-var vertexDone = function (executionNumber, vertex, global, err) {
-  vertex._save();
-  var globalCol = pregel.getGlobalCollection(executionNumber);
-  if (err && !getError(executionNumber)) {
-    globalCol.update(ERR, {error: err});
-  }
-  db._query(queryUpdateCounter, {"@global": globalCol.name()});
-  var counter = globalCol.document(COUNTER).count;
-  if (counter === 0) {
-    finishedStep(executionNumber, global);
   }
 };
 
@@ -296,6 +273,47 @@ var finishedStep = function (executionNumber, global) {
       error: error
     });
   }
+};
+
+var executeStep = function(executionNumber, step, options) {
+  require("internal").print("Starting with step: " + step);
+  id = ArangoServerState.id() || "localhost";
+  if (step === 0) {
+    require("internal").print("Setting up");
+    setup(executionNumber, options);
+  }
+  require("internal").print("Activate vertices");
+  activateVertices(executionNumber);
+  var q = getActiveVerticesQuery(executionNumber);
+  // read full count from result and write to work
+  var col = pregel.getGlobalCollection(executionNumber);
+  col.update(COUNTER, {count: q.count()});
+  if (q.count() === 0) {
+    finishedStep(executionNumber, {step : step});
+  } else {
+    while (q.hasNext()) {
+      addTask(executionNumber, step, q.next(), options);
+    }
+  }
+};
+
+var vertexDone = function (executionNumber, vertex, global, err) {
+  vertex._save();
+  var globalCol = pregel.getGlobalCollection(executionNumber);
+  if (err && !getError(executionNumber)) {
+    globalCol.update(ERR, {error: err});
+  }
+  db._query(queryUpdateCounter, {"@global": globalCol.name()});
+  var counter = globalCol.document(COUNTER).count;
+  if (counter === 0) {
+    finishedStep(executionNumber, global);
+  }
+};
+
+var cleanUp = function(executionNumber) {
+  db._drop(pregel.genWorkCollectionName(executionNumber));
+  db._drop(pregel.genMsgCollectionName(executionNumber));
+  db._drop(pregel.genGlobalCollectionName(executionNumber));
 };
 
 

@@ -68,6 +68,7 @@ function post_pregel (req, res) {
     case ("nextStep") :
       body = JSON.parse(req.requestBody);
       worker.executeStep(body.executionNumber, body.step, body.setup);
+      require("internal").print("started exeuction");
       actions.resultOk(req, res, actions.HTTP_OK);
       break;
 
