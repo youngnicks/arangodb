@@ -48,7 +48,7 @@ describe("Pregel Vertex Object Testing", function () {
 
   describe("testing vertex methods", function () {
 
-    var mapping, v1, v2, e2, firstDoc, secondDoc,
+    var mapping, v1, v2, e2, firstDoc, secondDoc, thirdDoc,
     execNr = "unittest_nr_1337",
     shardName = "Pancho";
 
@@ -183,6 +183,8 @@ describe("Pregel Vertex Object Testing", function () {
         sum: 1338,
         usable: true
       });
+
+      thirdDoc = db.UnitTestsPregelEdge2.save(firstDoc, secondDoc, {label: "hallo"});
 
       //create "shards"
       db._createDocumentCollection("s305000059");
@@ -333,6 +335,28 @@ describe("Pregel Vertex Object Testing", function () {
       var docAfter = db.UnitTestsPregelVertex1.document(firstDoc._id);
       expect(docBefore).toEqual(docAfter);
     });
+
+    it("should get outEdges attribute correctly", function () {
+      var docBefore = db.UnitTestsPregelEdge2.document(thirdDoc._id);
+      var resName = "P_305000077_RESULT_UnitTestsPregelEdge2";
+      var resDoc = db[resName].save(firstDoc, secondDoc, {myData: "Hello", _key: thirdDoc._key});
+
+      if (!ArangoClusterInfo.getResponsibleShard) {
+        ArangoClusterInfo.getResponsibleShard = function () {
+          return undefined;
+        };
+      }
+      spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(resName);
+
+      var Vertex = new vertex(execNr, resDoc._id);
+
+      var resultDocument = db[resName].document(resName + "/" + Vertex._key);
+
+      var docAfter = db.UnitTestsPregelEdge2.document(thirdDoc._id);
+      expect(docBefore).toEqual(docAfter);
+      expect(Vertex._outEdges).toEqual([]);
+    });
+
 
   });
 });
