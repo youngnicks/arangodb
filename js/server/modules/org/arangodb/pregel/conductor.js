@@ -66,7 +66,6 @@ var startNextStep = function(executionNumber, options) {
   var info = getExecutionInfo(executionNumber);
   var stepNo = info[step];
   options = options || {};
-  var httpOptions = {};
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
     var body = JSON.stringify({
@@ -75,12 +74,21 @@ var startNextStep = function(executionNumber, options) {
       setup: options,
       conductor: ArangoServerState.id()
     });
+    var httpOptions = {};
+    require("internal").print("Sending next step");
+    var coordOptions = {
+      coordTransactionID: ArangoClusterInfo.uniqid()
+    };
     dbServers.forEach(
       function(dbServer) {
         ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
-          "/_api/pregel/nextStep", body,{}, httpOptions);
+          "/_api/pregel/nextStep", body, httpOptions, coordOptions);
       }
     );
+    var i;
+    for (i = 0; i < dbServers.length; i++) {
+      ArangoClusterComm.wait(coordOptions);
+    }
   } else {
     dbServers = ["localhost"];
     require("org/arangodb/pregel").Worker.executeStep(executionNumber, stepNo, options);
