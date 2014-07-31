@@ -246,6 +246,7 @@ void TRI_InitialiseErrorMessages (void) {
   REG_ERROR(ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH, "message was recieved from server that was not expected");
   REG_ERROR(ERROR_PREGEL_MESSAGE_STEP_MISMATCH, "message was recieved with an unexpected step number");
   REG_ERROR(ERROR_PREGEL_MESSAGE_MALFORMED, "malformed message recieved");
+  REG_ERROR(ERROR_PREGEL_INVALID_TARGET_VERTEX, "target vertex is unknown in the graph.");
   REG_ERROR(RESULT_KEY_EXISTS, "element not inserted into structure, because key already exists");
   REG_ERROR(RESULT_ELEMENT_EXISTS, "element not inserted into structure, because it already exists");
   REG_ERROR(RESULT_KEY_NOT_FOUND, "key not found in structure");
