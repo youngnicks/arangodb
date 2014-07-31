@@ -30,6 +30,9 @@
 
 var db = require("internal").db;
 var _ = require("underscore");
+var arangodb = require("org/arangodb");
+var ERRORS = arangodb.errors;
+var ArangoError = arangodb.ArangoError;
 
 exports.getServerName = function () {
   return ArangoServerState.id() || "localhost";
@@ -83,6 +86,18 @@ exports.getResponsibleShard = function (col, doc) {
     return ArangoClusterInfo.getResponsibleShard(col, doc);
   }
   return col;
+};
+
+exports.getShardKeysForCollection = function (collection) {
+  var globalCol = exports.getGlobalCollection(executionNumber);
+  var map = globalCol.document("map").map;
+  if (!map[collection]) {
+    err = new ArangoError();
+    err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
+    err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
+    throw err;
+  }
+  return map[collection].shardKeys;
 };
 
 exports.getResponsibleEdgeShards = function (executionNumber, vertex) {

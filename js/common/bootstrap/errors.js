@@ -250,6 +250,7 @@
     "ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH" : { "code" : 4000, "message" : "message was recieved from server that was not expected" }, 
     "ERROR_PREGEL_MESSAGE_STEP_MISMATCH" : { "code" : 4001, "message" : "message was recieved with an unexpected step number" }, 
     "ERROR_PREGEL_MESSAGE_MALFORMED" : { "code" : 4002, "message" : "malformed message recieved" }, 
+    "ERROR_PREGEL_INVALID_TARGET_VERTEX" : { "code" : 4003, "message" : "target vertex is unknown in the graph." }, 
     "RESULT_KEY_EXISTS"            : { "code" : 10000, "message" : "element not inserted into structure, because key already exists" }, 
     "RESULT_ELEMENT_EXISTS"        : { "code" : 10001, "message" : "element not inserted into structure, because it already exists" }, 
     "RESULT_KEY_NOT_FOUND"         : { "code" : 10002, "message" : "key not found in structure" }, 

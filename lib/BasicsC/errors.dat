@@ -347,6 +347,7 @@ ERROR_ARANGO_INDEX_BITARRAY_CREATION_FAILURE_DUPLICATE_VALUES,3417,"bitarray ind
 ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH,4000,"message was recieved from server that was not expected","Will be raised whenever a communication request was recieved from a server that was not expected to send any message."
 ERROR_PREGEL_MESSAGE_STEP_MISMATCH,4001,"message was recieved with an unexpected step number","Will be raised whenever a message containing another step number is recieved."
 ERROR_PREGEL_MESSAGE_MALFORMED,4002,"malformed message recieved","Will be raised whenever a message with invalid content was revieved."
+ERROR_PREGEL_INVALID_TARGET_VERTEX,4003,"target vertex is unknown in the graph.","Will be raised whenever a target vertex is not part of the graph."
 
 
 ################################################################################

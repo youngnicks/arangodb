@@ -87,11 +87,17 @@ var startNextStep = function(executionNumber, options) {
   }
 };
 
-var cleanUp = function (executionNumber) {
+var cleanUp = function (executionNumber, err) {
   var dbServers;
   var httpOptions = {};
+  var execInfo = {state : stateFinished};
+  if (err) {
+    execInfo.state = stateError;
+    execInfo.error = err;
+  }
+
   updateExecutionInfo(
-    executionNumber, {state : stateFinished}
+    executionNumber, execInfo
   );
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
@@ -148,12 +154,14 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
       map[collection].originalShards =
       ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
+      map[collection].shardKeys = properties[collection].shardKeys;
     } else {
       map[collection] = {};
       map[collection].type = properties[collection].type;
       map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
       map[collection].originalShards = {};
       map[collection].originalShards[collection]= "localhost";
+      map[collection].shardKeys = [];
     }
     var props = {
       numberOfShards : properties[collection].numberOfShards,
@@ -287,6 +295,7 @@ var finishedStep = function(executionNumber, serverName, info) {
   }
   stepInfo.messages += info.messages;
   stepInfo.active += info.active;
+  runInfo.error = info.error;
   var awaiting = runInfo[waitForAnswer];
   var index = awaiting.indexOf(serverName);
   if (index === -1) {
@@ -297,7 +306,7 @@ var finishedStep = function(executionNumber, serverName, info) {
   }
   awaiting.splice(index, 1);
   updateExecutionInfo(executionNumber, runInfo);
-  if (awaiting.length === 0) {
+  if (awaiting.length === 0 && !runInfo.error) {
     initNextStep(executionNumber);
   }
 };

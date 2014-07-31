@@ -114,7 +114,8 @@ describe("Full Pregel execution", function () {
             return e._to;
           });
           outBound.concat(vertex._result.inBound).forEach(function (t) {
-            message.sendTo(t, vertex._result.inGraph);
+            //message.sendTo(t, vertex._result.inGraph);
+            message.sendTo();
           });
         }
         vertex._deactivate();

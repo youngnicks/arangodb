@@ -48,6 +48,7 @@ var stateFinished = "finished";
 var stateRunning = "running";
 var stateError = "error";
 var COUNTER = "counter";
+var ERR = "error";
 var CONDUCTOR = "conductor";
 var MAP = "map";
 var id;
@@ -84,7 +85,12 @@ var registerFunction = function(executionNumber, algorithm) {
     + "var global = {"
     +   "step: step"
     + "};"
-    + "(" + algorithm + "(vertex, messages, global));"
+    + "try {"
+    + "  (" + algorithm + "(vertex, messages, global));"
+    + "} catch (err) {"
+    +    "worker.vertexDone(executionNumber, vertex, global, err);"
+    + "  return;"
+    + "}"
     + "worker.vertexDone(executionNumber, vertex, global);"
     + "})(params)";
 
@@ -118,17 +124,24 @@ var getConductor = function(executionNumber) {
   return pregel.getGlobalCollection(executionNumber).document(CONDUCTOR).name;
 };
 
+var getError = function(executionNumber) {
+  return pregel.getGlobalCollection(executionNumber).document(ERR).error;
+};
+
 var setup = function(executionNumber, options) {
   // create global collection
   db._createEdgeCollection(pregel.genWorkCollectionName(executionNumber));
   db._createEdgeCollection(pregel.genMsgCollectionName(executionNumber)).ensureHashIndex("toShard");
   var global = db._create(pregel.genGlobalCollectionName(executionNumber));
   global.save({_key: COUNTER, count: -1});
+  global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
   saveMapping(executionNumber, options.map);
   var collectionMapping = {};
   _.each(options.map, function(mapping, collection) {
     collectionMapping[collection] = mapping.resultCollection;
+  });
+  _.each(options.map, function(mapping, collection) {
     var shards = Object.keys(mapping.originalShards);
     var resultShards = Object.keys(mapping.resultShards);
     var i;
@@ -243,9 +256,12 @@ var sendMessages = function (executionNumber) {
   }
 };
 
-var vertexDone = function (executionNumber, vertex, global) {
+var vertexDone = function (executionNumber, vertex, global, err) {
   vertex._save();
   var globalCol = pregel.getGlobalCollection(executionNumber);
+  if (err && !getError(executionNumber)) {
+    globalCol.update(ERR, {error: err});
+  }
   db._query(queryUpdateCounter, {"@global": globalCol.name()});
   var counter = globalCol.document(COUNTER).count;
   if (counter === 0) {
@@ -256,7 +272,10 @@ var vertexDone = function (executionNumber, vertex, global) {
 var finishedStep = function (executionNumber, global) {
   var messages = pregel.getMsgCollection(executionNumber).count();
   var active = getActiveVerticesQuery(executionNumber).count();
-  sendMessages(executionNumber);
+  var error = getError(executionNumber);
+  if (!error) {
+    sendMessages(executionNumber);
+  }
   if (ArangoServerState.role() === "PRIMARY") {
     var conductor = getConductor(executionNumber);
     var body = JSON.stringify({
@@ -264,7 +283,8 @@ var finishedStep = function (executionNumber, global) {
       step: global.step,
       executionNumber: executionNumber,
       messages: messages,
-      active: active
+      active: active,
+      error: error
     });
     ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
       "/_api/pregel/finishedStep", body, {}, {});
@@ -272,7 +292,8 @@ var finishedStep = function (executionNumber, global) {
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
       step: global.step,
       messages: messages,
-      active: active
+      active: active,
+      error: error
     });
   }
 };

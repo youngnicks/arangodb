@@ -31,6 +31,9 @@
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var query = "FOR m IN @@collection FILTER m._to == @vertex && m.step == @step RETURN m";
+var arangodb = require("org/arangodb");
+var ERRORS = arangodb.errors;
+var ArangoError = arangodb.ArangoError;
 
 var Queue = function (executionNumber, vertexId, step) {
   this.__collection = pregel.getMsgCollection(executionNumber);
@@ -44,9 +47,32 @@ var Queue = function (executionNumber, vertexId, step) {
 
 // Target is id now, has to be modified to contian vertex data
 Queue.prototype.sendTo = function(target, data) {
-  var id = target;
-  var shard = pregel.getResponsibleShard(id.split("/")[0], {_id: id});
-  this.__collection.save(this.__from, id, {data: data, step: this.__nextStep, toShard: shard});
+  var param, collection;
+  if (typeof target === "string" && target.match(/\S+\/\S+/)) {
+    param = {_id: target}
+    collection = target.split("/")[0];
+  } else if (typeof target === "object") {
+    collection = target._id.split("/")[0];
+    var shardKeys  = pregel.getShardKeysForCollection(collection);
+    param = {};
+    shardKeys.forEach(function (sk) {
+      if (!target[sk]) {
+        err = new ArangoError();
+        err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
+        err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
+        throw err;
+      }
+      param[sk] = target[sk];
+    });
+  } else {
+    err = new ArangoError();
+    err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
+    err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
+    throw err;
+  }
+
+  var shard = pregel.getResponsibleShard(collection, param);
+  this.__collection.save(this.__from, target, {data: data, step: this.__nextStep, toShard: shard});
 };
 
 Queue.prototype.getMessages = function () {
