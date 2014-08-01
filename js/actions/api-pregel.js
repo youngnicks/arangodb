@@ -52,6 +52,7 @@ function post_pregel (req, res) {
       break;
 
     case ("finishedStep") :
+      require("internal").print("Called Back");
       body = JSON.parse(req.requestBody);
       conductor.finishedStep(
         body.executionNumber,

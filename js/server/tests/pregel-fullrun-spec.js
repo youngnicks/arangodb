@@ -114,8 +114,8 @@ describe("Full Pregel execution", function () {
             return e._to;
           });
           outBound.concat(vertex._result.inBound).forEach(function (t) {
-            //message.sendTo(t, vertex._result.inGraph);
-            message.sendTo();
+            message.sendTo(t, vertex._result.inGraph);
+            //message.sendTo();
           });
         }
         vertex._deactivate();
@@ -123,7 +123,7 @@ describe("Full Pregel execution", function () {
       var id = conductor.startExecution(gN, myPregel.toString());
       require("console").log(id);
       var count = 0;
-      while (count < 100) {
+      while (count < 10) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "finished") {
           count = 2000;

@@ -37,6 +37,7 @@ var ArangoError = arangodb.ArangoError;
 exports.getServerName = function () {
   return ArangoServerState.id() || "localhost";
 };
+
 exports.genWorkCollectionName = function (executionNumber) {
   return "P_work_" + executionNumber;
 };

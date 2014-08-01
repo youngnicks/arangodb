@@ -73,6 +73,9 @@ var queryActivateVertices = "FOR v IN @@work UPDATE PARSE_IDENTIFIER(v._to).key 
 var queryUpdateCounter = "LET oldCount = DOCUMENT(@@global, 'counter').count "
   + "UPDATE 'counter' WITH {count: oldCount - 1} IN @@global";
 
+var queryMessageByShard = "FOR v IN @@message "
+  + "FILTER v.toShard == @shardId "
+  + "RETURN v";
 
 var registerFunction = function(executionNumber, algorithm) {
 
@@ -144,6 +147,7 @@ var setup = function(executionNumber, options) {
   global.save({_key: COUNTER, count: -1});
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
+  require("internal").print(options.conductor);
   saveMapping(executionNumber, options.map);
   require("internal").print("Saved Mapping");
   var collectionMapping = {};
@@ -233,6 +237,7 @@ var sendMessages = function (executionNumber) {
   var workCol = pregel.getWorkCollection(executionNumber);
   if (ArangoServerState.role() === "PRIMARY") {
     var map = loadMapping(executionNumber);
+    var waitCounter = 0;
     var shardList = _.flatten(
       _.map(
       _.filter(map, function (c) {
@@ -241,7 +246,32 @@ var sendMessages = function (executionNumber) {
         return Object.keys(c.originalShards);
       })
     );
+    var options = {
+      batchSize: 100
+    };
+    var bindVars = {
+      "@message": msgCol.name()
+    };
+    var coordOptions = {
+      coordTransactionID: ArangoClusterInfo.uniqid()
+    };
     require("internal").print(shardList);
+    _.each(shardList, function (shard) {
+      bindVars.shardId = shard;
+      var q = db._query(queryMessageByShard, bindVars, options);
+      var toSend;
+      while (q.hasNext()) {
+        require("internal").print("req");
+        toSend = JSON.stringify(q.next());
+        require("internal").print(toSend);
+        waitCounter++;
+        var res = ArangoClusterComm.asyncRequest("POST","shard:" + shard, db._name(),
+          "/_api/import?type=array&collection=" + workCol.name(), toSend, coordOptions, {});
+      }
+    });
+    for (waitCounter; waitCounter > 0; waitCounter--) {
+      ArangoClusterComm.wait(coordOptions);
+    }
   } else {
     var cursor = msgCol.all();
     var next;
@@ -249,8 +279,8 @@ var sendMessages = function (executionNumber) {
       next = cursor.next();
       workCol.save(next._from, next._to, next);
     }
-    msgCol.truncate();
   }
+  msgCol.truncate();
 };
 
 var finishedStep = function (executionNumber, global) {
@@ -273,12 +303,9 @@ var finishedStep = function (executionNumber, global) {
     var coordOptions = {
       coordTransactionID: ArangoClusterInfo.uniqid()
     };
-    require("internal").print("Send out message");
     ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
       "/_api/pregel/finishedStep", body, coordOptions, {});
-    require("internal").print("awaiting ans");
-      ArangoClusterComm.wait(coordOptions);
-    require("internal").print("received ans");
+    ArangoClusterComm.wait(coordOptions);
   } else {
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
       step: global.step,
@@ -290,7 +317,6 @@ var finishedStep = function (executionNumber, global) {
 };
 
 var vertexDone = function (executionNumber, vertex, global, err) {
-  require("internal").print("Vertex done");
   vertex._save();
   if (err && !err instanceof ArangoError) {
     err = new ArangoError();
@@ -304,18 +330,16 @@ var vertexDone = function (executionNumber, vertex, global, err) {
   db._query(queryUpdateCounter, {"@global": globalCol.name()});
   var counter = globalCol.document(COUNTER).count;
   if (counter === 0) {
+    require("internal").print("Finished step");
     finishedStep(executionNumber, global);
   }
 };
 
 var executeStep = function(executionNumber, step, options) {
-  require("internal").print("Starting with step: " + step);
   id = ArangoServerState.id() || "localhost";
   if (step === 0) {
-    require("internal").print("Setting up");
     setup(executionNumber, options);
   }
-  require("internal").print("Activate vertices");
   activateVertices(executionNumber);
   var q = getActiveVerticesQuery(executionNumber);
   // read full count from result and write to work

@@ -31,6 +31,7 @@
 var internal = require("internal");
 var db = internal.db;
 var graphModule = require("org/arangodb/general-graph");
+var pregel = require("org/arangodb/pregel");
 var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
@@ -66,14 +67,16 @@ var startNextStep = function(executionNumber, options) {
   var info = getExecutionInfo(executionNumber);
   var stepNo = info[step];
   options = options || {};
+  options.conductor = pregel.getServerName();
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
+    require("internal").print(pregel.getServerName(), ArangoServerState.id());
     var body = JSON.stringify({
       step: stepNo,
       executionNumber: executionNumber,
-      setup: options,
-      conductor: ArangoServerState.id()
+      setup: options
     });
+    require("internal").print(body);
     var httpOptions = {};
     require("internal").print("Sending next step");
     var coordOptions = {
@@ -91,7 +94,7 @@ var startNextStep = function(executionNumber, options) {
     }
   } else {
     dbServers = ["localhost"];
-    require("org/arangodb/pregel").Worker.executeStep(executionNumber, stepNo, options);
+    pregel.Worker.executeStep(executionNumber, stepNo, options);
   }
 };
 
@@ -131,6 +134,7 @@ var generateResultCollectionName = function (collectionName, executionNumber) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var initNextStep = function (executionNumber) {
+  require("internal").print("Next step!");
   var info = getExecutionInfo(executionNumber);
   info[step]++;
   info[stepContent].push({
@@ -287,6 +291,7 @@ var getInfo = function(executionNumber) {
 
 var finishedStep = function(executionNumber, serverName, info) {
   var err;
+  require("internal").print("Finishing", serverName);
   var runInfo = getExecutionInfo(executionNumber);
   if (info.step === undefined || info.step !== runInfo[step]) {
     err = new ArangoError();
@@ -304,6 +309,7 @@ var finishedStep = function(executionNumber, serverName, info) {
   stepInfo.messages += info.messages;
   stepInfo.active += info.active;
   runInfo.error = info.error;
+  require("internal").print("Storing info", JSON.stringify(stepInfo));
   var awaiting = runInfo[waitForAnswer];
   var index = awaiting.indexOf(serverName);
   if (index === -1) {
@@ -313,6 +319,7 @@ var finishedStep = function(executionNumber, serverName, info) {
     throw err;
   }
   awaiting.splice(index, 1);
+  require("internal").print("Waiting for", JSON.stringify(awaiting));
   updateExecutionInfo(executionNumber, runInfo);
   if (awaiting.length === 0 && !runInfo.error) {
     initNextStep(executionNumber);
