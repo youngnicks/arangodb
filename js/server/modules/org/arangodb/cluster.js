@@ -216,7 +216,8 @@ function getLocalCollections () {
   db._collections().forEach(function (collection) {
     var name = collection.name();
 
-    if (name.substr(0, 1) !== '_') {
+    // Ignore system collections (_<xyz>) and pregel collections (P_<xyz>)
+    if (name.substr(0, 1) !== '_' && name.substr(0, 2) !== 'P_') {
       var data = { 
         id: collection._id,
         name: name, 

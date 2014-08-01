@@ -36,6 +36,7 @@ var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
 var Queue = function (executionNumber, vertexId, step) {
+  this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
   this.__workCollection = pregel.getWorkCollection(executionNumber);
   var vertexCollectionName = pregel.getOriginalCollection(vertexId, executionNumber);
@@ -49,15 +50,15 @@ var Queue = function (executionNumber, vertexId, step) {
 Queue.prototype.sendTo = function(target, data) {
   var param, collection;
   if (typeof target === "string" && target.match(/\S+\/\S+/)) {
-    param = {_id: target}
+    param = {_id: target};
     collection = target.split("/")[0];
   } else if (typeof target === "object") {
     collection = target._id.split("/")[0];
-    var shardKeys  = pregel.getShardKeysForCollection(collection);
+    var shardKeys  = pregel.getShardKeysForCollection(this.__executionNumber, collection);
     param = {};
     shardKeys.forEach(function (sk) {
       if (!target[sk]) {
-        err = new ArangoError();
+        var err = new ArangoError();
         err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
         err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
         throw err;
@@ -65,7 +66,7 @@ Queue.prototype.sendTo = function(target, data) {
       param[sk] = target[sk];
     });
   } else {
-    err = new ArangoError();
+    var err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
     err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
     throw err;

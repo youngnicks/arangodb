@@ -38,15 +38,15 @@ exports.getServerName = function () {
   return ArangoServerState.id() || "localhost";
 };
 exports.genWorkCollectionName = function (executionNumber) {
-  return "work_" + executionNumber;
+  return "P_work_" + executionNumber;
 };
 
 exports.genMsgCollectionName = function (executionNumber) {
-  return "messages_" + executionNumber;
+  return "P_messages_" + executionNumber;
 };
 
 exports.genGlobalCollectionName = function (executionNumber) {
-  return "global_" + executionNumber;
+  return "P_global_" + executionNumber;
 };
 
 exports.getWorkCollection = function (executionNumber) {
@@ -83,16 +83,21 @@ exports.getGlobalCollection = function (executionNumber) {
 
 exports.getResponsibleShard = function (col, doc) {
   if (ArangoServerState.role() === "PRIMARY") {
-    return ArangoClusterInfo.getResponsibleShard(col, doc);
+    require("internal").print(col);
+    var colId = ArangoClusterInfo.getCollectionInfo(db._name(), col).id;
+    require("internal").print(colId);
+    var res = ArangoClusterInfo.getResponsibleShard(colId, doc).shardId;
+    require("internal").print(res);
+    return res;
   }
   return col;
 };
 
-exports.getShardKeysForCollection = function (collection) {
+exports.getShardKeysForCollection = function (executionNumber, collection) {
   var globalCol = exports.getGlobalCollection(executionNumber);
   var map = globalCol.document("map").map;
   if (!map[collection]) {
-    err = new ArangoError();
+    var err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
     err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
     throw err;
@@ -113,7 +118,7 @@ exports.getResponsibleEdgeShards = function (executionNumber, vertex) {
     if (ArangoServerState.role() === "PRIMARY") {
       _.each(map, function (c, key) {
         if (c.type === 3) {
-          result.push(ArangoClusterInfo.getResponsibleShard(key, example));
+          result.push(exports.getResponsibleShard(key, example));
         }
       });
       return result;
@@ -128,7 +133,7 @@ exports.getResponsibleEdgeShards = function (executionNumber, vertex) {
   if (ArangoServerState.role() === "PRIMARY") {
     _.each(map, function (c, col) {
       if (c.type === 3) {
-        result.push(ArangoClusterInfo.getResponsibleShard(col, example));
+        result.push(exports.getResponsibleShard(col, example));
       }
     });
     return result;

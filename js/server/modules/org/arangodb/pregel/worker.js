@@ -77,22 +77,29 @@ var queryUpdateCounter = "LET oldCount = DOCUMENT(@@global, 'counter').count "
 var registerFunction = function(executionNumber, algorithm) {
 
   var taskToExecute = "(function (params) {"
+    + "require('internal').print('In task');"
     + "var executionNumber = params.executionNumber;"
     + "var step = params.step;"
     + "var vertexid = params.vertexid;"
     + "var pregel = require('org/arangodb/pregel');"
     + "var worker = pregel.Worker;"
+    + "require('internal').print('Requireing v and m');"
+    + "require('internal').print('E' + executionNumber + ' v ' + vertexid);"
     + "var vertex = new pregel.Vertex(executionNumber, vertexid);"
+    + "require('internal').print('got v');"
     + "var messages = new pregel.MessageQueue(executionNumber, vertexid, step);"
+    + "require('internal').print('got m');"
     + "var global = {"
     +   "step: step"
     + "};"
+    + "require('internal').print('Try user algo');"
     + "try {"
     + "  (" + algorithm + "(vertex, messages, global));"
     + "} catch (err) {"
     +    "worker.vertexDone(executionNumber, vertex, global, err);"
     + "  return;"
     + "}"
+    + "require('internal').print('fin');"
     + "worker.vertexDone(executionNumber, vertex, global);"
     + "})(params)";
 
@@ -263,8 +270,15 @@ var finishedStep = function (executionNumber, global) {
       active: active,
       error: error
     });
+    var coordOptions = {
+      coordTransactionID: ArangoClusterInfo.uniqid()
+    };
+    require("internal").print("Send out message");
     ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
-      "/_api/pregel/finishedStep", body, {}, {});
+      "/_api/pregel/finishedStep", body, coordOptions, {});
+    require("internal").print("awaiting ans");
+      ArangoClusterComm.wait(coordOptions);
+    require("internal").print("received ans");
   } else {
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
       step: global.step,
@@ -276,6 +290,7 @@ var finishedStep = function (executionNumber, global) {
 };
 
 var vertexDone = function (executionNumber, vertex, global, err) {
+  require("internal").print("Vertex done");
   vertex._save();
   if (err && !err instanceof ArangoError) {
     err = new ArangoError();
