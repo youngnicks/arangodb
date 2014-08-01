@@ -80,29 +80,22 @@ var queryMessageByShard = "FOR v IN @@message "
 var registerFunction = function(executionNumber, algorithm) {
 
   var taskToExecute = "(function (params) {"
-    + "require('internal').print('In task');"
     + "var executionNumber = params.executionNumber;"
     + "var step = params.step;"
     + "var vertexid = params.vertexid;"
     + "var pregel = require('org/arangodb/pregel');"
     + "var worker = pregel.Worker;"
-    + "require('internal').print('Requireing v and m');"
-    + "require('internal').print('E' + executionNumber + ' v ' + vertexid);"
     + "var vertex = new pregel.Vertex(executionNumber, vertexid);"
-    + "require('internal').print('got v');"
     + "var messages = new pregel.MessageQueue(executionNumber, vertexid, step);"
-    + "require('internal').print('got m');"
     + "var global = {"
     +   "step: step"
     + "};"
-    + "require('internal').print('Try user algo');"
     + "try {"
     + "  (" + algorithm + "(vertex, messages, global));"
     + "} catch (err) {"
     +    "worker.vertexDone(executionNumber, vertex, global, err);"
     + "  return;"
     + "}"
-    + "require('internal').print('fin');"
     + "worker.vertexDone(executionNumber, vertex, global);"
     + "})(params)";
 
@@ -147,15 +140,12 @@ var setup = function(executionNumber, options) {
   global.save({_key: COUNTER, count: -1});
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
-  require("internal").print(options.conductor);
   saveMapping(executionNumber, options.map);
-  require("internal").print("Saved Mapping");
   var collectionMapping = {};
 
   _.each(options.map, function(mapping, collection) {
     collectionMapping[collection] = mapping.resultCollection;
   });
-  require("internal").print(JSON.stringify(collectionMapping));
 
   _.each(options.map, function(mapping) {
     var shards = Object.keys(mapping.originalShards);
@@ -168,18 +158,15 @@ var setup = function(executionNumber, options) {
           '@original' : shards[i],
           '@result' : resultShards[i]
         };
-        require("internal").print("Send query", JSON.stringify(bindVars));
         if (mapping.type === 3) {
           bindVars.collectionMapping = collectionMapping;
           db._query(queryInsertDefaultEdge, bindVars).execute();
         } else {
           db._query(queryInsertDefaultVertex, bindVars).execute();
         }
-        require("internal").print("queryDone");
       }
     }
   });
-  require("internal").print("Registering");
   registerFunction(executionNumber, options.algorithm);
 };
 
@@ -246,26 +233,21 @@ var sendMessages = function (executionNumber) {
         return Object.keys(c.originalShards);
       })
     );
-    var options = {
-      batchSize: 100
-    };
+    var batchSize = 100;
     var bindVars = {
       "@message": msgCol.name()
     };
     var coordOptions = {
       coordTransactionID: ArangoClusterInfo.uniqid()
     };
-    require("internal").print(shardList);
     _.each(shardList, function (shard) {
       bindVars.shardId = shard;
-      var q = db._query(queryMessageByShard, bindVars, options);
+      var q = db._query(queryMessageByShard, bindVars);
       var toSend;
       while (q.hasNext()) {
-        require("internal").print("req");
-        toSend = JSON.stringify(q.next());
-        require("internal").print(toSend);
+        toSend = JSON.stringify(q.next(batchSize));
         waitCounter++;
-        var res = ArangoClusterComm.asyncRequest("POST","shard:" + shard, db._name(),
+        ArangoClusterComm.asyncRequest("POST","shard:" + shard, db._name(),
           "/_api/import?type=array&collection=" + workCol.name(), toSend, coordOptions, {});
       }
     });
@@ -330,7 +312,6 @@ var vertexDone = function (executionNumber, vertex, global, err) {
   db._query(queryUpdateCounter, {"@global": globalCol.name()});
   var counter = globalCol.document(COUNTER).count;
   if (counter === 0) {
-    require("internal").print("Finished step");
     finishedStep(executionNumber, global);
   }
 };

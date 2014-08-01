@@ -70,15 +70,12 @@ var startNextStep = function(executionNumber, options) {
   options.conductor = pregel.getServerName();
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
-    require("internal").print(pregel.getServerName(), ArangoServerState.id());
     var body = JSON.stringify({
       step: stepNo,
       executionNumber: executionNumber,
       setup: options
     });
-    require("internal").print(body);
     var httpOptions = {};
-    require("internal").print("Sending next step");
     var coordOptions = {
       coordTransactionID: ArangoClusterInfo.uniqid()
     };
@@ -112,12 +109,19 @@ var cleanUp = function (executionNumber, err) {
   );
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
+    var coordOptions = {
+      coordTransactionID: ArangoClusterInfo.uniqid()
+    };
     dbServers.forEach(
       function(dbServer) {
         ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
-          "/_api/pregel/cleanup/" + executionNumber, {},{},httpOptions);
+          "/_api/pregel/cleanup/" + executionNumber, {}, httpOptions, coordOptions);
       }
     );
+    var i;
+    for (i = 0; i < dbServers.length; i++) {
+      ArangoClusterComm.wait(coordOptions);
+    }
   } else {
     dbServers = ["localhost"];
     httpOptions.type = "POST";
@@ -134,7 +138,6 @@ var generateResultCollectionName = function (collectionName, executionNumber) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var initNextStep = function (executionNumber) {
-  require("internal").print("Next step!");
   var info = getExecutionInfo(executionNumber);
   info[step]++;
   info[stepContent].push({
@@ -291,7 +294,6 @@ var getInfo = function(executionNumber) {
 
 var finishedStep = function(executionNumber, serverName, info) {
   var err;
-  require("internal").print("Finishing", serverName);
   var runInfo = getExecutionInfo(executionNumber);
   if (info.step === undefined || info.step !== runInfo[step]) {
     err = new ArangoError();
@@ -309,7 +311,6 @@ var finishedStep = function(executionNumber, serverName, info) {
   stepInfo.messages += info.messages;
   stepInfo.active += info.active;
   runInfo.error = info.error;
-  require("internal").print("Storing info", JSON.stringify(stepInfo));
   var awaiting = runInfo[waitForAnswer];
   var index = awaiting.indexOf(serverName);
   if (index === -1) {
@@ -319,7 +320,6 @@ var finishedStep = function(executionNumber, serverName, info) {
     throw err;
   }
   awaiting.splice(index, 1);
-  require("internal").print("Waiting for", JSON.stringify(awaiting));
   updateExecutionInfo(executionNumber, runInfo);
   if (awaiting.length === 0 && !runInfo.error) {
     initNextStep(executionNumber);

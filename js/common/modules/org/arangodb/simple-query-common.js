@@ -203,8 +203,13 @@ GeneralArrayCursor.prototype.hasNext = function () {
 /// @brief returns the next result document
 ////////////////////////////////////////////////////////////////////////////////
 
-GeneralArrayCursor.prototype.next = function() {
+GeneralArrayCursor.prototype.next = function(batchSize) {
   if (this._current < this._stop) {
+    if (batchSize) {
+      var res = this._documents.slice(this._current, this._current + batchSize);
+      this._current += batchSize;
+      return res;
+    }
     return this._documents[this._current++];
   }
 
