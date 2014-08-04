@@ -30,6 +30,7 @@
 
 var conductor = require("org/arangodb/pregel").Conductor;
 var graph = require("org/arangodb/general-graph");
+var _ = require("underscore");
 
 describe("Full Pregel execution", function () {
   "use strict";
@@ -60,7 +61,7 @@ describe("Full Pregel execution", function () {
       };
 
       var i;
-      for (i = 0; i < 14; i++) {
+      for (i = 1; i < 14; i++) {
         saveVertex(i);
       }
       saveEdge(1, 3);
@@ -121,17 +122,30 @@ describe("Full Pregel execution", function () {
         vertex._deactivate();
       };
       var id = conductor.startExecution(gN, myPregel.toString());
-      require("console").log(id);
       var count = 0;
+      var resGraph = "LostInBattle";
       while (count < 10) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "finished") {
-          count = 2000;
+          resGraph = conductor.getResult(id).graphName;
           break;
         }
         count++;
       }
-      expect(count).toEqual(2000);
+      expect(resGraph).not.toEqual("LostInBattle");
+      var resG = graph._graph(resGraph);
+      var vc = resG._vertexCollections()[0];
+      var resultVertices = vc.toArray();
+      _.each(resultVertices, function (v) {
+        var numVKey = parseInt(v._key, 10);
+        if (numVKey < 6) {
+          expect(v.result.inGraph).toEqual("1");
+        } else if (numVKey < 9) {
+          expect(v.result.inGraph).toEqual("6");
+        } else {
+          expect(v.result.inGraph).toEqual("10");
+        }
+      });
     });
 
 
