@@ -62,6 +62,19 @@ var saveExecutionInfo = function(infoObject) {
   return pregel.save(infoObject);
 };
 
+var getWaitForAnswerMap = function() {
+  var waitForAnswerMap = {}, serverList;
+  if (ArangoServerState.isCoordinator()) {
+    serverList = ArangoClusterInfo.getDBServers();
+  } else {
+    serverList = ["localhost"];
+  }
+  serverList.forEach(function(s) {
+    waitForAnswerMap[s] = false;
+  });
+  return waitForAnswerMap;
+};
+
 var startNextStep = function(executionNumber, options) {
   var dbServers;
   var info = getExecutionInfo(executionNumber);
@@ -144,11 +157,7 @@ var initNextStep = function (executionNumber) {
     active: 0,
     messages: 0
   });
-  if (ArangoServerState.isCoordinator()) {
-    info[waitForAnswer] = ArangoClusterInfo.getDBServers();
-  } else {
-    info[waitForAnswer] = ["localhost"];
-  }
+  info[waitForAnswer] = getWaitForAnswerMap();
   updateExecutionInfo(executionNumber, info);
   var stepInfo = info[stepContent][info[step]];
   if( stepInfo[active] > 0 || stepInfo[messages] > 0) {
@@ -180,7 +189,8 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
     }
     var props = {
       numberOfShards : properties[collection].numberOfShards,
-      shardKeys : properties[collection].shardKeys
+      shardKeys : properties[collection].shardKeys,
+      distributeShardsLike : collection
     };
     if (!noCreation) {
       if (map[collection].type === 2) {
@@ -244,12 +254,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
 var startExecution = function(graphName, algorithm, options) {
   var graph = graphModule._graph(graphName), dbServers, infoObject = {},
     stepContentObject = {} , setup;
-  if (ArangoServerState.isCoordinator()) {
-    dbServers = ArangoClusterInfo.getDBServers();
-  } else {
-    dbServers = ["localhost"];
-  }
-  infoObject[waitForAnswer] = dbServers;
+  infoObject[waitForAnswer] = getWaitForAnswerMap();
   infoObject[step] = 0;
   infoObject[state] = stateRunning;
   stepContentObject[active] = graph._countVertices();
@@ -312,18 +317,25 @@ var finishedStep = function(executionNumber, serverName, info) {
   stepInfo.active += info.active;
   runInfo.error = info.error;
   var awaiting = runInfo[waitForAnswer];
-  var index = awaiting.indexOf(serverName);
-  if (index === -1) {
+  if (awaiting[serverName] === undefined) {
     err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.code;
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message;
     throw err;
   }
-  awaiting.splice(index, 1);
+  awaiting[serverName] = true;
   updateExecutionInfo(executionNumber, runInfo);
-  if (awaiting.length === 0 && !runInfo.error) {
+  var everyServerResponded = true;
+  Object.keys(awaiting).forEach(function(s) {
+    if (awaiting[s] === false) {
+      everyServerResponded = false;
+    }
+  });
+  if (everyServerResponded && !runInfo.error) {
     initNextStep(executionNumber);
   }
+
+
 };
 
 // -----------------------------------------------------------------------------
