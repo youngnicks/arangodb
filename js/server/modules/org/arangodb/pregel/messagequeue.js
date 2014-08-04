@@ -49,10 +49,10 @@ var Queue = function (executionNumber, vertexId, step) {
 // Target is id now, has to be modified to contian vertex data
 Queue.prototype.sendTo = function(target, data) {
   var param, collection;
-  if (typeof target === "string" && target.match(/\S+\/\S+/)) {
+  if (target && typeof target === "string" && target.match(/\S+\/\S+/)) {
     param = {_id: target};
     collection = target.split("/")[0];
-  } else if (typeof target === "object") {
+  } else if (target && typeof target === "object") {
     collection = target._id.split("/")[0];
     var shardKeys  = pregel.getShardKeysForCollection(this.__executionNumber, collection);
     param = {};
@@ -67,8 +67,8 @@ Queue.prototype.sendTo = function(target, data) {
     });
   } else {
     var err = new ArangoError();
-    err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
-    err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
+    err.errorNum = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.code;
+    err.errorMessage = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.message;
     throw err;
   }
 

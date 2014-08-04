@@ -300,10 +300,11 @@ var finishedStep = function (executionNumber, global) {
 
 var vertexDone = function (executionNumber, vertex, global, err) {
   vertex._save();
-  if (err && !err instanceof ArangoError) {
-    err = new ArangoError();
-    err.errorNum = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.code;
-    err.errorMessage = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.message;
+  if (err && err instanceof ArangoError === false) {
+    var error = new ArangoError();
+    error.errorNum = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.code;
+    error.errorMessage = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.message + ": " + err;
+    err = error;
   }
   var globalCol = pregel.getGlobalCollection(executionNumber);
   if (err && !getError(executionNumber)) {

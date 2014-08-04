@@ -348,6 +348,7 @@ ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH,4000,"message was recieved from server
 ERROR_PREGEL_MESSAGE_STEP_MISMATCH,4001,"message was recieved with an unexpected step number","Will be raised whenever a message containing another step number is recieved."
 ERROR_PREGEL_MESSAGE_MALFORMED,4002,"malformed message recieved","Will be raised whenever a message with invalid content was revieved."
 ERROR_PREGEL_INVALID_TARGET_VERTEX,4003,"target vertex is unknown in the graph.","Will be raised whenever a target vertex is not part of the graph."
+ERROR_PREGEL_NO_TARGET_PROVIDED,4005,"invalid usage of messages.sentTo. a target is required","Will be raised if the target parameter in messages.sentTo is missing."
 ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR,4004,"syntax error in provided pregel algorithm.","Will be raised whenever a pregel algorithm throws a syntax error."
 
 

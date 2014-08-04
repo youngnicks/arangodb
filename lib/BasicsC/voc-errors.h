@@ -585,6 +585,8 @@ extern "C" {
 ///   Will be raised whenever a message with invalid content was revieved.
 /// - 4003: @LIT{target vertex is unknown in the graph.}
 ///   Will be raised whenever a target vertex is not part of the graph.
+/// - 4005: @LIT{invalid usage of messages.sentTo. a target is required}
+///   Will be raised if the target parameter in messages.sentTo is missing.
 /// - 4004: @LIT{syntax error in provided pregel algorithm.}
 ///   Will be raised whenever a pregel algorithm throws a syntax error.
 /// - 10000: @LIT{element not inserted into structure, because key already exists}
@@ -3070,6 +3072,16 @@ void TRI_InitialiseErrorMessages (void);
 ////////////////////////////////////////////////////////////////////////////////
 
 #define TRI_ERROR_PREGEL_INVALID_TARGET_VERTEX                            (4003)
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief 4005: ERROR_PREGEL_NO_TARGET_PROVIDED
+///
+/// invalid usage of messages.sentTo. a target is required
+///
+/// Will be raised if the target parameter in messages.sentTo is missing.
+////////////////////////////////////////////////////////////////////////////////
+
+#define TRI_ERROR_PREGEL_NO_TARGET_PROVIDED                               (4005)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief 4004: ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR
