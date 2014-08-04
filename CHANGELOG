@@ -1,4 +1,22 @@
-v2.2.1 (XXXX-XX-XX)
+v2.3.0 (XXXX-XX-XX)
+
+* Implemented a version of Pregel's algorithm
+
+  ArangoDB now offers an endpoint which accepts a JavaScript that is executed in parallel
+  on all vertices of a given graph.  Within the function it is possible to send messages
+  to other vertices, to read outbound edges of a vertex, store a result object for or delete
+  the vertex and its outbound edges, or deactivate the vertex. Pregel's algorithm is round-based
+  and repeats the execution of this function on a vertex until the vertex is deactived or deleted. 
+  If a message is send to a deactivated vertex it is reactivated and participates in the
+  next round again. The algorithm is terminated as soon as all vertices are deactivated
+  and no messages are send by the end of a round.
+  The result of the algorithm will be stored in a result graph created automatically.
+
+
+* `Cursor.next(n)` now accepts an optional first parameter, which allows to request
+  the next `n` elements instead of only the next one element.
+
+v2.2.1 (2014-07-24)
 -------------------
 
 * fixed hanging write-ahead log recovery for certain cases that involved dropping
