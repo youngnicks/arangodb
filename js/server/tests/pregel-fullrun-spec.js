@@ -170,6 +170,82 @@ describe("Full Pregel execution", function () {
 
     }
 
+    it("should return a syntax error message due to malformed algorithm", function () {
+      var myPregel = function (vertex, message, global) {
+        var inc = message.getMessages();
+        var next;
+        abc = def
+      };
+      var id = conductor.startExecution(gN, myPregel.toString());
+      var count = 0;
+      var result = "LostInBattle";
+      while (count < 10) {
+        require("internal").wait(1);
+        if (conductor.getInfo(id).state === "error") {
+          result = conductor.getResult(id);
+          break;
+        }
+        count++;
+      }
+      expect(result.error).toEqual(true);
+      expect(result.errorNum).toEqual(4004);
+    });
+
+    it("should return an error message due to misusage of messages.sentTo", function () {
+      var myPregel = function (vertex, message, global) {
+        var inc = message.getMessages();
+        var next;
+
+        if (global.step === 0) {
+          vertex._result = {
+            inGraph: vertex._key,
+            inBound: []
+          };
+        }
+        var min = vertex._result.inGraph;
+        if (global.step === 1) {
+          while (inc.hasNext()) {
+            next = inc.next();
+            vertex._result.inBound.push(next._from);
+            if (next.data < min) {
+              min = next.data;
+            }
+          }
+        } else if (global.step > 1) {
+          while (inc.hasNext()) {
+            next = inc.next();
+            if (next.data < min) {
+              min = next.data;
+            }
+          }
+        }
+        if (global.step < 2 || min < vertex._result.inGraph) {
+          vertex._result.inGraph = min;
+          var outBound = vertex._outEdges.map(function (e) {
+            return e._to;
+          });
+          outBound.concat(vertex._result.inBound).forEach(function () {
+            message.sendTo(null);
+          });
+        }
+        vertex._deactivate();
+      };
+      var id = conductor.startExecution(gN, myPregel.toString());
+      var count = 0;
+      var result = "LostInBattle";
+      while (count < 10) {
+        require("internal").wait(1);
+        if (conductor.getInfo(id).state === "error") {
+          result = conductor.getResult(id);
+          break;
+        }
+        count++;
+      }
+      expect(result.error).toEqual(true);
+      expect(result.errorNum).toEqual(4005);
+    });
+
+
   });
 
 });

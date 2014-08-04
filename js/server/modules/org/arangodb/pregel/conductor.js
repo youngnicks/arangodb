@@ -307,8 +307,18 @@ var startExecution = function(graphName, algorithm, options) {
 };
 
 var getResult = function (executionNumber) {
-  var info = getExecutionInfo(executionNumber);
-  return {graphName : info.state === stateFinished ? info.graphName : "", state : info.state};
+  var info = getExecutionInfo(executionNumber), result = {};
+  if (info.state === stateFinished) {
+    result.error = false;
+    result.result = {graphName : info.graphName, state : info.state};
+  } else if (info.state === stateRunning) {
+    result.error = false;
+    result.result = {graphName : "", state : info.state};
+  } else {
+    result = info.error;
+    result.state = info.state;
+  }
+  return result;
 };
 
 
@@ -358,6 +368,8 @@ var finishedStep = function(executionNumber, serverName, info) {
   });
   if (everyServerResponded && !runInfo.error) {
     initNextStep(executionNumber);
+  } else if (everyServerResponded) {
+    cleanUp(executionNumber, runInfo.error);
   }
 
 

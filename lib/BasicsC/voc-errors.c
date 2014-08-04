@@ -247,6 +247,7 @@ void TRI_InitialiseErrorMessages (void) {
   REG_ERROR(ERROR_PREGEL_MESSAGE_STEP_MISMATCH, "message was recieved with an unexpected step number");
   REG_ERROR(ERROR_PREGEL_MESSAGE_MALFORMED, "malformed message recieved");
   REG_ERROR(ERROR_PREGEL_INVALID_TARGET_VERTEX, "target vertex is unknown in the graph.");
+  REG_ERROR(ERROR_PREGEL_NO_TARGET_PROVIDED, "invalid usage of messages.sentTo. a target is required");
   REG_ERROR(ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR, "syntax error in provided pregel algorithm.");
   REG_ERROR(ERROR_PREGEL_TIMEOUT, "Execution timed out.");
   REG_ERROR(RESULT_KEY_EXISTS, "element not inserted into structure, because key already exists");
