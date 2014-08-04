@@ -34,6 +34,7 @@ var ArangoError = arangodb.ArangoError;
 var pregel = require("org/arangodb/pregel");
 var worker = pregel.Worker;
 var conductor = pregel.Conductor;
+var tasks = require("org/arangodb/tasks");
 
 var mapping = {
   "UnitTestsPregelVertex1": {
@@ -71,29 +72,17 @@ describe("Pregel Worker", function () {
 
       beforeEach(function () {
         var id = ArangoServerState.id() || "localhost";
-        try {
-          db._drop(pregel.genWorkCollectionName(executionNumber));
-        } catch (ignore) { }
-        try {
-          db._drop(pregel.genMsgCollectionName(executionNumber));
-        } catch (ignore) { }
-        try {
-          db._drop(pregel.genGlobalCollectionName(executionNumber));
-        } catch (ignore) { }
+        db._drop(pregel.genWorkCollectionName(executionNumber));
+        db._drop(pregel.genMsgCollectionName(executionNumber));
+        db._drop(pregel.genGlobalCollectionName(executionNumber));
         Object.keys(mapping).forEach(function (collection) {
           var shards = Object.keys(mapping[collection].originalShards);
           var resultShards = Object.keys(mapping[collection].resultShards);
           var i;
           for (i = 0; i < shards.length; i++) {
             if (mapping[collection].originalShards[shards[i]] === id) {
-              try {
-                db._drop(resultShards[i]);
-              } catch (ignore) {
-              }
-              try {
-                db._drop(shards[i]);
-              } catch (ignore) {
-              }
+              db._drop(resultShards[i]);
+              db._drop(shards[i]);
               try {
                 if (mapping[collection].type === 3) {
                   db._createEdgeCollection(shards[i]);
@@ -124,7 +113,8 @@ describe("Pregel Worker", function () {
         Object.keys(mapping).forEach(function (collection) {
           var shards = Object.keys(mapping[collection].originalShards);
           var resultShards = Object.keys(mapping[collection].resultShards);
-          for (var i = 0; i < shards.length; i++) {
+          var i;
+          for (i = 0; i < shards.length; i++) {
             if (mapping[collection].originalShards[shards[i]] === id) {
               db._drop(shards[i]);
               db._drop(resultShards[i]);
@@ -132,27 +122,25 @@ describe("Pregel Worker", function () {
 
           }
         });
-        try {
-          db._drop(pregel.genWorkCollectionName(executionNumber));
-          db._drop(pregel.genMsgCollectionName(executionNumber));
-          db._drop(pregel.genGlobalCollectionName(executionNumber));
-        } catch (ignore) {
-
-        }
+        db._drop(pregel.genWorkCollectionName(executionNumber));
+        db._drop(pregel.genMsgCollectionName(executionNumber));
+        db._drop(pregel.genGlobalCollectionName(executionNumber));
       });
 
       it("should first executeStep", function () {
+        spyOn(tasks, "register");
         var id = ArangoServerState.id() || "localhost";
         worker.executeStep(executionNumber, 0, {
           map: mapping,
           algorithm: "function(){}"
         });
-        expect(db["work_" + executionNumber]).not.toEqual(undefined);
-        expect(db["messages_" + executionNumber]).not.toEqual(undefined);
+        expect(db[pregel.genWorkCollectionName(executionNumber)]).not.toEqual(undefined);
+        expect(db[pregel.genMsgCollectionName(executionNumber)]).not.toEqual(undefined);
         Object.keys(mapping).forEach(function (collection) {
           var shards = Object.keys(mapping[collection].originalShards);
           var resultShards = Object.keys(mapping[collection].resultShards);
-          for (var i = 0; i < shards.length; i++) {
+          var i;
+          for (i = 0; i < shards.length; i++) {
             if (mapping[collection].originalShards[shards[i]] === id) {
               if (mapping[collection].type === 3) {
                 expect(db[resultShards[i]].document("edgeA")).not.toEqual(undefined);
@@ -168,7 +156,7 @@ describe("Pregel Worker", function () {
       });
 
       it("should cleanup", function () {
-        var id = ArangoServerState.id() || "localhost";
+        spyOn(tasks, "register");
         worker.executeStep(executionNumber, 0, {map: mapping, algorithm: "function(){}"});
         expect(db[pregel.genWorkCollectionName(executionNumber)]).not.toEqual(undefined);
         expect(db[pregel.genMsgCollectionName(executionNumber)]).not.toEqual(undefined);
@@ -183,7 +171,7 @@ describe("Pregel Worker", function () {
 
     describe("task done for vertex", function () {
 
-      var globalCol, messageCol, workCol, COUNTER, CONDUCTOR, MAP,
+      var globalCol, messageCol, workCol, COUNTER, CONDUCTOR, MAP, ERR,
         vertex1, vertex2, vertex3, vertex4, vertex5,
         vC, vCRes, step, conductorName,
         setActiveAndMessages = function () {
@@ -191,12 +179,9 @@ describe("Pregel Worker", function () {
           queue.sendTo(vC + "/v2", "My message");
           queue.sendTo(vC + "/v3", "My message");
           db[vCRes].updateByExample({active: false}, {active: true});
-          // var queue = new pregel.MessageQueue(vertex1._id);
-          // queue.sendTo(vertex2._id, "My message");
-          // queue.sendTo(vertex3._id, "My message");
         },
 
-        saveVertex = function(key) {
+        saveVertex = function (key) {
           var vid = db[vC].save({_key: key})._id;
           db[vCRes].save({
             _key: key,
@@ -217,24 +202,15 @@ describe("Pregel Worker", function () {
         vCRes = "P_" + executionNumber + "_RESULT_" + vC;
         conductorName = "Claus";
         step = 2;
-        try {
-          db._drop(vC);
-        } catch (ignore) { }
-        try {
-          db._drop(vCRes);
-        } catch (ignore) { }
-        try {
-          db._drop(pregel.genGlobalCollectionName(executionNumber));
-        } catch (ignore) { }
-        try {
-          db._drop(pregel.genMsgCollectionName(executionNumber));
-        } catch (ignore) { }
-        try {
-          db._drop(pregel.genWorkCollectionName(executionNumber));
-        } catch (ignore) { }
+        db._drop(vC);
+        db._drop(vCRes);
+        db._drop(pregel.genGlobalCollectionName(executionNumber));
+        db._drop(pregel.genMsgCollectionName(executionNumber));
+        db._drop(pregel.genWorkCollectionName(executionNumber));
         COUNTER = "counter";
         CONDUCTOR = "conductor";
         MAP = "map";
+        ERR = "error";
 
         var map = {};
         map[vC] = {};
@@ -252,6 +228,7 @@ describe("Pregel Worker", function () {
         globalCol.save({_key: COUNTER, count: 3});
         globalCol.save({_key: CONDUCTOR, name: conductorName});
         globalCol.save({_key: MAP, map: map});
+        globalCol.save({_key: ERR, error: undefined});
         db._create(vC);
         db._create(vCRes);
         vertex1 = saveVertex("v1");
@@ -297,14 +274,17 @@ describe("Pregel Worker", function () {
         });
 
         it("should callback the conductor in cluster case", function () {
+          var transActId = "1337";
           var body = JSON.stringify({
             server: pregel.getServerName(),
             step: step,
             executionNumber: executionNumber,
             messages: 0,
-            active: 0
+            active: 0,
+            error: null
           });
           spyOn(ArangoServerState, "role").and.returnValue("PRIMARY");
+          spyOn(ArangoClusterInfo, "uniqid").and.returnValue(transActId);
           spyOn(ArangoClusterComm, "asyncRequest");
           worker.vertexDone(executionNumber, vertex3, {step: step});
           expect(ArangoClusterComm.asyncRequest).toHaveBeenCalledWith(
@@ -313,21 +293,26 @@ describe("Pregel Worker", function () {
             db._name(),
             "/_api/pregel/finishedStep",
             body,
-            {},
+            {
+              coordTransactionID: transActId
+            },
             {}
           );
         });
 
         it("should send messages and active in cluster case", function () {
+          var transActId = "1337";
           setActiveAndMessages();
           var body = JSON.stringify({
             server: pregel.getServerName(),
             step: step,
             executionNumber: executionNumber,
             messages: 2,
-            active: 5
+            active: 5,
+            error: null
           });
           spyOn(ArangoServerState, "role").and.returnValue("PRIMARY");
+          spyOn(ArangoClusterInfo, "uniqid").and.returnValue(transActId);
           spyOn(ArangoClusterComm, "asyncRequest");
           worker.vertexDone(executionNumber, vertex3, {step: step});
           expect(ArangoClusterComm.asyncRequest).toHaveBeenCalledWith(
@@ -336,7 +321,9 @@ describe("Pregel Worker", function () {
             db._name(),
             "/_api/pregel/finishedStep",
             body,
-            {},
+            {
+              coordTransactionID: transActId
+            },
             {}
           );
         });
@@ -351,7 +338,8 @@ describe("Pregel Worker", function () {
             {
               step: step,
               active: 0,
-              messages: 0
+              messages: 0,
+              error: null
             }
           );
         });
@@ -367,7 +355,8 @@ describe("Pregel Worker", function () {
             {
               step: step,
               active: 5,
-              messages: 2
+              messages: 2,
+              error: null
             }
           );
         });
