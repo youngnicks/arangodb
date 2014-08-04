@@ -111,6 +111,7 @@ describe("Pregel Vertex Object Testing", function () {
       e2 = mapping.UnitTestsPregelEdge2;
 
       db._drop(vc1);
+      db._drop(ec1);
       db._drop(globalCollectionName);
       try {
         db.unittest_vertex2.drop();
@@ -159,6 +160,7 @@ describe("Pregel Vertex Object Testing", function () {
       db._createDocumentCollection("UnitTestsPregelVertex1");
       db._createDocumentCollection("unittest_vertex2");
       db._createEdgeCollection("unittest_edge2");
+      db._createEdgeCollection(ec1);
 
       db._create(globalCollectionName);
 
@@ -201,6 +203,7 @@ describe("Pregel Vertex Object Testing", function () {
 
     afterEach(function () {
       db._drop(vc1);
+      db._drop(ec1);
       db.unittest_vertex2.drop();
       db.unittest_edge2.drop();
 

@@ -127,7 +127,7 @@ describe("Pregel MessageQueue", function () {
       var sended = msgCollection.any();
       expect(sended.toShard).toEqual(shardName);
       expect(pregel.getResponsibleShard).not.toHaveBeenCalledWith(senderId);
-      expect(pregel.getResponsibleShard).toHaveBeenCalledWith(receiverId);
+      expect(pregel.getResponsibleShard).toHaveBeenCalledWith(receiverId.split("/")[0], {_id: receiverId});
     });
 
   });
