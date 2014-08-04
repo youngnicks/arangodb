@@ -49,8 +49,8 @@ describe("Pregel Vertex Object Testing", function () {
   describe("testing vertex methods", function () {
 
     var mapping, v1, v2, e2, firstDoc, secondDoc, thirdDoc,
-    execNr = "unittest_nr_1337",
-    shardName = "Pancho";
+      execNr = "unittest_nr_1337";
+    var globalCollectionName = pregel.genGlobalCollectionName(execNr);
 
     beforeEach(function () {
       mapping = {
@@ -110,9 +110,8 @@ describe("Pregel Vertex Object Testing", function () {
       v2 = mapping.UnitTestsPregelVertex2;
       e2 = mapping.UnitTestsPregelEdge2;
 
-      try {
-        db.UnitTestsPregelVertex1.drop();
-      } catch (ignore) {}
+      db._drop(vc1);
+      db._drop(globalCollectionName);
       try {
         db.unittest_vertex2.drop();
       } catch (ignore) {}
@@ -161,8 +160,7 @@ describe("Pregel Vertex Object Testing", function () {
       db._createDocumentCollection("unittest_vertex2");
       db._createEdgeCollection("unittest_edge2");
 
-      //global collections
-      db._createDocumentCollection("global_unittest_nr_1337");
+      db._create(globalCollectionName);
 
       //create result collections
       db._createDocumentCollection("P_305000077_RESULT_UnitTestsPregelVertex1");
@@ -197,17 +195,16 @@ describe("Pregel Vertex Object Testing", function () {
       db._createEdgeCollection("s305000090");
 
       //fill global collection with mapping
-      var globalCollectionName = pregel.genGlobalCollectionName(execNr);
       db[globalCollectionName].save({_key: "map", map: mapping});
 
     });
 
     afterEach(function () {
-      db.UnitTestsPregelVertex1.drop();
+      db._drop(vc1);
       db.unittest_vertex2.drop();
       db.unittest_edge2.drop();
 
-      db.global_unittest_nr_1337.drop();
+      db._drop(globalCollectionName);
 
       db.P_305000077_RESULT_UnitTestsPregelVertex1.drop();
       db.P_305000077_RESULT_UnitTestsPregelVertex2.drop();
