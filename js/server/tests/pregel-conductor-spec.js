@@ -236,7 +236,9 @@ describe("Pregel Conductor", function () {
 
       it("should call next pregel execution locally", function () {
         conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
-        expect(worker.executeStep).toHaveBeenCalledWith(execNr, 2, {});
+        expect(worker.executeStep).toHaveBeenCalledWith(execNr, 2, {
+          conductor: "localhost"
+        });
       });
 
     }
