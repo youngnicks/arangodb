@@ -310,11 +310,32 @@ var vertexDone = function (executionNumber, vertex, global, err) {
   if (err && !getError(executionNumber)) {
     globalCol.update(ERR, {error: err});
   }
-  db._query(queryUpdateCounter, {"@global": globalCol.name()});
-  var counter = globalCol.document(COUNTER).count;
-  if (counter === 0) {
+  var performFinish = db._executeTransaction({
+    collections : {write : [globalCol.name()]},
+    action : function (params) {
+      var db = internal.db;
+      globalCol = params.globalCol;
+      worker = params.worker;
+      db._query(params.queryUpdateCounter, {"@global": globalCol.name()});
+      var counter = globalCol.document(params.counter).count;
+      if (counter === 0) {
+        return true;
+      }
+      return false
+    },
+    params : {
+      globalCol : globalCol,
+      worker : this,
+      queryUpdateCounter : queryUpdateCounter,
+      counter : COUNTER
+
+    }
+  });
+  if (performFinish === true) {
     finishedStep(executionNumber, global);
   }
+
+
 };
 
 var executeStep = function(executionNumber, step, options) {
@@ -350,4 +371,5 @@ var cleanUp = function(executionNumber) {
 // Public functions
 exports.executeStep = executeStep;
 exports.cleanUp = cleanUp;
+exports.finishedStep = finishedStep;
 exports.vertexDone = vertexDone;

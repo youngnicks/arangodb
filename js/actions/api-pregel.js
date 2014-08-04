@@ -52,7 +52,6 @@ function post_pregel (req, res) {
       break;
 
     case ("finishedStep") :
-      require("internal").print("Called Back");
       body = JSON.parse(req.requestBody);
       conductor.finishedStep(
         body.executionNumber,
@@ -60,7 +59,8 @@ function post_pregel (req, res) {
         {
           step : body.step,
           messages : body.messages,
-          active : body.active
+          active : body.active,
+          error: body.error
         }
       );
       actions.resultOk(req, res, actions.HTTP_OK);
@@ -69,7 +69,6 @@ function post_pregel (req, res) {
     case ("nextStep") :
       body = JSON.parse(req.requestBody);
       worker.executeStep(body.executionNumber, body.step, body.setup);
-      require("internal").print("started exeuction");
       actions.resultOk(req, res, actions.HTTP_OK);
       break;
 

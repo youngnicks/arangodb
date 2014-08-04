@@ -128,7 +128,7 @@ describe("Full Pregel execution", function () {
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
-      while (count < 10) {
+      while (count < 30) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "finished") {
           res = conductor.getResult(id);
@@ -157,14 +157,22 @@ describe("Full Pregel execution", function () {
     if (coordinator) {
 
       it("should trigger a timeout event", function () {
-        var timeOut = 5;
-        spyOn(pregel, "getTimeoutConst").and.returnValue(timeOut);
-        var id = conductor.startExecution(gN, connectedSets.toString());
-        require("internal").wait(timeOut * 2);
+        var timeOut = 0.1;
+        var id = conductor.startExecution(gN, connectedSets.toString(), {timeout : timeOut});
+        var res;
+        var count = 0;
+        while (count < 30) {
+          require("internal").wait(1);
+          if (conductor.getInfo(id).state === "error") {
+            res = conductor.getResult(id);
+            break;
+          }
+          count++;
+        }
         expect(conductor.getInfo(id).state).toEqual("error");
         var res = conductor.getResult(id);
         expect(res.error).toBeTruthy();
-        expect(res.code).toEqual(ERRORS.ERROR_PREGEL_TIMEOUT.code);
+        expect(res.errorNum).toEqual(ERRORS.ERROR_PREGEL_TIMEOUT.code);
         expect(res.errorMessage).toEqual(ERRORS.ERROR_PREGEL_TIMEOUT.message);
       });
 
@@ -179,7 +187,7 @@ describe("Full Pregel execution", function () {
       var id = conductor.startExecution(gN, myPregel.toString());
       var count = 0;
       var result = "LostInBattle";
-      while (count < 10) {
+      while (count < 30) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "error") {
           result = conductor.getResult(id);
@@ -233,7 +241,7 @@ describe("Full Pregel execution", function () {
       var id = conductor.startExecution(gN, myPregel.toString());
       var count = 0;
       var result = "LostInBattle";
-      while (count < 10) {
+      while (count < 30) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "error") {
           result = conductor.getResult(id);
