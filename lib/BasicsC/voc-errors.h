@@ -587,6 +587,9 @@ extern "C" {
 ///   Will be raised whenever a target vertex is not part of the graph.
 /// - 4004: @LIT{syntax error in provided pregel algorithm.}
 ///   Will be raised whenever a pregel algorithm throws a syntax error.
+/// - 4005: @LIT{Execution timed out.}
+///   Will be raised whenever a db server does not report a result to the
+///   coordinator within the defined time interval.
 /// - 10000: @LIT{element not inserted into structure, because key already exists}
 ///   Will be returned if the element was not insert because the key already
 ///   exists.
@@ -3080,6 +3083,17 @@ void TRI_InitialiseErrorMessages (void);
 ////////////////////////////////////////////////////////////////////////////////
 
 #define TRI_ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR                           (4004)
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief 4005: ERROR_PREGEL_TIMEOUT
+///
+/// Execution timed out.
+///
+/// Will be raised whenever a db server does not report a result to the
+/// coordinator within the defined time interval.
+////////////////////////////////////////////////////////////////////////////////
+
+#define TRI_ERROR_PREGEL_TIMEOUT                                          (4005)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief 10000: RESULT_KEY_EXISTS

@@ -207,9 +207,8 @@ GeneralArrayCursor.prototype.hasNext = function () {
 GeneralArrayCursor.prototype.next = function(batchSize) {
   if (this._current < this._stop) {
     if (batchSize) {
-      this.current++;
       var res = this._documents.slice(this._current, this._current + batchSize);
-      this.current += batchSize;
+      this._current += batchSize;
       return res;
     }
     return this._documents[this._current++];

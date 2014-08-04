@@ -248,6 +248,7 @@ void TRI_InitialiseErrorMessages (void) {
   REG_ERROR(ERROR_PREGEL_MESSAGE_MALFORMED, "malformed message recieved");
   REG_ERROR(ERROR_PREGEL_INVALID_TARGET_VERTEX, "target vertex is unknown in the graph.");
   REG_ERROR(ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR, "syntax error in provided pregel algorithm.");
+  REG_ERROR(ERROR_PREGEL_TIMEOUT, "Execution timed out.");
   REG_ERROR(RESULT_KEY_EXISTS, "element not inserted into structure, because key already exists");
   REG_ERROR(RESULT_ELEMENT_EXISTS, "element not inserted into structure, because it already exists");
   REG_ERROR(RESULT_KEY_NOT_FOUND, "key not found in structure");
