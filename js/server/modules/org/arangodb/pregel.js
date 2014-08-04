@@ -54,6 +54,10 @@ exports.getWorkCollection = function (executionNumber) {
   return db._collection(exports.genWorkCollectionName(executionNumber));
 };
 
+exports.getTimeoutConst = function (executionNumber) {
+  return 300000;
+};
+
 exports.getMsgCollection = function (executionNumber) {
   return db._collection(exports.genMsgCollectionName(executionNumber));
 };

@@ -1,5 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, todo: true, white: false, sloppy: false */
 /*global require, describe, beforeEach, it, expect, spyOn, createSpy, createSpyObj, afterEach, runs, waitsFor */
+/*global ArangoServerState */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief test a complete run through pregel's algorithm
@@ -28,16 +29,57 @@
 /// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
-var conductor = require("org/arangodb/pregel").Conductor;
+var pregel = require("org/arangodb/pregel");
+var conductor = pregel.Conductor;
 var graph = require("org/arangodb/general-graph");
 var _ = require("underscore");
+var ERRORS = require("org/arangodb").errors;
+var coordinator = ArangoServerState.isCoordinator();
 
 describe("Full Pregel execution", function () {
   "use strict";
 
   describe("a small unsharded graph", function () {
 
-    var gN, v, e, g;
+    var gN, v, e, g,
+      connectedSets = function (vertex, message, global) {
+        var inc = message.getMessages();
+        var next;
+
+        if (global.step === 0) {
+          vertex._result = {
+            inGraph: vertex._key,
+            inBound: []
+          };
+        }
+        var min = vertex._result.inGraph;
+        if (global.step === 1) {
+          while (inc.hasNext()) {
+            next = inc.next();
+            vertex._result.inBound.push(next._from);
+            if (next.data < min) {
+              min = next.data;
+            }
+          }
+        } else if (global.step > 1) {
+          while (inc.hasNext()) {
+            next = inc.next();
+            if (next.data < min) {
+              min = next.data;
+            }
+          }
+        }
+        if (global.step < 2 || min < vertex._result.inGraph) {
+          vertex._result.inGraph = min;
+          var outBound = vertex._outEdges.map(function (e) {
+            return e._to;
+          });
+          outBound.concat(vertex._result.inBound).forEach(function (t) {
+            message.sendTo(t, vertex._result.inGraph);
+          });
+        }
+        vertex._deactivate();
+      };
 
     beforeEach(function () {
       gN = "UnitTestPregelGraph";
@@ -82,57 +124,21 @@ describe("Full Pregel execution", function () {
     });
 
     it("should identify all distinct graphs", function () {
-      var myPregel = function (vertex, message, global) {
-        var inc = message.getMessages();
-        var next;
-
-        if (global.step === 0) {
-          vertex._result = {
-            inGraph: vertex._key,
-            inBound: []
-          };
-        }
-        var min = vertex._result.inGraph;
-        if (global.step === 1) {
-          while (inc.hasNext()) {
-            next = inc.next();
-            vertex._result.inBound.push(next._from);
-            if (next.data < min) {
-              min = next.data;
-            }
-          }
-        } else if (global.step > 1) {
-          while (inc.hasNext()) {
-            next = inc.next();
-            if (next.data < min) {
-              min = next.data;
-            }
-          }
-        }
-        if (global.step < 2 || min < vertex._result.inGraph) {
-          vertex._result.inGraph = min;
-          var outBound = vertex._outEdges.map(function (e) {
-            return e._to;
-          });
-          outBound.concat(vertex._result.inBound).forEach(function (t) {
-            message.sendTo(t, vertex._result.inGraph);
-            //message.sendTo();
-          });
-        }
-        vertex._deactivate();
-      };
-      var id = conductor.startExecution(gN, myPregel.toString());
+      var id = conductor.startExecution(gN, connectedSets.toString());
       var count = 0;
       var resGraph = "LostInBattle";
+      var res;
       while (count < 10) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "finished") {
-          resGraph = conductor.getResult(id).graphName;
+          res = conductor.getResult(id);
+          resGraph = res.result.graphName;
           break;
         }
         count++;
       }
       expect(resGraph).not.toEqual("LostInBattle");
+      expect(res.error).toBeFalsy();
       var resG = graph._graph(resGraph);
       var vc = resG._vertexCollections()[0];
       var resultVertices = vc.toArray();
@@ -148,6 +154,21 @@ describe("Full Pregel execution", function () {
       });
     });
 
+    if (coordinator) {
+
+      it("should trigger a timeout event", function () {
+        var timeOut = 5;
+        spyOn(pregel, "getTimeoutConst").and.returnValue(timeOut);
+        var id = conductor.startExecution(gN, connectedSets.toString());
+        require("internal").wait(timeOut * 2);
+        expect(conductor.getInfo(id).state).toEqual("error");
+        var res = conductor.getResult(id);
+        expect(res.error).toBeTruthy();
+        expect(res.code).toEqual(ERRORS.ERROR_PREGEL_TIMEOUT.code);
+        expect(res.errorMessage).toEqual(ERRORS.ERROR_PREGEL_TIMEOUT.message);
+      });
+
+    }
 
   });
 

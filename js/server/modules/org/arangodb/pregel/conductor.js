@@ -33,6 +33,7 @@ var db = internal.db;
 var graphModule = require("org/arangodb/general-graph");
 var pregel = require("org/arangodb/pregel");
 var arangodb = require("org/arangodb");
+var tasks = require("org/arangodb/tasks");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
@@ -47,6 +48,10 @@ var stateFinished = "finished";
 var stateRunning = "running";
 var stateError = "error";
 
+var genTaskId = function (executionNumber) {
+  return "Pregel_Task_" + executionNumber;
+};
+
 var getExecutionInfo = function(executionNumber) {
   var pregel = db._pregel;
   return pregel.document(executionNumber);
@@ -60,6 +65,17 @@ var updateExecutionInfo = function(executionNumber, infoObject) {
 var saveExecutionInfo = function(infoObject) {
   var pregel = db._pregel;
   return pregel.save(infoObject);
+};
+
+var timeOutExecution = function (executionNumber) {
+  var err = new ArangoError({
+    errorNum: ERRORS.ERROR_PREGEL_TIMEOUT.code,
+    errorMessage: ERRORS.ERROR_PREGEL_TIMEOUT.message
+  });
+  updateExecutionInfo(executionNumber, {
+    state: stateError,
+    error: err
+  });
 };
 
 var getWaitForAnswerMap = function() {
@@ -102,6 +118,15 @@ var startNextStep = function(executionNumber, options) {
     for (i = 0; i < dbServers.length; i++) {
       ArangoClusterComm.wait(coordOptions);
     }
+    tasks.register({
+      id: genTaskId(executionNumber),
+      offset: pregel.getTimeoutConst(executionNumber),
+      command: function(params) {
+        var c = require("org/arangodb/pregel").conductor;
+        c.timeOutExecution(params.executionNumber);
+      },
+      params: {executionNumber: executionNumber}
+    });
   } else {
     dbServers = ["localhost"];
     pregel.Worker.executeStep(executionNumber, stepNo, options);
