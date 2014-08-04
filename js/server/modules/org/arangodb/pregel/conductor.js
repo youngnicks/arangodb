@@ -38,6 +38,7 @@ var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
 var step = "step";
+var timeout = "timeout";
 var stepContent = "stepContent";
 var waitForAnswer = "waitForAnswer";
 var active = "active";
@@ -85,6 +86,9 @@ var startNextStep = function(executionNumber, options) {
   var info = getExecutionInfo(executionNumber);
   var stepNo = info[step];
   options = options || {};
+  if (info[timeout]) {
+    options[timeout] = info[timeout];
+  }
   options.conductor = pregel.getServerName();
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
@@ -109,9 +113,9 @@ var startNextStep = function(executionNumber, options) {
     }
     tasks.register({
       id: genTaskId(executionNumber),
-      offset: pregel.getTimeoutConst(executionNumber),
+      offset: options.timeout ? options.timeout : pregel.getTimeoutConst(executionNumber),
       command: function(params) {
-        var c = require("org/arangodb/pregel").conductor;
+        var c = require("org/arangodb/pregel").Conductor;
         c.timeOutExecution(params.executionNumber);
       },
       params: {executionNumber: executionNumber}
@@ -278,6 +282,10 @@ var startExecution = function(graphName, algorithm, options) {
     stepContentObject = {} , setup;
   infoObject[waitForAnswer] = getWaitForAnswerMap();
   infoObject[step] = 0;
+  options = options  || {};
+  if (options[timeout]) {
+    infoObject[timeout] = options[timeout];
+  }
   infoObject[state] = stateRunning;
   stepContentObject[active] = graph._countVertices();
   stepContentObject[messages] = 0;
@@ -294,12 +302,11 @@ var startExecution = function(graphName, algorithm, options) {
     throw err;
   }
 
-  setup = options  || {};
-  setup.algorithm = algorithm;
+  options.algorithm = algorithm;
 
-  setup.map = createResultGraph(graph, key);
+  options.map = createResultGraph(graph, key);
 
-  startNextStep(key, setup);
+  startNextStep(key, options);
   return key;
 };
 
@@ -357,6 +364,7 @@ var finishedStep = function(executionNumber, serverName, info) {
   }
   db._executeTransaction({
     action: function (params) {
+      var tasks = require("org/arangodb/tasks");
       var self = params.self;
       var executionNumber = params.executionNumber;
       var runInfo = self.getExecutionInfo(executionNumber);
@@ -371,8 +379,10 @@ var finishedStep = function(executionNumber, serverName, info) {
         }
       });
       if (everyServerResponded && !runInfo.error) {
+        tasks.unregister(genTaskId(executionNumber));
         initNextStep(executionNumber);
       } else if (everyServerResponded) {
+        tasks.unregister(genTaskId(executionNumber));
         cleanUp(executionNumber, runInfo.error);
       }
     },
@@ -396,3 +406,4 @@ exports.getInfo = getInfo;
 
 // Internal functions
 exports.finishedStep = finishedStep;
+exports.timeOutExecution = timeOutExecution;
