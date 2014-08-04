@@ -37,12 +37,26 @@ describe("Pregel MessageQueue", function () {
   "use strict";
 
   var testee, executionNumber, senderId, receiverId, step, msgCollectionName, vertexCollectionName,
-    msgCollection, shardName;
+    workCollectionName, globalCollectionName, msgCollection, workCollection, shardName, globalCollection, map;
 
   beforeEach(function () {
+    var createMapEntry = function (src, tar, type) {
+      var res = {};
+      res.type = type;
+      res.resultCollection = tar;
+      res.orignalShards = {};
+      res.orignalShards[src] = "localhost";
+      res.resultShards = {};
+      res.resultShards[tar] = "localhost";
+      return res;
+    };
+
+
     executionNumber = "UnitTest123";
     vertexCollectionName = "UnitTestVertices";
     msgCollectionName = pregel.genMsgCollectionName(executionNumber);
+    workCollectionName = pregel.genWorkCollectionName(executionNumber);
+    globalCollectionName = pregel.genGlobalCollectionName(executionNumber);
     step = 2;
     senderId = vertexCollectionName + "/sender";
     receiverId = vertexCollectionName + "/receiver";
@@ -51,21 +65,23 @@ describe("Pregel MessageQueue", function () {
     } else {
       shardName = vertexCollectionName;
     }
-    try {
-      db._drop(vertexCollectionName);
-    } catch (ignore) { }
-    try {
-      db._drop(msgCollectionName);
-    } catch (ignore) { }
+    db._drop(vertexCollectionName);
+    db._drop(msgCollectionName);
+    db._drop(workCollectionName);
+    db._drop(globalCollectionName);
     db._create(vertexCollectionName);
+    globalCollection = db._create(globalCollectionName);
     db._createEdgeCollection(msgCollectionName).ensureHashIndex("toShard");
+    db._createEdgeCollection(workCollectionName);
     msgCollection = pregel.getMsgCollection(executionNumber);
+    workCollection = pregel.getWorkCollection(executionNumber);
+    map = {
+      _key: "map"
+    };
+    map[vertexCollectionName] = createMapEntry(vertexCollectionName, "resultCol", 2);
+
+    globalCollection.save(map);
     testee = new Queue(executionNumber, senderId, step);
-    if (!ArangoClusterInfo.getResponsibleShard) {
-      ArangoClusterInfo.getResponsibleShard = function () {
-        return undefined;
-      };
-    }
     spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(shardName);
     spyOn(pregel, "getResponsibleShard").and.callThrough();
   });
@@ -123,9 +139,9 @@ describe("Pregel MessageQueue", function () {
       var secondText = "bbb";
       var thirdText = "ccc";
 
-      msgCollection.save(receiverId, senderId, {data: firstText, step: step, toShard: shardName});
-      msgCollection.save(receiverId, senderId, {data: secondText, step: step, toShard: shardName});
-      msgCollection.save(receiverId, senderId, {data: thirdText, step: step, toShard: shardName});
+      workCollection.save(receiverId, senderId, {data: firstText, step: step, toShard: shardName});
+      workCollection.save(receiverId, senderId, {data: secondText, step: step, toShard: shardName});
+      workCollection.save(receiverId, senderId, {data: thirdText, step: step, toShard: shardName});
       var incomming = testee.getMessages();
       expect(incomming.count()).toEqual(3);
       expect(incomming.toArray().map(function (d) {
@@ -137,9 +153,9 @@ describe("Pregel MessageQueue", function () {
       var firstText = "aaa";
       var otherStep = "Other step";
 
-      msgCollection.save(receiverId, senderId, {data: firstText, step: step, toShard: shardName});
-      msgCollection.save(receiverId, senderId, {data: otherStep, step: step - 1, toShard: shardName});
-      msgCollection.save(receiverId, senderId, {data: otherStep, step: step + 1, toShard: shardName});
+      workCollection.save(receiverId, senderId, {data: firstText, step: step, toShard: shardName});
+      workCollection.save(receiverId, senderId, {data: otherStep, step: step - 1, toShard: shardName});
+      workCollection.save(receiverId, senderId, {data: otherStep, step: step + 1, toShard: shardName});
       var incomming = testee.getMessages();
       expect(incomming.count()).toEqual(1);
       expect(incomming.toArray().map(function (d) {
@@ -151,11 +167,11 @@ describe("Pregel MessageQueue", function () {
       var firstText = "aaa";
       var otherText = "Not for your eyes";
 
-      msgCollection.save(receiverId, senderId, {data: firstText, step: step, toShard: shardName});
-      msgCollection.save(senderId, receiverId, {data: otherText, step: step, toShard: shardName});
+      workCollection.save(receiverId, senderId, {data: firstText, step: step, toShard: shardName});
+      workCollection.save(senderId, receiverId, {data: otherText, step: step, toShard: shardName});
       var incomming = testee.getMessages();
       expect(incomming.count()).toEqual(1);
-      expect(incomming.toArray().map(function(d) {
+      expect(incomming.toArray().map(function (d) {
         return d.data;
       })).toEqual([firstText]);
     });
