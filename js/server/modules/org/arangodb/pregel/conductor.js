@@ -355,20 +355,33 @@ var finishedStep = function(executionNumber, serverName, info) {
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message;
     throw err;
   }
-  awaiting[serverName] = true;
-  updateExecutionInfo(executionNumber, runInfo);
-  var everyServerResponded = true;
-  Object.keys(awaiting).forEach(function(s) {
-    if (awaiting[s] === false) {
-      everyServerResponded = false;
+  db._executeTransaction({
+    action: function (params) {
+      var self = params.self;
+      var executionNumber = params.executionNumber;
+      var runInfo = self.getExecutionInfo(executionNumber);
+      var serverName = params.serverName;
+      var awaiting = runInfo[waitForAnswer];
+      awaiting[serverName] = true;
+      self.updateExecutionInfo(executionNumber, runInfo);
+      var everyServerResponded = true;
+      Object.keys(awaiting).forEach(function(s) {
+        if (awaiting[s] === false) {
+          everyServerResponded = false;
+        }
+      });
+      if (everyServerResponded && !runInfo.error) {
+        initNextStep(executionNumber);
+      } else if (everyServerResponded) {
+        cleanUp(executionNumber, runInfo.error);
+      }
+    },
+    params: {
+      serverName: serverName,
+      self: this,
+      executionNumber: executionNumber
     }
   });
-  if (everyServerResponded && !runInfo.error) {
-    initNextStep(executionNumber);
-  } else if (everyServerResponded) {
-    cleanUp(executionNumber, runInfo.error);
-  }
-
 
 };
 
