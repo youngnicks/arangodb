@@ -585,13 +585,13 @@ extern "C" {
 ///   Will be raised whenever a message with invalid content was revieved.
 /// - 4003: @LIT{target vertex is unknown in the graph.}
 ///   Will be raised whenever a target vertex is not part of the graph.
-/// - 4005: @LIT{invalid usage of messages.sentTo. a target is required}
-///   Will be raised if the target parameter in messages.sentTo is missing.
 /// - 4004: @LIT{syntax error in provided pregel algorithm.}
 ///   Will be raised whenever a pregel algorithm throws a syntax error.
 /// - 4005: @LIT{Execution timed out.}
 ///   Will be raised whenever a db server does not report a result to the
 ///   coordinator within the defined time interval.
+/// - 4006: @LIT{invalid usage of messages.sentTo. a target is required}
+///   Will be raised if the target parameter in messages.sentTo is missing.
 /// - 10000: @LIT{element not inserted into structure, because key already exists}
 ///   Will be returned if the element was not insert because the key already
 ///   exists.
@@ -3077,16 +3077,6 @@ void TRI_InitialiseErrorMessages (void);
 #define TRI_ERROR_PREGEL_INVALID_TARGET_VERTEX                            (4003)
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief 4005: ERROR_PREGEL_NO_TARGET_PROVIDED
-///
-/// invalid usage of messages.sentTo. a target is required
-///
-/// Will be raised if the target parameter in messages.sentTo is missing.
-////////////////////////////////////////////////////////////////////////////////
-
-#define TRI_ERROR_PREGEL_NO_TARGET_PROVIDED                               (4005)
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief 4004: ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR
 ///
 /// syntax error in provided pregel algorithm.
@@ -3106,6 +3096,16 @@ void TRI_InitialiseErrorMessages (void);
 ////////////////////////////////////////////////////////////////////////////////
 
 #define TRI_ERROR_PREGEL_TIMEOUT                                          (4005)
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief 4006: ERROR_PREGEL_NO_TARGET_PROVIDED
+///
+/// invalid usage of messages.sentTo. a target is required
+///
+/// Will be raised if the target parameter in messages.sentTo is missing.
+////////////////////////////////////////////////////////////////////////////////
+
+#define TRI_ERROR_PREGEL_NO_TARGET_PROVIDED                               (4006)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief 10000: RESULT_KEY_EXISTS

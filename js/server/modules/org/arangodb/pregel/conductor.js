@@ -67,17 +67,6 @@ var saveExecutionInfo = function(infoObject) {
   return pregel.save(infoObject);
 };
 
-var timeOutExecution = function (executionNumber) {
-  var err = new ArangoError({
-    errorNum: ERRORS.ERROR_PREGEL_TIMEOUT.code,
-    errorMessage: ERRORS.ERROR_PREGEL_TIMEOUT.message
-  });
-  updateExecutionInfo(executionNumber, {
-    state: stateError,
-    error: err
-  });
-};
-
 var getWaitForAnswerMap = function() {
   var waitForAnswerMap = {}, serverList;
   if (ArangoServerState.isCoordinator()) {
@@ -165,6 +154,14 @@ var cleanUp = function (executionNumber, err) {
     httpOptions.type = "POST";
     require("org/arangodb/pregel").Worker.cleanUp(executionNumber);
   }
+};
+
+var timeOutExecution = function (executionNumber) {
+  var err = new ArangoError({
+    errorNum: ERRORS.ERROR_PREGEL_TIMEOUT.code,
+    errorMessage: ERRORS.ERROR_PREGEL_TIMEOUT.message
+  });
+  cleanUp(executionNumber, err);
 };
 
 var generateResultCollectionName = function (collectionName, executionNumber) {

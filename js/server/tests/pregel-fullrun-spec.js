@@ -242,7 +242,7 @@ describe("Full Pregel execution", function () {
         count++;
       }
       expect(result.error).toEqual(true);
-      expect(result.errorNum).toEqual(4005);
+      expect(result.errorNum).toEqual(ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.code);
     });
 
 
