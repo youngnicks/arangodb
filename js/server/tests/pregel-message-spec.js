@@ -126,8 +126,16 @@ describe("Pregel MessageQueue", function () {
       testee.sendTo(receiverId, text);
       var sended = msgCollection.any();
       expect(sended.toShard).toEqual(shardName);
-      expect(pregel.getResponsibleShard).not.toHaveBeenCalledWith(executionNumber, senderId.split("/")[0], {_id: senderId});
-      expect(pregel.getResponsibleShard).toHaveBeenCalledWith(executionNumber, receiverId.split("/")[0], {_id: receiverId});
+      expect(pregel.getResponsibleShard).not.toHaveBeenCalledWith(
+        executionNumber,
+        senderId.split("/")[0],
+        {_id: senderId}
+      );
+      expect(pregel.getResponsibleShard).toHaveBeenCalledWith(
+        executionNumber,
+        receiverId.split("/")[0],
+        {_id: receiverId}
+      );
     });
 
   });
