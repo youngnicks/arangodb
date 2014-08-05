@@ -248,7 +248,7 @@ var sendMessages = function (executionNumber) {
         toSend = JSON.stringify(q.next(batchSize));
         waitCounter++;
         ArangoClusterComm.asyncRequest("POST","shard:" + shard, db._name(),
-          "/_api/import?type=array&collection=" + workCol.name(), toSend, coordOptions, {});
+          "/_api/import?type=array&collection=" + workCol.name(), toSend, {}, coordOptions);
       }
     });
     for (waitCounter; waitCounter > 0; waitCounter--) {
@@ -286,7 +286,7 @@ var finishedStep = function (executionNumber, global) {
       coordTransactionID: ArangoClusterInfo.uniqid()
     };
     ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
-      "/_api/pregel/finishedStep", body, coordOptions, {});
+      "/_api/pregel/finishedStep", body, {}, coordOptions);
     ArangoClusterComm.wait(coordOptions);
   } else {
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {

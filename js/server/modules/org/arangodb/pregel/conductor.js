@@ -198,17 +198,14 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   var properties = graph._getCollectionsProperties();
   var map = {};
   Object.keys(properties).forEach(function (collection) {
+    map[collection] = {};
+    map[collection].type = properties[collection].type;
+    map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
     if (ArangoServerState.isCoordinator()) {
-      map[collection] = {};
-      map[collection].type = properties[collection].type;
-      map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
       map[collection].originalShards =
         ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
       map[collection].shardKeys = properties[collection].shardKeys;
     } else {
-      map[collection] = {};
-      map[collection].type = properties[collection].type;
-      map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
       map[collection].originalShards = {};
       map[collection].originalShards[collection]= "localhost";
       map[collection].shardKeys = [];
@@ -238,6 +235,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       map[collection].resultShards = c;
     }
   });
+  require("internal").print(map);
   if (noCreation) {
     return map;
   }
@@ -358,7 +356,7 @@ var finishedStep = function(executionNumber, serverName, info) {
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message;
     throw err;
   }
-  var everyServerResponded = db._executeTransaction({
+  var checks = db._executeTransaction({
     collections: {
       write: [
         "_pregel"
@@ -384,7 +382,10 @@ var finishedStep = function(executionNumber, serverName, info) {
           everyServerResponded = false;
         }
       });
-      return everyServerResponded;
+      return {
+        respond: everyServerResponded,
+        error: runInfo.error
+      };
     },
     params: {
       serverName: serverName,
@@ -394,16 +395,16 @@ var finishedStep = function(executionNumber, serverName, info) {
       info: info
     }
   });
-  if (everyServerResponded && !runInfo.error) {
+  if (checks.respond && !checks.error) {
     if (ArangoServerState.isCoordinator()) {
       tasks.unregister(genTaskId(executionNumber));
     }
     initNextStep(executionNumber);
-  } else if (everyServerResponded) {
+  } else if (checks.respond) {
     if (ArangoServerState.isCoordinator()) {
       tasks.unregister(genTaskId(executionNumber));
     }
-    cleanUp(executionNumber, runInfo.error);
+    cleanUp(executionNumber, checks.error);
   }
 };
 

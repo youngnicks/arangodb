@@ -86,16 +86,17 @@ describe("Full Pregel execution", function () {
       gN = "UnitTestPregelGraph";
       v = "UnitTestVertices";
       e = "UnitTestEdges";
+      var numShards = 4;
 
       if (graph._exists(gN)) {
         graph._drop(gN, true);
       }
       if (coordinator) {
         db._create(v, {
-          numberOfShards: 1
+          numberOfShards: numShards
         });
         db._createEdgeCollection(e, {
-          numberOfShards: 1,
+          numberOfShards: numShards,
           distributeShardsLike: v,
           shardKeys: ["taiwanese"]
         });
@@ -183,7 +184,7 @@ describe("Full Pregel execution", function () {
           count++;
         }
         expect(conductor.getInfo(id).state).toEqual("error");
-        var res = conductor.getResult(id);
+        res = conductor.getResult(id);
         expect(res.error).toBeTruthy();
         expect(res.errorNum).toEqual(ERRORS.ERROR_PREGEL_TIMEOUT.code);
         expect(res.errorMessage).toEqual(ERRORS.ERROR_PREGEL_TIMEOUT.message);
