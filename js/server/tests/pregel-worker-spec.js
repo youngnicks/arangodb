@@ -39,18 +39,21 @@ var tasks = require("org/arangodb/tasks");
 var mapping = {
   "UnitTestsPregelVertex1": {
     "type": 2,
+    "shardKeys": [],
     "resultCollection": "P_305000077_RESULT_UnitTestsPregelVertex1",
     "originalShards": {"UnitTestsPregelVertex1" : "localhost"},
     "resultShards": {"P_305000077_RESULT_UnitTestsPregelVertex1" : "localhost"}
   },
   "UnitTestsPregelVertex2": {
     "type": 2,
+    "shardKeys": [],
     "resultCollection": "P_305000077_RESULT_UnitTestsPregelVertex2",
     "originalShards": {"UnitTestsPregelVertex2" : "localhost"},
     "resultShards": {"P_305000077_RESULT_UnitTestsPregelVertex2" : "localhost"}
   },
   "UnitTestsPregelEdge2": {
     "type": 3,
+    "shardKeys": [],
     "resultCollection": "P_305000077_RESULT_UnitTestsPregelEdge2",
     "originalShards": {"UnitTestsPregelEdge2" : "localhost"},
     "resultShards": {"P_305000077_RESULT_UnitTestsPregelEdge2" : "localhost"}
@@ -175,9 +178,9 @@ describe("Pregel Worker", function () {
         vertex1, vertex2, vertex3, vertex4, vertex5,
         vC, vCRes, step, conductorName,
         setActiveAndMessages = function () {
-          var queue = new pregel.MessageQueue(executionNumber, vC + "/v1", step);
-          queue.sendTo(vC + "/v2", "My message");
-          queue.sendTo(vC + "/v3", "My message");
+          var queue = new pregel.MessageQueue(executionNumber, {_id: vC + "/v1"}, step);
+          queue.sendTo({_id: vC + "/v2"}, "My message");
+          queue.sendTo({_id: vC + "/v3"}, "My message");
           db[vCRes].updateByExample({active: false}, {active: true});
         },
 
@@ -191,7 +194,10 @@ describe("Pregel Worker", function () {
           });
           var v = new pregel.Vertex(
             executionNumber,
-            vid
+            {
+              _id: vid,
+              shard: vCRes
+            }
           );
           spyOn(v, "_save");
           return v;
@@ -293,10 +299,10 @@ describe("Pregel Worker", function () {
             db._name(),
             "/_api/pregel/finishedStep",
             body,
+            {},
             {
               coordTransactionID: transActId
-            },
-            {}
+            }
           );
         });
 
@@ -321,10 +327,10 @@ describe("Pregel Worker", function () {
             db._name(),
             "/_api/pregel/finishedStep",
             body,
+            {},
             {
               coordTransactionID: transActId
-            },
-            {}
+            }
           );
         });
 
