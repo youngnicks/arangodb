@@ -36,6 +36,7 @@ var db = arangodb.db;
 var graph = require("org/arangodb/general-graph");
 var ArangoError = arangodb.ArangoError;
 var ERRORS = arangodb.errors;
+var _ = require("underscore");
 var vc1 = "UnitTestsPregelVertex1";
 var vc2 = "UnitTestsPregelVertex2";
 var ec1 = "UnitTestsPregelEdge2";
@@ -79,11 +80,11 @@ describe("Pregel Conductor", function () {
             messages: 2
           }
         ],
-        waitForAnswer: [
-          "Pavel",
-          dbServer,
-          "Pancho"
-        ]
+        waitForAnswer: {
+          Pavel: false,
+          Pjotr: false,
+          Pancho: false
+        }
       });
     });
 
@@ -94,8 +95,10 @@ describe("Pregel Conductor", function () {
     it("should remove the reporting server from the awaited list", function () {
       conductor.finishedStep(execNr, dbServer, { messages: 5, active: 10, step: 1 });
       var runDoc = getRunInfo(execNr);
-      expect(runDoc.waitForAnswer.length).toEqual(2);
-      expect(runDoc.waitForAnswer.sort()).toEqual(["Pavel", "Pancho"].sort());
+      var answered = runDoc.waitForAnswer;
+      expect(answered.Pavel).toBeFalsy();
+      expect(answered.Pancho).toBeFalsy();
+      expect(answered.Pjotr).toBeTruthy();
     });
 
     it("should update the step information for the next step", function () {
@@ -182,9 +185,9 @@ describe("Pregel Conductor", function () {
             messages: 0
           }
         ],
-        waitForAnswer: [
-          dbServer
-        ]
+        waitForAnswer: {
+          Pjotr: false
+        }
       });
     });
 
@@ -338,7 +341,7 @@ describe("Pregel Conductor", function () {
         expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
         expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
         expect(db._graphs.document("P_" + id + "_RESULT_" + graphName)).not.toEqual(undefined);
-        db._pregel.toArray()[0].waitForAnswer.forEach(function (dbserv) {
+        Object.keys(db._pregel.toArray()[0].waitForAnswer).forEach(function (dbserv) {
           conductor.finishedStep(id, dbserv, {step : 0, messages : 0, active : 0});
         });
       });
@@ -418,7 +421,7 @@ describe("Pregel Conductor", function () {
       });
 
       it("should return the resulting graph name", function () {
-        expect(conductor.getResult(execNr).graphName).toEqual("P_" + execNr + "_RESULT_" + graphName);
+        expect(conductor.getResult(execNr).result.graphName).toEqual("P_" + execNr + "_RESULT_" + graphName);
       });
 
       it("should return finished execution state", function () {

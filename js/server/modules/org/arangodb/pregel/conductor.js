@@ -275,8 +275,8 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
 
 
 var startExecution = function(graphName, algorithm, options) {
-  var graph = graphModule._graph(graphName), dbServers, infoObject = {},
-    stepContentObject = {} , setup;
+  var graph = graphModule._graph(graphName), infoObject = {},
+    stepContentObject = {};
   infoObject[waitForAnswer] = getWaitForAnswerMap();
   infoObject[step] = 0;
   options = options  || {};
