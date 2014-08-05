@@ -81,7 +81,7 @@ describe("Pregel MessageQueue", function () {
     map[vertexCollectionName] = createMapEntry(vertexCollectionName, "resultCol", 2);
 
     globalCollection.save(map);
-    testee = new Queue(executionNumber, senderId, step);
+    testee = new Queue(executionNumber, {_id: senderId}, step);
     spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(shardName);
     spyOn(pregel, "getResponsibleShard").and.callThrough();
   });
@@ -126,8 +126,8 @@ describe("Pregel MessageQueue", function () {
       testee.sendTo(receiverId, text);
       var sended = msgCollection.any();
       expect(sended.toShard).toEqual(shardName);
-      expect(pregel.getResponsibleShard).not.toHaveBeenCalledWith(senderId);
-      expect(pregel.getResponsibleShard).toHaveBeenCalledWith(receiverId.split("/")[0], {_id: receiverId});
+      expect(pregel.getResponsibleShard).not.toHaveBeenCalledWith(executionNumber, senderId.split("/")[0], {_id: senderId});
+      expect(pregel.getResponsibleShard).toHaveBeenCalledWith(executionNumber, receiverId.split("/")[0], {_id: receiverId});
     });
 
   });
