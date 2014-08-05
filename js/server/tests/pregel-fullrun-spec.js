@@ -98,7 +98,7 @@ describe("Full Pregel execution", function () {
         db._createEdgeCollection(e, {
           numberOfShards: numShards,
           distributeShardsLike: v,
-          shardKeys: ["taiwanese"]
+          shardKeys: ["from_shard_0"]
         });
       }
       g = graph._create(
