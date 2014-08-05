@@ -235,7 +235,6 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       map[collection].resultShards = c;
     }
   });
-  require("internal").print(map);
   if (noCreation) {
     return map;
   }

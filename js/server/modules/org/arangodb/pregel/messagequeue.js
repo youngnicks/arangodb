@@ -40,11 +40,13 @@ var Queue = function (executionNumber, vertexInfo, step) {
   this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
   this.__workCollection = pregel.getWorkCollection(executionNumber);
-  var vertexCollectionName = pregel.getOriginalCollection(vertexId, executionNumber);
+  this.__vertexCollectionName = pregel.getOriginalCollection(vertexId, executionNumber);
   var key = vertexId.split("/")[1];
-  this.__from = vertexCollectionName + "/" + key;
+  this.__from = this.__vertexCollectionName + "/" + key;
   this.__nextStep = step + 1;
   this.__step = step;
+  this.__vertexInfo = vertexInfo;
+  this.__vertexInfo._key = key;
 };
 
 // Target is id now, has to be modified to contian vertex data
@@ -55,10 +57,15 @@ Queue.prototype.sendTo = function(target, data) {
     targetid = target;
     collection = target.split("/")[0];
   } else if (target && typeof target === "object") {
-    collection = target._id.split("/")[0];
+    if (!target._id) {
+      target._id = target.id;
+    }
     targetid = target._id;
+    var targetKey = targetid.split("/")[1];
+    collection = pregel.getOriginalCollection(target._id, this.__executionNumber);
+    targetid = collection + "/" + targetKey;
     var shardKeys  = pregel.getShardKeysForCollection(this.__executionNumber, collection);
-    param = {};
+    param = {_id: targetid};
     shardKeys.forEach(function (sk) {
       if (!target[sk]) {
         var err = new ArangoError();
@@ -77,7 +84,14 @@ Queue.prototype.sendTo = function(target, data) {
 
 
   var shard = pregel.getResponsibleShard(this.__executionNumber, collection, param);
-  this.__collection.save(this.__from, targetid, {data: data, step: this.__nextStep, toShard: shard});
+
+  var sender = pregel.getLocationObject(this.__executionNumber, this.__vertexCollectionName, this.__vertexInfo);
+  this.__collection.save(this.__from, targetid, {
+    data: data,
+    step: this.__nextStep,
+    toShard: shard,
+    sender: sender
+  });
 };
 
 Queue.prototype.getMessages = function () {

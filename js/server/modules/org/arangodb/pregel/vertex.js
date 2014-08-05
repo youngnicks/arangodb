@@ -62,6 +62,8 @@ var Vertex = function (executionNumber, vertexInfo) {
     });
   });
 
+  this._locationInfo = pregel.getLocationObject(executionNumber, vertexId.split("/")[0], this);
+
 };
 
 Vertex.prototype._deactivate = function () {
@@ -74,6 +76,10 @@ Vertex.prototype._delete = function () {
 
 Vertex.prototype._save = function () {
   this._resCol.update(this._key, {result: this._result});
+};
+
+Vertex.prototype._locationInfo = function () {
+  
 };
 
 exports.Vertex = Vertex;

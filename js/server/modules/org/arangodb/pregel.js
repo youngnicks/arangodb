@@ -78,37 +78,47 @@ exports.getOriginalCollection = function (id, executionNumber) {
   return originalCollectionName;
 };
 
-exports.getLocationObject = function (executionNumber, collection, vertex) {
-  var map = exports.getMap(executionNumber);
-  var correct;
-  if (map[collection]) {
-    correct = map[collection];
-  } else {
-    correct = _.findWhere(map, {resultCollection: collection});
-  }
-  var keys = correct.shardKeys;
-  var i;
+exports.getLocationObject = function (executionNumber, collection, info) {
   var obj = {};
-  for (i = 0; i < keys.length; i++) {
-    obj[keys[i]] = vertex["shard_" + i];
+  if (info._from) {
+    obj.id = info._from;
+  } else {
+    obj.id = info._id;
+  }
+  if (ArangoServerState.role() === "PRIMARY") {
+    var map = exports.getMap(executionNumber);
+    var correct;
+    if (map[collection]) {
+      correct = map[collection];
+    } else {
+      correct = _.findWhere(map, {resultCollection: collection});
+    }
+    var keys = correct.shardKeys;
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      obj[keys[i]] = info["shard_" + i];
+    }
   }
   return obj;
 };
 
-exports.getToLocationObject = function (executionNumber, edge) {
-  var map = exports.getMap(executionNumber);
-  var toCol = edge._to.split("/")[0];
-  var correct;
-  if (map[toCol]) {
-    correct = map[toCol];
-  } else {
-    correct = _.findWhere(map, {resultCollection: toCol});
-  }
-  var keys = correct.shardKeys;
-  var i;
+exports.getToLocationObject = function (executionNumber, info) {
   var obj = {};
-  for (i = 0; i < keys.length; i++) {
-    obj[keys[i]] = edge["to_shard_" + i];
+  obj._id = info._to;
+  if (ArangoServerState.role() === "PRIMARY") {
+    var map = exports.getMap(executionNumber);
+    var toCol = info._to.split("/")[0];
+    var correct;
+    if (map[toCol]) {
+      correct = map[toCol];
+    } else {
+      correct = _.findWhere(map, {resultCollection: toCol});
+    }
+    var keys = correct.shardKeys;
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      obj[keys[i]] = info["to_shard_" + i];
+    }
   }
   return obj;
 };

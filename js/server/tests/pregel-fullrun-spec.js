@@ -57,7 +57,7 @@ describe("Full Pregel execution", function () {
         if (global.step === 1) {
           while (inc.hasNext()) {
             next = inc.next();
-            vertex._result.inBound.push(next._from);
+            vertex._result.inBound.push(next.sender);
             if (next.data < min) {
               min = next.data;
             }
@@ -73,7 +73,7 @@ describe("Full Pregel execution", function () {
         if (global.step < 2 || min < vertex._result.inGraph) {
           vertex._result.inGraph = min;
           var outBound = vertex._outEdges.map(function (e) {
-            return e._to;
+            return e._targetVertex;
           });
           outBound.concat(vertex._result.inBound).forEach(function (t) {
             message.sendTo(t, vertex._result.inGraph);
