@@ -111,7 +111,8 @@ describe("Full Pregel execution", function () {
       };
       var saveEdge = function (from, to) {
         g[e].save(v + "/" + from, v + "/" + to, {
-          taiwanese: String(from)
+          from_shard_0: String(from),
+          to_shard_0: String(to)
         });
       };
 

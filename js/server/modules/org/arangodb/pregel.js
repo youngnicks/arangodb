@@ -78,6 +78,59 @@ exports.getOriginalCollection = function (id, executionNumber) {
   return originalCollectionName;
 };
 
+exports.getLocationObject = function (executionNumber, collection, vertex) {
+  var map = exports.getMap(executionNumber);
+  var correct;
+  if (map[collection]) {
+    correct = map[collection];
+  } else {
+    correct = _.findWhere(map, {resultCollection: collection});
+  }
+  var keys = correct.shardKeys;
+  var i;
+  var obj = {};
+  for (i = 0; i < keys.length; i++) {
+    obj[keys[i]] = vertex["shard_" + i];
+  }
+  return obj;
+};
+
+exports.getFromLocationObject = function (executionNumber, edge) {
+  var map = exports.getMap(executionNumber);
+  var fromCol = edge._from.split("/")[0];
+  var correct;
+  if (map[fromCol]) {
+    correct = map[fromCol];
+  } else {
+    correct = _.findWhere(map, {resultCollection: fromCol});
+  }
+  var keys = correct.shardKeys;
+  var i;
+  var obj = {};
+  for (i = 0; i < keys.length; i++) {
+    obj[keys[i]] = edge["from_shard_" + i];
+  }
+  return obj;
+};
+
+exports.getToLocationObject = function (executionNumber, edge) {
+  var map = exports.getMap(executionNumber);
+  var toCol = edge._to.split("/")[0];
+  var correct;
+  if (map[toCol]) {
+    correct = map[toCol];
+  } else {
+    correct = _.findWhere(map, {resultCollection: toCol});
+  }
+  var keys = correct.shardKeys;
+  var i;
+  var obj = {};
+  for (i = 0; i < keys.length; i++) {
+    obj[keys[i]] = edge["to_shard_" + i];
+  }
+  return obj;
+};
+
 exports.getResultCollection = function (id) {
   return id.split('/')[0];
 };
