@@ -29,6 +29,7 @@
 /// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
+var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var conductor = pregel.Conductor;
 var graph = require("org/arangodb/general-graph");
@@ -89,6 +90,16 @@ describe("Full Pregel execution", function () {
       if (graph._exists(gN)) {
         graph._drop(gN, true);
       }
+      if (coordinator) {
+        db._create(v, {
+          numberOfShards: 1
+        });
+        db._createEdgeCollection(e, {
+          numberOfShards: 1,
+          distributeShardsLike: v,
+          shardKeys: ["taiwanese"]
+        });
+      }
       g = graph._create(
         gN,
         [graph._undirectedRelation(e, [v])]
@@ -97,9 +108,10 @@ describe("Full Pregel execution", function () {
       var saveVertex = function (key) {
         g[v].save({_key: String(key)});
       };
-
       var saveEdge = function (from, to) {
-        g[e].save(v + "/" + from, v + "/" + to, {});
+        g[e].save(v + "/" + from, v + "/" + to, {
+          taiwanese: String(from)
+        });
       };
 
       var i;
@@ -128,13 +140,14 @@ describe("Full Pregel execution", function () {
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
-      while (count < 30) {
+      while (count < 1000) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "finished") {
           res = conductor.getResult(id);
           resGraph = res.result.graphName;
           break;
         }
+        require("internal").print(conductor.getInfo(id));
         count++;
       }
       expect(resGraph).not.toEqual("LostInBattle");

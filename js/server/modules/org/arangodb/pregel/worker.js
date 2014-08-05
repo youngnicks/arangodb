@@ -199,7 +199,7 @@ var getActiveVerticesQuery = function (executionNumber) {
   var count = 0;
   var bindVars = {};
   var server = pregel.getServerName();
-  var query = "FOR u in UNION([]";
+  var query = "FOR u in UNION([], []";
   Object.keys(map).forEach(function (collection) {
     var resultShards = Object.keys(map[collection].resultShards);
     var i;

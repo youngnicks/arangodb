@@ -113,7 +113,7 @@ var startNextStep = function(executionNumber, options) {
     }
     tasks.register({
       id: genTaskId(executionNumber),
-      offset: options.timeout ? options.timeout : pregel.getTimeoutConst(executionNumber),
+      offset: options.timeout || pregel.getTimeoutConst(executionNumber),
       command: function(params) {
         var c = require("org/arangodb/pregel").Conductor;
         c.timeOutExecution(params.executionNumber);
@@ -203,7 +203,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       map[collection].type = properties[collection].type;
       map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
       map[collection].originalShards =
-      ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
+        ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
       map[collection].shardKeys = properties[collection].shardKeys;
     } else {
       map[collection] = {};
@@ -345,16 +345,12 @@ var finishedStep = function(executionNumber, serverName, info) {
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.message;
     throw err;
   }
-  var stepInfo = runInfo[stepContent][runInfo[step] + 1];
   if (info.messages === undefined || info.active === undefined) {
     err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.code;
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.message;
     throw err;
   }
-  stepInfo.messages += info.messages;
-  stepInfo.active += info.active;
-  runInfo.error = info.error;
   var awaiting = runInfo[waitForAnswer];
   if (awaiting[serverName] === undefined) {
     err = new ArangoError();
@@ -362,37 +358,53 @@ var finishedStep = function(executionNumber, serverName, info) {
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message;
     throw err;
   }
-  db._executeTransaction({
+  var everyServerResponded = db._executeTransaction({
+    collections: {
+      write: [
+        "_pregel"
+      ]
+    },
     action: function (params) {
-      var tasks = require("org/arangodb/tasks");
-      var self = params.self;
+      var info = params.info;
+      var getExecutionInfo = params.getExecutionInfo;
+      var updateExecutionInfo = params.updateExecutionInfo;
       var executionNumber = params.executionNumber;
-      var runInfo = self.getExecutionInfo(executionNumber);
+      var runInfo = getExecutionInfo(executionNumber);
+      var stepInfo = runInfo[stepContent][runInfo[step] + 1];
+      stepInfo.messages += info.messages;
+      stepInfo.active += info.active;
+      runInfo.error = info.error;
       var serverName = params.serverName;
       var awaiting = runInfo[waitForAnswer];
       awaiting[serverName] = true;
-      self.updateExecutionInfo(executionNumber, runInfo);
+      updateExecutionInfo(executionNumber, runInfo);
       var everyServerResponded = true;
       Object.keys(awaiting).forEach(function(s) {
         if (awaiting[s] === false) {
           everyServerResponded = false;
         }
       });
-      if (everyServerResponded && !runInfo.error) {
-        tasks.unregister(genTaskId(executionNumber));
-        initNextStep(executionNumber);
-      } else if (everyServerResponded) {
-        tasks.unregister(genTaskId(executionNumber));
-        cleanUp(executionNumber, runInfo.error);
-      }
+      return everyServerResponded;
     },
     params: {
       serverName: serverName,
-      self: this,
-      executionNumber: executionNumber
+      updateExecutionInfo: updateExecutionInfo,
+      getExecutionInfo: getExecutionInfo,
+      executionNumber: executionNumber,
+      info: info
     }
   });
-
+  if (everyServerResponded && !runInfo.error) {
+    if (ArangoServerState.isCoordinator()) {
+      tasks.unregister(genTaskId(executionNumber));
+    }
+    initNextStep(executionNumber);
+  } else if (everyServerResponded) {
+    if (ArangoServerState.isCoordinator()) {
+      tasks.unregister(genTaskId(executionNumber));
+    }
+    cleanUp(executionNumber, runInfo.error);
+  }
 };
 
 // -----------------------------------------------------------------------------
