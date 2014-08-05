@@ -64,8 +64,9 @@ Queue.prototype.sendTo = function(target, data) {
     var targetKey = targetid.split("/")[1];
     collection = pregel.getOriginalCollection(target._id, this.__executionNumber);
     targetid = collection + "/" + targetKey;
+    param = pregel.toLocationObject(this.__executionNumber, collection, target);
+    /*
     var shardKeys  = pregel.getShardKeysForCollection(this.__executionNumber, collection);
-    param = {_id: targetid};
     shardKeys.forEach(function (sk) {
       if (!target[sk]) {
         var err = new ArangoError();
@@ -75,6 +76,7 @@ Queue.prototype.sendTo = function(target, data) {
       }
       param[sk] = target[sk];
     });
+    */
   } else {
     var err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.code;

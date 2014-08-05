@@ -71,7 +71,9 @@ var queryInsertDefaultVertex = "FOR v IN @@original INSERT {"
 var queryInsertDefaultVertexIntoPart = "} INTO  @@result";
 
 
-var queryActivateVertices = "FOR v IN @@work UPDATE PARSE_IDENTIFIER(v._to).key WITH "
+var queryActivateVertices = "FOR v IN @@work "
+  + "FILTER v.toShard == @shard "
+  + "UPDATE PARSE_IDENTIFIER(v._to).key WITH "
   + "{'active' : true} IN @@result";
 
 var queryUpdateCounter = "LET oldCount = DOCUMENT(@@global, 'counter').count "
@@ -194,6 +196,7 @@ var activateVertices = function(executionNumber) {
   var map = loadMapping(executionNumber);
   Object.keys(map).forEach(function (collection) {
     var resultShards = Object.keys(map[collection].resultShards);
+    var originalShards = Object.keys(map[collection].originalShards);
     var i;
     var bindVars;
     for (i = 0; i < resultShards.length; i++) {
@@ -201,7 +204,8 @@ var activateVertices = function(executionNumber) {
         if (map[collection].type === 2) {
           bindVars = {
             '@work' : pregel.genWorkCollectionName(executionNumber),
-            '@result' : resultShards[i]
+            '@result' : resultShards[i],
+            'shard': originalShards[i]
           };
           db._query(queryActivateVertices, bindVars).execute();
         }
@@ -372,7 +376,8 @@ var executeStep = function(executionNumber, step, options) {
     finishedStep(executionNumber, {step : step});
   } else {
     while (q.hasNext()) {
-      addTask(executionNumber, step, q.next(), options);
+      var n = q.next();
+      addTask(executionNumber, step, n, options);
     }
   }
 };
