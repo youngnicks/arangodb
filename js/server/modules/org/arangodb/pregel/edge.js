@@ -39,7 +39,7 @@ var Edge = function (executionNumber, edgeJSON) {
     self[k] = v;
   });
   var resultCollectionName = pregel.getResultCollection(this._id, executionNumber);
-  this._resultShard = db._collection(pregel.getResponsibleShard(resultCollectionName, this));
+  this._resultShard = db._collection(pregel.getResponsibleEdgeShard(executionNumber, resultCollectionName, this));
   this._result = this._resultShard.document(this._key).result;
 };
 

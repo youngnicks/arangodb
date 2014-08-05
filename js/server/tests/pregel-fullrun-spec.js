@@ -98,7 +98,7 @@ describe("Full Pregel execution", function () {
         db._createEdgeCollection(e, {
           numberOfShards: numShards,
           distributeShardsLike: v,
-          shardKeys: ["from_shard_0"]
+          shardKeys: ["shard_0"]
         });
       }
       g = graph._create(
@@ -111,7 +111,7 @@ describe("Full Pregel execution", function () {
       };
       var saveEdge = function (from, to) {
         g[e].save(v + "/" + from, v + "/" + to, {
-          from_shard_0: String(from),
+          shard_0: String(from),
           to_shard_0: String(to)
         });
       };

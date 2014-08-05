@@ -49,12 +49,14 @@ var Queue = function (executionNumber, vertexInfo, step) {
 
 // Target is id now, has to be modified to contian vertex data
 Queue.prototype.sendTo = function(target, data) {
-  var param, collection;
+  var param, collection, targetid;
   if (target && typeof target === "string" && target.match(/\S+\/\S+/)) {
     param = {_id: target};
+    targetid = target;
     collection = target.split("/")[0];
   } else if (target && typeof target === "object") {
     collection = target._id.split("/")[0];
+    targetid = target._id;
     var shardKeys  = pregel.getShardKeysForCollection(this.__executionNumber, collection);
     param = {};
     shardKeys.forEach(function (sk) {
@@ -73,8 +75,9 @@ Queue.prototype.sendTo = function(target, data) {
     throw err;
   }
 
-  var shard = pregel.getResponsibleShard(collection, param);
-  this.__collection.save(this.__from, target, {data: data, step: this.__nextStep, toShard: shard});
+
+  var shard = pregel.getResponsibleShard(this.__executionNumber, collection, param);
+  this.__collection.save(this.__from, targetid, {data: data, step: this.__nextStep, toShard: shard});
 };
 
 Queue.prototype.getMessages = function () {
