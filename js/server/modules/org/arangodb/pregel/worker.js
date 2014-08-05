@@ -121,7 +121,7 @@ var saveMapping = function(executionNumber, map) {
 };
 
 var loadMapping = function(executionNumber) {
-  return pregel.getGlobalCollection(executionNumber).document(MAP).map;
+  return pregel.getMap(executionNumber);
 };
 
 var getConductor = function(executionNumber) {
@@ -208,8 +208,9 @@ var getActiveVerticesQuery = function (executionNumber) {
         if (map[collection].type === 2) {
           query += ",(FOR i in @@collection" + count
             + " FILTER i.active == true && i.deleted == false"
-            + " RETURN i._id)";
+            + " RETURN {_id: i._id, shard: @collection" + count + "})";
           bindVars["@collection" + count] = resultShards[i];
+          bindVars["collection" + count] = resultShards[i];
         }
         count++;
       }

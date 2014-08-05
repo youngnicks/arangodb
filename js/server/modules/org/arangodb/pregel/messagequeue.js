@@ -35,7 +35,8 @@ var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
-var Queue = function (executionNumber, vertexId, step) {
+var Queue = function (executionNumber, vertexInfo, step) {
+  var vertexId = vertexInfo._id;
   this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
   this.__workCollection = pregel.getWorkCollection(executionNumber);

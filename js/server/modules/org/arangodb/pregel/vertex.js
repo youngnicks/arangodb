@@ -33,23 +33,21 @@ var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Vertex = function (executionNumber, vertexId) {
+var Vertex = function (executionNumber, vertexInfo) {
+  var vertexId = vertexInfo._id;
+  var resultShard = vertexInfo.shard;
   var self = this;
   this._executionNumber = executionNumber;
 
   //get attributes from original collection
-  var resultCollectionName = pregel.getResultCollection(vertexId);
-  var collectionName = pregel.getOriginalCollection(vertexId, executionNumber);
-  var collection = pregel.getResponsibleShard(collectionName, this);
+  var collection = pregel.getResponsibleShardFromMapping(executionNumber, resultShard);
   var data = db[collection].document(vertexId.split("/")[1]);
 
   //write attributes to vertex
   _.each(data, function(val, key) {
     self[key] = val;
   });
-  this._resCol = db._collection(
-    pregel.getResponsibleShard(resultCollectionName, this)
-  );
+  this._resCol = db._collection(resultShard);
 
   this._result = this._resCol.document(this._key).result;
 

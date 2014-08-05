@@ -86,13 +86,26 @@ exports.getGlobalCollection = function (executionNumber) {
   return db._collection(exports.genGlobalCollectionName(executionNumber));
 };
 
+exports.getMap = function (executionNumber) {
+  return exports.getGlobalCollection(executionNumber).document("map").map;
+};
+
+exports.getResponsibleShardFromMapping = function (executionNumber, resShard) {
+  var map = exports.getMap(executionNumber);
+  var correct = _.filter(map, function (e) {
+    return e.resultShards[resShard] !== undefined;
+  })[0];
+  var resultList = Object.keys(correct.resultShards);
+  var index = resultList.indexOf(resShard);
+  var originalList = Object.keys(correct.originalShards);
+  return originalList[index];
+};
+
+
 exports.getResponsibleShard = function (col, doc) {
   if (ArangoServerState.role() === "PRIMARY") {
-    require("internal").print(col);
     var colId = ArangoClusterInfo.getCollectionInfo(db._name(), col).id;
-    require("internal").print(colId);
     var res = ArangoClusterInfo.getResponsibleShard(colId, doc).shardId;
-    require("internal").print(res);
     return res;
   }
   return col;
@@ -112,11 +125,11 @@ exports.getShardKeysForCollection = function (executionNumber, collection) {
 
 exports.getResponsibleEdgeShards = function (executionNumber, vertex) {
   var doc = vertex._id;
-  var globalCol = exports.getGlobalCollection(executionNumber);
-  var col = doc.split("/");
-  var map = globalCol.document("map").map;
+  var col = doc.split("/")[0];
+  var key = doc.split("/")[1];
+  var map = exports.getMap(executionNumber);
   var example = {
-    _from: doc
+    taiwanese: key
   };
   var result = [];
   if(map[col] !== undefined) {
