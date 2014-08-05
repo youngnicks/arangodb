@@ -53,19 +53,23 @@ var CONDUCTOR = "conductor";
 var MAP = "map";
 var id;
 
- var queryInsertDefaultEdge = "FOR v IN @@original "
+var queryInsertDefaultEdge = "FOR v IN @@original "
   + "LET from = PARSE_IDENTIFIER(v._from) "
-  + "LET to = PARSE_IDENTIFIER(v._to) "
-  + "INSERT {'_key' : v._key, 'deleted' : false, 'result' : {}, "
+  + "LET to = PARSE_IDENTIFIER(v._to) ";
+
+var queryInsertDefaultEdgeInsertPart = "INSERT {'_key' : v._key, 'deleted' : false, 'result' : {}, "
   + "'_from' : CONCAT(TRANSLATE(from.collection, @collectionMapping), "
   + "'/', from.key), "
   + "'_to' : CONCAT(TRANSLATE(to.collection, @collectionMapping), "
-  + "'/', to.key)"
-  + "} INTO  @@result";
+  + "'/', to.key)";
+
+var queryInsertDefaultEdgeIntoPart = "} INTO  @@result";
 
 var queryInsertDefaultVertex = "FOR v IN @@original INSERT {"
-  + "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {} "
-  + "} INTO  @@result";
+  + "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {} ";
+
+var queryInsertDefaultVertexIntoPart = "} INTO  @@result";
+
 
 var queryActivateVertices = "FOR v IN @@work UPDATE PARSE_IDENTIFIER(v._to).key WITH "
   + "{'active' : true} IN @@result";
@@ -141,10 +145,14 @@ var setup = function(executionNumber, options) {
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
   saveMapping(executionNumber, options.map);
-  var collectionMapping = {};
+  var collectionMapping = {}, shardKeyMapping = {};
 
+  var shardKeysAmount = 0;
   _.each(options.map, function(mapping, collection) {
     collectionMapping[collection] = mapping.resultCollection;
+    if (shardKeysAmount < mapping.shardKeys.length) {
+      shardKeysAmount = mapping.shardKeys.length;
+    }
   });
 
   _.each(options.map, function(mapping) {
@@ -160,9 +168,20 @@ var setup = function(executionNumber, options) {
         };
         if (mapping.type === 3) {
           bindVars.collectionMapping = collectionMapping;
-          db._query(queryInsertDefaultEdge, bindVars).execute();
+          for (var iterator = 0; iterator < shardKeysAmount; iterator++) {
+            queryInsertDefaultEdgeInsertPart += ", 'shard_" + iterator + "' : v.shard_" + iterator;
+            queryInsertDefaultEdgeInsertPart += ", 'to_shard_" + iterator + "' : v.to_shard_" + iterator;
+          }
+          db._query(queryInsertDefaultEdge +queryInsertDefaultEdgeInsertPart + queryInsertDefaultEdgeIntoPart, bindVars).execute();
         } else {
-          db._query(queryInsertDefaultVertex, bindVars).execute();
+          var shardKeyMap = "", count = 0;
+          mapping.shardKeys.forEach(function (sk) {
+            shardKeyMap += ", shard_" + count + " : v." + sk;
+            count++;
+          });
+          db._query(
+            queryInsertDefaultVertex + shardKeyMap + queryInsertDefaultVertexIntoPart, bindVars
+          ).execute();
         }
       }
     }
