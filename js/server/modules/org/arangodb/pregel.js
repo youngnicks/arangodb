@@ -169,20 +169,29 @@ exports.getShardKeysForCollection = function (executionNumber, collection) {
   return map[collection].shardKeys;
 };
 
+exports.toLocationObject = function (executionNumber, col, doc) {
+  var shardKeys = exports.getShardKeysForCollection(executionNumber, col);
+  var obj = {
+    _id: doc._id
+  };
+  _.each(shardKeys, function(key, i) {
+    obj["shard_" + i] = doc[key]; 
+  });
+  return obj;
+};
+
 exports.getResponsibleEdgeShards = function (executionNumber, vertex) {
   var doc = vertex._id;
   var col = doc.split("/")[0];
-  var key = doc.split("/")[1];
+  var locObj = exports.toLocationObject(executionNumber, col, vertex);
   var map = exports.getMap(executionNumber);
-  var example = {
-    taiwanese: key
-  };
   var result = [];
   if(map[col] !== undefined) {
     if (ArangoServerState.role() === "PRIMARY") {
       _.each(map, function (c, key) {
         if (c.type === 3) {
-          result.push(exports.getResponsibleShard(key, example));
+          var example = exports.getLocationObject(executionNumber, key, locObj);
+          result.push(exports.getResponsibleShard(executionNumber, key, example));
         }
       });
       return result;
@@ -197,7 +206,8 @@ exports.getResponsibleEdgeShards = function (executionNumber, vertex) {
   if (ArangoServerState.role() === "PRIMARY") {
     _.each(map, function (c, col) {
       if (c.type === 3) {
-        result.push(exports.getResponsibleShard(col, example));
+        var example = exports.getLocationObject(executionNumber, col, locObj);
+        result.push(exports.getResponsibleShard(executionNumber, col, example));
       }
     });
     return result;
