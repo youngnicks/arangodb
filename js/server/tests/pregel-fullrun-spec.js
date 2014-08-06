@@ -268,7 +268,6 @@ describe("Full Pregel execution", function () {
       expect(result.errorNum).toEqual(ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.code);
     });
 
-
   });
 
 });

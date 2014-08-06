@@ -47,6 +47,7 @@ var Queue = function (executionNumber, vertexInfo, step) {
   this.__step = step;
   this.__vertexInfo = vertexInfo;
   this.__vertexInfo._key = key;
+  this.__vertexInfo._id = this.__vertexCollectionName + "/" + key;
 };
 
 // Target is id now, has to be modified to contian vertex data
@@ -64,6 +65,9 @@ Queue.prototype.sendTo = function(target, data) {
     var targetKey = targetid.split("/")[1];
     collection = pregel.getOriginalCollection(target._id, this.__executionNumber);
     targetid = collection + "/" + targetKey;
+    if (!target._key) {
+      target._key = targetKey;
+    }
     param = pregel.toLocationObject(this.__executionNumber, collection, target);
     /*
     var shardKeys  = pregel.getShardKeysForCollection(this.__executionNumber, collection);
