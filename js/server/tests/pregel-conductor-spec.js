@@ -119,7 +119,7 @@ describe("Pregel Conductor", function () {
 
     it("should throw an error if the server calling back is not awaited", function () {
       try {
-        conductor.finishedStep(execNr, "unkownServer", { messages: 5, active: 10, step: 1 });
+        conductor.finishedStep(execNr, "unknownServer", { messages: 5, active: 10, step: 1 });
         this.fail(Error("should never be reached"));
       } catch (e) {
         expect(e instanceof ArangoError).toBeTruthy();
