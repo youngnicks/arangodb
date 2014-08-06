@@ -162,6 +162,7 @@ var setup = function(executionNumber, options) {
     var resultShards = Object.keys(mapping.resultShards);
     var i;
     var bindVars;
+    var iterator;
     for (i = 0; i < shards.length; i++) {
       if (mapping.originalShards[shards[i]] === pregel.getServerName()) {
         bindVars = {
@@ -170,11 +171,13 @@ var setup = function(executionNumber, options) {
         };
         if (mapping.type === 3) {
           bindVars.collectionMapping = collectionMapping;
-          for (var iterator = 0; iterator < shardKeysAmount; iterator++) {
+          for (iterator = 0; iterator < shardKeysAmount; iterator++) {
             queryInsertDefaultEdgeInsertPart += ", 'shard_" + iterator + "' : v.shard_" + iterator;
             queryInsertDefaultEdgeInsertPart += ", 'to_shard_" + iterator + "' : v.to_shard_" + iterator;
           }
-          db._query(queryInsertDefaultEdge +queryInsertDefaultEdgeInsertPart + queryInsertDefaultEdgeIntoPart, bindVars).execute();
+          db._query(
+            queryInsertDefaultEdge +queryInsertDefaultEdgeInsertPart + queryInsertDefaultEdgeIntoPart, bindVars
+          ).execute();
         } else {
           var shardKeyMap = "", count = 0;
           mapping.shardKeys.forEach(function (sk) {
