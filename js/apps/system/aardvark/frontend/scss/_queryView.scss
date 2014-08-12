@@ -42,6 +42,14 @@
   }
 }
 
+.queryMethods {
+  button {
+    a {
+      color: white;
+    }
+  }
+}
+
 .query-toolbar {
   @extend %toolbar;
 }
@@ -263,6 +271,7 @@
 
 .query-div {
   display: none;
+  min-height: 360px;
 
   &> * {
     border: 0 !important;

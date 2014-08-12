@@ -85,6 +85,11 @@
         notificationCollection: new window.NotificationCollection(),
         userCollection: this.userCollection
       });
+
+      this.queryCollection = new window.ArangoQueries([],{
+        activeUser: self.userCollection.activeUser
+      });
+
       this.footerView.render();
       this.naviView.render();
 
@@ -164,7 +169,9 @@
 
     query: function () {
       if (!this.queryView) {
-        this.queryView = new window.queryView();
+        this.queryView = new window.queryView({
+          collection: this.queryCollection
+        });
       }
       this.queryView.render();
       this.naviView.selectMenuItem('query-menu');

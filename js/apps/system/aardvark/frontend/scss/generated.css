@@ -1449,9 +1449,9 @@ nav.navbar, footer.footer {
     background-color: #f87c0f; }
 
 .button-inactive {
-  background-color: lightgrey; }
+  background-color: lightgray; }
   .button-inactive:hover, .button-inactive:focus {
-    background-color: grey; }
+    background-color: gray; }
 
 ul.link-dropdown-menu, ul.user-dropdown-menu, ul.gv-dropdown-menu {
   -moz-border-radius: 3px;
@@ -1934,6 +1934,8 @@ a.button-gui {
   text-decoration: none !important;
   top: 2px;
   width: auto; }
+  a.button-gui.button-gui-disabled {
+    display: none; }
 
 .clusterDownBtn {
   padding-bottom: 10px;
@@ -4672,7 +4674,7 @@ pre.gv-object-view {
     width: 5%; }
 
 .user-menu-img {
-  background-color: lightgrey;
+  background-color: lightgray;
   -moz-border-radius: 3px;
   -webkit-border-radius: 3px;
   border-radius: 3px;
@@ -4961,6 +4963,9 @@ pre.gv-object-view {
   .editor-toolbar .arango-icon-disk {
     margin-top: 1px; }
 
+.queryMethods button a {
+  color: white; }
+
 .aql-editor {
   border-color: #a0a0a0;
   border-left: 0 !important;
@@ -5124,7 +5129,8 @@ pre.gv-object-view {
   border-bottom-color: #fff !important; }
 
 .query-div {
-  display: none; }
+  display: none;
+  min-height: 360px; }
   .query-div > * {
     border: 0 !important; }
   .query-div .icon_arangodb {
@@ -5359,7 +5365,7 @@ pre.gv-object-view {
   color: #66ff00; }
 
 .jqconsole-cursor {
-  background-color: grey; }
+  background-color: gray; }
 
 .jqconsole-blurred .jqconsole-header .jqconsole-cursor {
   color: #c4cccc; }

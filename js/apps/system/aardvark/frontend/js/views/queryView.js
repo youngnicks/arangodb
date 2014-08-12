@@ -38,7 +38,9 @@
       'keypress #aqlEditor': 'aqlShortcuts',
       'click #arangoQueryTable .table-cell0': 'editCustomQuery',
       'click #arangoQueryTable .table-cell1': 'editCustomQuery',
-      'click #arangoQueryTable .table-cell2 a': 'deleteAQL'
+      'click #arangoQueryTable .table-cell2 a': 'deleteAQL',
+      'click #confirmQueryImport': 'importCustomQueries',
+      'click #confirmQueryExport': 'renderExportCustomQueries'
     },
 
     createCustomQueryModal: function(){
@@ -175,6 +177,7 @@
       if (typeof Storage) {
         if (localStorage.getItem("querySize") > 0) {
           querySize = parseInt(localStorage.getItem("querySize"), 10);
+
         }
       }
 
@@ -263,8 +266,39 @@
       $("#queryDiv").show();
       $("#customsDiv").show();
 
+      this.renderExportCustomQueries();
+      this.initQueryImport();
+
       this.switchTab('query-switch');
       return this;
+    },
+
+    initQueryImport: function () {
+      var self = this;
+      $('#importQueries').change(function(e) {
+        self.files = e.target.files || e.dataTransfer.files;
+        self.file = self.files[0];
+
+        self.allowUpload = true;
+      });
+    },
+
+    importCustomQueries: function () {
+      var result, fetched, self = this;
+      if (this.allowUpload === true) {
+        result = self.collection.saveQueries(self.file);
+      }
+    },
+
+    renderExportCustomQueries: function () {
+      var toExport = [];
+      _.each(this.customQueries, function(value, key) {
+        toExport.push({name: value.name, value: value.value});
+      });
+      var data = "text/json;charset=utf-8,"+ encodeURIComponent(JSON.stringify(toExport));
+
+      $('#confirmQueryExport').html('<a id="downloadQueryAsJson" href="data:'+
+        data+'"download="queries.json">Export</a>');
     },
 
     deselect: function (editor) {
@@ -317,9 +351,15 @@
       });
 
       this.customQueries = tempArray;
-      localStorage.setItem("customQueries", JSON.stringify(this.customQueries));
+
+      this.updateLocalQueries();
       this.renderSelectboxes();
       this.updateTable();
+    },
+
+    updateLocalQueries: function () {
+      localStorage.setItem("customQueries", JSON.stringify(this.customQueries));
+      this.renderExportCustomQueries();
     },
 
     saveAQL: function (e) {
@@ -364,10 +404,12 @@
 
       window.modalView.hide();
 
-      localStorage.setItem("customQueries", JSON.stringify(this.customQueries));
+      this.updateLocalQueries();
       this.renderSelectboxes();
       $('#querySelect').val(saveName);
     },
+
+
 
     getSystemQueries: function () {
       var self = this;
@@ -386,6 +428,7 @@
         }
       });
     },
+
     getCustomQueryValueByName: function (qName) {
       var returnVal;
       $.each(this.customQueries, function (k, v) {
