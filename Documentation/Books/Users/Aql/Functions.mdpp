@@ -417,7 +417,7 @@ AQL supports the following functions to operate on list values:
 
 - *UNIQUE(list)*: Returns all unique elements in *list*. To determine
   uniqueness, the function will use the comparison order.
-  Calling this function might return the unique elements in any order.
+  Calling this function may return the unique elements in any order.
 
 - *UNION(list1, list2, ...)*: Returns the union of all lists specified.
   The function expects at least two list values as its arguments. The result is a list
@@ -587,9 +587,9 @@ AQL supports the following functions to operate on document values:
 
       RETURN KEEP(doc, 'firstname', 'name', 'likes')
 
-- *PARSE_IDENTIFIER(document-handle)*: Parses the document handle specified in 
+- *PARSE_IDENTIFIER(document-handle)*: Parses the [document handle](../Glossary/README.html#document_handle) specified in 
   *document-handle* and returns a the handle's individual parts a separate attributes.
-  This function can be used to easily determine the collection name and key from a given document.
+  This function can be used to easily determine the [collection name](../Glossary/README.html#collection_name) and key from a given document.
   The *document-handle* can either be a regular document from a collection, or a document
   identifier string (e.g. *_users/1234*). Passing either a non-string or a non-document or a
   document without an *_id* attribute will result in an error.
@@ -608,7 +608,7 @@ AQL supports the following functions to operate on document values:
 
 !SUBSUBSECTION Geo functions
 
-AQL offers the following functions to filter data based on geo indexes:
+AQL offers the following functions to filter data based on [geo indexes](../Glossary/README.html#geo_index):
 
 - *NEAR(collection, latitude, longitude, limit, distancename)*: 
   Returns at most *limit* documents from collection *collection* that are near
@@ -637,7 +637,7 @@ with an error.
 
 !SUBSUBSECTION Fulltext functions
 
-AQL offers the following functions to filter data based on fulltext indexes:
+AQL offers the following functions to filter data based on [fulltext indexes](../Glossary/README.html#fulltext_index):
 
 - *FULLTEXT(collection, attribute, query)*: 
   Returns all documents from collection *collection* for which the attribute *attribute*
@@ -714,7 +714,7 @@ Please use [Graph operations](../Aql/GraphOperations.md) instead.
   The result of the function is a list of paths. Paths of length 0 will also be returned. Each 
   path is a document consisting of the following attributes:
   - *vertices*: list of vertices visited along the path
-  - *edges*: list of edges visited along the path (might be empty)
+  - *edges*: list of edges visited along the path (may be empty)
   - *source*: start vertex of path
   - *destination*: destination vertex of path
 
@@ -892,8 +892,8 @@ Please use [Graph operations](../Aql/GraphOperations.md) instead.
 When using one of AQL's graph functions please make sure that the graph does not contain cycles,
 or that you at least specify some maximum depth or uniqueness criteria for a traversal. 
 
-If no bounds are set, a traversal might run into an endless loop in a cyclic graph or sub-graph,
-and even in a non-cyclic graph, traversing far into the graph might consume a lot of processing
+If no bounds are set, a traversal may run into an endless loop in a cyclic graph or sub-graph,
+and even in a non-cyclic graph, traversing far into the graph may consume a lot of processing
 time and memory for the result set.
 
 **Warning Deprecated**
@@ -1092,7 +1092,7 @@ function categories:
       DOCUMENT([ "users/john", "users/amy" ])
 
 - *SKIPLIST(collection, condition, skip, limit)*: Return all documents 
-  from a skiplist index on collection *collection* that match the specified *condition*.
+  from a [skiplist index](../Glossary/README.html#skiplist_index) on collection *collection* that match the specified *condition*.
   This is a shortcut method to use a skiplist index for retrieving specific documents in 
   indexed order. The skiplist index supports equality and less than/greater than queries. The
   *skip* and *limit* parameters are optional but can be specified to further limit the

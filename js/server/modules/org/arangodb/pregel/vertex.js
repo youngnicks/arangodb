@@ -75,6 +75,9 @@ Vertex.prototype._delete = function () {
 };
 
 Vertex.prototype._save = function () {
+  this._outEdges.forEach(function(e) {
+    e._save();
+  });
   this._resCol.update(this._key, {result: this._result});
 };
 

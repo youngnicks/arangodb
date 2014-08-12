@@ -114,6 +114,7 @@
         "frontend/js/models/arangoStatisticsDescription.js",
         "frontend/js/models/arangoStatistics.js",
         "frontend/js/models/arangoUsers.js",
+        "frontend/js/models/arangoQuery.js",
         "frontend/js/models/currentDatabase.js",
         "frontend/js/models/foxx.js",
         "frontend/js/models/graph.js",
@@ -132,6 +133,7 @@
         "frontend/js/collections/graphCollection.js",
         "frontend/js/collections/arangoLogs.js",
         "frontend/js/collections/notificationCollection.js",
+        "frontend/js/collections/arangoQueries.js",
         "frontend/js/views/_paginationView.js",
         "frontend/js/views/apiView.js",
         "frontend/js/views/appDocumentationView.js",
@@ -236,6 +238,7 @@
         "frontend/js/templates/modalGraph.ejs",
         "frontend/js/templates/lineChartDetailView.ejs",
         "clusterFrontend/js/templates/clusterDown.ejs",
+        "clusterFrontend/js/templates/clusterUnreachable.ejs",
         "clusterFrontend/js/templates/detailView.ejs",
         "clusterFrontend/js/templates/loginModal.ejs",
         "clusterFrontend/js/templates/modalDashboardDummy.ejs",
@@ -262,6 +265,7 @@
 
     "cluster.js": {
       "files": [
+        "frontend/js/arango/arango.js",
         "clusterFrontend/js/models/clusterCollection.js",
         "clusterFrontend/js/models/clusterCoordinator.js",
         "clusterFrontend/js/models/clusterDatabase.js",
@@ -269,6 +273,7 @@
         "clusterFrontend/js/models/clusterServer.js",
         "clusterFrontend/js/models/clusterShard.js",
         "clusterFrontend/js/models/clusterType.js",
+        "clusterFrontend/js/collections/_automaticRetryCollection.js",
         "clusterFrontend/js/collections/arangoClusterStatisticsCollection.js",
         "clusterFrontend/js/collections/clusterCollections.js",
         "clusterFrontend/js/collections/clusterCoordinators.js",
@@ -288,6 +293,7 @@
         "frontend/js/config/dygraphConfig.js",
         "frontend/js/collections/arangoStatisticsDescriptionCollection.js",
         "clusterFrontend/js/views/clusterDownView.js",
+        "clusterFrontend/js/views/clusterUnreachableView.js",
         "clusterFrontend/js/views/dbServerDashboardView.js",
         "clusterFrontend/js/views/loginModalView.js",
         "clusterFrontend/js/views/planScenarioSelectorView.js",

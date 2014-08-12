@@ -116,8 +116,10 @@ var startNextStep = function(executionNumber, options) {
       }
     );
     var i;
+    var debug;
     for (i = 0; i < dbServers.length; i++) {
-      ArangoClusterComm.wait(coordOptions);
+      debug = ArangoClusterComm.wait(coordOptions);
+      require("console").log(debug);
     }
     tasks.register({
       id: genTaskId(executionNumber),
@@ -162,8 +164,10 @@ var cleanUp = function (executionNumber, err) {
       }
     );
     var i;
+    var debug;
     for (i = 0; i < dbServers.length; i++) {
-      ArangoClusterComm.wait(coordOptions);
+      debug = ArangoClusterComm.wait(coordOptions);
+      require("console").log(debug);
     }
   } else {
     dbServers = ["localhost"];

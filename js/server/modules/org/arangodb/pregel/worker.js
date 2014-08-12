@@ -282,8 +282,10 @@ var sendMessages = function (executionNumber) {
           "/_api/import?type=array&collection=" + workCol.name(), toSend, {}, coordOptions);
       }
     });
+    var debug;
     for (waitCounter; waitCounter > 0; waitCounter--) {
-      ArangoClusterComm.wait(coordOptions);
+      debug = ArangoClusterComm.wait(coordOptions);
+      require("console").log(debug);
     }
   } else {
     var cursor = msgCol.all();
@@ -318,7 +320,9 @@ var finishedStep = function (executionNumber, global) {
     };
     ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
       "/_api/pregel/finishedStep", body, {}, coordOptions);
-    ArangoClusterComm.wait(coordOptions);
+    var debug = ArangoClusterComm.wait(coordOptions);
+    require("console").log(debug);
+
   } else {
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
       step: global.step,
