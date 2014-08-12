@@ -111,7 +111,7 @@ var startNextStep = function(executionNumber, options) {
     var debug;
     for (i = 0; i < dbServers.length; i++) {
       debug = ArangoClusterComm.wait(coordOptions);
-      require("internal").print(debug);
+      require("console").log(debug);
     }
     tasks.register({
       id: genTaskId(executionNumber),
@@ -155,7 +155,7 @@ var cleanUp = function (executionNumber, err) {
     var debug;
     for (i = 0; i < dbServers.length; i++) {
       debug = ArangoClusterComm.wait(coordOptions);
-      require("internal").print(debug);
+      require("console").log(debug);
     }
   } else {
     dbServers = ["localhost"];
