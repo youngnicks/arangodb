@@ -48,24 +48,27 @@ var error = "error";
 var stateFinished = "finished";
 var stateRunning = "running";
 var stateError = "error";
+var _pregel = db._pregel;
 
 var genTaskId = function (executionNumber) {
   return "Pregel_Task_" + executionNumber;
 };
 
 var getExecutionInfo = function(executionNumber) {
-  var pregel = db._pregel;
-  return pregel.document(executionNumber);
+  return _pregel.document(executionNumber);
 };
 
 var updateExecutionInfo = function(executionNumber, infoObject) {
-  var pregel = db._pregel;
-  return pregel.update(executionNumber, infoObject);
+  return _pregel.update(executionNumber, infoObject);
 };
 
-var saveExecutionInfo = function(infoObject) {
-  var pregel = db._pregel;
-  return pregel.save(infoObject);
+var saveExecutionInfo = function(infoObject, globals) {
+  infoObject.globalValues = globals;
+  return _pregel.save(infoObject);
+};
+
+var getGlobals = function(executionNumber) {
+  return _pregel.document(executionNumber).globalValues;
 };
 
 var getWaitForAnswerMap = function() {
@@ -84,6 +87,7 @@ var getWaitForAnswerMap = function() {
 var startNextStep = function(executionNumber, options) {
   var dbServers;
   var info = getExecutionInfo(executionNumber);
+  var globals = getGlobals(executionNumber);
   var stepNo = info[step];
   options = options || {};
   if (info[timeout]) {
@@ -92,11 +96,15 @@ var startNextStep = function(executionNumber, options) {
   options.conductor = pregel.getServerName();
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
-    var body = JSON.stringify({
+    var body = {
       step: stepNo,
       executionNumber: executionNumber,
       setup: options
-    });
+    };
+    if (globals) {
+      body.globals = globals;
+    }
+    body = JSON.stringify(body);
     var httpOptions = {};
     var coordOptions = {
       coordTransactionID: ArangoClusterInfo.uniqid()
@@ -122,7 +130,11 @@ var startNextStep = function(executionNumber, options) {
     });
   } else {
     dbServers = ["localhost"];
-    pregel.Worker.executeStep(executionNumber, stepNo, options);
+    if (globals) {
+      pregel.Worker.executeStep(executionNumber, stepNo, options, globals);
+    } else {
+      pregel.Worker.executeStep(executionNumber, stepNo, options);
+    }
   }
 };
 
@@ -282,12 +294,13 @@ var startExecution = function(graphName, algorithm, options) {
   options = options  || {};
   if (options[timeout]) {
     infoObject[timeout] = options[timeout];
+    delete options.timeout;
   }
   infoObject[state] = stateRunning;
   stepContentObject[active] = graph._countVertices();
   stepContentObject[messages] = 0;
   infoObject[stepContent] = [stepContentObject, {active: 0 , messages: 0}];
-  var key = saveExecutionInfo(infoObject)._key;
+  var key = saveExecutionInfo(infoObject, options)._key;
   try {
     /*jslint evil : true */
     var x = new Function("(" + algorithm + "())");

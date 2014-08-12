@@ -93,9 +93,8 @@ var registerFunction = function(executionNumber, algorithm) {
     + "var worker = pregel.Worker;"
     + "var vertex = new pregel.Vertex(executionNumber, vertexid);"
     + "var messages = new pregel.MessageQueue(executionNumber, vertexid, step);"
-    + "var global = {"
-    +   "step: step"
-    + "};"
+    + "var global = params.global;"
+    + "global.step = step;"
     + "try {"
     + "  (" + algorithm + "(vertex, messages, global));"
     + "} catch (err) {"
@@ -111,13 +110,18 @@ var registerFunction = function(executionNumber, algorithm) {
 
 };
 
-var addTask = function (executionNumber, stepNumber, vertex, options) {
+var addTask = function (executionNumber, stepNumber, vertex, globals) {
   var col = pregel.getGlobalCollection(executionNumber);
   var task = col.document("task").task;
   try {
     tasks.register({
       command: task,
-      params: { executionNumber: executionNumber, step: stepNumber,  vertexid : vertex}
+      params: {
+        executionNumber: executionNumber,
+        step: stepNumber,
+        vertexid : vertex,
+        global: globals || {}
+      }
     });
   } catch (ignore) { }
 };
@@ -365,7 +369,7 @@ var vertexDone = function (executionNumber, vertex, global, err) {
 
 };
 
-var executeStep = function(executionNumber, step, options) {
+var executeStep = function(executionNumber, step, options, globals) {
   id = ArangoServerState.id() || "localhost";
   if (step === 0) {
     setup(executionNumber, options);
@@ -378,9 +382,10 @@ var executeStep = function(executionNumber, step, options) {
   if (q.count() === 0) {
     finishedStep(executionNumber, {step : step});
   } else {
+    var n;
     while (q.hasNext()) {
-      var n = q.next();
-      addTask(executionNumber, step, n, options);
+      n = q.next();
+      addTask(executionNumber, step, n, globals);
     }
   }
 };
