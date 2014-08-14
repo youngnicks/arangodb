@@ -72,7 +72,7 @@ var queryInsertDefaultVertexIntoPart = "} INTO  @@result";
 
 
 var queryActivateVertices = "FOR v IN @@work "
-  + "FILTER v.toShard == @shard "
+  + "FILTER v.toShard == @shard && v.step == @step "
   + "UPDATE PARSE_IDENTIFIER(v._to).key WITH "
   + "{'active' : true} IN @@result";
 
@@ -199,7 +199,7 @@ var setup = function(executionNumber, options) {
 };
 
 
-var activateVertices = function(executionNumber) {
+var activateVertices = function(executionNumber, step) {
   var map = loadMapping(executionNumber);
   Object.keys(map).forEach(function (collection) {
     var resultShards = Object.keys(map[collection].resultShards);
@@ -212,7 +212,8 @@ var activateVertices = function(executionNumber) {
           bindVars = {
             '@work' : pregel.genWorkCollectionName(executionNumber),
             '@result' : resultShards[i],
-            'shard': originalShards[i]
+            'shard': originalShards[i],
+            'step' : step
           };
           db._query(queryActivateVertices, bindVars).execute();
         }
@@ -378,7 +379,7 @@ var executeStep = function(executionNumber, step, options, globals) {
   if (step === 0) {
     setup(executionNumber, options);
   }
-  activateVertices(executionNumber);
+  activateVertices(executionNumber, step);
   var q = getActiveVerticesQuery(executionNumber);
   // read full count from result and write to work
   var col = pregel.getGlobalCollection(executionNumber);

@@ -71,6 +71,11 @@ var getGlobals = function(executionNumber) {
   return _pregel.document(executionNumber).globalValues;
 };
 
+
+var saveGlobals = function(executionNumber, globals) {
+  return _pregel.update(executionNumber, {globalValues : globals});
+};
+
 var getWaitForAnswerMap = function() {
   var waitForAnswerMap = {}, serverList;
   if (ArangoServerState.isCoordinator()) {
@@ -193,7 +198,7 @@ var generateResultCollectionName = function (collectionName, executionNumber) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var initNextStep = function (executionNumber) {
-  var info = getExecutionInfo(executionNumber);
+  var info = getExecutionInfo(executionNumber), cAR = {};
   info[step]++;
   info[stepContent].push({
     active: 0,
@@ -201,8 +206,18 @@ var initNextStep = function (executionNumber) {
   });
   info[waitForAnswer] = getWaitForAnswerMap();
   updateExecutionInfo(executionNumber, info);
+
+  var globals = getGlobals(executionNumber);
   var stepInfo = info[stepContent][info[step]];
-  if( stepInfo[active] > 0 || stepInfo[messages] > 0) {
+
+  if (globals.conductorAlgorithm) {
+    globals.step = info[step] -1;
+    var x = new Function("a", "b", "c", "return " + globals.conductorAlgorithm + "(a,b,c);");
+    cAR = x(new pregel.GraphAccess(generateResultCollectionName(globals.graphName, executionNumber)),globals, stepInfo);
+    saveGlobals(executionNumber, globals);
+  }
+
+  if( stepInfo[active] > 0 || stepInfo[messages] > 0 || cAR.continuePregel) {
     startNextStep(executionNumber);
   } else {
     cleanUp(executionNumber);
@@ -290,12 +305,14 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
 };
 
 
-var startExecution = function(graphName, algorithm, options) {
+var startExecution = function(graphName, pregelAlgorithm, conductorAlgorithm, options) {
   var graph = graphModule._graph(graphName), infoObject = {},
     stepContentObject = {};
   infoObject[waitForAnswer] = getWaitForAnswerMap();
   infoObject[step] = 0;
   options = options  || {};
+  options.conductorAlgorithm = conductorAlgorithm;
+  options.graphName = graphName;
   if (options[timeout]) {
     infoObject[timeout] = options[timeout];
     delete options.timeout;
@@ -307,7 +324,7 @@ var startExecution = function(graphName, algorithm, options) {
   var key = saveExecutionInfo(infoObject, options)._key;
   try {
     /*jslint evil : true */
-    var x = new Function("(" + algorithm + "())");
+    var x = new Function("(" + pregelAlgorithm + "())");
     /*jslint evil : false */
   } catch (e) {
     var err = new ArangoError();
@@ -316,7 +333,7 @@ var startExecution = function(graphName, algorithm, options) {
     throw err;
   }
 
-  options.algorithm = algorithm;
+  options.algorithm = pregelAlgorithm;
 
   options.map = createResultGraph(graph, key);
 
