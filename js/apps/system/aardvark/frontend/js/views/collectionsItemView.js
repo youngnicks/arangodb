@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 100, vars: true, white: true, plusplus: true */
-/*global require, window, exports, Backbone, EJS, $, templateEngine, arangoHelper*/
+/*global require, window, exports, Backbone, EJS, $, templateEngine, arangoHelper, Joi*/
 
 (function() {
   "use strict";
@@ -92,10 +92,6 @@
       }
       else {
         newname = $('#change-collection-name').val();
-        if (newname === '') {
-          arangoHelper.arangoError('No collection name entered!');
-          return 0;
-        }
       }
 
       var status = this.model.get('status');
@@ -169,7 +165,26 @@
       if (! window.isCoordinator()) {
         tableContent.push(
           window.modalView.createTextEntry(
-            "change-collection-name", "Name", this.model.get('name'), false, "", true
+            "change-collection-name",
+            "Name",
+            this.model.get('name'),
+            false,
+            "",
+            true,
+            [
+              {
+                rule: Joi.string().regex(/^[a-zA-Z]/),
+                msg: "Collection name must always start with a letter."
+              },
+              {
+                rule: Joi.string().regex(/^[a-zA-Z0-9\-_]*$/),
+                msg: 'Only Symbols "_" and "-" are allowed.'
+              },
+              {
+                rule: Joi.string().required(),
+                msg: "No collection name given."
+              }
+            ]
           )
         );
       }
@@ -186,7 +201,17 @@
             journalSize,
             "The maximal size of a journal or datafile (in MB). Must be at least 1.",
             "",
-            true
+            true,
+            [
+              {
+                rule: Joi.string().required(),
+                msg: "No journal size given."
+              },
+              {
+                rule: Joi.string().regex(/^[0-9]*$/),
+                msg: "Must be a number."
+              }
+            ]
           )
         );
       }

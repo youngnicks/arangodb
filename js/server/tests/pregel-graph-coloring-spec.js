@@ -252,12 +252,13 @@ describe("Graph coloring Pregel execution", function () {
         return result;
       };
 
-      var id = conductor.startExecution(gN, graphColoring.toString(),conductorAlgorithm.toString());
+      //var id = conductor.startExecution(gN, graphColoring.toString(),conductorAlgorithm.toString());
+      var id = conductor.startExecution("gc", graphColoring.toString(),conductorAlgorithm.toString());
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
-      while (count < 10000000) {
-        require("internal").wait(10);
+      while (count < 100000000) {
+        require("internal").wait(20);
         require("console").log(JSON.stringify(conductor.getInfo(id)));
         if (conductor.getInfo(id).state === "finished") {
           res = conductor.getResult(id);

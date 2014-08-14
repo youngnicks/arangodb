@@ -1036,6 +1036,11 @@ exports.scanAppDirectory = function () {
 
   var aal = getStorage();
 
+  // only initialize global collections
+  if (aal === null) {
+    return;
+  }
+
   // remove all loaded apps first
   aal.removeByExample({ type: "app" });
 
@@ -1482,7 +1487,8 @@ exports.appRoutes = function () {
 
   return arangodb.db._executeTransaction({
     collections: {
-      read: [ aal.name() ]
+      read: [ '_queues', '_jobs', aal.name() ],
+      write: [ '_queues', '_jobs' ]
     },
     params: {
       aal : aal
@@ -1726,7 +1732,7 @@ exports.initializeFoxx = function () {
     exports.scanAppDirectory();
   }
   catch (err) {
-    console.error("cannot initialize Foxx application: %s", String(err));
+    console.errorLines("cannot initialize Foxx application: %s", String(err.stack || err));
   }
 
   var aal = getStorage();

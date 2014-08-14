@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 100, sloppy: true, vars: true, white: true, plusplus: true */
-/*global Backbone, $, window, arangoHelper, templateEngine, _*/
+/*global Backbone, $, window, arangoHelper, templateEngine, Joi, _*/
 
 window.ApplicationsView = Backbone.View.extend({
   el: '#content',
@@ -28,12 +28,21 @@ window.ApplicationsView = Backbone.View.extend({
     tableContent.push(
       window.modalView.createTextEntry(
         'github-url',
-        'Github Url',
+        'Github information',
         '',
-        'Your Github URL comes here: username/application-name',
-        undefined,
+        'Your Github link comes here: username/application-name',
+        "username/application-name",
         false,
-        /[<>&'"]/
+        [
+          {
+            rule: Joi.string().regex(/^[a-zA-Z0-9]+[\/]/),
+            msg: "No valid github link given."
+          },
+          {
+            rule: Joi.string().required(),
+            msg: "No github link given."
+          }
+        ]
     ));
     tableContent.push(
       window.modalView.createTextEntry(
@@ -41,7 +50,7 @@ window.ApplicationsView = Backbone.View.extend({
         'Version (optional)',
         '',
         'Example: v1.1.2 for Version 1.1.2 - if no version is commited, master is used',
-        undefined,
+        'master',
         false,
         /[<>&'"]/
     ));

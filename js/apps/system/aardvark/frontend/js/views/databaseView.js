@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 100, vars: true, white: true, plusplus: true */
-/*global window, document, Backbone, EJS, SwaggerUi, hljs, $, arangoHelper, templateEngine */
+/*global window, document, Backbone, EJS, SwaggerUi, hljs, $, arangoHelper, templateEngine, Joi*/
 (function() {
 
   "use strict";
@@ -242,7 +242,21 @@
           "",
           false,
           "Database Name",
-          true
+          true,
+          [
+            {
+              rule: Joi.string().regex(/^[a-zA-Z]/),
+              msg: "Database name must start with a letter."
+            },
+            {
+              rule: Joi.string().regex(/^[a-zA-Z0-9\-_]*$/),
+              msg: 'Only Symbols "_" and "-" are allowed.'
+            },
+            {
+              rule: Joi.string().required(),
+              msg: "No database name given."
+            }
+          ]
         )
       );
       tableContent.push(
@@ -255,7 +269,13 @@
             + "you will not be able to see the database. "
             + "If there is a failure you will be informed.",
           "Database Owner",
-          true
+          true,
+          [
+            {
+              rule: Joi.string().required(),
+              msg: "No username given."
+            }
+          ]
         )
       );
       tableContent.push(

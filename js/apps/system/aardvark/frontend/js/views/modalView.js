@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 100, vars: true, white: true, plusplus: true */
-/*global Backbone, $, window, _ */
+/*global Backbone, $, window, setTimeout, Joi, _ */
 /*global templateEngine*/
 
 (function () {
@@ -46,7 +46,8 @@
     if (regexp){
       // returns true if the string contains the match
       obj.validateInput = function(el){
-        return regexp.test(el.val());
+        //return regexp.test(el.val());
+        return regexp;
       };
     }
     return obj;
@@ -284,8 +285,17 @@
       var ind = buttons.indexOf(this.closeButton);
       buttons.splice(ind, 1);
 
+      var completeTableContent = tableContent;
+      try {
+        _.each(advancedContent.content, function(x) {
+          completeTableContent.push(x);
+        });
+      }
+      catch(ignore) {
+      }
+
       //handle select2
-      _.each(tableContent, function(r) {
+      _.each(completeTableContent, function(r) {
         if (r.type === self.tables.SELECT2) {
           $('#'+r.id).select2({
             tags: r.tags || [],
@@ -298,13 +308,59 @@
       });//handle select2
 
       self.testInput = (function(){
-        _.each(tableContent,function(r){
-          if(r.validateInput){
+        _.each(completeTableContent,function(r){
+
+          if(r.validateInput) {
+            //catch result of validation and act
             $('#' + r.id).on('keyup', function(){
-              if(r.validateInput($('#' + r.id))){
+
+              var validation = r.validateInput($('#' + r.id));
+              var error = false, msg;
+
+              _.each(validation, function(validator, key) {
+
+                var schema = Joi.object().keys({
+                  toCheck: validator.rule
+                });
+
+                Joi.validate({
+                  toCheck: $('#' + r.id).val()
+                },
+                schema,
+                function (err, value) {
+
+                  if (err) {
+                    msg = validator.msg;
+                    error = true;
+                  }
+                });
+              });
+              var errorElement = $('#'+r.id).next()[0];
+
+              if(error === true){
+                // if validation throws an error
                 $('#' + r.id).addClass('invalid-input');
-              } else {
+                $('.modal-footer .button-success').prop('disabled', true);
+                $('.modal-footer .button-success').addClass('disabled');
+
+                if (errorElement) {
+                  //error element available
+                  $(errorElement).text(msg);
+                }
+                else {
+                  //error element not available
+                  $('#' + r.id).after('<p class="errorMessage">' + msg+ '</p>');
+                }
+
+              }
+              else {
+                //validation throws success
                 $('#' + r.id).removeClass('invalid-input');
+                $('.modal-footer .button-success').prop('disabled', false);
+                $('.modal-footer .button-success').removeClass('disabled');
+                if (errorElement) {
+                  $(errorElement).remove();
+                }
               }
             });
           }
@@ -325,6 +381,13 @@
       if (this.enableHotKeys) {
         this.createModalHotkeys();
       }
+
+      //if input-field is available -> autofocus first one
+      var focus = $('#modal-dialog').find('input');
+      if (focus) {
+        setTimeout(function() {$(focus[0]).focus();}, 800);
+      }
+
     },
 
     hide: function() {

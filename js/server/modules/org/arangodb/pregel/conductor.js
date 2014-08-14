@@ -210,7 +210,7 @@ var initNextStep = function (executionNumber) {
   var globals = getGlobals(executionNumber);
   var stepInfo = info[stepContent][info[step]];
 
-  if (globals.conductorAlgorithm) {
+  if (globals && globals.conductorAlgorithm) {
     globals.step = info[step] -1;
     var x = new Function("a", "b", "c", "return " + globals.conductorAlgorithm + "(a,b,c);");
     cAR = x(new pregel.GraphAccess(generateResultCollectionName(globals.graphName, executionNumber)),globals, stepInfo);

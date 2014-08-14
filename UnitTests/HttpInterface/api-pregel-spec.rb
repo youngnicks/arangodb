@@ -69,8 +69,8 @@ describe ArangoDB do
         cmd = api + '/finishedStep'
         body = "{ \"server\" : \"localhost\", \"step\" : 0, \"executionNumber\" : \"" + docId +  "\", \"messages\" : 0, \"active\" : 0 }"
         doc = ArangoDB.log_post("#{prefix}-finishedStep", cmd , :body => body)
-	doc.code.should eq(200)
-	doc.parsed_response['error'].should eq(false)
+        doc.code.should eq(200)
+        doc.parsed_response['error'].should eq(false)
         doc.parsed_response['code'].should eq(200)
         cmd = "/_api/document/_pregel/" + docId
         doc = ArangoDB.log_get("#{prefix}", cmd)
@@ -131,7 +131,7 @@ describe ArangoDB do
 
       it "succesful startExecution" do
         cmd = api + '/startExecution'
-        body = "{\"graphName\" : \"pregelTest\", \"algorithm\" : \"function () {}\", \"options\" : {}}"
+        body = "{\"graphName\" : \"pregelTest\", \"pregelAlgorithm\" : \"function () {}\", \"options\" : {}}"
         doc = ArangoDB.log_post("#{prefix}-startExecution", cmd , :body => body)
         doc.code.should eq(200)
         docId = doc.parsed_response['executionNumber']
@@ -159,7 +159,7 @@ describe ArangoDB do
 
       it "succesful getResult" do
         cmd = api + '/startExecution'
-        body = "{\"graphName\" : \"pregelTest\", \"algorithm\" : \"function () {}\", \"options\" : {}}"
+        body = "{\"graphName\" : \"pregelTest\", \"pregelAlgorithm\" : \"function () {}\", \"options\" : {}}"
         doc = ArangoDB.log_post("#{prefix}-startExecution", cmd , :body => body)
 	doc.code.should eq(200)
         docId = doc.parsed_response['executionNumber']

@@ -10,7 +10,7 @@
 ///
 /// DISCLAIMER
 ///
-/// Copyright 2014 triagens GmbH, Cologne, Germany
+/// Copyright 2014 ArangoDB GmbH, Cologne, Germany
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
 /// you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 /// See the License for the specific language governing permissions and
 /// limitations under the License.
 ///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
+/// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
 /// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
@@ -42,8 +42,7 @@ var console = require("console");
 ////////////////////////////////////////////////////////////////////////////////
 
 actions.defineHttp({
-  url : "_open/cerberus",
-  context : "admin",
+  url: "_open/cerberus",
   prefix : true,
 
   callback : function (req, res) {
@@ -55,7 +54,7 @@ actions.defineHttp({
     suffix = suffix.concat(req.suffix);
 
     req.suffix = suffix;
-    
+
     actions.routeRequest(req, res);
   }
 });
@@ -66,5 +65,5 @@ actions.defineHttp({
 
 // Local Variables:
 // mode: outline-minor
-// outline-regexp: "/// @brief\\|/// @addtogroup\\|// --SECTION--\\|/// @page\\|/// @\\}"
+// outline-regexp: "/// @brief\\|/// {@inheritDoc}\\|/// @page\\|// --SECTION--\\|/// @\\}"
 // End:
