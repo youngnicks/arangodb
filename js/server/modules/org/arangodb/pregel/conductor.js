@@ -214,7 +214,8 @@ var initNextStep = function (executionNumber) {
   if (globals && globals.conductorAlgorithm) {
     globals.step = info[step] -1;
     var x = new Function("a", "b", "c", "return " + globals.conductorAlgorithm + "(a,b,c);");
-    x(new pregel.GraphAccess(generateResultCollectionName(globals.graphName, executionNumber)),globals, stepInfo);
+    var resultName = generateResultCollectionName(globals.graphName, executionNumber);
+    x(new pregel.GraphAccess(resultName, stepInfo),globals, stepInfo);
     saveGlobals(executionNumber, globals);
   }
 
