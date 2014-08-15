@@ -48,33 +48,35 @@ var error = "error";
 var stateFinished = "finished";
 var stateRunning = "running";
 var stateError = "error";
-var _pregel = db._pregel;
 var _ = require("underscore");
+
+function getCollection () {
+  return db._pregel;
+}
 
 var genTaskId = function (executionNumber) {
   return "Pregel_Task_" + executionNumber;
 };
 
 var getExecutionInfo = function(executionNumber) {
-  return _.clone(_pregel.document(executionNumber));
+  return _.clone(getCollection().document(executionNumber));
 };
 
 var updateExecutionInfo = function(executionNumber, infoObject) {
-  return _pregel.update(executionNumber, infoObject);
+  return getCollection().update(executionNumber, infoObject);
 };
 
 var saveExecutionInfo = function(infoObject, globals) {
   infoObject.globalValues = globals;
-  return _pregel.save(infoObject);
+  return getCollection().save(infoObject);
 };
 
 var getGlobals = function(executionNumber) {
-  return _pregel.document(executionNumber).globalValues;
+  return getCollection().document(executionNumber).globalValues;
 };
 
-
 var saveGlobals = function(executionNumber, globals) {
-  return _pregel.update(executionNumber, {globalValues : globals});
+  return getCollection().update(executionNumber, {globalValues : globals});
 };
 
 var getWaitForAnswerMap = function() {

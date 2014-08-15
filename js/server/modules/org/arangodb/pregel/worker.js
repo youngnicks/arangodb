@@ -36,7 +36,7 @@ var pregel = require("org/arangodb/pregel");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
-var tasks = require("org/arangodb/tasks");
+var queues = require("org/arangodb/foxx/queues");
 
 var step = "step";
 var stepContent = "stepContent";
@@ -50,8 +50,10 @@ var stateError = "error";
 var COUNTER = "counter";
 var ERR = "error";
 var CONDUCTOR = "conductor";
+var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
+var workers = 4;
 
 var queryInsertDefaultEdge = "FOR v IN @@original "
   + "LET from = PARSE_IDENTIFIER(v._from) "
@@ -83,47 +85,45 @@ var queryMessageByShard = "FOR v IN @@message "
   + "FILTER v.toShard == @shardId "
   + "RETURN v";
 
-var registerFunction = function(executionNumber, algorithm) {
 
-  var taskToExecute = "(function (params) {"
-    + "var executionNumber = params.executionNumber;"
-    + "var step = params.step;"
-    + "var vertexid = params.vertexid;"
-    + "var pregel = require('org/arangodb/pregel');"
-    + "var worker = pregel.Worker;"
-    + "var vertex = new pregel.Vertex(executionNumber, vertexid);"
-    + "var messages = new pregel.MessageQueue(executionNumber, vertexid, step);"
-    + "var global = params.global;"
-    + "global.step = step;"
-    + "try {"
-    + "  (" + algorithm + "(vertex, messages, global));"
-    + "} catch (err) {"
-    +    "worker.vertexDone(executionNumber, vertex, global, err);"
-    + "  return;"
-    + "}"
-    + "worker.vertexDone(executionNumber, vertex, global);"
-    + "})(params)";
 
-    // This has to be replaced by worker registry
-    var col = pregel.getGlobalCollection(executionNumber);
-    col.save({_key: "task", task: taskToExecute});
-
-};
+queues.registerJobType(
+  "PREGEL",
+  {
+    execute : function (params) {
+      var executionNumber = params.executionNumber;
+      var step = params.step;
+      var vertexid = params.vertexid;
+      var pregel = require('org/arangodb/pregel');
+      var worker = pregel.Worker;
+      var vertex = new pregel.Vertex(executionNumber, vertexid);
+      var messages = new pregel.MessageQueue(executionNumber, vertexid, step);
+      var global = params.global;
+      global.step = step;
+      try {
+        var x = new Function("vertex", "messages", "global", "(" +  params.algorithm + ")(vertex,messages,global);");
+        x(vertex, messages, global);
+      } catch (err) {
+        worker.vertexDone(executionNumber, vertex, global, err);
+        return;
+      }
+      worker.vertexDone(executionNumber, vertex, global);
+    }
+  }
+);
 
 var addTask = function (executionNumber, stepNumber, vertex, globals) {
   var col = pregel.getGlobalCollection(executionNumber);
-  var task = col.document("task").task;
-  try {
-    tasks.register({
-      command: task,
-      params: {
-        executionNumber: executionNumber,
-        step: stepNumber,
-        vertexid : vertex,
-        global: globals || {}
-      }
-    });
-  } catch (ignore) { }
+  var algorithm = col.document(ALGORITHM).algorithm;
+
+  var q = queues.get("P_" + executionNumber);
+  q.push("PREGEL", {
+    executionNumber: executionNumber,
+    step: stepNumber,
+    vertexid : vertex,
+    global: globals || {},
+    algorithm : algorithm
+  });
 };
 
 var saveMapping = function(executionNumber, map) {
@@ -150,6 +150,7 @@ var setup = function(executionNumber, options) {
   global.save({_key: COUNTER, count: -1});
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
+  global.save({_key: ALGORITHM, algorithm : options.algorithm});
   saveMapping(executionNumber, options.map);
   var collectionMapping = {}, shardKeyMapping = {};
 
@@ -195,7 +196,7 @@ var setup = function(executionNumber, options) {
       }
     }
   });
-  registerFunction(executionNumber, options.algorithm);
+  queues.create("P_" + executionNumber, workers);
 };
 
 
@@ -396,6 +397,7 @@ var executeStep = function(executionNumber, step, options, globals) {
 };
 
 var cleanUp = function(executionNumber) {
+  queues.delete("P_" + executionNumber);
   db._drop(pregel.genWorkCollectionName(executionNumber));
   db._drop(pregel.genMsgCollectionName(executionNumber));
   db._drop(pregel.genGlobalCollectionName(executionNumber));
