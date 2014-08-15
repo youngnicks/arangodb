@@ -159,11 +159,12 @@ describe("Graph coloring Pregel execution", function () {
             vertex._outEdges.forEach(function (e) {
               vertex._result.neighbors.push(e._targetVertex._id);
               message.sendTo(e._targetVertex);
+              vertex._result.sexman = message.getSexman();
             });
         }
 
       };
-
+/*
     beforeEach(function () {
       gN = "UnitTestPregelGraph";
       v = "UnitTestVertices";
@@ -223,7 +224,7 @@ describe("Graph coloring Pregel execution", function () {
 
     afterEach(function () {
       graph._drop(gN, true);
-    });
+    });*/
 
     it("should color a graph by pregel", function () {
       var start = require("internal").time();
@@ -243,13 +244,14 @@ describe("Graph coloring Pregel execution", function () {
               }
               globals.usedColors.push(newColor);
               globals.color = newColor;
+              stepInfo.active === 1
             }
           }
         }
       };
 
-      var id = conductor.startExecution(gN, graphColoring.toString(),conductorAlgorithm.toString());
-      //var id = conductor.startExecution("gc", graphColoring.toString(),conductorAlgorithm.toString());
+      //var id = conductor.startExecution(gN, graphColoring.toString(),conductorAlgorithm.toString());
+      var id = conductor.startExecution("ff", graphColoring.toString(),conductorAlgorithm.toString());
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
