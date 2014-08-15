@@ -45,7 +45,7 @@ jasmine.getGlobal().clearTimeout = function (timeoutId) {
 
 exports.executeTestSuite = function (specFileNames, options) {
   'use strict';
-  var sandbox = jasmine.getEnv(),
+  var sandbox = new jasmine.Env(),
     format = options.format || 'progress';
 
   // Explicitly add require
