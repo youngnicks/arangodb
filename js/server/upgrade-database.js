@@ -1313,7 +1313,7 @@
       database:    [ DATABASE_INIT, DATABASE_UPGRADE ],
 
       task: function () {
-        return createSystemCollection("_queues", { waitForSync : true });
+        return createSystemCollection("_queues");
       }
     });
 
@@ -1332,7 +1332,7 @@
       database:    [ DATABASE_INIT, DATABASE_UPGRADE ],
 
       task: function () {
-        return createSystemCollection("_jobs", { waitForSync : true });
+        return createSystemCollection("_jobs");
       }
     });
 
@@ -1351,7 +1351,7 @@
       database:    [ DATABASE_INIT, DATABASE_UPGRADE ],
 
       task: function () {
-        return createSystemCollection("_pregel", { waitForSync : true });
+        return createSystemCollection("_pregel");
       }
     });
 
