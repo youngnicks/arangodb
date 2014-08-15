@@ -214,11 +214,11 @@ var initNextStep = function (executionNumber) {
   if (globals && globals.conductorAlgorithm) {
     globals.step = info[step] -1;
     var x = new Function("a", "b", "c", "return " + globals.conductorAlgorithm + "(a,b,c);");
-    cAR = x(new pregel.GraphAccess(generateResultCollectionName(globals.graphName, executionNumber)),globals, stepInfo);
+    x(new pregel.GraphAccess(generateResultCollectionName(globals.graphName, executionNumber)),globals, stepInfo);
     saveGlobals(executionNumber, globals);
   }
 
-  if( stepInfo[active] > 0 || stepInfo[messages] > 0 || cAR.continuePregel) {
+  if( stepInfo[active] > 0 || stepInfo[messages] > 0) {
     startNextStep(executionNumber);
   } else {
     cleanUp(executionNumber);
