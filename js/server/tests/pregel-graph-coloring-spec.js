@@ -159,7 +159,6 @@ describe("Graph coloring Pregel execution", function () {
             vertex._outEdges.forEach(function (e) {
               vertex._result.neighbors.push(e._targetVertex._id);
               message.sendTo(e._targetVertex);
-              vertex._result.sexman = message.getSexman();
             });
         }
 
@@ -256,7 +255,7 @@ describe("Graph coloring Pregel execution", function () {
       var resGraph = "LostInBattle";
       var res;
       while (count < 100000000) {
-        require("internal").wait(20);
+        require("internal").wait(1);
         if (conductor.getInfo(id).state === "finished") {
           res = conductor.getResult(id);
           require("internal").print(res)
