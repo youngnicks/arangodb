@@ -49,13 +49,14 @@ var stateFinished = "finished";
 var stateRunning = "running";
 var stateError = "error";
 var _pregel = db._pregel;
+var _ = require("underscore");
 
 var genTaskId = function (executionNumber) {
   return "Pregel_Task_" + executionNumber;
 };
 
 var getExecutionInfo = function(executionNumber) {
-  return _pregel.document(executionNumber);
+  return _.clone(_pregel.document(executionNumber));
 };
 
 var updateExecutionInfo = function(executionNumber, infoObject) {
@@ -396,28 +397,29 @@ var finishedStep = function(executionNumber, serverName, info) {
       ]
     },
     action: function (params) {
-      var info = params.info;
-      var getExecutionInfo = params.getExecutionInfo;
-      var updateExecutionInfo = params.updateExecutionInfo;
-      var executionNumber = params.executionNumber;
-      var runInfo = getExecutionInfo(executionNumber);
-      var stepInfo = runInfo[stepContent][runInfo[step] + 1];
-      stepInfo.messages += info.messages;
-      stepInfo.active += info.active;
-      runInfo.error = info.error;
-      var serverName = params.serverName;
-      var awaiting = runInfo[waitForAnswer];
-      awaiting[serverName] = true;
-      updateExecutionInfo(executionNumber, runInfo);
-      var everyServerResponded = true;
-      Object.keys(awaiting).forEach(function(s) {
-        if (awaiting[s] === false) {
-          everyServerResponded = false;
+      var transInfo = params.info;
+      var transGetExecutionInfo = params.getExecutionInfo;
+      var transUpdateExecutionInfo = params.updateExecutionInfo;
+      var transExecutionNumber = params.executionNumber;
+      var transRunInfo = _.clone(transGetExecutionInfo(transExecutionNumber));
+      var transStep = transRunInfo[step] + 1;
+      transRunInfo[stepContent][transStep].messages += transInfo.messages;
+      transRunInfo[stepContent][transStep].active += transInfo.active;
+      transRunInfo.error = transInfo.error;
+      var transServerName = params.serverName;
+      var transAwaiting = transRunInfo[waitForAnswer];
+      transAwaiting[transServerName] = true;
+      transUpdateExecutionInfo(transExecutionNumber, transRunInfo);
+      var transEveryServerResponded = true;
+      Object.keys(transAwaiting).forEach(function(s) {
+        if (transAwaiting[s] === false) {
+          transEveryServerResponded = false;
         }
       });
       return {
-        respond: everyServerResponded,
-        error: runInfo.error
+        respond: transEveryServerResponded,
+        error: transRunInfo.error,
+        active: transRunInfo[stepContent][transStep].active
       };
     },
     params: {
