@@ -53,7 +53,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var workers = 4;
+var workers = 16;
 
 var queryInsertDefaultEdge = "FOR v IN @@original "
   + "LET from = PARSE_IDENTIFIER(v._from) "
@@ -84,8 +84,6 @@ var queryUpdateCounter = "LET oldCount = DOCUMENT(@@global, 'counter').count "
 var queryMessageByShard = "FOR v IN @@message "
   + "FILTER v.toShard == @shardId "
   + "RETURN v";
-
-
 
 queues.registerJobType(
   "PREGEL",

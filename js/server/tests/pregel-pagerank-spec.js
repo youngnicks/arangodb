@@ -79,11 +79,9 @@ describe("Pregel PageRank", function () {
       },
       superStep = function (graph, globals) {
         if (globals.step === 31) {
-          require("internal").print("Done", require("internal").time());
           graph._stopExecution();
           return;
         }
-        require("internal").print("Continue", require("internal").time());
       };
 
     beforeEach(function () {
@@ -148,9 +146,8 @@ describe("Pregel PageRank", function () {
     });
 
     it("should compute the pageRank", function () {
-//      gN = "lager";
+      gN = "lager";
       var gr = require("org/arangodb/general-graph")._graph(gN);
-      require("internal").print("Starting", require("internal").time());
       var id = conductor.startExecution(gN, pageRank.toString(), superStep.toString(), {
         alpha: 0.85,
 //        vertexCount: 11

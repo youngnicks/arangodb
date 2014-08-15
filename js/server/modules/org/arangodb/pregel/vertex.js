@@ -28,12 +28,13 @@
 /// @author Florian Bartels, Michael Hackstein, Heiko Kernbach
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
-
+var internal = require("internal");
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
 var Vertex = function (executionNumber, vertexInfo) {
+  var Edge = pregel.Edge;
   var vertexId = vertexInfo._id;
   var resultShard = vertexInfo.shard;
   var self = this;
@@ -51,7 +52,6 @@ var Vertex = function (executionNumber, vertexInfo) {
 
   this._result = this._resCol.document(this._key).result;
 
-  var Edge = require("org/arangodb/pregel").Edge;
   var respEdges = pregel.getResponsibleEdgeShards(this._executionNumber, this);
   this._outEdges = [];
   _.each(respEdges, function(collection) {
@@ -79,10 +79,6 @@ Vertex.prototype._save = function () {
     e._save();
   });
   this._resCol.update(this._key, {result: this._result});
-};
-
-Vertex.prototype._locationInfo = function () {
-  
 };
 
 exports.Vertex = Vertex;
