@@ -49,7 +49,6 @@ describe("Graph coloring Pregel execution", function () {
       graphColoring = function (vertex, message, global) {
         var inc = message.getMessages();
         var next, color = "#25262a";
-        require("internal").print(global)
         if (global.color) {
           color = global.color;
         }
@@ -230,7 +229,6 @@ describe("Graph coloring Pregel execution", function () {
       var start = require("internal").time();
 
       var conductorAlgorithm = function (graphAccess, globals, stepInfo) {
-        var result = {};
         if (!globals.usedColors) {
           globals.usedColors = ['#25262a'];
         }
@@ -245,23 +243,21 @@ describe("Graph coloring Pregel execution", function () {
               }
               globals.usedColors.push(newColor);
               globals.color = newColor;
-              result.continuePregel = true;
             }
           }
         }
-        return result;
       };
 
-      //var id = conductor.startExecution(gN, graphColoring.toString(),conductorAlgorithm.toString());
-      var id = conductor.startExecution("gc", graphColoring.toString(),conductorAlgorithm.toString());
+      var id = conductor.startExecution(gN, graphColoring.toString(),conductorAlgorithm.toString());
+      //var id = conductor.startExecution("gc", graphColoring.toString(),conductorAlgorithm.toString());
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
       while (count < 100000000) {
         require("internal").wait(20);
-        require("console").log(JSON.stringify(conductor.getInfo(id)));
         if (conductor.getInfo(id).state === "finished") {
           res = conductor.getResult(id);
+          require("internal").print(res)
           resGraph = res.result.graphName;
           var end = require("internal").time();
           require("internal").print(end - start);
