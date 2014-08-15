@@ -32,19 +32,26 @@ var db = require("internal").db;
 var graphModule = require("org/arangodb/general-graph");
 
 
-var GraphAccess = function (resultGraphName) {
+var GraphAccess = function (resultGraphName, stepInfo) {
   this._resultGraphName = resultGraphName;
+  this._stepInfo = stepInfo;
+};
+
+GraphAccess.prototype._stopExecution = function () {
+  this._stepInfo.messages = 0;
+  this._stepInfo.active = 0;
 };
 
 GraphAccess.prototype._activateVerticesByExample = function (example) {
 
-  var graph = graphModule._graph(this._resultGraphName)
+  var graph = graphModule._graph(this._resultGraphName);
   var updated = 0;
   var self = this;
   example.deleted = false;
+  example.active = false;
   var aql = "FOR v in GRAPH_VERTICES(@name, @example, {vertexCollectionRestriction : @c}) " +
     "UPDATE PARSE_IDENTIFIER(v._id).key " +
-    "WITH {'active' : true} in @@collection"
+    "WITH {'active' : true} in @@collection";
 
   Object.keys(graph.__vertexCollections).forEach(function (c) {
 
@@ -57,20 +64,19 @@ GraphAccess.prototype._activateVerticesByExample = function (example) {
         '@collection' : c
       }).getExtra().operations.executed;
   });
-
+  this._stepInfo.active += updated;
   return updated;
-
 };
 
 GraphAccess.prototype._deleteVerticesByExample = function (example) {
 
-  var graph = graphModule._graph(this._resultGraphName)
+  var graph = graphModule._graph(this._resultGraphName);
   var updated = 0;
   var self = this;
   example.deleted = false;
   var aql = "FOR v in GRAPH_VERTICES(@name, @example, {vertexCollectionRestriction : @c}) " +
     "UPDATE PARSE_IDENTIFIER(v._id).key " +
-    "WITH {'deleted' : true} in @@collection"
+    "WITH {'deleted' : true} in @@collection";
 
   Object.keys(graph.__vertexCollections).forEach(function (c) {
 
@@ -84,19 +90,17 @@ GraphAccess.prototype._deleteVerticesByExample = function (example) {
       }).getExtra().operations.executed;
   });
   return updated;
-
 };
 
 GraphAccess.prototype._deleteEdgesByExample = function (example) {
-  var graph = graphModule._graph(this._resultGraphName)
+  var graph = graphModule._graph(this._resultGraphName);
   var updated = 0;
   var self = this;
   var aql = "FOR v in GRAPH_EDGES(@name, @example, {edgeCollectionRestriction : @c}) " +
     "UPDATE PARSE_IDENTIFIER(v._id).key " +
-    "WITH {'deleted' : true} in @@collection"
+    "WITH {'deleted' : true} in @@collection";
 
   Object.keys(graph.__edgeCollections).forEach(function (c) {
-
     updated = updated + db._query(
       aql,
       {
