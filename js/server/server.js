@@ -54,7 +54,6 @@
   if (internal.enableStatistics && internal.threadNumber === 0) {
     require("org/arangodb/statistics").startup();
   }
-  return;
 
   // load all foxxes
   if (internal.threadNumber === 0) {
