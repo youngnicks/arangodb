@@ -312,7 +312,7 @@
 
           if(r.validateInput) {
             //catch result of validation and act
-            $('#' + r.id).on('keyup', function(){
+            $('#' + r.id).on('keyup focusout', function(e){
 
               var validation = r.validateInput($('#' + r.id));
               var error = false, msg;
@@ -323,8 +323,14 @@
                   toCheck: validator.rule
                 });
 
+                var valueToCheck = $('#' + r.id).val();
+
+                if (valueToCheck === '' && e.type === "keyup") {
+                  return;
+                }
+
                 Joi.validate({
-                  toCheck: $('#' + r.id).val()
+                  toCheck: valueToCheck
                 },
                 schema,
                 function (err, value) {
