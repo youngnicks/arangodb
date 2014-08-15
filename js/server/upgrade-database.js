@@ -1336,6 +1336,27 @@
       }
     });
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief setupPregel
+///
+/// set up the collection _pregel
+////////////////////////////////////////////////////////////////////////////////
+
+    addTask({
+      name:        "setupPregel",
+      description: "setup _pregel collection",
+
+      mode:        [ MODE_PRODUCTION, MODE_DEVELOPMENT ],
+      cluster:     [ CLUSTER_NONE, CLUSTER_COORDINATOR_GLOBAL ],
+      database:    [ DATABASE_INIT, DATABASE_UPGRADE ],
+
+      task: function () {
+        return createSystemCollection("_pregel", { waitForSync : true });
+      }
+    });
+
+
+
 // -----------------------------------------------------------------------------
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
