@@ -1309,7 +1309,7 @@
       description: "setup _queues collection",
 
       mode:        [ MODE_PRODUCTION, MODE_DEVELOPMENT ],
-      cluster:     [ CLUSTER_DB_SERVER_LOCAL, CLUSTER_COORDINATOR_GLOBAL ],
+      cluster:     [ CLUSTER_NONE, CLUSTER_DB_SERVER_LOCAL, CLUSTER_COORDINATOR_GLOBAL ],
       database:    [ DATABASE_INIT, DATABASE_UPGRADE ],
 
       task: function () {
