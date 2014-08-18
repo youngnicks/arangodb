@@ -58,6 +58,7 @@
     initialize: function () {
       // This should be the only global object
       window.modalView = new window.ModalView();
+      window.progressView = new window.ProgressView();
       var self = this;
 
       this.currentDB = new window.CurrentDatabase();
@@ -95,6 +96,7 @@
         self.handleResize();
       });
       window.checkVersion();
+
     },
 
     checkUser: function () {
