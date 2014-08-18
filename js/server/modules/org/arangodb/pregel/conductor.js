@@ -252,7 +252,9 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
     };
     if (!noCreation) {
       if (map[collection].type === 2) {
-        db._create(generateResultCollectionName(collection, executionNumber) , props).ensureHashIndex("active");
+        var newCol = db._create(generateResultCollectionName(collection, executionNumber) , props);
+        newCol.ensureSkiplist("active");
+        newCol.ensureSkiplist("deleted");
       } else {
         db._createEdgeCollection(
           generateResultCollectionName(collection, executionNumber) , props

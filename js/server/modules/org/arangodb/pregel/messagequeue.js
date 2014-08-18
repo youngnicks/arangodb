@@ -47,7 +47,7 @@ var Queue = function (executionNumber, vertexInfo, step) {
   this.__step = step;
   this.__vertexInfo = vertexInfo;
   this.__vertexInfo._key = key;
-  this.__vertexInfo._id = this.__vertexCollectionName + "/" + key;
+  this.__vertexInfo._id = this.__from;
 };
 
 // Target is id now, has to be modified to contian vertex data

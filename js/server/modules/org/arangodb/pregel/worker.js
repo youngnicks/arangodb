@@ -91,21 +91,20 @@ queues.registerJobType(
     execute : function (params) {
       var executionNumber = params.executionNumber;
       var step = params.step;
-      var vertexid = params.vertexid;
+      var vertexInfo = params.vertexInfo;
       var pregel = require('org/arangodb/pregel');
       var worker = pregel.Worker;
-      var vertex = new pregel.Vertex(executionNumber, vertexid);
-      var messages = new pregel.MessageQueue(executionNumber, vertexid, step);
+      var vertex = new pregel.Vertex(executionNumber, vertexInfo);
+      var messages = new pregel.MessageQueue(executionNumber, vertexInfo, step);
       var global = params.global;
       global.step = step;
       try {
         var x = new Function("vertex", "messages", "global", "(" +  params.algorithm + ")(vertex,messages,global);");
         x(vertex, messages, global);
+        worker.vertexDone(executionNumber, vertex, global);
       } catch (err) {
         worker.vertexDone(executionNumber, vertex, global, err);
-        return;
       }
-      worker.vertexDone(executionNumber, vertex, global);
     }
   }
 );
@@ -118,7 +117,7 @@ var addTask = function (executionNumber, stepNumber, vertex, globals) {
   q.push("PREGEL", {
     executionNumber: executionNumber,
     step: stepNumber,
-    vertexid : vertex,
+    vertexInfo : vertex,
     global: globals || {},
     algorithm : algorithm
   });
@@ -142,15 +141,14 @@ var getError = function(executionNumber) {
 
 var setup = function(executionNumber, options) {
   // create global collection
-  db._createEdgeCollection(pregel.genWorkCollectionName(executionNumber));
-  db._createEdgeCollection(pregel.genMsgCollectionName(executionNumber)).ensureHashIndex("toShard");
-  var global = db._create(pregel.genGlobalCollectionName(executionNumber));
+  pregel.createWorkerCollections(executionNumber);
+  var global = pregel.getGlobalCollection(executionNumber);
   global.save({_key: COUNTER, count: -1});
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
   global.save({_key: ALGORITHM, algorithm : options.algorithm});
   saveMapping(executionNumber, options.map);
-  var collectionMapping = {}, shardKeyMapping = {};
+  var collectionMapping = {};
 
   var shardKeysAmount = 0;
   _.each(options.map, function(mapping, collection) {
@@ -179,7 +177,7 @@ var setup = function(executionNumber, options) {
             queryInsertDefaultEdgeInsertPart += ", 'to_shard_" + iterator + "' : v.to_shard_" + iterator;
           }
           db._query(
-            queryInsertDefaultEdge +queryInsertDefaultEdgeInsertPart + queryInsertDefaultEdgeIntoPart, bindVars
+            queryInsertDefaultEdge + queryInsertDefaultEdgeInsertPart + queryInsertDefaultEdgeIntoPart, bindVars
           ).execute();
         } else {
           var shardKeyMap = "", count = 0;

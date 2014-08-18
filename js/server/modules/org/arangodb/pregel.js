@@ -50,6 +50,19 @@ exports.genGlobalCollectionName = function (executionNumber) {
   return "P_global_" + executionNumber;
 };
 
+exports.createWorkerCollections = function (executionNumber) {
+  var work = db._createEdgeCollection(
+    exports.genWorkCollectionName(executionNumber)
+  );
+  work.ensureSkiplist("toShard");
+  work.ensureSkiplist("step");
+  var message = db._createEdgeCollection(
+    exports.genMsgCollectionName(executionNumber)
+  );
+  message.ensureSkiplist("toShard");
+  db._create(exports.genGlobalCollectionName(executionNumber));
+};
+
 exports.getWorkCollection = function (executionNumber) {
   return db._collection(exports.genWorkCollectionName(executionNumber));
 };
