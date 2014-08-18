@@ -53,7 +53,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var workers = 16;
+var workers = 4;
 
 var queryInsertDefaultEdge = "FOR v IN @@original "
   + "LET from = PARSE_IDENTIFIER(v._from) "

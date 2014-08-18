@@ -28,7 +28,7 @@
 /// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
-var QUEUE_MANAGER_PERIOD = 1000, // in ms
+var QUEUE_MANAGER_PERIOD = 100, // in ms
   _ = require('underscore'),
   tasks = require('org/arangodb/tasks'),
   db = require('org/arangodb').db;
@@ -70,8 +70,7 @@ exports.manage = function () {
             command: function (job) {
               require('org/arangodb/foxx/queues/worker').work(job);
             },
-            params: _.extend({}, doc, {status: 'progress'}),
-            offset: 0
+            params: _.extend({}, doc, {status: 'progress'})
           });
         });
       });
