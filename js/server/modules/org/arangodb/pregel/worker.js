@@ -35,8 +35,7 @@ var arangodb = require("org/arangodb");
 var pregel = require("org/arangodb/pregel");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
-
-var queues = require("org/arangodb/foxx/queues");
+var tasks = require("org/arangodb/tasks");
 
 var step = "step";
 var stepContent = "stepContent";
@@ -53,7 +52,8 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var workers = 4;
+var WORKERS = 3;
+var QUEUESIZE = 10000;
 
 var queryInsertDefaultEdge = "FOR v IN @@original "
   + "LET from = PARSE_IDENTIFIER(v._from) "
@@ -85,42 +85,47 @@ var queryMessageByShard = "FOR v IN @@message "
   + "FILTER v.toShard == @shardId "
   + "RETURN v";
 
-queues.registerJobType(
-  "PREGEL",
-  {
-    execute : function (params) {
-      var executionNumber = params.executionNumber;
-      var step = params.step;
-      var vertexInfo = params.vertexInfo;
-      var pregel = require('org/arangodb/pregel');
-      var worker = pregel.Worker;
-      var vertex = new pregel.Vertex(executionNumber, vertexInfo);
-      var messages = new pregel.MessageQueue(executionNumber, vertexInfo, step);
-      var global = params.global;
-      global.step = step;
-      try {
-        var x = new Function("vertex", "messages", "global", "(" +  params.algorithm + ")(vertex,messages,global);");
-        x(vertex, messages, global);
-        worker.vertexDone(executionNumber, vertex, global);
-      } catch (err) {
-        worker.vertexDone(executionNumber, vertex, global, err);
-      }
-    }
-  }
-);
+var getQueueName = function (executionNumber) {
+  return "P_QUEUE_" + executionNumber;
+};
+
+var algorithmToString = function (algorithm) {
+  return "var executionNumber = params.executionNumber; "
+    + "var step = params.step;"
+    + "var vertexInfo = params.vertexInfo;"
+    + "var pregel = require('org/arangodb/pregel');"
+    + "var worker = pregel.Worker;"
+    + "var vertex = new pregel.Vertex(executionNumber, vertexInfo);"
+    + "var messages = new pregel.MessageQueue(executionNumber, vertexInfo, step);"
+    + "var global = params.global;"
+    + "global.step = step;"
+    + "try {"
+    + "  (" + algorithm + ")(vertex,messages,global);"
+    + "  worker.vertexDone(executionNumber, vertex, global);"
+    + "} catch (err) {"
+    + "  worker.vertexDone(executionNumber, vertex, global, err);"
+    + "}";
+};
+
+var createTaskQueue = function (executionNumber, algorithm) {
+  tasks.createNamedQueue({
+    name: getQueueName(executionNumber),
+    threads: WORKERS,
+    size: QUEUESIZE,
+    worker: algorithmToString(algorithm)
+  });
+};
 
 var addTask = function (executionNumber, stepNumber, vertex, globals) {
-  var col = pregel.getGlobalCollection(executionNumber);
-  var algorithm = col.document(ALGORITHM).algorithm;
-
-  var q = queues.get("P_" + executionNumber);
-  q.push("PREGEL", {
-    executionNumber: executionNumber,
-    step: stepNumber,
-    vertexInfo : vertex,
-    global: globals || {},
-    algorithm : algorithm
-  });
+  tasks.addJob(
+    getQueueName(executionNumber), 
+    {
+      executionNumber: executionNumber,
+      step: stepNumber,
+      vertexInfo : vertex,
+      global: globals || {}
+    }
+  );
 };
 
 var saveMapping = function(executionNumber, map) {
@@ -140,6 +145,7 @@ var getError = function(executionNumber) {
 };
 
 var setup = function(executionNumber, options) {
+  var sw = require("internal").time();
   // create global collection
   pregel.createWorkerCollections(executionNumber);
   var global = pregel.getGlobalCollection(executionNumber);
@@ -147,6 +153,7 @@ var setup = function(executionNumber, options) {
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
   global.save({_key: ALGORITHM, algorithm : options.algorithm});
+  createTaskQueue(executionNumber, options.algorithm);
   saveMapping(executionNumber, options.map);
   var collectionMapping = {};
 
@@ -192,7 +199,7 @@ var setup = function(executionNumber, options) {
       }
     }
   });
-  queues.create("P_" + executionNumber, workers);
+  require("internal").print("Setup", require("internal").time() - sw);
 };
 
 
@@ -393,7 +400,7 @@ var executeStep = function(executionNumber, step, options, globals) {
 };
 
 var cleanUp = function(executionNumber) {
-  queues.delete("P_" + executionNumber);
+  // queues.delete("P_" + executionNumber); To be done for new queue
   db._drop(pregel.genWorkCollectionName(executionNumber));
   db._drop(pregel.genMsgCollectionName(executionNumber));
   db._drop(pregel.genGlobalCollectionName(executionNumber));
