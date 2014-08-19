@@ -75,7 +75,7 @@ var queryInsertDefaultVertexIntoPart = "} INTO  @@result";
 
 var queryActivateVertices = "FOR v IN @@work "
   + "FILTER v.toShard == @shard && v.step == @step "
-  + "UPDATE PARSE_IDENTIFIER(v._to).key WITH "
+  + "UPDATE PARSE_IDENTIFIER(v._toVertex).key WITH "
   + "{'active' : true} IN @@result";
 
 var queryUpdateCounter = "LET oldCount = DOCUMENT(@@global, 'counter').count "
@@ -127,7 +127,15 @@ var addTask = function (executionNumber, stepNumber, vertex, globals) {
     }
   );
 };
+/*
+var aggregateWithSender = function (allMessages) {
 
+};
+
+var aggregateWithoutSender = function () {
+
+};
+*/
 var saveMapping = function(executionNumber, map) {
   pregel.getGlobalCollection(executionNumber).save({_key: MAP, map: map});
 };
@@ -145,7 +153,6 @@ var getError = function(executionNumber) {
 };
 
 var setup = function(executionNumber, options) {
-  var sw = require("internal").time();
   // create global collection
   pregel.createWorkerCollections(executionNumber);
   var global = pregel.getGlobalCollection(executionNumber);
@@ -295,7 +302,7 @@ var sendMessages = function (executionNumber) {
     var next;
     while(cursor.hasNext()) {
       next = cursor.next();
-      workCol.save(next._from, next._to, next);
+      workCol.save(next);
     }
   }
   msgCol.truncate();

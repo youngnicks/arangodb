@@ -75,7 +75,7 @@ Queue.prototype.sendTo = function(target, data, sendLocation) {
   if (sendLocation) {
     toSend.sender = pregel.getLocationObject(this.__executionNumber, this.__vertexInfo);
   }
-  this.__collection.save(this.__vertexInfo._id, target._id, toSend);
+  this.__collection.save(toSend);
 };
 
 Queue.prototype.getMessages = function () {

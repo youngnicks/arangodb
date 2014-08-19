@@ -71,12 +71,12 @@ exports.genGlobalCollectionName = function (executionNumber) {
 };
 
 exports.createWorkerCollections = function (executionNumber) {
-  var work = db._createEdgeCollection(
+  var work = db._create(
     exports.genWorkCollectionName(executionNumber)
   );
   work.ensureSkiplist("toShard");
   work.ensureSkiplist("step");
-  var message = db._createEdgeCollection(
+  var message = db._create(
     exports.genMsgCollectionName(executionNumber)
   );
   message.ensureSkiplist("toShard");
