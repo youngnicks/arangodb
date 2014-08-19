@@ -237,18 +237,18 @@ describe("ShortestPath Pregel execution", function () {
     });
 
     it("should identify all distinct graphs", function () {
-      var id = conductor.startExecution(gN, connectedSets.toString());
+      //var id = conductor.startExecution(gN, connectedSets.toString());
+      var id = conductor.startExecution("ff", connectedSets.toString());
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
-      while (count < 1000) {
+      while (count < 1000000000000000000) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "finished") {
           res = conductor.getResult(id);
           resGraph = res.result.graphName;
           break;
         }
-        require("internal").print(conductor.getInfo(id));
         count++;
       }
 
