@@ -34,6 +34,26 @@ var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
+var transformToFindShard = function (executionNumber, col, params, prefix) {
+  if (!prefix) {
+    prefix = "shard_";
+  }
+  var map = exports.getMap(executionNumber);
+  var correct;
+  if (map[col]) {
+    correct = map[col];
+  } else {
+    correct = _.findWhere(map, {resultCollection: col});
+  }
+  var keys = correct.shardKeys;
+  var locParams = {};
+  var i;
+  for (i = 0; i < keys.length; i++) {
+    locParams[keys[i]] = params[prefix + i];
+  }
+  return locParams;
+};
+
 exports.getServerName = function () {
   return ArangoServerState.id() || "localhost";
 };
@@ -91,12 +111,31 @@ exports.getOriginalCollection = function (id, executionNumber) {
   return originalCollectionName;
 };
 
-exports.getLocationObject = function (executionNumber, collection, info) {
+exports.getLocationObject = function (executionNumber, info) {
+  var obj = {}, col, locParams;
+  if (info._from) {
+    obj._id = info._from;
+  } else {
+    obj._id = info._id;
+  }
+  col = obj._id.split("/")[0];
+  if (ArangoServerState.role() === "PRIMARY") {
+    locParams = transformToFindShard(executionNumber, col, info, "shard_"); 
+    locParams._id = obj._id; 
+    var colId = ArangoClusterInfo.getCollectionInfo(db._name(), col).id;
+    obj.shard = ArangoClusterInfo.getResponsibleShard(colId, locParams).shardId;
+  } else {
+    obj.shard = col;
+  }
+  return obj;
+};
+
+exports.getLocationObjectOld = function (executionNumber, collection, info) {
   var obj = {};
   if (info._from) {
-    obj.id = info._from;
+    obj._id = info._from;
   } else {
-    obj.id = info._id;
+    obj._id = info._id;
   }
   if (ArangoServerState.role() === "PRIMARY") {
     var map = exports.getMap(executionNumber);
@@ -115,23 +154,17 @@ exports.getLocationObject = function (executionNumber, collection, info) {
   return obj;
 };
 
-exports.getToLocationObject = function (executionNumber, info) {
+exports.getToLocationObject = function (executionNumber, edge) {
   var obj = {};
-  obj._id = info._to;
+  obj._id = edge._to;
+  var toCol = edge._to.split("/")[0];
   if (ArangoServerState.role() === "PRIMARY") {
-    var map = exports.getMap(executionNumber);
-    var toCol = info._to.split("/")[0];
-    var correct;
-    if (map[toCol]) {
-      correct = map[toCol];
-    } else {
-      correct = _.findWhere(map, {resultCollection: toCol});
-    }
-    var keys = correct.shardKeys;
-    var i;
-    for (i = 0; i < keys.length; i++) {
-      obj[keys[i]] = info["to_shard_" + i];
-    }
+    var locParams = transformToFindShard(executionNumber, toCol, edge, "to_shard_"); 
+    locParams._id = obj._id; 
+    var colId = ArangoClusterInfo.getCollectionInfo(db._name(), toCol).id;
+    obj.shard = ArangoClusterInfo.getResponsibleShard(colId, locParams).shardId;
+  } else {
+    obj.shard = toCol;
   }
   return obj;
 };
@@ -162,7 +195,7 @@ exports.getResponsibleShardFromMapping = function (executionNumber, resShard) {
 
 exports.getResponsibleShard = function (executionNumber, col, edge) {
   if (ArangoServerState.role() === "PRIMARY") {
-    var doc = exports.getLocationObject(executionNumber, col, edge);
+    var doc = transformToFindShard(executionNumber, col, edge, "shard_");
     var colId = ArangoClusterInfo.getCollectionInfo(db._name(), col).id;
     var res = ArangoClusterInfo.getResponsibleShard(colId, doc).shardId;
     return res;
@@ -196,31 +229,15 @@ exports.toLocationObject = function (executionNumber, col, doc) {
 exports.getResponsibleEdgeShards = function (executionNumber, vertex) {
   var doc = vertex._id;
   var col = doc.split("/")[0];
+  var key = doc.split("/")[1];
   var locObj = exports.toLocationObject(executionNumber, col, vertex);
   var map = exports.getMap(executionNumber);
   var result = [];
-  if(map[col] !== undefined) {
-    if (ArangoServerState.role() === "PRIMARY") {
-      _.each(map, function (c, key) {
-        if (c.type === 3) {
-          var example = exports.getLocationObject(executionNumber, key, locObj);
-          result.push(exports.getResponsibleShard(executionNumber, key, example));
-        }
-      });
-      return result;
-    }
-    _.each(map, function (c, key) {
-      if (c.type === 3) {
-        result.push(key);
-      }
-    });
-    return result;
-  }
   if (ArangoServerState.role() === "PRIMARY") {
     _.each(map, function (c, col) {
       if (c.type === 3) {
-        var example = exports.getLocationObject(executionNumber, col, locObj);
-        result.push(exports.getResponsibleShard(executionNumber, col, example));
+        locObj._id = col + "/" + key;
+        result.push(exports.getLocationObject(executionNumber, locObj).shard);
       }
     });
     return result;

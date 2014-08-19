@@ -62,7 +62,7 @@ var Vertex = function (executionNumber, vertexInfo) {
     });
   });
 
-  this._locationInfo = pregel.getLocationObject(executionNumber, vertexId.split("/")[0], this);
+  this._locationInfo = pregel.getLocationObject(executionNumber, this);
 
 };
 

@@ -52,7 +52,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 3;
+var WORKERS = 6;
 var QUEUESIZE = 10000;
 
 var queryInsertDefaultEdge = "FOR v IN @@original "
@@ -290,7 +290,6 @@ var sendMessages = function (executionNumber) {
     var debug;
     for (waitCounter; waitCounter > 0; waitCounter--) {
       debug = ArangoClusterComm.wait(coordOptions);
-      require("console").log(JSON.stringify(debug));
     }
   } else {
     var cursor = msgCol.all();
@@ -326,7 +325,6 @@ var finishedStep = function (executionNumber, global) {
     ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
       "/_api/pregel/finishedStep", body, {}, coordOptions);
     var debug = ArangoClusterComm.wait(coordOptions);
-    require("console").log(JSON.stringify(debug));
 
   } else {
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {

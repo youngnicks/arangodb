@@ -30,7 +30,7 @@
 
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
-var query = "FOR m IN @@collection FILTER m._to == @vertex && m.step == @step RETURN m";
+var query = "FOR m IN @@collection FILTER m._toVertex == @vertex && m.step == @step RETURN m";
 var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
@@ -40,9 +40,9 @@ var Queue = function (executionNumber, vertexInfo, step) {
   this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
   this.__workCollection = pregel.getWorkCollection(executionNumber);
-  this.__vertexCollectionName = pregel.getOriginalCollection(vertexId, executionNumber);
+  var vertexCollectionName = pregel.getOriginalCollection(vertexId, executionNumber);
   var key = vertexId.split("/")[1];
-  this.__from = this.__vertexCollectionName + "/" + key;
+  this.__from = vertexCollectionName + "/" + key;
   this.__nextStep = step + 1;
   this.__step = step;
   this.__vertexInfo = vertexInfo;
@@ -51,53 +51,31 @@ var Queue = function (executionNumber, vertexInfo, step) {
 };
 
 // Target is id now, has to be modified to contian vertex data
-Queue.prototype.sendTo = function(target, data) {
-  var param, collection, targetid;
+Queue.prototype.sendTo = function(target, data, sendLocation) {
+  if (sendLocation !== false) {
+    sendLocation = true; 
+  }
   if (target && typeof target === "string" && target.match(/\S+\/\S+/)) {
-    param = {_id: target};
-    targetid = target;
-    collection = target.split("/")[0];
-  } else if (target && typeof target === "object") {
-    if (!target._id) {
-      target._id = target.id;
-    }
-    targetid = target._id;
-    var targetKey = targetid.split("/")[1];
-    collection = pregel.getOriginalCollection(target._id, this.__executionNumber);
-    targetid = collection + "/" + targetKey;
-    if (!target._key) {
-      target._key = targetKey;
-    }
-    param = pregel.toLocationObject(this.__executionNumber, collection, target);
-    /*
-    var shardKeys  = pregel.getShardKeysForCollection(this.__executionNumber, collection);
-    shardKeys.forEach(function (sk) {
-      if (!target[sk]) {
-        var err = new ArangoError();
-        err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
-        err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
-        throw err;
-      }
-      param[sk] = target[sk];
-    });
-    */
-  } else {
+    target = pregel.getLocationObject(this.__executionNumber, target);
+  } else if (!(
+    target && typeof target === "object" &&
+    target._id && target.shard
+  )) {
     var err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.code;
     err.errorMessage = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.message;
     throw err;
   }
-
-
-  var shard = pregel.getResponsibleShard(this.__executionNumber, collection, param);
-
-  var sender = pregel.getLocationObject(this.__executionNumber, this.__vertexCollectionName, this.__vertexInfo);
-  this.__collection.save(this.__from, targetid, {
+  var toSend = {
+    _toVertex: target._id,
     data: data,
     step: this.__nextStep,
-    toShard: shard,
-    sender: sender
-  });
+    toShard: target.shard
+  };
+  if (sendLocation) {
+    toSend.sender = pregel.getLocationObject(this.__executionNumber, this.__vertexInfo);
+  }
+  this.__collection.save(this.__vertexInfo._id, target._id, toSend);
 };
 
 Queue.prototype.getMessages = function () {
