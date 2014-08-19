@@ -74,15 +74,21 @@ describe("Pregel PageRank", function () {
         vertex._result.rank = newPR;
         send = newPR / edgeCount;
         vertex._outEdges.forEach(function (e) {
-          message.sendTo(e._targetVertex, send);
+          message.sendTo(e._targetVertex, send, false);
         });
       },
       superStep = function (graph, globals) {
-        if (globals.step === 31) {
+        require("internal").print(globals.step, String(require("internal").time() % 1000).replace(".", ","));
+        if (globals.step === 30) {
           graph._stopExecution();
           return;
         }
       };
+      /*
+      aggregator = function (message, oldMessages) {
+        
+      };
+      */
 
     beforeEach(function () {
       gN = "UnitTestPregelGraph";
@@ -142,16 +148,19 @@ describe("Pregel PageRank", function () {
     });
 
     afterEach(function () {
-      graph._drop(gN, true);
+      // graph._drop(gN, true);
     });
 
     it("should compute the pageRank", function () {
-      gN = "lager";
+      // gN = "lager";
+      gN = "max";
       var gr = require("org/arangodb/general-graph")._graph(gN);
+      require("internal").print("Start", String(require("internal").time() % 1000).replace(".", ","));
+      var vC = gr._vertices().count();
+      require("internal").print("vC", vC);
       var id = conductor.startExecution(gN, pageRank.toString(), superStep.toString(), {
         alpha: 0.85,
-//        vertexCount: 11
-        vertexCount: gr._vertices().count()
+        vertexCount: vC
       });
       var count = 0;
       var resGraph = "LostInBattle";
@@ -172,11 +181,10 @@ describe("Pregel PageRank", function () {
       }
       expect(resGraph).not.toEqual("LostInBattle");
       expect(res.error).toBeFalsy();
-      expect(conductor.getInfo(id).step).toEqual(32);
+      expect(conductor.getInfo(id).step).toEqual(31);
       var resG = graph._graph(resGraph);
       var vc = resG._vertexCollections()[0];
       var resultVertices = vc.toArray();
-      /*
       _.each(resultVertices, function (v) {
         var exp;
         switch (v._key) {
@@ -201,7 +209,6 @@ describe("Pregel PageRank", function () {
         }
         expect(v.result.rank).toBeCloseTo(exp, 3, "for vertex " + v._key);
       });
-      */
     });
 
   });
