@@ -79,7 +79,7 @@ describe("Graph coloring Pregel execution", function () {
               vertex._result.degree = vertex._result.neighbors.length;
             }
             var random = Math.random();
-            if (1.0/(2*vertex._result.degree) <= random ) {
+            if (1.0/(2*vertex._result.degree) <= random  || vertex._result.degree === 0) {
               vertex._result.type = "TentativelyInS";
               vertex._result.neighbors.forEach(function (e) {
                 message.sendTo(e, {id : vertex._id});
@@ -163,7 +163,7 @@ describe("Graph coloring Pregel execution", function () {
         }
 
       };
-/*
+
     beforeEach(function () {
       gN = "UnitTestPregelGraph";
       v = "UnitTestVertices";
@@ -202,7 +202,7 @@ describe("Graph coloring Pregel execution", function () {
       };
 
       var i;
-      for (i = 1; i < 11; i++) {
+      for (i = 1; i < 12; i++) {
         saveVertex(i);
       }
       saveEdge(1, 2, 2);
@@ -223,7 +223,7 @@ describe("Graph coloring Pregel execution", function () {
 
     afterEach(function () {
       graph._drop(gN, true);
-    });*/
+    });
 
     it("should color a graph by pregel", function () {
       var start = require("internal").time();

@@ -52,7 +52,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 6;
+var WORKERS = 8;
 var QUEUESIZE = 10000;
 
 var queryInsertDefaultEdge = "FOR v IN @@original "
@@ -199,7 +199,6 @@ var setup = function(executionNumber, options) {
       }
     }
   });
-  require("internal").print("Setup", require("internal").time() - sw);
 };
 
 
@@ -389,10 +388,12 @@ var executeStep = function(executionNumber, step, options, globals) {
   if (q.count() === 0) {
     finishedStep(executionNumber, {step : step});
   } else {
+    var col = pregel.getGlobalCollection(executionNumber);
+    var algorithm = col.document(ALGORITHM).algorithm;
     var n;
     while (q.hasNext()) {
       n = q.next();
-      addTask(executionNumber, step, n, globals);
+      addTask(executionNumber, step, n, globals, algorithm);
     }
   }
 };
