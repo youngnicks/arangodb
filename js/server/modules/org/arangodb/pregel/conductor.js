@@ -309,9 +309,12 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
 };
 
 
-var startExecution = function(graphName, pregelAlgorithm, conductorAlgorithm, options) {
+var startExecution = function(graphName, algorithms,  options) {
   var graph = graphModule._graph(graphName), infoObject = {},
     stepContentObject = {};
+  var pregelAlgorithm = algorithms.base;
+  var conductorAlgorithm = algorithms.superstep;
+  var aggregator = algorithms.aggregator;
   infoObject[waitForAnswer] = getWaitForAnswerMap();
   infoObject[step] = 0;
   options = options  || {};
@@ -338,6 +341,9 @@ var startExecution = function(graphName, pregelAlgorithm, conductorAlgorithm, op
   }
 
   options.algorithm = pregelAlgorithm;
+  if (aggregator) {
+    options.aggregator = aggregator;
+  }
 
   options.map = createResultGraph(graph, key);
 

@@ -160,6 +160,9 @@ var setup = function(executionNumber, options) {
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
   global.save({_key: ALGORITHM, algorithm : options.algorithm});
+  if (options.aggregator) {
+    pregel.saveAggregator(executionNumber, options.aggregator); 
+  }
   createTaskQueue(executionNumber, options.algorithm);
   saveMapping(executionNumber, options.map);
   var collectionMapping = {};
