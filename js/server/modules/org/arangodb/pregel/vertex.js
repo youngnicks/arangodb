@@ -50,7 +50,9 @@ var Vertex = function (executionNumber, vertexInfo) {
   });
   this._resCol = db._collection(resultShard);
 
-  this._result = this._resCol.document(this._key).result;
+  this._doc = this._resCol.document(this._key);
+
+  this._result = this._doc.result;
 
   var respEdges = pregel.getResponsibleEdgeShards(this._executionNumber, this);
   this._outEdges = [];
@@ -67,18 +69,21 @@ var Vertex = function (executionNumber, vertexInfo) {
 };
 
 Vertex.prototype._deactivate = function () {
-  this._resCol.update(this._key, {active: false});
+  this._doc.active = false;
+  //this._resCol.update(this._key, {active: false});
 };
 
 Vertex.prototype._delete = function () {
-  this._resCol.update(this._key, {deleted: true});
+  this._doc.deleted = true;
+  //this._resCol.update(this._key, {deleted: true});
 };
 
 Vertex.prototype._save = function () {
   this._outEdges.forEach(function(e) {
     e._save();
   });
-  this._resCol.update(this._key, {result: this._result});
+  this._doc.result = this._result;
+  this._resCol.replace(this._key, this._doc);
 };
 
 exports.Vertex = Vertex;
