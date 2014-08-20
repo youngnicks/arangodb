@@ -46,7 +46,6 @@ var Queue = function (executionNumber, vertexInfo, step) {
   this.__nextStep = step + 1;
   this.__step = step;
   this.__vertexInfo = vertexInfo;
-  this.__vertexInfo._key = key;
   this.__vertexInfo._id = this.__from;
 };
 
@@ -73,7 +72,7 @@ Queue.prototype.sendTo = function(target, data, sendLocation) {
     toShard: target.shard
   };
   if (sendLocation) {
-    toSend.sender = pregel.getLocationObject(this.__executionNumber, this.__vertexInfo);
+    toSend.sender = this.__vertexInfo;
   }
   this.__collection.save(toSend);
 };
