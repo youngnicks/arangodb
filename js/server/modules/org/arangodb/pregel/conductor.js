@@ -119,6 +119,15 @@ var startNextStep = function(executionNumber, options) {
     var coordOptions = {
       coordTransactionID: ArangoClusterInfo.uniqid()
     };
+    tasks.register({
+      id: genTaskId(executionNumber),
+      offset: options.timeout || pregel.getTimeoutConst(executionNumber),
+      command: function(params) {
+        var c = require("org/arangodb/pregel").Conductor;
+        c.timeOutExecution(params.executionNumber);
+      },
+      params: {executionNumber: executionNumber}
+    });
     dbServers.forEach(
       function(dbServer) {
         ArangoClusterComm.asyncRequest("POST","server:" + dbServer, db._name(),
@@ -130,15 +139,6 @@ var startNextStep = function(executionNumber, options) {
     for (i = 0; i < dbServers.length; i++) {
       debug = ArangoClusterComm.wait(coordOptions);
     }
-    tasks.register({
-      id: genTaskId(executionNumber),
-      offset: options.timeout || pregel.getTimeoutConst(executionNumber),
-      command: function(params) {
-        var c = require("org/arangodb/pregel").Conductor;
-        c.timeOutExecution(params.executionNumber);
-      },
-      params: {executionNumber: executionNumber}
-    });
   } else {
     dbServers = ["localhost"];
     p.storeWatch("TriggerNextStep", t);

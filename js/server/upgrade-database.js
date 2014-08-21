@@ -1337,6 +1337,26 @@
     });
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief setupProfile
+///
+/// set up the collection _profile
+////////////////////////////////////////////////////////////////////////////////
+
+    addTask({
+      name:        "setupProfile",
+      description: "setup _profile collection",
+
+      mode:        [ MODE_PRODUCTION, MODE_DEVELOPMENT ],
+      cluster:     [ CLUSTER_NONE, CLUSTER_DB_SERVER_LOCAL, CLUSTER_COORDINATOR_GLOBAL ],
+      database:    [ DATABASE_INIT, DATABASE_UPGRADE ],
+
+      task: function () {
+        return createSystemCollection("_profile");
+      }
+    });
+
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief setupPregel
 ///
 /// set up the collection _pregel

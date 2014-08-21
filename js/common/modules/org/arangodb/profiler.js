@@ -31,22 +31,22 @@ var db = require("internal").db;
 var t = require("internal").time;
 
 exports.setup = function() {
-  db._drop("pregel_profiler"); 
-  db._create("pregel_profiler");
+  db._truncate("_profile");
 };
 
 exports.stopWatch = function() {
-  return t();
+  //return t();
 };
 
 exports.storeWatch = function(name, time) {
+  return;
   time = t() - time;
   db._executeTransaction({
     collections: {
-      write: ["pregel_profiler"],
+      write: ["_profile"]
     },
     action: function(params) {
-      var col = require("internal").db.pregel_profiler;
+      var col = require("internal").db._profile;
       if (col.exists(params.name)) {
         var doc = col.document(params.name);
         doc.duration += params.time;

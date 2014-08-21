@@ -159,6 +159,7 @@ var getError = function(executionNumber) {
 var setup = function(executionNumber, options) {
   // create global collection
   pregel.createWorkerCollections(executionNumber);
+  p.setup();
   var global = pregel.getGlobalCollection(executionNumber);
   global.save({_key: COUNTER, count: -1});
   global.save({_key: ERR, error: undefined});
