@@ -29,6 +29,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 var db = require("internal").db;
 var t = require("internal").time;
+var updateQuery = "for x in @@col filter x._key == @name "
+  + "let t = x.duration let i = x.invocations "
+  + "update x with {duration: t + @time, invocations: i + 1} "
+  + "in @@col";
+var aggregateAll = "FOR x IN @@col COLLECT name = x.func INTO g "
+  + "INSERT {_key: name, invocations: LENGTH(g), duration: SUM(g[*].x.duration)}"
+  + "IN @@col";
+var deleteSingle = "FOR x IN @@col FILTER HAS(x, 'func') REMOVE x._key IN @@col";
 
 var disabled = false;
 
@@ -52,28 +60,14 @@ exports.storeWatch = function(name, time) {
     return;
   }
   time = t() - time;
-  db._executeTransaction({
-    collections: {
-      write: ["pregel_profiler"],
-    },
-    action: function(params) {
-      var col = require("internal").db.pregel_profiler;
-      if (col.exists(params.name)) {
-        var doc = require("underscore").clone(col.document(params.name));
-        doc.duration += params.time;
-        doc.invocations++;
-        col.update(doc._key, doc);
-        return;
-      }
-      col.save({
-        _key: params.name,
-        duration: params.time,
-        invocations: 1
-      });
-    },
-    params: {
-      time: time,
-      name: name
-    }
+  var col = db.pregel_profiler;
+  col.save({
+    func: name,
+    duration: time
   });
+};
+
+exports.aggregate = function() {
+  db._query(aggregateAll, {"@col": "pregel_profiler"}).execute();
+  db._query(deleteSingle, {"@col": "pregel_profiler"}).execute();
 };
