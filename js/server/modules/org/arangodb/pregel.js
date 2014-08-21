@@ -27,6 +27,7 @@
 /// @author Florian Bartels, Michael Hackstein, Guido Schwab
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
+var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
 var _ = require("underscore");
@@ -35,6 +36,7 @@ var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
 var transformToFindShard = function (executionNumber, col, params, prefix) {
+  var t = p.stopWatch();
   if (!prefix) {
     prefix = "shard_";
   }
@@ -51,6 +53,7 @@ var transformToFindShard = function (executionNumber, col, params, prefix) {
   for (i = 0; i < keys.length; i++) {
     locParams[keys[i]] = params[prefix + i];
   }
+  p.storeWatch("transformToFindShard", t);
   return locParams;
 };
 
@@ -71,6 +74,7 @@ exports.genGlobalCollectionName = function (executionNumber) {
 };
 
 exports.createWorkerCollections = function (executionNumber) {
+  var t = p.stopWatch();
   var work = db._create(
     exports.genWorkCollectionName(executionNumber)
   );
@@ -81,6 +85,7 @@ exports.createWorkerCollections = function (executionNumber) {
   );
   message.ensureSkiplist("toShard");
   db._create(exports.genGlobalCollectionName(executionNumber));
+  p.storeWatch("setupWorkerCollections", t);
 };
 
 exports.getWorkCollection = function (executionNumber) {
@@ -96,6 +101,7 @@ exports.getMsgCollection = function (executionNumber) {
 };
 
 exports.getOriginalCollection = function (id, executionNumber) {
+  var t = p.stopWatch();
   var mapping = exports.getGlobalCollection(executionNumber).document("map").map;
   var collectionName = exports.getResultCollection(id), originalCollectionName;
 
@@ -106,12 +112,15 @@ exports.getOriginalCollection = function (id, executionNumber) {
   });
 
   if (originalCollectionName === undefined) {
+    p.storeWatch("OrigCol", t);
     return collectionName;
   }
+  p.storeWatch("OrigCol", t);
   return originalCollectionName;
 };
 
 exports.getLocationObject = function (executionNumber, info) {
+  var t = p.stopWatch();
   var obj = {}, col, locParams;
   if (info._from) {
     obj._id = info._from;
@@ -127,6 +136,7 @@ exports.getLocationObject = function (executionNumber, info) {
   } else {
     obj.shard = col;
   }
+  p.storeWatch("getLocObj", t);
   return obj;
 };
 
@@ -155,6 +165,7 @@ exports.getLocationObjectOld = function (executionNumber, collection, info) {
 };
 
 exports.getToLocationObject = function (executionNumber, edge) {
+  var t = p.stopWatch();
   var obj = {};
   obj._id = edge._to;
   var toCol = edge._to.split("/")[0];
@@ -166,6 +177,7 @@ exports.getToLocationObject = function (executionNumber, edge) {
   } else {
     obj.shard = toCol;
   }
+  p.storeWatch("getToLocObj", t);
   return obj;
 };
 
@@ -182,9 +194,9 @@ exports.getMap = function (executionNumber) {
 };
 
 exports.getAggregator = function (executionNumber) {
-  var doc = exports.getGlobalCollection(executionNumber).document("aggregator");
-  if (doc) {
-    return doc.func;
+  var col = exports.getGlobalCollection(executionNumber);
+  if (col.exists("aggregator")) {
+    return col.document("aggregator").func;
   }
 };
 
@@ -196,24 +208,29 @@ exports.saveAggregator = function (executionNumber, func) {
 };
 
 exports.getResponsibleShardFromMapping = function (executionNumber, resShard) {
+  var t = p.stopWatch();
   var map = exports.getMap(executionNumber);
-  var correct = _.filter(map, function (e) {
-    return e.resultShards[resShard] !== undefined;
+  var correct = _.filter(map, function (e, key) {
+    return key !== "@edgeShards" && e.resultShards[resShard] !== undefined;
   })[0];
   var resultList = Object.keys(correct.resultShards);
   var index = resultList.indexOf(resShard);
   var originalList = Object.keys(correct.originalShards);
+  p.storeWatch("RespMapShard", t);
   return originalList[index];
 };
 
 
 exports.getResponsibleShard = function (executionNumber, col, edge) {
+  var t = p.stopWatch();
   if (ArangoServerState.role() === "PRIMARY") {
     var doc = transformToFindShard(executionNumber, col, edge, "shard_");
     var colId = ArangoClusterInfo.getCollectionInfo(db._name(), col).id;
     var res = ArangoClusterInfo.getResponsibleShard(colId, doc).shardId;
+    p.storeWatch("GetRespShard", t);
     return res;
   }
+  p.storeWatch("GetRespShard", t);
   return col;
 };
 
@@ -230,6 +247,7 @@ exports.getShardKeysForCollection = function (executionNumber, collection) {
 };
 
 exports.toLocationObject = function (executionNumber, col, doc) {
+  var t = p.stopWatch();
   var shardKeys = exports.getShardKeysForCollection(executionNumber, col);
   var obj = {
     _id: doc._id
@@ -237,37 +255,23 @@ exports.toLocationObject = function (executionNumber, col, doc) {
   _.each(shardKeys, function(key, i) {
     obj["shard_" + i] = doc[key]; 
   });
+  p.storeWatch("ToLocObj", t);
   return obj;
 };
 
-exports.getResponsibleEdgeShards = function (executionNumber, vertex) {
-  var doc = vertex._id;
-  var col = doc.split("/")[0];
-  var key = doc.split("/")[1];
-  var locObj = exports.toLocationObject(executionNumber, col, vertex);
+exports.getResponsibleEdgeShards = function (executionNumber, shard) {
+  var t = p.stopWatch();
   var map = exports.getMap(executionNumber);
-  var result = [];
-  if (ArangoServerState.role() === "PRIMARY") {
-    _.each(map, function (c, col) {
-      if (c.type === 3) {
-        locObj._id = col + "/" + key;
-        result.push(exports.getLocationObject(executionNumber, locObj).shard);
-      }
-    });
-    return result;
-  }
-  _.each(map, function (c, col) {
-    if (c.type === 3) {
-      result.push(col);
-    }
-  });
-  return result;
+  var res = map["@edgeShards"][shard];
+  p.storeWatch("RespEdgeShards", t);
+  return res;
 };
 
 exports.storeAggregate = function(executionNumber, step, target, info) {
   var msg = exports.genMsgCollectionName(executionNumber);
   var agg = exports.getAggregator(executionNumber);
   if (agg) {
+    var t = p.stopWatch();
     db._executeTransaction({
       collections: {
         write: [msg]
@@ -301,7 +305,9 @@ exports.storeAggregate = function(executionNumber, step, target, info) {
         agg: agg
       }
     });
+    p.storeWatch("UserAggregate", t);
   } else {
+    var t = p.stopWatch();
     db._executeTransaction({
       collections: {
         write: [msg]
@@ -339,7 +345,7 @@ exports.storeAggregate = function(executionNumber, step, target, info) {
         step: step
       }
     });
-
+  p.storeWatch("DefaultAggregate", t);
   }
 };
 
