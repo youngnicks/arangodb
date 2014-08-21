@@ -41,7 +41,8 @@ var Vertex = function (executionNumber, vertexInfo) {
   this._executionNumber = executionNumber;
 
   //get attributes from original collection
-  var collection = pregel.getResponsibleShardFromMapping(executionNumber, resultShard);
+  this._locationInfo = vertexInfo.locationObject;
+  var collection = this._locationInfo.shard;
   var data = db[collection].document(vertexId.split("/")[1]);
 
   //write attributes to vertex
@@ -64,7 +65,6 @@ var Vertex = function (executionNumber, vertexInfo) {
     });
   });
 
-  this._locationInfo = pregel.getLocationObject(executionNumber, this);
 
 };
 

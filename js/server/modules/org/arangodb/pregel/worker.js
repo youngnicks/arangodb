@@ -70,7 +70,8 @@ var queryInsertDefaultEdgeInsertPart = "INSERT {'_key' : v._key, 'deleted' : fal
 var queryInsertDefaultEdgeIntoPart = "} INTO  @@result";
 
 var queryInsertDefaultVertex = "FOR v IN @@original INSERT {"
-  + "'_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {} ";
+  + " '_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {},"
+  + " 'locationObject': { '_id': v._id, 'shard': @origShard }";
 
 var queryInsertDefaultVertexIntoPart = "} INTO  @@result";
 
@@ -111,6 +112,12 @@ var algorithmToString = function (algorithm) {
     + "}";
 };
 
+var algorithmForQueue = function (algorithm) {
+  return function(params) {
+    require("internal").print(params, algorithm);
+  };
+};
+
 var createTaskQueue = function (executionNumber, algorithm) {
   tasks.createNamedQueue({
     name: getQueueName(executionNumber),
@@ -120,28 +127,24 @@ var createTaskQueue = function (executionNumber, algorithm) {
   });
 };
 
-var addTask = function (executionNumber, stepNumber, vertex, globals) {
+var addTask = function (executionNumber, queue, stepNumber, vertex, globals) {
   tasks.addJob(
-    getQueueName(executionNumber), 
+    queue,
     {
       executionNumber: executionNumber,
       step: stepNumber,
       vertexInfo : vertex,
-      global: globals || {}
+      global: globals
     }
   );
 };
-/*
-var aggregateWithSender = function (allMessages) {
 
-};
-
-var aggregateWithoutSender = function () {
-
-};
-*/
 var saveMapping = function(executionNumber, map) {
-  pregel.getGlobalCollection(executionNumber).save({_key: MAP, map: map});
+  pregel.saveShardKeyMapping(executionNumber, map.shardKeyMap);
+  pregel.saveShardMapping(executionNumber, map.shardMap);
+  pregel.saveLocalShardMapping(executionNumber, map.serverShardMap);
+  pregel.saveLocalResultShardMapping(executionNumber, map.serverResultShardMap);
+  pregel.saveEdgeShardMapping(executionNumber, map.edgeShards);
 };
 
 var loadMapping = function(executionNumber) {
@@ -163,29 +166,24 @@ var setup = function(executionNumber, options) {
   global.save({_key: COUNTER, count: -1});
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
-  global.save({_key: ALGORITHM, algorithm : options.algorithm});
+//  global.save({_key: ALGORITHM, algorithm : options.algorithm});
   if (options.aggregator) {
     pregel.saveAggregator(executionNumber, options.aggregator); 
   }
   createTaskQueue(executionNumber, options.algorithm);
   saveMapping(executionNumber, options.map);
+  var map = options.map.map;
   var collectionMapping = {};
 
   var shardKeysAmount = 0;
-  _.each(options.map, function(mapping, collection) {
-    if (collection === "@edgeShards") {
-      return;
-    }
+  _.each(map, function(mapping, collection) {
     collectionMapping[collection] = mapping.resultCollection;
     if (shardKeysAmount < mapping.shardKeys.length) {
       shardKeysAmount = mapping.shardKeys.length;
     }
   });
 
-  _.each(options.map, function(mapping, collection) {
-    if (collection === "@edgeShards") {
-      return;
-    }
+  _.each(map, function(mapping) {
     var shards = Object.keys(mapping.originalShards);
     var resultShards = Object.keys(mapping.resultShards);
     var i;
@@ -212,6 +210,7 @@ var setup = function(executionNumber, options) {
             shardKeyMap += ", shard_" + count + " : v." + sk;
             count++;
           });
+          bindVars.origShard = shards[i];
           db._query(
             queryInsertDefaultVertex + shardKeyMap + queryInsertDefaultVertexIntoPart, bindVars
           ).execute();
@@ -223,58 +222,45 @@ var setup = function(executionNumber, options) {
 
 
 var activateVertices = function(executionNumber, step) {
-  var map = loadMapping(executionNumber);
-  Object.keys(map).forEach(function (collection) {
-    if (collection === "@edgeShards") {
-      return;
-    }
-    var resultShards = Object.keys(map[collection].resultShards);
-    var originalShards = Object.keys(map[collection].originalShards);
+  var t = p.stopWatch();
+  var work = pregel.genWorkCollectionName(executionNumber);
+  var resultShardMapping = pregel.getLocalResultShardMapping(executionNumber);
+  _.each(resultShardMapping, function (resultShards, collection) {
+    var originalShards = pregel.getLocalCollectionShards(executionNumber, collection);
     var i;
     var bindVars;
     for (i = 0; i < resultShards.length; i++) {
-      if (map[collection].resultShards[resultShards[i]] === id) {
-        if (map[collection].type === 2) {
-          bindVars = {
-            '@work' : pregel.genWorkCollectionName(executionNumber),
-            '@result' : resultShards[i],
-            'shard': originalShards[i],
-            'step' : step
-          };
-          db._query(queryActivateVertices, bindVars).execute();
-        }
-      }
+      bindVars = {
+        '@work': work,
+        '@result': resultShards[i],
+        'shard': originalShards[i],
+        'step': step
+      };
+      db._query(queryActivateVertices, bindVars).execute();
     }
   });
+  p.storeWatch("ActivateVertices", t);
 };
 
 ///////////////////////////////////////////////////////////
 /// @brief Creates a cursor containing all active vertices
 ///////////////////////////////////////////////////////////
 var getActiveVerticesQuery = function (executionNumber) {
-  var map = loadMapping(executionNumber);
   var count = 0;
   var bindVars = {};
-  var server = pregel.getServerName();
   var query = "FOR u in UNION([], []";
-  Object.keys(map).forEach(function (collection) {
-    if (collection === "@edgeShards") {
-      return;
-    }
-    var resultShards = Object.keys(map[collection].resultShards);
+  var resultShardMapping = pregel.getLocalResultShardMapping(executionNumber);
+  _.each(resultShardMapping, function (resultShards) {
     var i;
     for (i = 0; i < resultShards.length; i++) {
-      if (map[collection].resultShards[resultShards[i]] === server) {
-        if (map[collection].type === 2) {
-          query += ",(FOR i in @@collection" + count
-            + " FILTER i.active == true && i.deleted == false"
-            + " RETURN {_id: i._id, shard: @collection" + count + "})";
-          bindVars["@collection" + count] = resultShards[i];
-          bindVars["collection" + count] = resultShards[i];
-        }
-        count++;
-      }
+      query += ",(FOR i in @@collection" + count
+        + " FILTER i.active == true && i.deleted == false"
+        + " RETURN {_id: i._id, shard: @collection" + count 
+        + ", locationObject: i.locationObject})";
+      bindVars["@collection" + count] = resultShards[i];
+      bindVars["collection" + count] = resultShards[i];
     }
+    count++;
   });
   query += ") RETURN u";
   return db._query(query, bindVars);
@@ -284,16 +270,8 @@ var sendMessages = function (executionNumber) {
   var msgCol = pregel.getMsgCollection(executionNumber);
   var workCol = pregel.getWorkCollection(executionNumber);
   if (ArangoServerState.role() === "PRIMARY") {
-    var map = loadMapping(executionNumber);
     var waitCounter = 0;
-    var shardList = _.flatten(
-      _.map(
-      _.filter(map, function (c) {
-        return c.type === 2;
-      }), function (c) {
-        return Object.keys(c.originalShards);
-      })
-    );
+    var shardList = pregel.getGlobalCollectionShards(executionNumber);
     var batchSize = 100;
     var bindVars = {
       "@message": msgCol.name()
@@ -420,12 +398,12 @@ var executeStep = function(executionNumber, step, options, globals) {
     finishedStep(executionNumber, {step : step});
   } else {
     var t = p.stopWatch();
-    var col = pregel.getGlobalCollection(executionNumber);
-    var algorithm = col.document(ALGORITHM).algorithm;
     var n;
+    globals = globals || {};
+    var queue = getQueueName(executionNumber);
     while (q.hasNext()) {
       n = q.next();
-      addTask(executionNumber, step, n, globals, algorithm);
+      addTask(executionNumber, queue, step, n, globals);
     }
     p.storeWatch("AddingAllTasks", t);
   }

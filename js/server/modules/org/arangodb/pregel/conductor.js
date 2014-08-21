@@ -243,6 +243,10 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
     edge: {},
     vertex: {}
   };
+  var shardKeyMap = {};
+  var shardMap = [];
+  var serverShardMap = {};
+  var serverResultShardMap = {};
   var numShards = 1;
   Object.keys(properties).forEach(function (collection) {
     var mc = {};
@@ -259,9 +263,16 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       mc.originalShards[collection]= "localhost";
       mc.shardKeys = [];
     }
+    shardKeyMap[collection] = mc.shardKeys;
     if (mc.type === 2) {
       tmpMap.vertex[collection] = Object.keys(mc.originalShards);
+      shardMap = shardMap.concat(tmpMap.vertex[collection]);
       numShards = tmpMap.vertex[collection].length;
+      _.each(mc.originalShards, function(server, shard) {
+        serverShardMap[server] = serverShardMap[server] || {};
+        serverShardMap[server][collection] = serverShardMap[server][collection] || [];
+        serverShardMap[server][collection].push(shard);
+      });
     } else {
       tmpMap.edge[collection] = Object.keys(mc.originalShards);
     }
@@ -292,6 +303,13 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       c[generateResultCollectionName(collection, executionNumber)] = "localhost";
       mc.resultShards = c;
     }
+    _.each(mc.resultShards, function(server, shard) {
+      if (mc.type === 2) {
+        serverResultShardMap[server] = serverResultShardMap[server] || {};
+        serverResultShardMap[server][collection] = serverResultShardMap[server][collection] || [];
+        serverResultShardMap[server][collection].push(shard);
+      }
+    });
   });
   var lists = [];
   var j;
@@ -303,16 +321,24 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
     });
     lists.push(list);
   }
-  map["@edgeShards"] = {};
+  var edgeShards = {};
   _.each(tmpMap.vertex, function(shards) {
     _.each(shards, function(sId, index) {
-      map["@edgeShards"][sId] = lists[index];
+      edgeShards[sId] = lists[index];
     });
   });
+  var resMap = {
+    shardKeyMap: shardKeyMap,
+    shardMap: shardMap,
+    serverResultShardMap: serverResultShardMap,
+    serverShardMap: serverShardMap,
+    edgeShards: edgeShards,
+    map: map
+  };
   // Create Vertex -> EdgeShards Mapping
   if (noCreation) {
     p.storeWatch("SetupResultGraph", t);
-    return map;
+    return resMap;
   }
   var resultEdgeDefinitions = [], resultEdgeDefinition;
   var edgeDefinitions = graph.__edgeDefinitions;
@@ -347,7 +373,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
     executionNumber, {graphName : generateResultCollectionName(graph.__name, executionNumber)}
   );
   p.storeWatch("SetupResultGraph", t);
-  return map;
+  return resMap;
 };
 
 

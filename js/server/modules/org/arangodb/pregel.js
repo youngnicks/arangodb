@@ -36,18 +36,12 @@ var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
 var transformToFindShard = function (executionNumber, col, params, prefix) {
+  require("console").log(col);
   var t = p.stopWatch();
   if (!prefix) {
     prefix = "shard_";
   }
-  var map = exports.getMap(executionNumber);
-  var correct;
-  if (map[col]) {
-    correct = map[col];
-  } else {
-    correct = _.findWhere(map, {resultCollection: col});
-  }
-  var keys = correct.shardKeys;
+  var keys = exports.getShardKeys(executionNumber, col);
   var locParams = {};
   var i;
   for (i = 0; i < keys.length; i++) {
@@ -141,6 +135,7 @@ exports.getLocationObject = function (executionNumber, info) {
 };
 
 exports.getLocationObjectOld = function (executionNumber, collection, info) {
+  var t = p.stopWatch();
   var obj = {};
   if (info._from) {
     obj._id = info._from;
@@ -161,6 +156,7 @@ exports.getLocationObjectOld = function (executionNumber, collection, info) {
       obj[keys[i]] = info["shard_" + i];
     }
   }
+  p.storeWatch("getOldLocObj", t);
   return obj;
 };
 
@@ -207,11 +203,74 @@ exports.saveAggregator = function (executionNumber, func) {
   });
 };
 
+exports.getEdgeShardMapping = function (executionNumber) {
+  var col = exports.getGlobalCollection(executionNumber);
+  return col.document("edgeShards");
+};
+
+var saveMapping = function (executionNumber, name, map) {
+  var col = exports.getGlobalCollection(executionNumber);
+  map._key = name;
+  col.save(map);
+};
+
+exports.saveEdgeShardMapping = function (executionNumber, map) {
+  saveMapping(executionNumber, "edgeShards", map);
+};
+
+exports.saveShardKeyMapping = function (executionNumber, map) {
+  saveMapping(executionNumber, "shardKeys", map);
+};
+
+exports.saveShardMapping = function (executionNumber, list) {
+  var col = exports.getGlobalCollection(executionNumber);
+  col.save({
+    _key: "shards",
+    list: list
+  });
+};
+
+exports.saveLocalShardMapping = function (executionNumber, map) {
+  saveMapping(executionNumber, "localShards", map[exports.getServerName()]);
+};
+
+exports.saveLocalResultShardMapping = function (executionNumber, map) {
+  saveMapping(executionNumber, "localResultShards", map[exports.getServerName()]);
+};
+
+var loadMapping = function (executionNumber, name) {
+  return exports.getGlobalCollection(executionNumber).document(name);
+};
+
+exports.getShardKeys = function (executionNumber, col) {
+  return loadMapping(executionNumber, "shardKeys")[col]; 
+};
+
+exports.getGlobalCollectionShards = function (executionNumber) {
+  return loadMapping(executionNumber, "shards").list; 
+};
+
+exports.getLocalCollectionShards = function (executionNumber, col) {
+  return loadMapping(executionNumber, "localShards")[col]; 
+};
+
+exports.getLocalResultShards = function (executionNumber, col) {
+  return loadMapping(executionNumber, "localResultShards")[col]; 
+};
+
+exports.getLocalResultShardMapping = function (executionNumber) {
+  var map = _.clone(loadMapping(executionNumber, "localResultShards")); 
+  delete map._id;
+  delete map._key;
+  delete map._rev;
+  return map;
+};
+
 exports.getResponsibleShardFromMapping = function (executionNumber, resShard) {
   var t = p.stopWatch();
   var map = exports.getMap(executionNumber);
-  var correct = _.filter(map, function (e, key) {
-    return key !== "@edgeShards" && e.resultShards[resShard] !== undefined;
+  var correct = _.filter(map, function (e) {
+    return e.resultShards[resShard] !== undefined;
   })[0];
   var resultList = Object.keys(correct.resultShards);
   var index = resultList.indexOf(resShard);
@@ -235,15 +294,14 @@ exports.getResponsibleShard = function (executionNumber, col, edge) {
 };
 
 exports.getShardKeysForCollection = function (executionNumber, collection) {
-  var globalCol = exports.getGlobalCollection(executionNumber);
-  var map = globalCol.document("map").map;
-  if (!map[collection]) {
+  var keys = exports.getShardKeys(executionNumber, collection);
+  if (!keys) {
     var err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
     err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
     throw err;
   }
-  return map[collection].shardKeys;
+  return keys;
 };
 
 exports.toLocationObject = function (executionNumber, col, doc) {
@@ -261,8 +319,7 @@ exports.toLocationObject = function (executionNumber, col, doc) {
 
 exports.getResponsibleEdgeShards = function (executionNumber, shard) {
   var t = p.stopWatch();
-  var map = exports.getMap(executionNumber);
-  var res = map["@edgeShards"][shard];
+  var res = exports.getEdgeShardMapping(executionNumber)[shard];
   p.storeWatch("RespEdgeShards", t);
   return res;
 };

@@ -90,17 +90,13 @@ InMessages.prototype.next = function () {
 };
 
 var Queue = function (executionNumber, vertexInfo, step) {
-  var vertexId = vertexInfo._id;
   this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
   this.__workCollection = pregel.getWorkCollection(executionNumber);
-  var vertexCollectionName = pregel.getOriginalCollection(vertexId, executionNumber);
-  var key = vertexId.split("/")[1];
-  this.__from = vertexCollectionName + "/" + key;
+  this.__from = vertexInfo.locationObject._id;
   this.__nextStep = step + 1;
   this.__step = step;
-  this.__vertexInfo = vertexInfo;
-  this.__vertexInfo._id = this.__from;
+  this.__vertexInfo = vertexInfo.locationObject;
 };
 
 // Target is id now, has to be modified to contian vertex data
