@@ -29,6 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 var db = require("internal").db;
 var t = require("internal").time;
+var colName = "_profile";
 var updateQuery = "for x in @@col filter x._key == @name "
   + "let t = x.duration let i = x.invocations "
   + "update x with {duration: t + @time, invocations: i + 1} "
@@ -44,8 +45,7 @@ exports.setup = function() {
   if (disabled) {
     return;
   }
-  db._drop("pregel_profiler"); 
-  db._create("pregel_profiler");
+  db._truncate(colName);
 };
 
 exports.stopWatch = function() {
@@ -60,7 +60,7 @@ exports.storeWatch = function(name, time) {
     return;
   }
   time = t() - time;
-  var col = db.pregel_profiler;
+  var col = db[colName];
   col.save({
     func: name,
     duration: time
@@ -68,6 +68,6 @@ exports.storeWatch = function(name, time) {
 };
 
 exports.aggregate = function() {
-  db._query(aggregateAll, {"@col": "pregel_profiler"}).execute();
-  db._query(deleteSingle, {"@col": "pregel_profiler"}).execute();
+  db._query(aggregateAll, {"@col": colName}).execute();
+  db._query(deleteSingle, {"@col": colName}).execute();
 };
