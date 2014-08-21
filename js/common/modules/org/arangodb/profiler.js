@@ -30,16 +30,27 @@
 var db = require("internal").db;
 var t = require("internal").time;
 
+var disabled = false;
+
 exports.setup = function() {
+  if (disabled) {
+    return;
+  }
   db._drop("pregel_profiler"); 
   db._create("pregel_profiler");
 };
 
 exports.stopWatch = function() {
+  if (disabled) {
+    return;
+  }
   return t();
 };
 
 exports.storeWatch = function(name, time) {
+  if (disabled) {
+    return;
+  }
   time = t() - time;
   db._executeTransaction({
     collections: {
@@ -48,7 +59,7 @@ exports.storeWatch = function(name, time) {
     action: function(params) {
       var col = require("internal").db.pregel_profiler;
       if (col.exists(params.name)) {
-        var doc = col.document(params.name);
+        var doc = require("underscore").clone(col.document(params.name));
         doc.duration += params.time;
         doc.invocations++;
         col.update(doc._key, doc);
