@@ -31,9 +31,63 @@
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var query = "FOR m IN @@collection FILTER m._toVertex == @vertex && m.step == @step RETURN m";
+var countQuery = "FOR m IN @@collection FILTER m._toVertex == @vertex && m.step == @step RETURN LENGTH(m.data)";
 var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
+
+var InMessages = function (col, step, from) {
+  var bindVars = {
+    step: step,
+    vertex: from,
+    "@collection": col
+  };
+  var countQ = db._query(
+    countQuery, bindVars
+  );
+  var c = 0;
+  while (countQ.hasNext()) {
+    c += countQ.next();
+  }
+  this._count = c;
+  this._position = 0;
+  this._maxPosition = 0;
+  this._cursor = db._query(query, bindVars); 
+  this._current = null;
+};
+
+InMessages.prototype.count = function () {
+  return this._count;
+};
+
+InMessages.prototype.hasNext = function () {
+  if (this._position < this._maxPosition) {
+    return true;
+  }
+  if (this._cursor.hasNext()) {
+    this._current = this._cursor.next();
+    this._position = -1;
+    this._maxPosition = this._current.data.length - 1;
+    return true;
+  }
+  return false;
+};
+
+InMessages.prototype.next = function () {
+  if (!this.hasNext()) {
+    return null;
+  }
+  this._position++;
+  if (this._current.sender) {
+    return {
+      data: this._current.data[this._position],
+      sender: this._current.sender[this._position]
+    };
+  }
+  return {
+    data: this._current.data[this._position]
+  };
+};
 
 var Queue = function (executionNumber, vertexInfo, step) {
   var vertexId = vertexInfo._id;
@@ -58,7 +112,7 @@ Queue.prototype.sendTo = function(target, data, sendLocation) {
     target = pregel.getLocationObject(this.__executionNumber, target);
   } else if (!(
     target && typeof target === "object" &&
-    target._id && target.shard
+                                target._id && target.shard
   )) {
     var err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.code;
@@ -66,28 +120,16 @@ Queue.prototype.sendTo = function(target, data, sendLocation) {
     throw err;
   }
   var toSend = {
-    _toVertex: target._id,
-    data: data,
-    step: this.__nextStep,
-    toShard: target.shard
+    data: data
   };
   if (sendLocation) {
     toSend.sender = this.__vertexInfo;
   }
-  this.__collection.save(toSend);
+  pregel.storeAggregate(this.__executionNumber, this.__nextStep, target, toSend);
 };
 
 Queue.prototype.getMessages = function () {
-  return db._query(
-    query,
-    {
-      step: this.__step,
-      vertex: this.__from,
-      "@collection": this.__workCollection.name()
-    },{
-      count: true
-    }
-  );
+  return new InMessages(this.__workCollection.name(), this.__step, this.__from);
 };
 
 exports.MessageQueue = Queue;

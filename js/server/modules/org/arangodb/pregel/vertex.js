@@ -54,7 +54,7 @@ var Vertex = function (executionNumber, vertexInfo) {
 
   this._result = this._doc.result;
 
-  var respEdges = pregel.getResponsibleEdgeShards(this._executionNumber, this);
+  var respEdges = pregel.getResponsibleEdgeShards(this._executionNumber, collection);
   this._outEdges = [];
   _.each(respEdges, function(collection) {
     var outEdges = db[collection].outEdges(self._id);

@@ -28,6 +28,8 @@
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
+var p = require("org/arangodb/profiler");
+
 var internal = require("internal");
 var _ = require("underscore");
 var db = internal.db;
@@ -90,7 +92,8 @@ var getQueueName = function (executionNumber) {
 };
 
 var algorithmToString = function (algorithm) {
-  return "var executionNumber = params.executionNumber; "
+  return "var time = require('org/arangodb/profiler').stopWatch();"
+    + "var executionNumber = params.executionNumber; "
     + "var step = params.step;"
     + "var vertexInfo = params.vertexInfo;"
     + "var pregel = require('org/arangodb/pregel');"
@@ -101,6 +104,7 @@ var algorithmToString = function (algorithm) {
     + "global.step = step;"
     + "try {"
     + "  (" + algorithm + ")(vertex,messages,global);"
+    + " require('org/arangodb/profiler').storeWatch('singleVertex', time);"
     + "  worker.vertexDone(executionNumber, vertex, global);"
     + "} catch (err) {"
     + "  worker.vertexDone(executionNumber, vertex, global, err);"
@@ -160,19 +164,28 @@ var setup = function(executionNumber, options) {
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
   global.save({_key: ALGORITHM, algorithm : options.algorithm});
+  if (options.aggregator) {
+    pregel.saveAggregator(executionNumber, options.aggregator); 
+  }
   createTaskQueue(executionNumber, options.algorithm);
   saveMapping(executionNumber, options.map);
   var collectionMapping = {};
 
   var shardKeysAmount = 0;
   _.each(options.map, function(mapping, collection) {
+    if (collection === "@edgeShards") {
+      return;
+    }
     collectionMapping[collection] = mapping.resultCollection;
     if (shardKeysAmount < mapping.shardKeys.length) {
       shardKeysAmount = mapping.shardKeys.length;
     }
   });
 
-  _.each(options.map, function(mapping) {
+  _.each(options.map, function(mapping, collection) {
+    if (collection === "@edgeShards") {
+      return;
+    }
     var shards = Object.keys(mapping.originalShards);
     var resultShards = Object.keys(mapping.resultShards);
     var i;
@@ -212,6 +225,9 @@ var setup = function(executionNumber, options) {
 var activateVertices = function(executionNumber, step) {
   var map = loadMapping(executionNumber);
   Object.keys(map).forEach(function (collection) {
+    if (collection === "@edgeShards") {
+      return;
+    }
     var resultShards = Object.keys(map[collection].resultShards);
     var originalShards = Object.keys(map[collection].originalShards);
     var i;
@@ -242,6 +258,9 @@ var getActiveVerticesQuery = function (executionNumber) {
   var server = pregel.getServerName();
   var query = "FOR u in UNION([], []";
   Object.keys(map).forEach(function (collection) {
+    if (collection === "@edgeShards") {
+      return;
+    }
     var resultShards = Object.keys(map[collection].resultShards);
     var i;
     for (i = 0; i < resultShards.length; i++) {
@@ -309,11 +328,14 @@ var sendMessages = function (executionNumber) {
 };
 
 var finishedStep = function (executionNumber, global) {
+  var t = p.stopWatch();
   var messages = pregel.getMsgCollection(executionNumber).count();
   var active = getActiveVerticesQuery(executionNumber).count();
   var error = getError(executionNumber);
   if (!error) {
+    var t2 = p.stopWatch();
     sendMessages(executionNumber);
+    p.storeWatch("ShiftMessages", t2);
   }
   if (ArangoServerState.role() === "PRIMARY") {
     var conductor = getConductor(executionNumber);
@@ -333,6 +355,7 @@ var finishedStep = function (executionNumber, global) {
     var debug = ArangoClusterComm.wait(coordOptions);
 
   } else {
+    p.storeWatch("FinishStep", t);
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
       step: global.step,
       messages: messages,
@@ -343,6 +366,7 @@ var finishedStep = function (executionNumber, global) {
 };
 
 var vertexDone = function (executionNumber, vertex, global, err) {
+  var t = p.stopWatch();
   vertex._save();
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
@@ -359,7 +383,6 @@ var vertexDone = function (executionNumber, vertex, global, err) {
     action : function (params) {
       var db = internal.db;
       globalCol = params.globalCol;
-      worker = params.worker;
       db._query(params.queryUpdateCounter, {"@global": globalCol.name()});
       var counter = globalCol.document(params.counter).count;
       if (counter === 0) {
@@ -375,6 +398,7 @@ var vertexDone = function (executionNumber, vertex, global, err) {
 
     }
   });
+  p.storeWatch("VertexDone", t);
   if (performFinish === true) {
     finishedStep(executionNumber, global);
   }
@@ -395,6 +419,7 @@ var executeStep = function(executionNumber, step, options, globals) {
   if (q.count() === 0) {
     finishedStep(executionNumber, {step : step});
   } else {
+    var t = p.stopWatch();
     var col = pregel.getGlobalCollection(executionNumber);
     var algorithm = col.document(ALGORITHM).algorithm;
     var n;
@@ -402,6 +427,7 @@ var executeStep = function(executionNumber, step, options, globals) {
       n = q.next();
       addTask(executionNumber, step, n, globals, algorithm);
     }
+    p.storeWatch("AddingAllTasks", t);
   }
 };
 

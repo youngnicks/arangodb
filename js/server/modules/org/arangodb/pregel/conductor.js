@@ -27,6 +27,7 @@
 /// @author Florian Bartels, Michael Hackstein, Guido Schwab
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
+var p = require("org/arangodb/profiler");
 
 var internal = require("internal");
 var db = internal.db;
@@ -93,6 +94,7 @@ var getWaitForAnswerMap = function() {
 };
 
 var startNextStep = function(executionNumber, options) {
+  var t = p.stopWatch();
   var dbServers;
   var info = getExecutionInfo(executionNumber);
   var globals = getGlobals(executionNumber);
@@ -139,6 +141,7 @@ var startNextStep = function(executionNumber, options) {
     });
   } else {
     dbServers = ["localhost"];
+    p.storeWatch("TriggerNextStep", t);
     if (globals) {
       pregel.Worker.executeStep(executionNumber, stepNo, options, globals);
     } else {
@@ -199,7 +202,8 @@ var generateResultCollectionName = function (collectionName, executionNumber) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var initNextStep = function (executionNumber) {
-  var info = getExecutionInfo(executionNumber), cAR = {};
+  var t = p.stopWatch();
+  var info = getExecutionInfo(executionNumber);
   info[step]++;
   info[stepContent].push({
     active: 0,
@@ -212,65 +216,102 @@ var initNextStep = function (executionNumber) {
   var stepInfo = info[stepContent][info[step]];
 
   if (globals && globals.conductorAlgorithm) {
+    var t2 = p.stopWatch();
     globals.step = info[step] -1;
     var x = new Function("a", "b", "c", "return " + globals.conductorAlgorithm + "(a,b,c);");
     var resultName = generateResultCollectionName(globals.graphName, executionNumber);
     x(new pregel.GraphAccess(resultName, stepInfo),globals, stepInfo);
     saveGlobals(executionNumber, globals);
+    p.storeWatch("SuperStepAlgo", t2);
   }
 
   if( stepInfo[active] > 0 || stepInfo[messages] > 0) {
+    p.storeWatch("initNextStep", t);
     startNextStep(executionNumber);
   } else {
+    p.storeWatch("initNextStep", t);
     cleanUp(executionNumber);
   }
 };
 
 
 var createResultGraph = function (graph, executionNumber, noCreation) {
+  var t = p.stopWatch();
   var properties = graph._getCollectionsProperties();
   var map = {};
+  var tmpMap = {
+    edge: {},
+    vertex: {}
+  };
+  var numShards = 1;
   Object.keys(properties).forEach(function (collection) {
-    map[collection] = {};
-    map[collection].type = properties[collection].type;
-    map[collection].resultCollection = generateResultCollectionName(collection, executionNumber);
+    var mc = {};
+    map[collection] = mc;
+    var mprops = properties[collection];
+    mc.type = mprops.type;
+    mc.resultCollection = generateResultCollectionName(collection, executionNumber);
     if (ArangoServerState.isCoordinator()) {
-      map[collection].originalShards =
+      mc.originalShards =
         ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
-      map[collection].shardKeys = properties[collection].shardKeys;
+      mc.shardKeys = mprops.shardKeys;
     } else {
-      map[collection].originalShards = {};
-      map[collection].originalShards[collection]= "localhost";
-      map[collection].shardKeys = [];
+      mc.originalShards = {};
+      mc.originalShards[collection]= "localhost";
+      mc.shardKeys = [];
+    }
+    if (mc.type === 2) {
+      tmpMap.vertex[collection] = Object.keys(mc.originalShards);
+      numShards = tmpMap.vertex[collection].length;
+    } else {
+      tmpMap.edge[collection] = Object.keys(mc.originalShards);
     }
     var props = {
-      numberOfShards : properties[collection].numberOfShards,
-      shardKeys : properties[collection].shardKeys,
+      numberOfShards : mprops.numberOfShards,
+      shardKeys : mprops.shardKeys,
       distributeShardsLike : collection
     };
     if (!noCreation) {
-      if (map[collection].type === 2) {
-        var newCol = db._create(generateResultCollectionName(collection, executionNumber) , props);
-        newCol.ensureSkiplist("active");
+      var newCol;
+      if (mc.type === 2) {
+        newCol = db._create(generateResultCollectionName(collection, executionNumber) , props);
         newCol.ensureSkiplist("deleted");
       } else {
-        db._createEdgeCollection(
+        newCol = db._createEdgeCollection(
           generateResultCollectionName(collection, executionNumber) , props
         );
       }
+      newCol.ensureSkiplist("active");
     }
     if (ArangoServerState.isCoordinator()) {
-      map[collection].resultShards =
+      mc.resultShards =
         ArangoClusterInfo.getCollectionInfo(
           db._name(), generateResultCollectionName(collection, executionNumber)
         ).shards;
     } else {
       var c = {};
       c[generateResultCollectionName(collection, executionNumber)] = "localhost";
-      map[collection].resultShards = c;
+      mc.resultShards = c;
     }
   });
+  var lists = [];
+  var j;
+  var list;
+  for (j = 0; j < numShards; j++) {
+    list = [];
+    _.each(tmpMap.edge, function(edgeShards) {
+      list.push(edgeShards[j]);
+    });
+    lists.push(list);
+  }
+  map["@edgeShards"] = {};
+  _.each(tmpMap.vertex, function(shards) {
+    _.each(shards, function(sId, index) {
+      map["@edgeShards"][sId] = lists[index];
+    });
+  });
+  // Create Vertex -> EdgeShards Mapping
   if (noCreation) {
+    p.storeWatch("SetupResultGraph", t);
     return map;
   }
   var resultEdgeDefinitions = [], resultEdgeDefinition;
@@ -305,13 +346,18 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   updateExecutionInfo(
     executionNumber, {graphName : generateResultCollectionName(graph.__name, executionNumber)}
   );
+  p.storeWatch("SetupResultGraph", t);
   return map;
 };
 
 
-var startExecution = function(graphName, pregelAlgorithm, conductorAlgorithm, options) {
+var startExecution = function(graphName, algorithms,  options) {
+  var t = p.stopWatch();
   var graph = graphModule._graph(graphName), infoObject = {},
     stepContentObject = {};
+  var pregelAlgorithm = algorithms.base;
+  var conductorAlgorithm = algorithms.superstep;
+  var aggregator = algorithms.aggregator;
   infoObject[waitForAnswer] = getWaitForAnswerMap();
   infoObject[step] = 0;
   options = options  || {};
@@ -338,9 +384,13 @@ var startExecution = function(graphName, pregelAlgorithm, conductorAlgorithm, op
   }
 
   options.algorithm = pregelAlgorithm;
+  if (aggregator) {
+    options.aggregator = aggregator;
+  }
 
   options.map = createResultGraph(graph, key);
 
+  p.storeWatch("startExecution", t);
   startNextStep(key, options);
   return key;
 };
@@ -372,6 +422,7 @@ var getInfo = function(executionNumber) {
 };
 
 var finishedStep = function(executionNumber, serverName, info) {
+  var t = p.stopWatch();
   var err;
   var runInfo = getExecutionInfo(executionNumber);
   if (info.step === undefined || info.step !== runInfo[step]) {
@@ -437,11 +488,13 @@ var finishedStep = function(executionNumber, serverName, info) {
     if (ArangoServerState.isCoordinator()) {
       tasks.unregister(genTaskId(executionNumber));
     }
+    p.storeWatch("finishedStepConductor", t);
     initNextStep(executionNumber);
   } else if (checks.respond) {
     if (ArangoServerState.isCoordinator()) {
       tasks.unregister(genTaskId(executionNumber));
     }
+    p.storeWatch("finishedStepConductor", t);
     cleanUp(executionNumber, checks.error);
   }
 };
