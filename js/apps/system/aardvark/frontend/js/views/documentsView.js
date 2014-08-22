@@ -10,6 +10,11 @@
     idPrefix : "documents",
 
     addDocumentSwitch: true,
+    activeFilter: false,
+    lastCollectionName: undefined,
+    restoredFilters: [],
+
+    editMode: false,
 
     allowUpload: false,
 
@@ -19,25 +24,33 @@
     },
 
     initialize : function () {
-        this.documentStore = this.options.documentStore;
-        this.collectionsStore = this.options.collectionsStore;
+      this.documentStore = this.options.documentStore;
+      this.collectionsStore = this.options.collectionsStore;
     },
 
-
     setCollectionId : function (colid, pageid) {
-        this.collection.setCollection(colid);
-        var type = arangoHelper.collectionApiType(colid);
-        this.pageid = pageid;
-        this.type = type;
-        this.collection.getDocuments(colid, pageid);
-        this.collectionModel = this.collectionsStore.get(colid);
+      this.collection.setCollection(colid);
+      var type = arangoHelper.collectionApiType(colid);
+      this.pageid = pageid;
+      this.type = type;
+
+      this.checkCollectionState();
+
+      this.collection.getDocuments(this.getDocsCallback.bind(this));
+      this.collectionModel = this.collectionsStore.get(colid);
     },
 
     alreadyClicked: false,
 
     el: '#content',
     table: '#documentsTableID',
-
+    getDocsCallback: function() {
+      //Hide first/last pagination
+      $('#documents_last').css("visibility", "hidden");
+      $('#documents_first').css("visibility", "hidden");
+      this.drawTable();
+      this.renderPaginationElements();
+    },
 
     template: templateEngine.createTemplate("documentsView.ejs"),
 
@@ -45,13 +58,15 @@
       "click #collectionPrev"      : "prevCollection",
       "click #collectionNext"      : "nextCollection",
       "click #filterCollection"    : "filterCollection",
+      "click #markDocuments"       : "editDocuments",
       "click #indexCollection"     : "indexCollection",
       "click #importCollection"    : "importCollection",
       "click #filterSend"          : "sendFilter",
       "click #addFilterItem"       : "addFilterItem",
       "click .removeFilterItem"    : "removeFilterItem",
-      "click #documentsTableID tr" : "clicked",
+      "click #documentsTableID tbody tr" : "clicked",
       "click #deleteDoc"           : "remove",
+      "click #deleteSelected"      : "deleteSelectedDocs",
       "click #addDocumentButton"   : "addDocument",
       "click #documents_first"     : "firstDocuments",
       "click #documents_last"      : "lastDocuments",
@@ -71,7 +86,9 @@
       "click #confirmDeleteIndexBtn"    : "deleteIndex",
       "click #documentsToolbar ul"      : "resetIndexForms",
       "click #indexHeader #addIndex"    :    "toggleNewIndexView",
-      "click #indexHeader #cancelIndex" :    "toggleNewIndexView"
+      "click #indexHeader #cancelIndex" :    "toggleNewIndexView",
+      "change #documentSize"            :    "setPagesize",
+      "change #docsSort"                :    "setSorting"
     },
 
     showSpinner: function() {
@@ -90,7 +107,26 @@
       $("#docImportModal").modal('hide');
     },
 
+    setPagesize: function() {
+      var size = $('#documentSize').find(":selected").val();
+      this.collection.setPagesize(size);
+      this.collection.getDocuments(this.getDocsCallback.bind(this));
+    },
+
+    setSorting: function() {
+      var sortAttribute = $('#docsSort').val();
+
+      if (sortAttribute === '' || sortAttribute === undefined || sortAttribute === null) {
+        sortAttribute = '_key';
+      }
+
+      this.collection.setSort(sortAttribute);
+    },
+
     returnPressedHandler: function(event) {
+      if (event.keyCode === 13 && $(event.target).is($('#docsSort'))) {
+        this.collection.getDocuments(this.getDocsCallback.bind(this));
+      }
       if (event.keyCode === 13) {
         if ($("#confirmDeleteBtn").attr("disabled") === false) {
           this.confirmDelete();
@@ -114,6 +150,7 @@
       $('input').val('');
       $('select').val('==');
       this.removeAllFilterItems();
+      $('#documentSize').val(this.collection.getPageSize());
 
       this.clearTable();
       $('#documents_last').css("visibility", "visible");
@@ -121,9 +158,9 @@
       this.addDocumentSwitch = true;
       this.collection.resetFilter();
       this.collection.loadTotal();
-      this.collection.getDocuments();
-      this.drawTable();
-      this.renderPaginationElements();
+      this.restoredFilters = [];
+      this.markFilterToggle();
+      this.collection.getDocuments(this.getDocsCallback.bind(this));
     },
 
     startUpload: function () {
@@ -195,13 +232,36 @@
       }
     },
 
+    markFilterToggle: function () {
+      if (this.restoredFilters.length > 0) {
+        $('#filterCollection').addClass('activated');
+      }
+      else {
+        $('#filterCollection').removeClass('activated');
+      }
+    },
+
+    editDocuments: function () {
+      $('#indexCollection').removeClass('activated');
+      $('#importCollection').removeClass('activated');
+      this.markFilterToggle();
+      $('#markDocuments').toggleClass('activated'); this.changeEditMode();
+      $('#filterHeader').hide();
+      $('#importHeader').hide();
+      $('#indexHeader').hide();
+      $('#editHeader').slideToggle(200);
+    },
+
     filterCollection : function () {
       $('#indexCollection').removeClass('activated');
       $('#importCollection').removeClass('activated');
-      $('#filterCollection').toggleClass('activated');
+      $('#markDocuments').removeClass('activated'); this.changeEditMode(false);
+      this.markFilterToggle();
+      this.activeFilter = true;
       $('#filterHeader').slideToggle(200);
       $('#importHeader').hide();
       $('#indexHeader').hide();
+      $('#editHeader').hide();
 
       var i;
       for (i in this.filters) {
@@ -213,24 +273,44 @@
     },
 
     importCollection: function () {
-      $('#filterCollection').removeClass('activated');
+      this.markFilterToggle();
       $('#indexCollection').removeClass('activated');
+      $('#markDocuments').removeClass('activated'); this.changeEditMode(false);
       $('#importCollection').toggleClass('activated');
       $('#importHeader').slideToggle(200);
       $('#filterHeader').hide();
       $('#indexHeader').hide();
+      $('#editHeader').hide();
     },
 
     indexCollection: function () {
-      $('#filterCollection').removeClass('activated');
+      this.markFilterToggle();
       $('#importCollection').removeClass('activated');
+      $('#markDocuments').removeClass('activated'); this.changeEditMode(false);
       $('#indexCollection').toggleClass('activated');
       $('#newIndexView').hide();
       $('#indexEditView').show();
       $('#indexHeader').slideToggle(200);
       $('#importHeader').hide();
+      $('#editHeader').hide();
       $('#filterHeader').hide();
+    },
 
+    changeEditMode: function (enable) {
+      if (enable === false || this.editMode === true) {
+        $('#documentsTableID tbody tr').css('cursor', 'default');
+        $('.deleteButton').fadeIn();
+        $('.addButton').fadeIn();
+        $('.selected-row').removeClass('selected-row');
+        this.editMode = false;
+      }
+      else {
+        $('#documentsTableID tbody tr').css('cursor', 'copy');
+        $('.deleteButton').fadeOut();
+        $('.addButton').fadeOut();
+        $('.selectedCount').text(0);
+        this.editMode = true;
+      }
     },
 
     getFilterContent: function () {
@@ -261,23 +341,42 @@
     },
 
     sendFilter : function () {
-      var filters = this.getFilterContent();
+      this.restoredFilters = this.getFilterContent();
       var self = this;
       this.collection.resetFilter();
       this.addDocumentSwitch = false;
-      _.each(filters, function (f) {
+      _.each(this.restoredFilters, function (f) {
+        if (f.operator !== undefined) {
           self.collection.addFilter(f.attribute, f.operator, f.value);
+        }
       });
       this.clearTable();
       this.collection.setToFirst();
-      this.collection.getDocuments();
 
-      //Hide first/last pagination
-      $('#documents_last').css("visibility", "hidden");
-      $('#documents_first').css("visibility", "hidden");
+      this.collection.getDocuments(this.getDocsCallback.bind(this));
+      this.markFilterToggle();
+    },
 
-      this.drawTable();
-      this.renderPaginationElements();
+    restoreFilter: function () {
+      var self = this, counter = 0;
+
+      this.filterId = 0;
+      $('#docsSort').val(this.collection.getSort());
+      _.each(this.restoredFilters, function (f) {
+        //change html here and restore filters
+        if (counter !== 0) {
+          self.addFilterItem();
+        }
+        if (f.operator !== undefined) {
+          $('#attribute_name' + counter).val(f.attribute);
+          $('#operator' + counter).val(f.operator);
+          $('#attribute_value' + counter).val(f.value);
+        }
+        counter++;
+
+        //add those filters also to the collection
+        self.collection.addFilter(f.attribute, f.operator, f.value);
+      });
     },
 
     addFilterItem : function () {
@@ -318,6 +417,7 @@
       var filterId = button.id.replace(/^removeFilter/, '');
       // remove the filter from the list
       delete this.filters[filterId];
+      delete this.restoredFilters[filterId];
 
       // remove the line from the DOM
       $(button.parentElement).remove();
@@ -418,6 +518,86 @@
       }
     },
 
+    deleteSelectedDocs: function() {
+      var buttons = [], tableContent = [];
+      var toDelete = this.getSelectedDocs();
+
+      if (toDelete.length === 0) {
+        return;
+      }
+
+      tableContent.push(
+        window.modalView.createReadOnlyEntry(
+          undefined,
+          toDelete.length + ' Documents selected',
+          'Do you want to delete all selected documents?',
+          undefined,
+          undefined,
+          false,
+          undefined
+        )
+      );
+
+      buttons.push(
+        window.modalView.createDeleteButton('Delete', this.confirmDeleteSelectedDocs.bind(this))
+      );
+
+      window.modalView.show(
+        'modalTable.ejs',
+        'Delete documents',
+        buttons,
+        tableContent
+      );
+    },
+
+    confirmDeleteSelectedDocs: function() {
+      var toDelete = this.getSelectedDocs();
+      var deleted = [], self = this;
+
+      _.each(toDelete, function(key) {
+        var result = false;
+        if (self.type === 'document') {
+          result = self.documentStore.deleteDocument(
+            self.collection.collectionID, key
+          );
+          if (result) {
+            //on success
+            deleted.push(true);
+            self.collection.setTotalMinusOne();
+          }
+          else {
+            deleted.push(false);
+            arangoHelper.arangoError('Document error', 'Could not delete document.');
+          }
+        }
+        else if (self.type === 'edge') {
+          result = self.documentStore.deleteEdge(self.collection.collectionID, key);
+          if (result === true) {
+            //on success
+            self.collection.setTotalMinusOne();
+            deleted.push(true);
+          }
+          else {
+            deleted.push(false);
+            arangoHelper.arangoError('Edge error', 'Could not delete edge');
+          }
+        }
+      });
+      this.collection.getDocuments(this.getDocsCallback.bind(this));
+      $('#markDocuments').click();
+      window.modalView.hide();
+    },
+
+    getSelectedDocs: function() {
+      var toDelete = [];
+      _.each($('#documentsTableID tbody tr'), function(element) {
+        if ($(element).hasClass('selected-row')) {
+          toDelete.push($($(element).children()[1]).find('.key').text());
+        }
+      });
+      return toDelete;
+    },
+
     remove: function (a) {
       this.target = a.currentTarget;
       var thiselement = a.currentTarget.parentElement;
@@ -453,6 +633,7 @@
         );
         if (result) {
           //on success
+          this.collection.setTotalMinusOne();
           deleted = true;
         }
         else {
@@ -463,6 +644,7 @@
         result = this.documentStore.deleteEdge(this.collection.collectionID, this.docid);
         if (result === true) {
           //on success
+          this.collection.setTotalMinusOne();
           deleted = true;
         }
         else {
@@ -475,19 +657,45 @@
           $('#documentsTableID').dataTable().fnGetPosition(row)
         );
         $('#documentsTableID').dataTable().fnClearTable();
-          this.collection.getDocuments(this.collection.collectionID, page);
+          this.collection.getDocuments(this.getDocsCallback.bind(this));
         $('#docDeleteModal').modal('hide');
-        this.drawTable();
-        this.renderPaginationElements();
       }
 
     },
     clicked: function (event) {
+      var self = event.currentTarget;
+
       if (this.alreadyClicked === true) {
         this.alreadyClicked = false;
         return 0;
       }
-      var self = event.currentTarget;
+
+      if(this.editMode === true) {
+        if($(self).hasClass('selected-row')) {
+          $(event.currentTarget).removeClass('selected-row');
+        }
+        else {
+          $(event.currentTarget).addClass('selected-row');
+        }
+
+        var selected = this.getSelectedDocs();
+        $('.selectedCount').text(selected.length);
+
+        if (selected.length > 0) {
+          $('#deleteSelected').prop('disabled', false);
+          $('#deleteSelected').removeClass('button-neutral');
+          $('#deleteSelected').addClass('button-danger');
+          $('#deleteSelected').removeClass('disabled');
+        }
+        else {
+          $('#deleteSelected').prop('disabled', true);
+          $('#deleteSelected').addClass('disabled');
+          $('#deleteSelected').addClass('button-neutral');
+          $('#deleteSelected').removeClass('button-danger');
+        }
+        return;
+      }
+
       var aPos = $(this.table).dataTable().fnGetPosition(self);
       if (aPos === null) {
         // headline
@@ -536,7 +744,7 @@
         $('.dataTables_empty').text('No documents');
       }
       else {
-            this.collection.each(function(value, key) {
+          this.collection.each(function(value, key) {
           var tempObj = {};
           $.each(value.attributes.content, function(k, v) {
             if (! (k === '_id' || k === '_rev' || k === '_key')) {
@@ -577,16 +785,39 @@
       }
     },
 
+    checkCollectionState: function() {
+      if (this.lastCollectionName === this.collectionName) {
+        if (this.activeFilter) {
+          this.filterCollection();
+          this.restoreFilter();
+        }
+      }
+      else {
+        if (this.lastCollectionName !== undefined) {
+          this.collection.resetFilter();
+          this.collection.setSort('_key');
+          this.restoredFilters = [];
+          this.activeFilter = false;
+        }
+      }
+    },
 
     render: function() {
       this.collectionContext = this.collectionsStore.getPosition(
-          this.collection.collectionID
+        this.collection.collectionID
       );
 
       $(this.el).html(this.template.render({}));
+
       this.getIndex();
       this.initTable();
       this.breadcrumb();
+
+      this.checkCollectionState();
+
+      //set last active collection name
+      this.lastCollectionName = this.collectionName;
+
       if (this.collectionContext.prev === null) {
         $('#collectionPrev').parent().addClass('disabledPag');
       }
@@ -601,16 +832,18 @@
       arangoHelper.fixTooltips(".icon_arangodb, .arangoicon", "top");
       this.drawTable();
       this.renderPaginationElements();
+      this.selectActivePagesize();
+      this.markFilterToggle();
       return this;
     },
 
     rerender : function () {
-        this.clearTable();
-        this.collection.getDocuments();
-        this.drawTable();
-        $('#documents_last').css("visibility", "hidden");
-        $('#documents_first').css("visibility", "hidden");
-        this.renderPaginationElements();
+      this.clearTable();
+      this.collection.getDocuments(this.getDocsCallback.bind(this));
+    },
+
+    selectActivePagesize: function() {
+      $('#documentSize').val(this.collection.getPageSize());
     },
 
     renderPaginationElements: function () {

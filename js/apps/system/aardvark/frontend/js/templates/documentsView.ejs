@@ -16,6 +16,11 @@
       </a>
     </li>
     <li class="enabled">
+      <a id="markDocuments" class="headerButton">
+        <span class="icon_arangodb_edit" title="Edit documents"></span>
+      </a>
+    </li>
+    <li class="enabled">
       <a id="importCollection" class="headerButton">
         <span class="icon_arangodb_import" title="Upload documents from JSON file"></span>
       </a>
@@ -46,9 +51,11 @@
            <option value="&gt;">&gt;</option>
            <option value="&gt;=">&gt;=</option>
        </select><input id="attribute_value0" type="text" placeholder="Attribute value" class="filterValue">
-        <a id="addFilterItem" class="add-filter-item"><i class="icon-plus arangoicon"></i></a>
-        <button id="resetView" class="button-warning btn-old-padding">Reset</button>
-        <button id="filterSend" class="button-success btn-old-padding">Filter</button>
+       <a id="addFilterItem" class="add-filter-item"><i class="icon-plus arangoicon"></i></a>
+       <button id="resetView" class="button-warning btn-old-padding">Reset</button>
+       <button id="filterSend" class="button-success btn-old-padding">Filter</button>
+       <input type="text" id="docsSort" placeholder="_key" style="float: right"></input>
+       <div class="textDiv" style="float: right">Sort by:</div>
     </div>
   </div>
 
@@ -58,6 +65,13 @@
       <button id="confirmDocImport" class="button-success btn-old-padding" style="float:right">
         <img id="uploadIndicator" class="upload-indicator" src="img/ajax-loader.gif"/>Import JSON
       </button>
+    </div>
+  </div>
+
+  <div id="editHeader" class="dropdownImport">
+    <div class="queryline">
+      <div style="float:left; margin-top:5px"><div style="float:left" class="selectedCount">0</div> . Documents selected</div>
+      <button id="deleteSelected" class="button-neutral btn-old-padding" style="float:right">Delete</button>
     </div>
   </div>
 
@@ -291,6 +305,17 @@
     <div id="documentsToolbarFL">
       <div id="documentsToolbarF" class="pagination-line">
       </div>
+        <select id="documentSize" class="documents-size">
+          <option value="10" selected="">10 results</option>
+          <option value="20">20 results</option>
+          <option value="50">50 results</option>
+          <option value="100">100 results</option>
+          <option value="500">500 results</option>
+          <option value="1000">1000 results</option>
+          <option value="2500">2500 results</option>
+          <option value="5000">5000 results</option>
+          <option value="all">All results</option>
+        </select>
     </div>
 
 <!-- Delete Modal -->
