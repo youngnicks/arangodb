@@ -28,33 +28,39 @@
 /// @author Florian Bartels, Michael Hackstein, Heiko Kernbach
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
+var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Edge = function (executionNumber, edgeJSON) {
+var Edge = function (mapping, edgeJSON) {
   var self = this;
   _.each(edgeJSON, function(v, k) {
     self[k] = v;
   });
-  var resultCollectionName = pregel.getResultCollection(this._id, executionNumber);
-  this._resultShard = db._collection(pregel.getResponsibleShard(executionNumber, resultCollectionName, this));
-  this._result = this._resultShard.document(this._key).result;
+  var resultCollectionName = mapping.getResultCollection(this._id);
+  this._resultShard = db._collection(mapping.getResponsibleShard(resultCollectionName, this));
+  this._doc = _.clone(this._resultShard.document(this._key));
+  delete this._doc._PRINT;
+  this._result = this._doc.result;
 
-  this._targetVertex = pregel.getToLocationObject(executionNumber, this);
+  this._targetVertex = mapping.getToLocationObject(this);
 };
 
 Edge.prototype._delete = function () {
-  this._resultShard.update(this._key, {deleted: true});
+  this._doc.deleted = true;
 };
 
 Edge.prototype._isDeleted = function () {
-  return this._resultShard.document(this._key).deleted;
+  return this._doc.deleted;
 };
 
 Edge.prototype._save = function () {
-  return this._resultShard.update(this._key, {result: this._result});
+  var t = p.stopWatch();
+  this._doc.result = this._result;
+  this._resultShard.replace(this._key, this._doc);
+  p.storeWatch("SaveEdge", t);
 };
 
 exports.Edge = Edge;

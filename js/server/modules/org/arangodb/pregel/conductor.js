@@ -263,7 +263,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       mc.originalShards[collection]= "localhost";
       mc.shardKeys = [];
     }
-    shardKeyMap[collection] = mc.shardKeys;
+    shardKeyMap[collection] = _.clone(mc.shardKeys);
     if (mc.type === 2) {
       tmpMap.vertex[collection] = Object.keys(mc.originalShards);
       shardMap = shardMap.concat(tmpMap.vertex[collection]);

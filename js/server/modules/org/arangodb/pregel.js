@@ -35,13 +35,20 @@ var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
-var transformToFindShard = function (executionNumber, col, params, prefix) {
-  require("console").log(col);
+var Mapping = function(executionNumber) {
+  this._map = exports.getGlobalCollection(executionNumber).document("map");
+};
+
+Mapping.prototype.getResultCollection = function (id) {
+  return id.split('/')[0];
+};
+
+Mapping.prototype.transformToFindShard = function (col, params, prefix) {
   var t = p.stopWatch();
   if (!prefix) {
     prefix = "shard_";
   }
-  var keys = exports.getShardKeys(executionNumber, col);
+  var keys = this.getShardKeys(col);
   var locParams = {};
   var i;
   for (i = 0; i < keys.length; i++) {
@@ -50,6 +57,108 @@ var transformToFindShard = function (executionNumber, col, params, prefix) {
   p.storeWatch("transformToFindShard", t);
   return locParams;
 };
+
+Mapping.prototype.getShardKeys = function (col) {
+  return this._map.shardKeys[col]; 
+};
+
+Mapping.prototype.getGlobalCollectionShards = function () {
+  return this._map.shardMap; 
+};
+
+Mapping.prototype.getLocalCollectionShards = function (col) {
+  return this._map.serverShardMap[exports.getServerName()][col]; 
+};
+
+Mapping.prototype.getLocalResultShards = function (col) {
+  return this._map.serverResultShardMap[exports.getServerName()][col]; 
+};
+
+Mapping.prototype.getLocalResultShardMapping = function () {
+  return this._map.serverResultShardMap[exports.getServerName()]; 
+};
+
+Mapping.prototype.getResponsibleShardFromMapping = function (executionNumber, resShard) {
+  throw "Not yet";
+  var t = p.stopWatch();
+  var map = exports.getMap(executionNumber);
+  var correct = _.filter(map, function (e) {
+    return e.resultShards[resShard] !== undefined;
+  })[0];
+  var resultList = Object.keys(correct.resultShards);
+  var index = resultList.indexOf(resShard);
+  var originalList = Object.keys(correct.originalShards);
+  p.storeWatch("RespMapShard", t);
+  return originalList[index];
+};
+
+
+Mapping.prototype.getResponsibleShard = function (col, edge) {
+  var t = p.stopWatch();
+  if (ArangoServerState.role() === "PRIMARY") {
+    var doc = this.transformToFindShard(col, edge, "shard_");
+    var colId = ArangoClusterInfo.getCollectionInfo(db._name(), col).id;
+    var res = ArangoClusterInfo.getResponsibleShard(colId, doc).shardId;
+    p.storeWatch("GetRespShard", t);
+    return res;
+  }
+  p.storeWatch("GetRespShard", t);
+  return col;
+};
+
+Mapping.prototype.getShardKeysForCollection = function (collection) {
+  var t = p.stopWatch();
+  var keys = this.getShardKeys(collection);
+  if (!keys) {
+    var err = new ArangoError();
+    err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
+    err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
+    throw err;
+  }
+  p.storeWatch("ColShardKeys", t);
+  return keys;
+};
+/*
+Mapping.prototype.toLocationObject = function (col, doc) {
+  var t = p.stopWatch();
+  var shardKeys = this.getShardKeysForCollection(col);
+  var obj = {
+    _id: doc._id
+  };
+  _.each(shardKeys, function(key, i) {
+    obj["shard_" + i] = doc[key]; 
+  });
+  p.storeWatch("ToLocObj", t);
+  return obj;
+};
+*/
+Mapping.prototype.getResponsibleEdgeShards = function (shard) {
+  var t = p.stopWatch();
+  var res = this._map.edgeShards[shard];
+  p.storeWatch("RespEdgeShards", t);
+  return res;
+};
+
+Mapping.prototype.getToLocationObject = function (edge) {
+  var t = p.stopWatch();
+  var obj = {};
+  obj._id = edge._to;
+  var toCol = edge._to.split("/")[0];
+  if (ArangoServerState.role() === "PRIMARY") {
+    var locParams = this.transformToFindShard(toCol, edge, "to_shard_"); 
+    locParams._id = obj._id; 
+    var colId = ArangoClusterInfo.getCollectionInfo(db._name(), toCol).id;
+    obj.shard = ArangoClusterInfo.getResponsibleShard(colId, locParams).shardId;
+  } else {
+    obj.shard = toCol;
+  }
+  p.storeWatch("getToLocObj", t);
+  return obj;
+};
+
+
+
+// End of Mapping Object
 
 exports.getServerName = function () {
   return ArangoServerState.id() || "localhost";
@@ -94,93 +203,6 @@ exports.getMsgCollection = function (executionNumber) {
   return db._collection(exports.genMsgCollectionName(executionNumber));
 };
 
-exports.getOriginalCollection = function (id, executionNumber) {
-  var t = p.stopWatch();
-  var mapping = exports.getGlobalCollection(executionNumber).document("map").map;
-  var collectionName = exports.getResultCollection(id), originalCollectionName;
-
-  _.each(mapping, function(value, key) {
-    if (value.resultCollection === collectionName) {
-      originalCollectionName = key;
-    }
-  });
-
-  if (originalCollectionName === undefined) {
-    p.storeWatch("OrigCol", t);
-    return collectionName;
-  }
-  p.storeWatch("OrigCol", t);
-  return originalCollectionName;
-};
-
-exports.getLocationObject = function (executionNumber, info) {
-  var t = p.stopWatch();
-  var obj = {}, col, locParams;
-  if (info._from) {
-    obj._id = info._from;
-  } else {
-    obj._id = info._id;
-  }
-  col = obj._id.split("/")[0];
-  if (ArangoServerState.role() === "PRIMARY") {
-    locParams = transformToFindShard(executionNumber, col, info, "shard_"); 
-    locParams._id = obj._id; 
-    var colId = ArangoClusterInfo.getCollectionInfo(db._name(), col).id;
-    obj.shard = ArangoClusterInfo.getResponsibleShard(colId, locParams).shardId;
-  } else {
-    obj.shard = col;
-  }
-  p.storeWatch("getLocObj", t);
-  return obj;
-};
-
-exports.getLocationObjectOld = function (executionNumber, collection, info) {
-  var t = p.stopWatch();
-  var obj = {};
-  if (info._from) {
-    obj._id = info._from;
-  } else {
-    obj._id = info._id;
-  }
-  if (ArangoServerState.role() === "PRIMARY") {
-    var map = exports.getMap(executionNumber);
-    var correct;
-    if (map[collection]) {
-      correct = map[collection];
-    } else {
-      correct = _.findWhere(map, {resultCollection: collection});
-    }
-    var keys = correct.shardKeys;
-    var i;
-    for (i = 0; i < keys.length; i++) {
-      obj[keys[i]] = info["shard_" + i];
-    }
-  }
-  p.storeWatch("getOldLocObj", t);
-  return obj;
-};
-
-exports.getToLocationObject = function (executionNumber, edge) {
-  var t = p.stopWatch();
-  var obj = {};
-  obj._id = edge._to;
-  var toCol = edge._to.split("/")[0];
-  if (ArangoServerState.role() === "PRIMARY") {
-    var locParams = transformToFindShard(executionNumber, toCol, edge, "to_shard_"); 
-    locParams._id = obj._id; 
-    var colId = ArangoClusterInfo.getCollectionInfo(db._name(), toCol).id;
-    obj.shard = ArangoClusterInfo.getResponsibleShard(colId, locParams).shardId;
-  } else {
-    obj.shard = toCol;
-  }
-  p.storeWatch("getToLocObj", t);
-  return obj;
-};
-
-exports.getResultCollection = function (id) {
-  return id.split('/')[0];
-};
-
 exports.getGlobalCollection = function (executionNumber) {
   return db._collection(exports.genGlobalCollectionName(executionNumber));
 };
@@ -190,10 +212,12 @@ exports.getMap = function (executionNumber) {
 };
 
 exports.getAggregator = function (executionNumber) {
+  var t = p.stopWatch();
   var col = exports.getGlobalCollection(executionNumber);
   if (col.exists("aggregator")) {
     return col.document("aggregator").func;
   }
+  p.storeWatch("loadAggregator", t);
 };
 
 exports.saveAggregator = function (executionNumber, func) {
@@ -201,11 +225,6 @@ exports.saveAggregator = function (executionNumber, func) {
     _key: "aggregator",
     func: func
   });
-};
-
-exports.getEdgeShardMapping = function (executionNumber) {
-  var col = exports.getGlobalCollection(executionNumber);
-  return col.document("edgeShards");
 };
 
 var saveMapping = function (executionNumber, name, map) {
@@ -239,88 +258,9 @@ exports.saveLocalResultShardMapping = function (executionNumber, map) {
 };
 
 var loadMapping = function (executionNumber, name) {
-  return exports.getGlobalCollection(executionNumber).document(name);
-};
-
-exports.getShardKeys = function (executionNumber, col) {
-  return loadMapping(executionNumber, "shardKeys")[col]; 
-};
-
-exports.getGlobalCollectionShards = function (executionNumber) {
-  return loadMapping(executionNumber, "shards").list; 
-};
-
-exports.getLocalCollectionShards = function (executionNumber, col) {
-  return loadMapping(executionNumber, "localShards")[col]; 
-};
-
-exports.getLocalResultShards = function (executionNumber, col) {
-  return loadMapping(executionNumber, "localResultShards")[col]; 
-};
-
-exports.getLocalResultShardMapping = function (executionNumber) {
-  var map = _.clone(loadMapping(executionNumber, "localResultShards")); 
-  delete map._id;
-  delete map._key;
-  delete map._rev;
-  return map;
-};
-
-exports.getResponsibleShardFromMapping = function (executionNumber, resShard) {
   var t = p.stopWatch();
-  var map = exports.getMap(executionNumber);
-  var correct = _.filter(map, function (e) {
-    return e.resultShards[resShard] !== undefined;
-  })[0];
-  var resultList = Object.keys(correct.resultShards);
-  var index = resultList.indexOf(resShard);
-  var originalList = Object.keys(correct.originalShards);
-  p.storeWatch("RespMapShard", t);
-  return originalList[index];
-};
-
-
-exports.getResponsibleShard = function (executionNumber, col, edge) {
-  var t = p.stopWatch();
-  if (ArangoServerState.role() === "PRIMARY") {
-    var doc = transformToFindShard(executionNumber, col, edge, "shard_");
-    var colId = ArangoClusterInfo.getCollectionInfo(db._name(), col).id;
-    var res = ArangoClusterInfo.getResponsibleShard(colId, doc).shardId;
-    p.storeWatch("GetRespShard", t);
-    return res;
-  }
-  p.storeWatch("GetRespShard", t);
-  return col;
-};
-
-exports.getShardKeysForCollection = function (executionNumber, collection) {
-  var keys = exports.getShardKeys(executionNumber, collection);
-  if (!keys) {
-    var err = new ArangoError();
-    err.errorNum = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.code;
-    err.errorMessage = ERRORS.ERROR_PREGEL_INVALID_TARGET_VERTEX.message;
-    throw err;
-  }
-  return keys;
-};
-
-exports.toLocationObject = function (executionNumber, col, doc) {
-  var t = p.stopWatch();
-  var shardKeys = exports.getShardKeysForCollection(executionNumber, col);
-  var obj = {
-    _id: doc._id
-  };
-  _.each(shardKeys, function(key, i) {
-    obj["shard_" + i] = doc[key]; 
-  });
-  p.storeWatch("ToLocObj", t);
-  return obj;
-};
-
-exports.getResponsibleEdgeShards = function (executionNumber, shard) {
-  var t = p.stopWatch();
-  var res = exports.getEdgeShardMapping(executionNumber)[shard];
-  p.storeWatch("RespEdgeShards", t);
+  var res = exports.getGlobalCollection(executionNumber).document(name);
+  p.storeWatch("loadMapping", t);
   return res;
 };
 
@@ -412,3 +352,4 @@ exports.Vertex = require("org/arangodb/pregel/vertex").Vertex;
 exports.GraphAccess = require("org/arangodb/pregel/graphAccess").GraphAccess;
 exports.Edge = require("org/arangodb/pregel/edge").Edge;
 exports.MessageQueue = require("org/arangodb/pregel/messagequeue").MessageQueue;
+exports.Mapping = Mapping;

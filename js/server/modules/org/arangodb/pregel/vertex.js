@@ -28,17 +28,18 @@
 /// @author Florian Bartels, Michael Hackstein, Heiko Kernbach
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
+var p = require("org/arangodb/profiler");
+
 var internal = require("internal");
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Vertex = function (executionNumber, vertexInfo) {
+var Vertex = function (mapping, vertexInfo) {
   var Edge = pregel.Edge;
   var vertexId = vertexInfo._id;
   var resultShard = vertexInfo.shard;
   var self = this;
-  this._executionNumber = executionNumber;
 
   //get attributes from original collection
   this._locationInfo = vertexInfo.locationObject;
@@ -51,39 +52,37 @@ var Vertex = function (executionNumber, vertexInfo) {
   });
   this._resCol = db._collection(resultShard);
 
-  this._doc = this._resCol.document(this._key);
+  this._doc = vertexInfo._doc;
 
   this._result = this._doc.result;
 
-  var respEdges = pregel.getResponsibleEdgeShards(this._executionNumber, collection);
+  var respEdges = mapping.getResponsibleEdgeShards(collection);
   this._outEdges = [];
   _.each(respEdges, function(collection) {
     var outEdges = db[collection].outEdges(self._id);
     _.each(outEdges, function (json) {
-      var e = new Edge(self._executionNumber, json);
+      var e = new Edge(mapping, json);
       self._outEdges.push(e);
     });
   });
-
-
 };
 
 Vertex.prototype._deactivate = function () {
   this._doc.active = false;
-  //this._resCol.update(this._key, {active: false});
 };
 
 Vertex.prototype._delete = function () {
   this._doc.deleted = true;
-  //this._resCol.update(this._key, {deleted: true});
 };
 
 Vertex.prototype._save = function () {
+  var t = p.stopWatch();
   this._outEdges.forEach(function(e) {
     e._save();
   });
   this._doc.result = this._result;
   this._resCol.replace(this._key, this._doc);
+  p.storeWatch("SaveVertex", t);
 };
 
 exports.Vertex = Vertex;
