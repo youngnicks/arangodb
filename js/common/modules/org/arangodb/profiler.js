@@ -68,6 +68,9 @@ exports.storeWatch = function(name, time) {
 };
 
 exports.aggregate = function() {
+  if (disabled) {
+    return;
+  }
   db._query(aggregateAll, {"@col": colName}).execute();
   db._query(deleteSingle, {"@col": colName}).execute();
 };
