@@ -383,8 +383,8 @@ var finishedStep = function (executionNumber, global, mapping) {
 };
 
 var vertexDone = function (executionNumber, vertex, global, mapping, err) {
-  var t = p.stopWatch();
   vertex._save();
+  var t = p.stopWatch();
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
     error.errorNum = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.code;
