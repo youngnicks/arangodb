@@ -120,21 +120,18 @@ var algorithmToString = function (algorithm) {
 var algorithmForQueue = function (algorithm, executionNumber) {
   return "(function() {"
     + "var t1 = require('org/arangodb/profiler').stopWatch();"
-    + "require('internal').print('Heiko');"
     + "var executionNumber = " + executionNumber + ";"
     + "var pregel = require('org/arangodb/pregel');"
-    + "require('internal').print('Peter');"
     + "var mapping = new pregel.Mapping(executionNumber);"
     + "var worker = pregel.Worker;"
+    + "var storeAggregate = pregel.storeAggregate(executionNumber);"
     + "require('org/arangodb/profiler').storeWatch('contextSetup', t1);"
-    + "require('internal').print('Klaus');"
     + "return function(params) {"
-    + "require('internal').print(execitionNumber, pregel, mapping);"
     + "var t2 = require('org/arangodb/profiler').stopWatch();"
     + "var step = params.step;"
     + "var vertexInfo = params.vertexInfo;"
     + "var vertex = new pregel.Vertex(mapping, vertexInfo);"
-    + "var messages = new pregel.MessageQueue(executionNumber, vertexInfo, step);"
+    + "var messages = new pregel.MessageQueue(executionNumber, vertexInfo, step, storeAggregate);"
     + "var global = params.global;"
     + "global.step = step;"
     + "try {"
@@ -144,7 +141,8 @@ var algorithmForQueue = function (algorithm, executionNumber) {
     + "} catch (err) {"
     + "  worker.vertexDone(executionNumber, vertex, global, mapping, err);"
     + "}"
-    + "}";
+    + "}"
+    + "}())";
 };
 
 var createTaskQueue = function (executionNumber, algorithm) {
@@ -156,10 +154,11 @@ var createTaskQueue = function (executionNumber, algorithm) {
   });
 };
 
-var addTask = function (queue, stepNumber, vertex, globals) {
+var addTask = function (queue, stepNumber, vertex, globals, executionNumber) {
   tasks.addJob(
     queue,
     {
+      executionNumber: executionNumber,
       step: stepNumber,
       vertexInfo : vertex,
       global: globals
@@ -170,12 +169,6 @@ var addTask = function (queue, stepNumber, vertex, globals) {
 var saveMapping = function(executionNumber, map) {
   map._key = "map";
   pregel.getGlobalCollection(executionNumber).save(map);
-  // Old version
-  pregel.saveShardKeyMapping(executionNumber, map.shardKeyMap);
-  pregel.saveShardMapping(executionNumber, map.shardMap);
-  pregel.saveLocalShardMapping(executionNumber, map.serverShardMap);
-  pregel.saveLocalResultShardMapping(executionNumber, map.serverResultShardMap);
-  pregel.saveEdgeShardMapping(executionNumber, map.edgeShards);
 };
 
 var loadMapping = function(executionNumber) {
@@ -202,8 +195,8 @@ var setup = function(executionNumber, options) {
   if (options.aggregator) {
     pregel.saveAggregator(executionNumber, options.aggregator); 
   }
-  createTaskQueue(executionNumber, options.algorithm);
   saveMapping(executionNumber, options.map);
+  createTaskQueue(executionNumber, options.algorithm);
   var map = options.map.map;
   var collectionMapping = {};
 

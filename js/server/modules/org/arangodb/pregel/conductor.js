@@ -449,6 +449,7 @@ var getInfo = function(executionNumber) {
 
 var finishedStep = function(executionNumber, serverName, info) {
   var t = p.stopWatch();
+  executionNumber = String(executionNumber);
   var err;
   var runInfo = getExecutionInfo(executionNumber);
   if (info.step === undefined || info.step !== runInfo[step]) {

@@ -89,7 +89,7 @@ InMessages.prototype.next = function () {
   };
 };
 
-var Queue = function (executionNumber, vertexInfo, step) {
+var Queue = function (executionNumber, vertexInfo, step, storeAggregate) {
   this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
   this.__workCollection = pregel.getWorkCollection(executionNumber);
@@ -97,6 +97,7 @@ var Queue = function (executionNumber, vertexInfo, step) {
   this.__nextStep = step + 1;
   this.__step = step;
   this.__vertexInfo = vertexInfo.locationObject;
+  this.__storeAggregate = storeAggregate;
 };
 
 // Target is id now, has to be modified to contian vertex data
@@ -121,7 +122,7 @@ Queue.prototype.sendTo = function(target, data, sendLocation) {
   if (sendLocation) {
     toSend.sender = this.__vertexInfo;
   }
-  pregel.storeAggregate(this.__executionNumber, this.__nextStep, target, toSend);
+  this.__storeAggregate(this.__nextStep, target, toSend);
 };
 
 Queue.prototype.getMessages = function () {
