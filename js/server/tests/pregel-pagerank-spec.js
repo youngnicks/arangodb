@@ -36,6 +36,7 @@ var graph = require("org/arangodb/general-graph");
 var _ = require("underscore");
 var ERRORS = require("org/arangodb").errors;
 var coordinator = ArangoServerState.isCoordinator();
+var p = require("org/arangodb/profiler");
 
 describe("Pregel PageRank", function () {
   "use strict";
@@ -56,7 +57,7 @@ describe("Pregel PageRank", function () {
           };
           send = initPR / edgeCount;
           vertex._outEdges.forEach(function (e) {
-            message.sendTo(e._targetVertex, send);
+            message.sendTo(e._targetVertex, send, false);
           });
           return;
         }
@@ -83,12 +84,10 @@ describe("Pregel PageRank", function () {
           graph._stopExecution();
           return;
         }
+      },
+      aggregator = function (message, oldMessage) {
+        return message + oldMessage;
       };
-      /*
-      aggregator = function (message, oldMessages) {
-        
-      };
-      */
 
     beforeEach(function () {
       gN = "UnitTestPregelGraph";
@@ -145,20 +144,26 @@ describe("Pregel PageRank", function () {
       saveEdge(9, 5);
       saveEdge(10, 5);
       saveEdge(11, 5);
+      p.setup();
     });
 
     afterEach(function () {
+      p.aggregate();
       // graph._drop(gN, true);
     });
 
     it("should compute the pageRank", function () {
       // gN = "lager";
       gN = "max";
+      // gN = "caesar";
       var gr = require("org/arangodb/general-graph")._graph(gN);
       require("internal").print("Start", String(require("internal").time() % 1000).replace(".", ","));
       var vC = gr._vertices().count();
-      require("internal").print("vC", vC);
-      var id = conductor.startExecution(gN, pageRank.toString(), superStep.toString(), {
+      var id = conductor.startExecution(gN, {
+        base: pageRank.toString(),
+        superstep: superStep.toString(),
+        aggregator: aggregator.toString()
+      }, {
         alpha: 0.85,
         vertexCount: vC
       });
@@ -182,35 +187,37 @@ describe("Pregel PageRank", function () {
       expect(resGraph).not.toEqual("LostInBattle");
       expect(res.error).toBeFalsy();
       expect(conductor.getInfo(id).step).toEqual(31);
-      var resG = graph._graph(resGraph);
-      var vc = resG._vertexCollections()[0];
-      var resultVertices = vc.toArray();
-      _.each(resultVertices, function (v) {
-        var exp;
-        switch (v._key) {
-        case "1":
-          exp = 0.028;
-          break;
-        case "2":
-          exp = 0.323;
-          break;
-        case "3":
-          exp = 0.29;
-          break;
-        case "4":
-        case "6":
-          exp = 0.033;
-          break;
-        case "5":
-          exp = 0.068;
-          break;
-        default:
-          exp = 0.014;
-        }
-        expect(v.result.rank).toBeCloseTo(exp, 3, "for vertex " + v._key);
-      });
-    });
+      if (gN === "UnitTestPregelGraph") {
+        var resG = graph._graph(resGraph);
+        var vc = resG._vertexCollections()[0];
+        var resultVertices = vc.toArray();
+        _.each(resultVertices, function (v) {
+          var exp;
+          switch (v._key) {
+          case "1":
+            exp = 0.028;
+            break;
+          case "2":
+            exp = 0.323;
+            break;
+          case "3":
+            exp = 0.29;
+            break;
+          case "4":
+          case "6":
+            exp = 0.033;
+            break;
+          case "5":
+            exp = 0.068;
+            break;
+          default:
+            exp = 0.014;
+          }
+          expect(v.result.rank).toBeCloseTo(exp, 3, "for vertex " + v._key);
+        });
+      }
 
+    });
   });
 
 });
