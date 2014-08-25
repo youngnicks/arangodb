@@ -284,26 +284,27 @@ describe("Graph coloring Pregel execution", function () {
         }
       };
 
-      /*var id = conductor.startExecution(gN, {
-          base : graphColoring.toString(),
-          superstep : conductorAlgorithm.toString(),
-          aggregator : null
-        }
-      );*/
-      profiler.setup();
-      var id = conductor.startExecution("ff", {
+      var id = conductor.startExecution(gN, {
           base : graphColoring.toString(),
           superstep : conductorAlgorithm.toString(),
           aggregator : null
         }
       );
-      //var id = conductor.startExecution("ff", graphColoring.toString(),conductorAlgorithm.toString());
+      profiler.setup();
+      /*var id = conductor.startExecution("ff", {
+          base : graphColoring.toString(),
+          superstep : conductorAlgorithm.toString(),
+          aggregator : null
+        }
+      );*/
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
       while (count < 100000000) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "finished") {
+          var end = require("internal").time();
+          require("internal").print(end - start);
           res = conductor.getResult(id);
           require("internal").print(res)
           resGraph = res.result.graphName;
@@ -311,7 +312,9 @@ describe("Graph coloring Pregel execution", function () {
           graph._graph(resGraph)._vertices({}).toArray().forEach(function (r) {
               if (r.result.type === 3) {
                 Object.keys(r.result.neighbors).forEach(function (m) {
-                  var n = db._document(m);
+                  var n = graph._graph(resGraph)._vertices({_key : m.split("/")[1]}, {
+                    vertexCollectionRestriction : m.split("/")[0]}).toArray()[0]
+                  require("internal").print(n);
                   if (n.result.type === 3 && n.result.color === r.result.color) {
                     errors.push([n._key, r._key]);
                   }
@@ -322,8 +325,6 @@ describe("Graph coloring Pregel execution", function () {
             require("internal").print(errors);
           }
           expect(errors.length).toEqual(0);
-          var end = require("internal").time();
-          require("internal").print(end - start);
           break;
         }
         count++;

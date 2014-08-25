@@ -52,7 +52,7 @@ var stateError = "error";
 var _ = require("underscore");
 
 function getCollection () {
-  return db._pregel;
+  return pregel.getCollection();
 }
 
 var genTaskId = function (executionNumber) {
@@ -60,11 +60,11 @@ var genTaskId = function (executionNumber) {
 };
 
 var getExecutionInfo = function(executionNumber) {
-  return _.clone(getCollection().document(executionNumber));
+  return pregel.getExecutionInfo(executionNumber);
 };
 
 var updateExecutionInfo = function(executionNumber, infoObject) {
-  return getCollection().update(executionNumber, infoObject);
+  return pregel.updateExecutionInfo(executionNumber, infoObject);
 };
 
 var saveExecutionInfo = function(infoObject, globals) {
@@ -106,6 +106,7 @@ var startNextStep = function(executionNumber, options) {
   options.conductor = pregel.getServerName();
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
+    require("internal").print(dbServers)
     var body = {
       step: stepNo,
       executionNumber: executionNumber,
@@ -162,7 +163,7 @@ var cleanUp = function (executionNumber, err) {
   updateExecutionInfo(
     executionNumber, execInfo
   );
-  /*if (ArangoServerState.isCoordinator()) {
+  if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
     var coordOptions = {
       coordTransactionID: ArangoClusterInfo.uniqid()
@@ -182,7 +183,7 @@ var cleanUp = function (executionNumber, err) {
     dbServers = ["localhost"];
     httpOptions.type = "POST";
     require("org/arangodb/pregel").Worker.cleanUp(executionNumber);
-  }*/
+  }
 };
 
 var timeOutExecution = function (executionNumber) {
@@ -486,26 +487,29 @@ var finishedStep = function(executionNumber, serverName, info) {
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message;
     throw err;
   }
-  var checks = db._executeTransaction({
+
+
+  var transactionBody = {
     collections: {
       write: [
         "_pregel"
       ]
     },
     action: function (params) {
+      var pregel = require("org/arangodb/pregel");
+      var _ = require("underscore");
+      var db = require("internal").db;
       var transInfo = params.info;
-      var transGetExecutionInfo = params.getExecutionInfo;
-      var transUpdateExecutionInfo = params.updateExecutionInfo;
       var transExecutionNumber = params.executionNumber;
-      var transRunInfo = _.clone(transGetExecutionInfo(transExecutionNumber));
-      var transStep = transRunInfo[step] + 1;
-      transRunInfo[stepContent][transStep].messages += transInfo.messages;
-      transRunInfo[stepContent][transStep].active += transInfo.active;
+      var transRunInfo = _.clone(db[params.dbName].document(transExecutionNumber));
+      var transStep = transRunInfo["step"] + 1;
+      transRunInfo["stepContent"][transStep].messages += transInfo.messages;
+      transRunInfo["stepContent"][transStep].active += transInfo.active;
       transRunInfo.error = transInfo.error;
       var transServerName = params.serverName;
-      var transAwaiting = transRunInfo[waitForAnswer];
+      var transAwaiting = transRunInfo["waitForAnswer"];
       transAwaiting[transServerName] = true;
-      transUpdateExecutionInfo(transExecutionNumber, transRunInfo);
+      db[params.dbName].update(transExecutionNumber, transRunInfo)
       var transEveryServerResponded = true;
       Object.keys(transAwaiting).forEach(function(s) {
         if (transAwaiting[s] === false) {
@@ -515,17 +519,39 @@ var finishedStep = function(executionNumber, serverName, info) {
       return {
         respond: transEveryServerResponded,
         error: transRunInfo.error,
-        active: transRunInfo[stepContent][transStep].active
+        active: transRunInfo["stepContent"][transStep].active
       };
     },
     params: {
       serverName: serverName,
-      updateExecutionInfo: updateExecutionInfo,
-      getExecutionInfo: getExecutionInfo,
       executionNumber: executionNumber,
-      info: info
+      info: info,
+      dbName : "_pregel"
     }
-  });
+  };
+
+  var checks;
+
+  if (ArangoServerState.isCoordinator()) {
+    var coordOptions = {
+      coordTransactionID: ArangoClusterInfo.uniqid()
+    };
+    var objInfo = ArangoClusterInfo.getCollectionInfo("_system", "_pregel");
+    var endpoint = objInfo.shards[Object.keys(objInfo.shards)[0]];
+    transactionBody.collections = {
+      write: [
+        Object.keys(objInfo.shards)[0]
+      ]
+    };
+    transactionBody.params.dbName = Object.keys(objInfo.shards)[0];
+    transactionBody.action = transactionBody.action.toString();
+    ArangoClusterComm.asyncRequest("POST","server:" + endpoint, db._name(),
+      "/_api/transaction/",JSON.stringify(transactionBody), {}, coordOptions);
+    checks = JSON.parse(ArangoClusterComm.wait(coordOptions).body).result;
+
+  } else {
+    checks = db._executeTransaction(transactionBody);
+  }
   if (checks.respond && !checks.error) {
     if (ArangoServerState.isCoordinator()) {
       tasks.unregister(genTaskId(executionNumber));

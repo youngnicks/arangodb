@@ -35,6 +35,18 @@ var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
+exports.getCollection = function () {
+  return db._pregel;
+}
+
+exports.getExecutionInfo = function(executionNumber) {
+  return _.clone(exports.getCollection().document(executionNumber));
+};
+
+exports.updateExecutionInfo = function(executionNumber, infoObject) {
+  return exports.getCollection().update(executionNumber, infoObject);
+};
+
 exports.getServerName = function () {
   return ArangoServerState.id() || "localhost";
 };
