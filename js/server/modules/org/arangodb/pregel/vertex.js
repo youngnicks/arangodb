@@ -58,10 +58,10 @@ var Vertex = function (mapping, vertexInfo) {
 
   var respEdges = mapping.getResponsibleEdgeShards(collection);
   this._outEdges = [];
-  _.each(respEdges, function(collection) {
-    var outEdges = db[collection].outEdges(self._id);
+  _.each(respEdges, function(edgeShard) {
+    var outEdges = db[edgeShard].outEdges(self._id);
     _.each(outEdges, function (json) {
-      var e = new Edge(mapping, json);
+      var e = new Edge(mapping, json, edgeShard);
       self._outEdges.push(e);
     });
   });

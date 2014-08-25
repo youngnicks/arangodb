@@ -285,8 +285,8 @@ var getActiveVerticesQuery = function (mapping) {
         + ", locationObject: i.locationObject, _doc: i})";
       bindVars["@collection" + count] = resultShards[i];
       bindVars["collection" + count] = resultShards[i];
+      count++;
     }
-    count++;
   });
   query += ") RETURN u";
   return db._query(query, bindVars);

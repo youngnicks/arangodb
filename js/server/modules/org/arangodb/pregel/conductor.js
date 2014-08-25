@@ -247,7 +247,9 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   var shardMap = [];
   var serverShardMap = {};
   var serverResultShardMap = {};
+  var edgeResultShards = {};
   var numShards = 1;
+  var i;
   Object.keys(properties).forEach(function (collection) {
     var mc = {};
     map[collection] = mc;
@@ -303,13 +305,19 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       c[generateResultCollectionName(collection, executionNumber)] = "localhost";
       mc.resultShards = c;
     }
-    _.each(mc.resultShards, function(server, shard) {
-      if (mc.type === 2) {
+    if (mc.type === 2) {
+      _.each(mc.resultShards, function(server, shard) {
         serverResultShardMap[server] = serverResultShardMap[server] || {};
         serverResultShardMap[server][collection] = serverResultShardMap[server][collection] || [];
         serverResultShardMap[server][collection].push(shard);
+      });
+    } else {
+      var origShards = Object.keys(mc.originalShards);
+      var resShards = Object.keys(mc.resultShards);
+      for (i = 0; i < origShards.length; i++) {
+        edgeResultShards[origShards[i]] = resShards[i];
       }
-    });
+    }
   });
   var lists = [];
   var j;
@@ -327,12 +335,19 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       edgeShards[sId] = lists[index];
     });
   });
+  // ShardKeyMap: collection => [shardKeys]
+  // ShardMap: collection => [shard]
+  // serverResultShardMap: collection => server => [result_shard]
+  // serverShardMap: collection => server => [shard]
+  // edgeShards: vertexShard => [edgeShards]
+  // edgeResultShards: edgeShard => edgeResultShard
   var resMap = {
     shardKeyMap: shardKeyMap,
     shardMap: shardMap,
     serverResultShardMap: serverResultShardMap,
     serverShardMap: serverShardMap,
     edgeShards: edgeShards,
+    edgeResultShards: edgeResultShards,
     map: map
   };
   // Create Vertex -> EdgeShards Mapping

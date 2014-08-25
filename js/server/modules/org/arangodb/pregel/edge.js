@@ -34,13 +34,12 @@ var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Edge = function (mapping, edgeJSON) {
+var Edge = function (mapping, edgeJSON, shard) {
   var self = this;
   _.each(edgeJSON, function(v, k) {
     self[k] = v;
   });
-  var resultCollectionName = mapping.getResultCollection(this._id);
-  this._resultShard = db._collection(mapping.getResponsibleShard(resultCollectionName, this));
+  this._resultShard = db._collection(mapping.getEdgeResultShard(shard));
   this._doc = _.clone(this._resultShard.document(this._key));
   delete this._doc._PRINT;
   this._result = this._doc.result;
