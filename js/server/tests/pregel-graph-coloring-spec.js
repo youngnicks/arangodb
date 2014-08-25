@@ -38,6 +38,7 @@ var ERRORS = require("org/arangodb").errors;
 var coordinator = ArangoServerState.isCoordinator();
 var helper = require("org/arangodb/aql-helper");
 var getQueryResults = helper.getQueryResults;
+var profiler = require("org/arangodb/profiler");
 
 
 describe("Graph coloring Pregel execution", function () {
@@ -58,31 +59,44 @@ describe("Graph coloring Pregel execution", function () {
         var PHASE_CONFLICT_RESOLUTION = "3";
         var NOT_IN_S_AND_DEGREE_ADJUSTING1 = "4";
 
+        var STATE_UNKNOWN = 1;
+        var STATE_TENTATIVELY_IN = 2;
+        var STATE_IN = 3;
+        var NOT_IN = 4;
+
+        var MSG_NEIGHBOR = 1;
+        var MSG_DECREMENT = 2;
+        var MSG_CONTACT = 3;
+        var MSG_TIS = 4
+
         if (global.retype === true) {
-          vertex._result.type = "unknown";
+          vertex._result.type = STATE_UNKNOWN;
         }
 
         switch(vertex._result.phase) {
           case PHASE_PRE_INITIALIZATION:
-            if (vertex._result.type !== "unknown") {
+            if (vertex._result.type !== STATE_UNKNOWN) {
               vertex._deactivate();
               return;
             }
             vertex._result.phase = PHASE_INITIALIZATION;
-            if (!vertex._result.degree) {
+            if (vertex._result.degree === undefined) {
               while (inc.hasNext()) {
                 next = inc.next();
-                if (vertex._result.neighbors.indexOf(next.sender.id) === -1) {
-                  vertex._result.neighbors.push(next.sender.id);
+                if (next.data.msg !==  MSG_CONTACT) {
+                  require("internal").print("INVALID MASSAGE IN PHASE_PRE_INITIALIZATION", next.data," FOR ", vertex, " in step ", global.step);
+                }
+                if (Object.keys(vertex._result.neighbors).indexOf(next.sender._id) === -1) {
+                  vertex._result.neighbors[next.sender._id] = next.sender.shard;
                 }
               }
-              vertex._result.degree = vertex._result.neighbors.length;
+              vertex._result.degree = Object.keys(vertex._result.neighbors).length;
             }
             var random = Math.random();
             if (1.0/(2*vertex._result.degree) <= random  || vertex._result.degree === 0) {
-              vertex._result.type = "TentativelyInS";
-              vertex._result.neighbors.forEach(function (e) {
-                message.sendTo(e, {id : vertex._id});
+              vertex._result.type = STATE_TENTATIVELY_IN;
+              Object.keys(vertex._result.neighbors).forEach(function (e) {
+                message.sendTo({_id : e, shard : vertex._result.neighbors[e]}, {id : vertex._id, msg : MSG_TIS});
               });
             }
             break;
@@ -92,20 +106,26 @@ describe("Graph coloring Pregel execution", function () {
           case PHASE_INITIALIZATION:
             vertex._result.phase = PHASE_CONFLICT_RESOLUTION;
             var iDs = [vertex._id];
-            if (vertex._result.type === "TentativelyInS") {
+            if (vertex._result.type === STATE_TENTATIVELY_IN) {
               while (inc.hasNext()) {
                 next = inc.next();
+                if (next.data.msg !==  MSG_TIS) {
+                  require("internal").print("INVALID MASSAGE IN PHASE_INITIALIZATION", next.data," FOR ", vertex, " in step ", global.step);
+                }
                 iDs.push(next.data.id);
               }
               if (vertex._id === iDs.sort()[0]) {
-                vertex._result.type = "InS";
+                vertex._result.type = STATE_IN;
                 vertex._result.color = color;
-                vertex._result.neighbors.forEach(function (e) {
-                  message.sendTo(e, {msg : "neighbor-in-set", id : vertex._id});
+                Object.keys(vertex._result.neighbors).forEach(function (e) {
+                  message.sendTo(
+                    {_id : e, shard : vertex._result.neighbors[e]},
+                    {msg : MSG_NEIGHBOR, id : vertex._id}
+                  );
                 });
                 vertex._delete();
               } else {
-                vertex._result.type = "unknown";
+                vertex._result.type = STATE_UNKNOWN;
               }
             }
 
@@ -117,15 +137,21 @@ describe("Graph coloring Pregel execution", function () {
             vertex._result.phase = NOT_IN_S_AND_DEGREE_ADJUSTING1;
             while (inc.hasNext()) {
               next = inc.next();
-              if (next.data.msg ===  "neighbor-in-set") {
-                vertex._result.type = "NotInS";
-                vertex._result.neighbors.splice(vertex._result.neighbors.indexOf(next.data.id), 1);
+              if (next.data.msg ===  MSG_NEIGHBOR) {
+                vertex._result.type = NOT_IN;
+                delete vertex._result.neighbors[next.data.id];
+              } else {
+                require("internal").print("INVALID MASSAGE IN PHASE_CONFLICT_RESOLUTION", next.data," FOR ", vertex, " in step ", global.step);
               }
             }
-            if (vertex._result.type === "NotInS") {
-              vertex._result.neighbors.forEach(function (e) {
-                message.sendTo(e, {msg : "empty-decrement-degree"});
+            if (vertex._result.type === NOT_IN) {
+              Object.keys(vertex._result.neighbors).forEach(function (e) {
+                message.sendTo(
+                  {_id : e, shard : vertex._result.neighbors[e]},
+                  {msg : MSG_DECREMENT}
+                );
               });
+              vertex._result.phase = PHASE_PRE_INITIALIZATION;
               vertex._deactivate();
             }
             break;
@@ -137,11 +163,14 @@ describe("Graph coloring Pregel execution", function () {
             vertex._result.phase = PHASE_PRE_INITIALIZATION;
             while (inc.hasNext()) {
               next = inc.next();
-              if (vertex._result.type === "unknown") {
+              if (next.data.msg !==  MSG_DECREMENT) {
+                require("internal").print("INVALID MASSAGE IN NOT_IN_S_AND_DEGREE_ADJUSTING1", next.data," FOR ", vertex, " in step ", global.step);
+              }
+              if (vertex._result.type === STATE_UNKNOWN) {
                 vertex._result.degree = vertex._result.degree -1;
               }
             }
-            if (vertex._result.type !== "unknown") {
+            if (vertex._result.type !== STATE_UNKNOWN) {
               vertex._deactivate();
             }
 
@@ -152,13 +181,13 @@ describe("Graph coloring Pregel execution", function () {
 
           default:
             vertex._result={
-              type : "unknown",
-              neighbors : [],
+              type : STATE_UNKNOWN,
+              neighbors : {},
               phase : PHASE_PRE_INITIALIZATION
             };
             vertex._outEdges.forEach(function (e) {
-              vertex._result.neighbors.push(e._targetVertex._id);
-              message.sendTo(e._targetVertex);
+              vertex._result.neighbors[e._targetVertex._id] = e._targetVertex.shard;
+              message.sendTo(e._targetVertex, {msg : MSG_CONTACT});
             });
         }
 
@@ -232,25 +261,43 @@ describe("Graph coloring Pregel execution", function () {
         if (!globals.usedColors) {
           globals.usedColors = ['#25262a'];
         }
+
+        if (globals.step > 3) {
+          require("internal").print("Step", globals.step, graphAccess._verticesByExample({result : {}}).toArray())
+        }
+
+
         var newColor = '#25262a';
         globals.retype = false
         if( stepInfo.active === 0 && stepInfo.messages === 0) {
-          if (graphAccess._countVerticesByExample({"result.type" : "unknown"}) === 0) {
-            if (graphAccess._activateVerticesByExample({"result.type" : "NotInS"}) > 0) {
+          if (graphAccess._countVerticesByExample({"result.type" : 1}) === 0) {
+            if (graphAccess._activateVerticesByExample({"result.type" : 4}) > 0) {
               globals.retype = true;
               while (globals.usedColors.indexOf(newColor) !== -1) {
                 newColor = '#' + Math.random().toString(16).substring(2, 8);
               }
               globals.usedColors.push(newColor);
               globals.color = newColor;
-              stepInfo.active === 1
+              stepInfo.active = 1
             }
           }
         }
       };
 
-      //var id = conductor.startExecution(gN, graphColoring.toString(),conductorAlgorithm.toString());
-      var id = conductor.startExecution("ff", graphColoring.toString(),conductorAlgorithm.toString());
+      /*var id = conductor.startExecution(gN, {
+          base : graphColoring.toString(),
+          superstep : conductorAlgorithm.toString(),
+          aggregator : null
+        }
+      );*/
+      profiler.setup();
+      var id = conductor.startExecution("ff", {
+          base : graphColoring.toString(),
+          superstep : conductorAlgorithm.toString(),
+          aggregator : null
+        }
+      );
+      //var id = conductor.startExecution("ff", graphColoring.toString(),conductorAlgorithm.toString());
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
@@ -260,6 +307,21 @@ describe("Graph coloring Pregel execution", function () {
           res = conductor.getResult(id);
           require("internal").print(res)
           resGraph = res.result.graphName;
+          var errors = [];
+          graph._graph(resGraph)._vertices({}).toArray().forEach(function (r) {
+              if (r.result.type === 3) {
+                Object.keys(r.result.neighbors).forEach(function (m) {
+                  var n = db._document(m);
+                  if (n.result.type === 3 && n.result.color === r.result.color) {
+                    errors.push([n._key, r._key]);
+                  }
+                });
+              }
+          });
+          if (errors) {
+            require("internal").print(errors);
+          }
+          expect(errors.length).toEqual(0);
           var end = require("internal").time();
           require("internal").print(end - start);
           break;

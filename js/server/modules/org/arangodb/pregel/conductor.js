@@ -162,7 +162,7 @@ var cleanUp = function (executionNumber, err) {
   updateExecutionInfo(
     executionNumber, execInfo
   );
-  if (ArangoServerState.isCoordinator()) {
+  /*if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
     var coordOptions = {
       coordTransactionID: ArangoClusterInfo.uniqid()
@@ -182,7 +182,7 @@ var cleanUp = function (executionNumber, err) {
     dbServers = ["localhost"];
     httpOptions.type = "POST";
     require("org/arangodb/pregel").Worker.cleanUp(executionNumber);
-  }
+  }*/
 };
 
 var timeOutExecution = function (executionNumber) {
@@ -277,6 +277,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       });
     } else {
       tmpMap.edge[collection] = Object.keys(mc.originalShards);
+      shardMap = shardMap.concat(tmpMap.edge[collection]);
     }
     var props = {
       numberOfShards : mprops.numberOfShards,
@@ -430,7 +431,6 @@ var startExecution = function(graphName, algorithms,  options) {
   }
 
   options.map = createResultGraph(graph, key);
-
   p.storeWatch("startExecution", t);
   startNextStep(key, options);
   return key;
