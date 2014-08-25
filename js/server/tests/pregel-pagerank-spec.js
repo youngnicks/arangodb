@@ -51,7 +51,7 @@ describe("Pregel PageRank", function () {
         if (global.step === 0) {
           edgeCount = vertex._outEdges.length;
           var initPR = 1 / total;
-          vertex._result = {
+          vertex._setResult = {
             rank: initPR,
             edgeCount: edgeCount
           };
@@ -61,7 +61,8 @@ describe("Pregel PageRank", function () {
           });
           return;
         }
-        edgeCount = vertex._result.edgeCount;
+        var result = vertex._getResult();
+        edgeCount = result.edgeCount;
         var alpha = global.alpha;
         var newPR = 0;
         var inc = message.getMessages();
@@ -72,7 +73,8 @@ describe("Pregel PageRank", function () {
         }
         newPR *= alpha;
         newPR += (1 - alpha) / total;
-        vertex._result.rank = newPR;
+        result.rank = newPR;
+        vertex._setResult(result);
         send = newPR / edgeCount;
         vertex._outEdges.forEach(function (e) {
           message.sendTo(e._targetVertex, send, false);
@@ -84,9 +86,9 @@ describe("Pregel PageRank", function () {
           graph._stopExecution();
           return;
         }
-      },
+        /*      },
       aggregator = function (message, oldMessage) {
-        return message + oldMessage;
+        return message + oldMessage; */
       };
 
     beforeEach(function () {
@@ -162,7 +164,7 @@ describe("Pregel PageRank", function () {
       var id = conductor.startExecution(gN, {
         base: pageRank.toString(),
         superstep: superStep.toString(),
-        aggregator: aggregator.toString()
+      //  aggregator: aggregator.toString()
       }, {
         alpha: 0.85,
         vertexCount: vC

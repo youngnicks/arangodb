@@ -36,6 +36,7 @@ var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
 var Vertex = function (mapping, vertexInfo) {
+  var t = p.stopWatch();
   var Edge = pregel.Edge;
   var vertexId = vertexInfo._id;
   var resultShard = vertexInfo.shard;
@@ -51,7 +52,7 @@ var Vertex = function (mapping, vertexInfo) {
     self[key] = val;
   });
   this._resCol = db._collection(resultShard);
-
+  this.__hasChanged = false;
   this._doc = vertexInfo._doc;
 
   this._result = this._doc.result;
@@ -65,14 +66,26 @@ var Vertex = function (mapping, vertexInfo) {
       self._outEdges.push(e);
     });
   });
+  p.storeWatch("ConstructVertex", t);
 };
 
 Vertex.prototype._deactivate = function () {
   this._doc.active = false;
+  this.__hasChanged = true;
 };
 
 Vertex.prototype._delete = function () {
   this._doc.deleted = true;
+  this.__hasChanged = true;
+};
+
+Vertex.prototype._getResult = function () {
+  return this._result;
+};
+
+Vertex.prototype._setResult = function (result) {
+  this.__hasChanged = true;
+  this._result = result;
 };
 
 Vertex.prototype._save = function () {
@@ -80,8 +93,10 @@ Vertex.prototype._save = function () {
   this._outEdges.forEach(function(e) {
     e._save();
   });
-  this._doc.result = this._result;
-  this._resCol.replace(this._key, this._doc);
+  if (this.__hasChanged) {
+    this._doc.result = this._result;
+    this._resCol.replace(this._key, this._doc);
+  }
   p.storeWatch("SaveVertex", t);
 };
 
