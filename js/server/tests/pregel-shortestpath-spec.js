@@ -177,7 +177,7 @@ describe("ShortestPath Pregel execution", function () {
         vertex._deactivate();
       };
 
-    beforeEach(function () {
+    /*beforeEach(function () {
       gN = "UnitTestPregelGraph";
       v = "UnitTestVertices";
       e = "UnitTestEdges";
@@ -234,7 +234,7 @@ describe("ShortestPath Pregel execution", function () {
 
     afterEach(function () {
       graph._drop(gN, true);
-    });
+    });*/
 
     it("should identify all distinct graphs", function () {
       //var id = conductor.startExecution(gN, connectedSets.toString());

@@ -79,7 +79,6 @@ Mapping.prototype.getLocalResultShardMapping = function () {
 };
 
 Mapping.prototype.getResponsibleShardFromMapping = function (executionNumber, resShard) {
-  throw "Not yet";
   var t = p.stopWatch();
   var map = exports.getMap(executionNumber);
   var correct = _.filter(map, function (e) {

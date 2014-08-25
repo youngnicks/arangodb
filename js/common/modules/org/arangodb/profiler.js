@@ -39,7 +39,7 @@ var aggregateAll = "FOR x IN @@col COLLECT name = x.func INTO g "
   + "IN @@col";
 var deleteSingle = "FOR x IN @@col FILTER HAS(x, 'func') REMOVE x._key IN @@col";
 
-var disabled = false;
+var disabled = true;
 
 exports.setup = function() {
   if (disabled) {
