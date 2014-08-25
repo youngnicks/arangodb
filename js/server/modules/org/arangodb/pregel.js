@@ -163,6 +163,9 @@ exports.genGlobalCollectionName = function (executionNumber) {
   return "P_global_" + executionNumber;
 };
 
+exports.genCountCollectionName = function (executionNumber) {
+  return "P_count_" + executionNumber;
+};
 exports.createWorkerCollections = function (executionNumber) {
   var t = p.stopWatch();
   var work = db._create(
@@ -176,6 +179,7 @@ exports.createWorkerCollections = function (executionNumber) {
   message.ensureSkiplist("toShard");
   db._create(exports.genGlobalCollectionName(executionNumber));
   p.storeWatch("setupWorkerCollections", t);
+  db._create(exports.genCountCollectionName(executionNumber));
 };
 
 exports.getWorkCollection = function (executionNumber) {
@@ -192,6 +196,10 @@ exports.getMsgCollection = function (executionNumber) {
 
 exports.getGlobalCollection = function (executionNumber) {
   return db._collection(exports.genGlobalCollectionName(executionNumber));
+};
+
+exports.getCountCollection = function (executionNumber) {
+  return db._collection(exports.genCountCollectionName(executionNumber));
 };
 
 exports.getMap = function (executionNumber) {
