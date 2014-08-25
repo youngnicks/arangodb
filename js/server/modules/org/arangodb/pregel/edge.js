@@ -35,30 +35,44 @@ var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
 var Edge = function (mapping, edgeJSON, shard) {
+  var t = p.stopWatch();
   var self = this;
   _.each(edgeJSON, function(v, k) {
     self[k] = v;
   });
   this._resultShard = db._collection(mapping.getEdgeResultShard(shard));
-  this._doc = _.clone(this._resultShard.document(this._key));
+  this._doc = this._resultShard.document(this._key);
   delete this._doc._PRINT;
+  this.__hasChanged = false;
   this._result = this._doc.result;
-
   this._targetVertex = mapping.getToLocationObject(this);
+  p.storeWatch("ConstructEdge", t);
 };
 
 Edge.prototype._delete = function () {
   this._doc.deleted = true;
+  this.__hasChanged = true;
 };
 
 Edge.prototype._isDeleted = function () {
   return this._doc.deleted;
 };
 
+Edge.prototype._getResult = function () {
+  return this._result;
+};
+
+Edge.prototype._setResult = function (result) {
+  this.__hasChanged = true;
+  this._result = result;
+};
+
 Edge.prototype._save = function () {
   var t = p.stopWatch();
-  this._doc.result = this._result;
-  this._resultShard.replace(this._key, this._doc);
+  if (this.__hasChanged) {
+    this._doc.result = this._result;
+    this._resultShard.replace(this._key, this._doc);
+  }
   p.storeWatch("SaveEdge", t);
 };
 
