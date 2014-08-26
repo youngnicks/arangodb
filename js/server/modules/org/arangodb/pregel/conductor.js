@@ -251,6 +251,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   var serverShardMap = {};
   var serverResultShardMap = {};
   var resultShards = {};
+  var collectionMap = {};
   var numShards = 1;
   var i;
   Object.keys(properties).forEach(function (collection) {
@@ -259,6 +260,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
     var mprops = properties[collection];
     mc.type = mprops.type;
     mc.resultCollection = generateResultCollectionName(collection, executionNumber);
+    collectionMap[collection] = mc.resultCollection;
     if (ArangoServerState.isCoordinator()) {
       mc.originalShards =
         ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
@@ -344,6 +346,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   // serverShardMap: collection => server => [shard]
   // edgeShards: vertexShard => [edgeShards]
   // resultShards: shard => resultShard
+  // collectionMap: collection => resultCollection
   var resMap = {
     shardKeyMap: shardKeyMap,
     shardMap: shardMap,
@@ -351,9 +354,9 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
     serverShardMap: serverShardMap,
     edgeShards: edgeShards,
     resultShards: resultShards,
+    collectionMap: collectionMap,
     map: map
   };
-  require("internal").print("Mapping");
   // Create Vertex -> EdgeShards Mapping
   if (noCreation) {
     p.storeWatch("SetupResultGraph", t);

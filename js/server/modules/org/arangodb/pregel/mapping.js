@@ -41,7 +41,7 @@ var Mapping = function(executionNumber) {
 };
 
 Mapping.prototype.getResultCollection = function (id) {
-  return id.split('/')[0];
+  return this._map.collectionMap[id];
 };
 
 Mapping.prototype.transformToFindShard = function (col, params, prefix) {

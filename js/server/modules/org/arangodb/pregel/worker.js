@@ -103,7 +103,7 @@ var translateId = function (id, mapping) {
   var split = id.split("/");
   var col = split[0];
   var key = split[1];
-  return mapping.getResultShard(col) + "/" + key;
+  return mapping.getResultCollection(col) + "/" + key;
 };
 
 var algorithmToString = function (algorithm) {
@@ -196,6 +196,7 @@ var getError = function(executionNumber) {
 
 var setup = function(executionNumber, options) {
   // create global collection
+  try {
   pregel.createWorkerCollections(executionNumber);
   p.setup();
   var global = pregel.getGlobalCollection(executionNumber);
@@ -244,6 +245,7 @@ var setup = function(executionNumber, options) {
         };
         if (mapping.type === 3) {
           q = db._query(edgeQuery, bindVars); 
+          require("console").log("Penisle", q.hasNext(), bindVars, edgeQuery);
           resultCol = db[resultShards[i]];
           while (q.hasNext()) {
             edgeToStore = q.next();
@@ -252,6 +254,7 @@ var setup = function(executionNumber, options) {
             edgeToStore.result = {};
             from = translateId(edgeToStore._from, pregelMapping);
             to = translateId(edgeToStore._to, pregelMapping);
+            require("console").log(from, to, edgeToStore);
             resultCol.save(from, to, edgeToStore);
           }
         } else {
@@ -269,6 +272,9 @@ var setup = function(executionNumber, options) {
       }
     }
   });
+} catch (e) {
+  require("internal").print(e);
+}
 };
 
 
