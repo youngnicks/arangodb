@@ -41,29 +41,38 @@ var Edge = function (mapping, edgeJSON, shard) {
     self[k] = v;
   });
   this._resultShard = db._collection(mapping.getEdgeResultShard(shard));
-  this._doc = this._resultShard.document(this._key);
-  delete this._doc._PRINT;
   this.__hasChanged = false;
-  this._result = this._doc.result;
   this._targetVertex = mapping.getToLocationObject(this);
   p.storeWatch("ConstructEdge", t);
 };
 
+Edge.prototype._lazyLoad = function () {
+  if (!this.hasOwnProperty("_doc")) {
+    this._doc = _.clone(this._resultShard.document(this._key));
+    delete this._doc._PRINT;
+    this._result = this._doc.result;
+  }
+};
+
 Edge.prototype._delete = function () {
-  this._doc.deleted = true;
+  this._lazyLoad();
   this.__hasChanged = true;
+  this._doc.deleted = true;
 };
 
 Edge.prototype._isDeleted = function () {
+  this._lazyLoad();
   return this._doc.deleted;
 };
 
 Edge.prototype._getResult = function () {
+  this._lazyLoad();
   return this._result;
 };
 
 Edge.prototype._setResult = function (result) {
   this.__hasChanged = true;
+  this._lazyLoad();
   this._result = result;
 };
 
