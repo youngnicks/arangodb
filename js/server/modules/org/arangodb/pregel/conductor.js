@@ -106,7 +106,6 @@ var startNextStep = function(executionNumber, options) {
   options.conductor = pregel.getServerName();
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
-    require("internal").print(dbServers)
     var body = {
       step: stepNo,
       executionNumber: executionNumber,
