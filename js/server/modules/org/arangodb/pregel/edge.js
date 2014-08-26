@@ -40,39 +40,30 @@ var Edge = function (mapping, edgeJSON, shard) {
   _.each(edgeJSON, function(v, k) {
     self[k] = v;
   });
-  this._resultShard = db._collection(mapping.getEdgeResultShard(shard));
+  this._resultShard = db._collection(mapping.getResultShard(shard));
   this.__hasChanged = false;
-  this._targetVertex = mapping.getToLocationObject(this);
+  this._doc = _.clone(this._resultShard.document(this._key));
+  delete this._doc._PRINT;
+  this._result = this._doc.result;
+  this._targetVertex = this._doc._targetVertex;
   p.storeWatch("ConstructEdge", t);
 };
 
-Edge.prototype._lazyLoad = function () {
-  if (!this.hasOwnProperty("_doc")) {
-    this._doc = _.clone(this._resultShard.document(this._key));
-    delete this._doc._PRINT;
-    this._result = this._doc.result;
-  }
-};
-
 Edge.prototype._delete = function () {
-  this._lazyLoad();
   this.__hasChanged = true;
   this._doc.deleted = true;
 };
 
 Edge.prototype._isDeleted = function () {
-  this._lazyLoad();
   return this._doc.deleted;
 };
 
 Edge.prototype._getResult = function () {
-  this._lazyLoad();
   return this._result;
 };
 
 Edge.prototype._setResult = function (result) {
   this.__hasChanged = true;
-  this._lazyLoad();
   this._result = result;
 };
 

@@ -139,6 +139,7 @@ var startNextStep = function(executionNumber, options) {
     for (i = 0; i < dbServers.length; i++) {
       debug = ArangoClusterComm.wait(coordOptions);
     }
+    require("internal").print("Told all servers");
   } else {
     dbServers = ["localhost"];
     p.storeWatch("TriggerNextStep", t);
@@ -215,6 +216,7 @@ var initNextStep = function (executionNumber) {
   var globals = getGlobals(executionNumber);
   var stepInfo = info[stepContent][info[step]];
 
+  require("internal").print("Initing");
   if (globals && globals.conductorAlgorithm) {
     var t2 = p.stopWatch();
     globals.step = info[step] -1;
@@ -243,11 +245,12 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
     edge: {},
     vertex: {}
   };
+  require("internal").print("Resulting");
   var shardKeyMap = {};
   var shardMap = [];
   var serverShardMap = {};
   var serverResultShardMap = {};
-  var edgeResultShards = {};
+  var resultShards = {};
   var numShards = 1;
   var i;
   Object.keys(properties).forEach(function (collection) {
@@ -312,12 +315,11 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
         serverResultShardMap[server][collection] = serverResultShardMap[server][collection] || [];
         serverResultShardMap[server][collection].push(shard);
       });
-    } else {
-      var origShards = Object.keys(mc.originalShards);
-      var resShards = Object.keys(mc.resultShards);
-      for (i = 0; i < origShards.length; i++) {
-        edgeResultShards[origShards[i]] = resShards[i];
-      }
+    }
+    var origShards = Object.keys(mc.originalShards);
+    var resShards = Object.keys(mc.resultShards);
+    for (i = 0; i < origShards.length; i++) {
+      resultShards[origShards[i]] = resShards[i];
     }
   });
   var lists = [];
@@ -341,16 +343,17 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   // serverResultShardMap: collection => server => [result_shard]
   // serverShardMap: collection => server => [shard]
   // edgeShards: vertexShard => [edgeShards]
-  // edgeResultShards: edgeShard => edgeResultShard
+  // resultShards: shard => resultShard
   var resMap = {
     shardKeyMap: shardKeyMap,
     shardMap: shardMap,
     serverResultShardMap: serverResultShardMap,
     serverShardMap: serverShardMap,
     edgeShards: edgeShards,
-    edgeResultShards: edgeResultShards,
+    resultShards: resultShards,
     map: map
   };
+  require("internal").print("Mapping");
   // Create Vertex -> EdgeShards Mapping
   if (noCreation) {
     p.storeWatch("SetupResultGraph", t);
@@ -388,6 +391,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   updateExecutionInfo(
     executionNumber, {graphName : generateResultCollectionName(graph.__name, executionNumber)}
   );
+  require("internal").print("Gerumpeling");
   p.storeWatch("SetupResultGraph", t);
   return resMap;
 };
@@ -551,6 +555,7 @@ var finishedStep = function(executionNumber, serverName, info) {
   } else {
     checks = db._executeTransaction(transactionBody);
   }
+  require("internal").print("checked", checks, serverName);
   if (checks.respond && !checks.error) {
     if (ArangoServerState.isCoordinator()) {
       tasks.unregister(genTaskId(executionNumber));

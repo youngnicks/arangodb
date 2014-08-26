@@ -79,8 +79,8 @@ Mapping.prototype.getLocalResultShardMapping = function () {
   return this._map.serverResultShardMap[pregel.getServerName()]; 
 };
 
-Mapping.prototype.getEdgeResultShard = function (shard) {
-  return this._map.edgeResultShards[shard];
+Mapping.prototype.getResultShard = function (shard) {
+  return this._map.resultShards[shard];
 };
 
 Mapping.prototype.getShardKeysForCollection = function (collection) {
