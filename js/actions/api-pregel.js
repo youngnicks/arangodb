@@ -74,8 +74,16 @@ function post_pregel (req, res) {
 
     case ("startExecution") :
       body = JSON.parse(req.requestBody);
+      var algorithms = {};
+      algorithms.base = body.pregelAlgorithm;
+      if (body.conductorAlgorithm) {
+        algorithms.superstep = body.conductorAlgorithm;
+      }
+      if (body.aggregator) {
+        algorithms.aggregator = body.aggregator;
+      } 
       var result = conductor.startExecution(
-        body.graphName, body.pregelAlgorithm, body.conductorAlgorithm, body.options
+        body.graphName, algorithms, body.options
       );
       actions.resultOk(req, res, actions.HTTP_OK, {executionNumber : result});
       break;

@@ -124,17 +124,22 @@ function getAuthorization (dispatcher) {
   return getAuthorizationHeader(dispatcher.username, dispatcher.passwd);
 }
 
-function waitForServerUp (endpoint, timeout) {
+function waitForServerUp (endpoint, timeout, server) {
   var url = endpointToURL(endpoint) + "/_api/version";
   var time = 0;
+  var endpointOut = endpoint;
+  if (server) {
+    endpointOut += " (" +server + ")";
+  }
+
   while (true) {
     var r = download(url, "", {});
     if (r.code === 200 || r.code === 401) {
-      console.info("Could talk to "+endpoint+" .");
+      console.info("Could talk to "+endpointOut+" .");
       return true;
     }
     if (time >= timeout) {
-      console.info("Could not talk to endpoint "+endpoint+", giving up.");
+      console.info("Could not talk to endpoint "+endpointOut+", giving up.");
       return false;
     }
     wait(0.5);
@@ -393,7 +398,7 @@ launchActions.startServers = function (dispatchers, cmd, isRelaunch) {
 
   var error = false;
   for (i = 0;i < endpoints.length;i++) {
-    if (! waitForServerUp(endpoints[i], 30)) {
+    if (! waitForServerUp(endpoints[i], 30, servers[i])) {
       error = true;
     }
   }
@@ -782,7 +787,7 @@ upgradeActions.startServers = function (dispatchers, cmd, isRelaunch) {
 
   error = false;
   for (i = 0;i < endpoints.length;i++) {
-    if (! waitForServerUp(endpoints[i], 30)) {
+    if (! waitForServerUp(endpoints[i], 30, servers[i])) {
       error = true;
     }
   }

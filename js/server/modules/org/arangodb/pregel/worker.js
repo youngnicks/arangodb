@@ -57,6 +57,9 @@ var id;
 var WORKERS = 8;
 var QUEUESIZE = 10000;
 
+var queryGetAllSourceEdges = "FOR e IN @@original RETURN "
+  + "{ _key: e._key, _from: e._from, _to: e._to";
+
 var queryInsertDefaultEdge = "FOR v IN @@original "
   + "LET from = PARSE_IDENTIFIER(v._from) "
   + "LET to = PARSE_IDENTIFIER(v._to) ";
@@ -94,6 +97,13 @@ var queryCountStillActiveVertices = "LET c = (FOR i in @@collection"
 
 var getQueueName = function (executionNumber) {
   return "P_QUEUE_" + executionNumber;
+};
+
+var translateId = function (id, mapping) {
+  var split = id.split("/");
+  var col = split[0];
+  var key = split[1];
+  return mapping.getResultCollection(col) + "/" + key;
 };
 
 var algorithmToString = function (algorithm) {
@@ -186,6 +196,7 @@ var getError = function(executionNumber) {
 
 var setup = function(executionNumber, options) {
   // create global collection
+  try {
   pregel.createWorkerCollections(executionNumber);
   p.setup();
   var global = pregel.getGlobalCollection(executionNumber);
@@ -208,6 +219,7 @@ var setup = function(executionNumber, options) {
       shardKeysAmount = mapping.shardKeys.length;
     }
   });
+  var pregelMapping = new pregel.Mapping(executionNumber);
 
   _.each(map, function(mapping) {
     var shards = Object.keys(mapping.originalShards);
@@ -215,22 +227,38 @@ var setup = function(executionNumber, options) {
     var i;
     var bindVars;
     var iterator;
+    var q;
+    var edgeToStore;
+    var resultCol;
+    var from;
+    var to;
+    var edgeQuery = queryGetAllSourceEdges;
+    for (iterator = 0; iterator < shardKeysAmount; iterator++) {
+      edgeQuery += ", shard_" + iterator + ": e.shard_" + iterator;
+      edgeQuery += ", to_shard_" + iterator + ": e.to_shard_" + iterator;
+    }
+    edgeQuery += "}";
     for (i = 0; i < shards.length; i++) {
       if (mapping.originalShards[shards[i]] === pregel.getServerName()) {
         bindVars = {
-          '@original' : shards[i],
-          '@result' : resultShards[i]
+          '@original' : shards[i]
         };
         if (mapping.type === 3) {
-          bindVars.collectionMapping = collectionMapping;
-          for (iterator = 0; iterator < shardKeysAmount; iterator++) {
-            queryInsertDefaultEdgeInsertPart += ", 'shard_" + iterator + "' : v.shard_" + iterator;
-            queryInsertDefaultEdgeInsertPart += ", 'to_shard_" + iterator + "' : v.to_shard_" + iterator;
+          q = db._query(edgeQuery, bindVars); 
+          require("console").log("Penisle", q.hasNext(), bindVars, edgeQuery);
+          resultCol = db[resultShards[i]];
+          while (q.hasNext()) {
+            edgeToStore = q.next();
+            edgeToStore._targetVertex = pregelMapping.getToLocationObject(edgeToStore);
+            edgeToStore.deleted = false;
+            edgeToStore.result = {};
+            from = translateId(edgeToStore._from, pregelMapping);
+            to = translateId(edgeToStore._to, pregelMapping);
+            require("console").log(from, to, edgeToStore);
+            resultCol.save(from, to, edgeToStore);
           }
-          db._query(
-            queryInsertDefaultEdge + queryInsertDefaultEdgeInsertPart + queryInsertDefaultEdgeIntoPart, bindVars
-          ).execute();
         } else {
+          bindVars['@result'] = resultShards[i];
           var shardKeyMap = "", count = 0;
           mapping.shardKeys.forEach(function (sk) {
             shardKeyMap += ", shard_" + count + " : v." + sk;
@@ -244,6 +272,9 @@ var setup = function(executionNumber, options) {
       }
     }
   });
+} catch (e) {
+  require("internal").print(e);
+}
 };
 
 
