@@ -74,6 +74,12 @@ Vertex.prototype._deactivate = function () {
   this.__hasChanged = true;
 };
 
+Vertex.prototype._activate = function () {
+  this._doc.active = true;
+  this.__hasChanged = true;
+};
+
+
 Vertex.prototype._delete = function () {
   this._doc.deleted = true;
   this.__hasChanged = true;
