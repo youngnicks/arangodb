@@ -111,7 +111,10 @@ var Queue = function (executionNumber, vertices, aggregate) {
     this.__aggregate = aggregate;
   }
   this.__queues = [];
-  _.each(vertices, function(v) {
+  _.each(vertices, function(v, k) {
+    if (k === "__actives") {
+      return;
+    }
     var id = v._locationInfo._id;
     self.__queues.push(id);
     self[id] = new VertexMessageQueue(self, v._locationInfo);

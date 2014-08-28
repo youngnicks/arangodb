@@ -94,11 +94,14 @@ var algorithmForQueue = function (algorithms, vertices,  executionNumber) {
   return "(function() {"
     + "var executionNumber = " + executionNumber + ";"
     + "var pregel = require('org/arangodb/pregel');"
+    + "var pregelMapping = new pregel.Mapping(executionNumber);"
     + "var worker = pregel.Worker;"
-    + "if (algorithms.aggregator) {"
-    + "  aggregator = new Function('a', 'b', aggregate + '(a,b);');"
-    + "}"
-    + "var vertices = vertices";
+    + (algorithms.aggregator ? "  aggregator = (" + algorithms.aggregator + ");" : "")
+    + "var vertices = " + JSON.stringify(vertices) + ";"
+    + "Object.keys(vertices).forEach(function(key) {"
+    +   "if(key === '__actives'){ return; }"
+    +   "vertices[key] = new pregel.Vertex(vertices[key], pregelMapping);"
+    + "});"
     + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
     + "return function(params) {"
     + "var step = params.step;"
@@ -106,17 +109,18 @@ var algorithmForQueue = function (algorithms, vertices,  executionNumber) {
     + "var global = params.global;"
     + "global.step = step;"
     + "Object.keys(vertices).forEach(function (v) {"
+    + " if (v === '__actives') return;"
     + " var vertex = vertices[v];"
     + " try {"
     + "   if (global.final === true) {"
     + "     (" + algorithms.finalAlgorithm + ")(vertex,queue[vertex._id],global);"
-    + "     worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol);"
     + "   } else {"
+    + "     require('internal').print(vertex._key);"
     + "     (" + algorithms.algorithm + ")(vertex,queue[vertex._id],global);"
-    + "     worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol);"
     + "   }"
+    + "   worker.queueDone(executionNumber, global, vertex.__actives, pregelMapping);"
     + " } catch (err) {"
-    + "   worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol, err);"
+    + "   worker.queueDone(executionNumber, global, vertex.__actives, pregelMapping, err);"
     + " }"
     + "});"
     + "}"
@@ -132,14 +136,12 @@ var  createTaskQueue = function (executionNumber, vertices,  algorithms, workerI
   });
 };
 
-var addTask = function (queue, stepNumber, vertex, globals, vertexCount) {
+var addTask = function (queue, stepNumber, globals) {
   tasks.addJob(
     queue,
     {
       step: stepNumber,
-      vertexInfo : vertex,
-      global: globals,
-      vertexCount: vertexCount
+      global: globals
     }
   );
 };
@@ -175,18 +177,22 @@ var setup = function(executionNumber, options) {
   var map = options.map.map;
   var collectionMapping = {};
   var pregelMapping = new pregel.Mapping(executionNumber);
-
-  for (var w = 0; w < WORKERS; w++) {
-    var vertices = {};
-    _.each(map, function(mapping) {
-      var shards = Object.keys(mapping.originalShards);
+  var w;
+  var vertices;
+  for (w = 0; w < WORKERS; w++) {
+    vertices = {};
+    vertices.__actives = 0;
+    _.each(pregelMapping.getLocalCollectionShardMapping(), function (shards) {
       var i;
       for (i = 0; i < shards.length; i++) {
-        if (mapping.originalShards[shards[i]] === pregel.getServerName()) {
-          db[shards[i]].NTH(w, WORKERS).documents.forEach(function (d)  {
-            vertices[d._id] = new pregel.Vertex(d, pregelMapping, shards[i]);
-          });
-        }
+        db[shards[i]].NTH(w, WORKERS).documents.forEach(function (d)  {
+          vertices[d._id] = d;
+          vertices.__actives++;
+          vertices[d._id]._locationInfo = {
+            shard: shards[i],
+            _id: d._id
+          };
+        });
       }
     });
     createTaskQueue(executionNumber, vertices, options, w);
@@ -354,8 +360,8 @@ var finishedStep = function (executionNumber, global, mapping, final) {
   }
 };
 
-var vertexDone = function (executionNumber, vertex, global, mapping, vertexCount, countCol, err) {
-  vertex._save();
+var queueDone = function (executionNumber, global, actives, mapping, err) {
+  require("internal").print(global);
   var t = p.stopWatch();
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
@@ -363,22 +369,26 @@ var vertexDone = function (executionNumber, vertex, global, mapping, vertexCount
     error.errorMessage = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.message + ": " + err;
     err = error;
   }
+  var globalCol = pregel.getGlobalCollection(executionNumber);
   if (err && !getError(executionNumber)) {
-    var globalCol = pregel.getGlobalCollection(executionNumber);
     globalCol.update(ERR, {error: err});
   }
   var done = db._executeTransaction({
     collections: {
-      write: [countCol.name()]
+      write: [globalCol.name()]
     },
     action: function() {
-      countCol.save({});
-      return countCol.count();
+      var c = globalCol.document("counter");
+      if (c.count + 1 === WORKERS) {
+        globalCol.update("counter", {count: 0});
+        return true;
+      }
+      globalCol.update("counter", {count: c.count + 1});
+      return false;
     }
   });
   p.storeWatch("VertexDone", t);
-  if (done === vertexCount) {
-    countCol.truncate();
+  if (done) {
     finishedStep(executionNumber, global, mapping);
   }
 };
@@ -389,29 +399,15 @@ var executeStep = function(executionNumber, step, options, globals) {
     setup(executionNumber, options);
   }
   var mapping = new pregel.Mapping(executionNumber);
-  activateVertices(executionNumber, step, mapping);
-  var q;
-  if (options.final) {
-    q = getVerticesQuery(mapping);
-  } else {
-    q = getActiveVerticesQuery(mapping);
+  var t = p.stopWatch();
+  globals = globals || {};
+  globals.final = options.final;
+  var i = 0;
+  for (i = 0; i < WORKERS; i++) {
+    var queue = getQueueName(executionNumber, i);
+    addTask(queue, step, globals);
   }
-  // read full count from result and write to work
-  var vertexCount = q.count();
-  if (vertexCount === 0) {
-    finishedStep(executionNumber, {step : step}, mapping, options.final ? true : false);
-  } else {
-    var t = p.stopWatch();
-    var n;
-    globals = globals || {};
-    globals.final = options.final;
-    var queue = getQueueName(executionNumber);
-    while (q.hasNext()) {
-      n = q.next();
-      addTask(queue, step, n, globals, vertexCount);
-    }
-    p.storeWatch("AddingAllTasks", t);
-  }
+  p.storeWatch("AddingAllTasks", t);
 };
 
 var cleanUp = function(executionNumber) {
@@ -430,4 +426,4 @@ var cleanUp = function(executionNumber) {
 exports.executeStep = executeStep;
 exports.cleanUp = cleanUp;
 exports.finishedStep = finishedStep;
-exports.vertexDone = vertexDone;
+exports.queueDone = queueDone;

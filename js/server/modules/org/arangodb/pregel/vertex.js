@@ -35,18 +35,15 @@ var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Vertex = function (jsonData, mapping, shard) {
+var Vertex = function (jsonData, mapping) {
   var t = p.stopWatch();
   var Edge = pregel.Edge;
   var self = this;
   _.each(jsonData, function(val, key) {
     self[key] = val;
   });
+  var shard = this._locationInfo.shard;
   this.__resultShard = db[mapping.getResultShard(shard)];
-  this._locationInfo = {
-    shard: shard,
-    _id: this._id
-  };
   this.__active = true;
   this.__deleted = false;
   this.__result = {};
