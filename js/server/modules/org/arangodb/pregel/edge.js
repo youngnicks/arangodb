@@ -34,45 +34,42 @@ var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Edge = function (mapping, edgeJSON, shard) {
+var Edge = function (edgeJSON, mapping, shard) {
   var t = p.stopWatch();
   var self = this;
   _.each(edgeJSON, function(v, k) {
     self[k] = v;
   });
-  this._resultShard = db._collection(mapping.getResultShard(shard));
-  this.__hasChanged = false;
-  this._doc = _.clone(this._resultShard.document(this._key));
+  this.__resultShard = db._collection(mapping.getResultShard(shard));
   delete this._doc._PRINT;
-  this._result = this._doc.result;
-  this._targetVertex = this._doc._targetVertex;
+  this.__result = {};
+  this.__deleted = false;
+  this._targetVertex = mapping.getToLocationObject(this);
   p.storeWatch("ConstructEdge", t);
 };
 
 Edge.prototype._delete = function () {
-  this.__hasChanged = true;
-  this._doc.deleted = true;
+  this.__deleted = true;
 };
 
 Edge.prototype._isDeleted = function () {
-  return this._doc.deleted;
+  return this.__deleted;
 };
 
 Edge.prototype._getResult = function () {
-  return this._result;
+  return this.__result;
 };
 
 Edge.prototype._setResult = function (result) {
-  this.__hasChanged = true;
-  this._result = result;
+  this.__result = result;
 };
 
 Edge.prototype._save = function () {
   var t = p.stopWatch();
-  if (this.__hasChanged) {
-    this._doc.result = this._result;
-    this._resultShard.replace(this._key, this._doc);
-  }
+  this.__resultShard.save({
+    _key: this._key,
+    result: this._getResult()
+  });
   p.storeWatch("SaveEdge", t);
 };
 
