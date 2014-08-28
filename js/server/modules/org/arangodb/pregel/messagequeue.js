@@ -93,7 +93,7 @@ VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
     data: data
   };
   if (sendLocation) {
-    toSend.sender = this.__vertexInfo;
+    toSend.sender = this._vertexInfo;
   }
   this._parent._send(target, toSend);
 };

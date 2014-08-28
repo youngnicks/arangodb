@@ -96,7 +96,7 @@ var algorithmForQueue = function (algorithms, vertices,  executionNumber) {
     + "var pregel = require('org/arangodb/pregel');"
     + "var pregelMapping = new pregel.Mapping(executionNumber);"
     + "var worker = pregel.Worker;"
-    + (algorithms.aggregator ? "  aggregator = (" + algorithms.aggregator + ");" : "")
+    + (algorithms.aggregator ? "  var aggregator = (" + algorithms.aggregator + ");" : "var aggregator = null;")
     + "var vertices = " + JSON.stringify(vertices) + ";"
     + "Object.keys(vertices).forEach(function(key) {"
     +   "if(key === '__actives'){ return; }"
