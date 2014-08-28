@@ -175,21 +175,15 @@ var setup = function(executionNumber, options) {
   var map = options.map.map;
   var collectionMapping = {};
   var pregelMapping = new pregel.Mapping(executionNumber);
-  var shardKeysAmount = 0;
-  _.each(map, function(mapping, collection) {
-    collectionMapping[collection] = mapping.resultCollection;
-    if (shardKeysAmount < mapping.shardKeys.length) {
-      shardKeysAmount = mapping.shardKeys.length;
-    }
-  });
-  var shards = Object.keys(mapping.originalShards);
+
   for (var w = 0; w < WORKERS; w++) {
     var vertices = {};
     _.each(map, function(mapping) {
+      var shards = Object.keys(mapping.originalShards);
       var i;
       for (i = 0; i < shards.length; i++) {
         if (mapping.originalShards[shards[i]] === pregel.getServerName()) {
-          shards[i].NTH(w, WORKERS).documents.forEach(function (d)  {
+          db[shards[i]].NTH(w, WORKERS).documents.forEach(function (d)  {
             vertices[d._id] = new pregel.Vertex(d, pregelMapping, shards[i]);
           });
         }
