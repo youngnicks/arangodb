@@ -41,7 +41,6 @@ var Edge = function (edgeJSON, mapping, shard) {
     self[k] = v;
   });
   this.__resultShard = db._collection(mapping.getResultShard(shard));
-  delete this._doc._PRINT;
   this.__result = {};
   this.__deleted = false;
   this._targetVertex = mapping.getToLocationObject(this);
