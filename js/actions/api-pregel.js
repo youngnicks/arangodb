@@ -60,7 +60,8 @@ function post_pregel (req, res) {
           step : body.step,
           messages : body.messages,
           active : body.active,
-          error: body.error
+          error: body.error,
+          final: body.final
         }
       );
       actions.resultOk(req, res, actions.HTTP_OK);

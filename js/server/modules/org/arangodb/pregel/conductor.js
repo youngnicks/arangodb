@@ -43,6 +43,7 @@ var timeout = "timeout";
 var stepContent = "stepContent";
 var waitForAnswer = "waitForAnswer";
 var active = "active";
+var final = "final";
 var state = "state";
 var messages = "messages";
 var error = "error";
@@ -139,7 +140,6 @@ var startNextStep = function(executionNumber, options) {
     for (i = 0; i < dbServers.length; i++) {
       debug = ArangoClusterComm.wait(coordOptions);
     }
-    require("internal").print("Told all servers");
   } else {
     dbServers = ["localhost"];
     p.storeWatch("TriggerNextStep", t);
@@ -206,23 +206,22 @@ var initNextStep = function (executionNumber) {
   var t = p.stopWatch();
   var info = getExecutionInfo(executionNumber);
   info[step]++;
+  var stepInfo = info[stepContent][info[step]];
   info[stepContent].push({
     active: 0,
-    messages: 0
+    messages: 0,
+    final: stepInfo[active] === 0 && stepInfo[messages] === 0 ? true : false
   });
   info[waitForAnswer] = getWaitForAnswerMap();
   updateExecutionInfo(executionNumber, info);
 
   var globals = getGlobals(executionNumber);
-  var stepInfo = info[stepContent][info[step]];
 
-  require("internal").print("Initing");
   if (globals && globals.conductorAlgorithm) {
     var t2 = p.stopWatch();
     globals.step = info[step] -1;
     var x = new Function("a", "b", "c", "return " + globals.conductorAlgorithm + "(a,b,c);");
-    var resultName = generateResultCollectionName(globals.graphName, executionNumber);
-    x(new pregel.GraphAccess(resultName, stepInfo),globals, stepInfo);
+    x(globals, stepInfo);
     saveGlobals(executionNumber, globals);
     p.storeWatch("SuperStepAlgo", t2);
   }
@@ -230,6 +229,9 @@ var initNextStep = function (executionNumber) {
   if( stepInfo[active] > 0 || stepInfo[messages] > 0) {
     p.storeWatch("initNextStep", t);
     startNextStep(executionNumber);
+  } else if (stepInfo[final] === false && globals && globals.finalAlgorithm)  {
+    p.storeWatch("initNextStep", t);
+    startNextStep(executionNumber, {final : true});
   } else {
     p.storeWatch("initNextStep", t);
     cleanUp(executionNumber);
@@ -245,7 +247,6 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
     edge: {},
     vertex: {}
   };
-  require("internal").print("Resulting");
   var shardKeyMap = {};
   var shardMap = [];
   var serverShardMap = {};
@@ -394,7 +395,6 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   updateExecutionInfo(
     executionNumber, {graphName : generateResultCollectionName(graph.__name, executionNumber)}
   );
-  require("internal").print("Gerumpeling");
   p.storeWatch("SetupResultGraph", t);
   return resMap;
 };
@@ -406,11 +406,13 @@ var startExecution = function(graphName, algorithms,  options) {
     stepContentObject = {};
   var pregelAlgorithm = algorithms.base;
   var conductorAlgorithm = algorithms.superstep;
+  var finalAlgorithm = algorithms.final;
   var aggregator = algorithms.aggregator;
   infoObject[waitForAnswer] = getWaitForAnswerMap();
   infoObject[step] = 0;
   options = options  || {};
   options.conductorAlgorithm = conductorAlgorithm;
+  options.finalAlgorithm = finalAlgorithm;
   options.graphName = graphName;
   if (options[timeout]) {
     infoObject[timeout] = options[timeout];
@@ -419,7 +421,8 @@ var startExecution = function(graphName, algorithms,  options) {
   infoObject[state] = stateRunning;
   stepContentObject[active] = graph._countVertices();
   stepContentObject[messages] = 0;
-  infoObject[stepContent] = [stepContentObject, {active: 0 , messages: 0}];
+  stepContentObject[final] = false;
+  infoObject[stepContent] = [stepContentObject, {active: 0 , messages: 0, final : false}];
   var key = saveExecutionInfo(infoObject, options)._key;
   try {
     /*jslint evil : true */
@@ -558,7 +561,6 @@ var finishedStep = function(executionNumber, serverName, info) {
   } else {
     checks = db._executeTransaction(transactionBody);
   }
-  require("internal").print("checked", checks, serverName);
   if (checks.respond && !checks.error) {
     if (ArangoServerState.isCoordinator()) {
       tasks.unregister(genTaskId(executionNumber));

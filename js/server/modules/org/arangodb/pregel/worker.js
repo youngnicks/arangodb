@@ -55,7 +55,7 @@ var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
 var WORKERS = 8;
-var QUEUESIZE = 10000;
+var QUEUESIZE = 15000;
 
 var queryGetAllSourceEdges = "FOR e IN @@original RETURN "
   + "{ _key: e._key, _from: e._from, _to: e._to";
@@ -127,7 +127,7 @@ var algorithmToString = function (algorithm) {
     + "}";
 };
 
-var algorithmForQueue = function (algorithm, executionNumber) {
+var algorithmForQueue = function (algorithm, finalAlgorithm, executionNumber) {
   return "(function() {"
     + "var t1 = require('org/arangodb/profiler').stopWatch();"
     + "var executionNumber = " + executionNumber + ";"
@@ -146,9 +146,15 @@ var algorithmForQueue = function (algorithm, executionNumber) {
     + "var global = params.global;"
     + "global.step = step;"
     + "try {"
+    + " if (global.final === true) {"
+    + "  (" + finalAlgorithm + ")(vertex,messages,global);"
+    + "  require('org/arangodb/profiler').storeWatch('singleVertex', t2);"
+    + "  worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol);"
+    + " } else {"
     + "  (" + algorithm + ")(vertex,messages,global);"
     + "  require('org/arangodb/profiler').storeWatch('singleVertex', t2);"
     + "  worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol);"
+    + " }"
     + "} catch (err) {"
     + "  worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol, err);"
     + "}"
@@ -156,12 +162,12 @@ var algorithmForQueue = function (algorithm, executionNumber) {
     + "}())";
 };
 
-var createTaskQueue = function (executionNumber, algorithm) {
+var createTaskQueue = function (executionNumber, algorithm, finalAlgorithm) {
   tasks.createNamedQueue({
     name: getQueueName(executionNumber),
     threads: WORKERS,
     size: QUEUESIZE,
-    worker: algorithmForQueue(algorithm, executionNumber)
+    worker: algorithmForQueue(algorithm, finalAlgorithm, executionNumber)
   });
 };
 
@@ -196,19 +202,17 @@ var getError = function(executionNumber) {
 
 var setup = function(executionNumber, options) {
   // create global collection
-  try {
   pregel.createWorkerCollections(executionNumber);
   p.setup();
   var global = pregel.getGlobalCollection(executionNumber);
   global.save({_key: COUNTER, count: -1});
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
-//  global.save({_key: ALGORITHM, algorithm : options.algorithm});
   if (options.aggregator) {
     pregel.saveAggregator(executionNumber, options.aggregator); 
   }
   saveMapping(executionNumber, options.map);
-  createTaskQueue(executionNumber, options.algorithm);
+  createTaskQueue(executionNumber, options.algorithm, options.finalAlgorithm);
   var map = options.map.map;
   var collectionMapping = {};
 
@@ -245,7 +249,6 @@ var setup = function(executionNumber, options) {
         };
         if (mapping.type === 3) {
           q = db._query(edgeQuery, bindVars); 
-          require("console").log("Penisle", q.hasNext(), bindVars, edgeQuery);
           resultCol = db[resultShards[i]];
           while (q.hasNext()) {
             edgeToStore = q.next();
@@ -254,7 +257,6 @@ var setup = function(executionNumber, options) {
             edgeToStore.result = {};
             from = translateId(edgeToStore._from, pregelMapping);
             to = translateId(edgeToStore._to, pregelMapping);
-            require("console").log(from, to, edgeToStore);
             resultCol.save(from, to, edgeToStore);
           }
         } else {
@@ -272,9 +274,6 @@ var setup = function(executionNumber, options) {
       }
     }
   });
-} catch (e) {
-  require("internal").print(e);
-}
 };
 
 
@@ -322,6 +321,28 @@ var getActiveVerticesQuery = function (mapping) {
   query += ") RETURN u";
   return db._query(query, bindVars);
 };
+
+var getVerticesQuery = function (mapping) {
+  var count = 0;
+  var bindVars = {};
+  var query = "FOR u in UNION([], []";
+  var resultShardMapping = mapping.getLocalResultShardMapping();
+  _.each(resultShardMapping, function (resultShards) {
+    var i;
+    for (i = 0; i < resultShards.length; i++) {
+      query += ",(FOR i in @@collection" + count
+        + " FILTER i.deleted == false"
+        + " RETURN {_id: i._id, shard: @collection" + count
+        + ", locationObject: i.locationObject, _doc: i})";
+      bindVars["@collection" + count] = resultShards[i];
+      bindVars["collection" + count] = resultShards[i];
+      count++;
+    }
+  });
+  query += ") RETURN u";
+  return db._query(query, bindVars);
+};
+
 
 var countActiveVertices = function (mapping) {
   var count = 0;
@@ -376,7 +397,7 @@ var sendMessages = function (executionNumber, mapping) {
   msgCol.truncate();
 };
 
-var finishedStep = function (executionNumber, global, mapping) {
+var finishedStep = function (executionNumber, global, mapping, final) {
   var t = p.stopWatch();
   var messages = pregel.getMsgCollection(executionNumber).count();
   var active = countActiveVertices(mapping);
@@ -394,7 +415,8 @@ var finishedStep = function (executionNumber, global, mapping) {
       executionNumber: executionNumber,
       messages: messages,
       active: active,
-      error: error
+      error: error,
+      final : final
     });
     var coordOptions = {
       coordTransactionID: ArangoClusterInfo.uniqid()
@@ -409,7 +431,8 @@ var finishedStep = function (executionNumber, global, mapping) {
       step: global.step,
       messages: messages,
       active: active,
-      error: error
+      error: error,
+      final : final
     });
   }
 };
@@ -450,15 +473,21 @@ var executeStep = function(executionNumber, step, options, globals) {
   }
   var mapping = new pregel.Mapping(executionNumber);
   activateVertices(executionNumber, step, mapping);
-  var q = getActiveVerticesQuery(mapping);
+  var q;
+  if (options.final) {
+    q = getVerticesQuery(mapping);
+  } else {
+    q = getActiveVerticesQuery(mapping);
+  }
   // read full count from result and write to work
   var vertexCount = q.count();
   if (vertexCount === 0) {
-    finishedStep(executionNumber, {step : step}, mapping);
+    finishedStep(executionNumber, {step : step}, mapping, options.final ? true : false);
   } else {
     var t = p.stopWatch();
     var n;
     globals = globals || {};
+    globals.final = options.final;
     var queue = getQueueName(executionNumber);
     while (q.hasNext()) {
       n = q.next();
