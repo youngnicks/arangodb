@@ -140,6 +140,7 @@ Queue.prototype._fillQueues = function () {
     }
     vQueue = self[key];
     vQueue._fill(content);
+    self.__vertices[key]._activate();
   };
   while (cursor.hasNext()) {
     msg = cursor.next();
