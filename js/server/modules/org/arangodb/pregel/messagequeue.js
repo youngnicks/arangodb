@@ -29,79 +29,52 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var db = require("internal").db;
+var _ = require("underscore");
 var pregel = require("org/arangodb/pregel");
-var query = "FOR m IN @@collection FILTER m._toVertex == @vertex && m.step == @step RETURN m";
-var countQuery = "FOR m IN @@collection FILTER m._toVertex == @vertex && m.step == @step RETURN LENGTH(m.data)";
+var query = "FOR m IN @@collection FILTER m.step == @step RETURN m";
 var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
-var InMessages = function (col, step, from) {
-  var bindVars = {
-    step: step,
-    vertex: from,
-    "@collection": col
-  };
-  var countQ = db._query(
-    countQuery, bindVars
-  );
-  var c = 0;
-  while (countQ.hasNext()) {
-    c += countQ.next();
-  }
-  this._count = c;
-  this._position = 0;
-  this._maxPosition = 0;
-  this._cursor = db._query(query, bindVars); 
-  this._current = null;
+var VertexMessageQueue = function(parent, vertexInfo) {
+  this._parent = parent;
+  this._vertexInfo = vertexInfo;
+  this._inc = [];
+  this._pos = 0;
 };
 
-InMessages.prototype.count = function () {
-  return this._count;
+VertexMessageQueue.prototype.count = function () {
+  return this._inc.length;
 };
 
-InMessages.prototype.hasNext = function () {
-  if (this._position < this._maxPosition) {
-    return true;
-  }
-  if (this._cursor.hasNext()) {
-    this._current = this._cursor.next();
-    this._position = -1;
-    this._maxPosition = this._current.data.length - 1;
-    return true;
-  }
-  return false;
+VertexMessageQueue.prototype.hasNext = function () {
+  return this._pos < this.count();
 };
 
-InMessages.prototype.next = function () {
+VertexMessageQueue.prototype.next = function () {
   if (!this.hasNext()) {
     return null;
   }
-  this._position++;
-  if (this._current.sender) {
-    return {
-      data: this._current.data[this._position],
-      sender: this._current.sender[this._position]
-    };
+  var next = this._inc[this._pos];
+  this._pos++;
+  return next;
+};
+
+VertexMessageQueue.prototype._fill = function (msg) {
+  if (msg.aggregate) {
+    this._inc.push({data: msg.aggregate});
   }
-  return {
-    data: this._current.data[this._position]
-  };
+  if (msg.plain) {
+    this._inc = this._inc.concat(msg.plain);
+  }
 };
 
-var Queue = function (executionNumber, vertexInfo, step, storeAggregate) {
-  this.__executionNumber = executionNumber;
-  this.__collection = pregel.getMsgCollection(executionNumber);
-  this.__workCollection = pregel.getWorkCollection(executionNumber);
-  this.__from = vertexInfo.locationObject._id;
-  this.__nextStep = step + 1;
-  this.__step = step;
-  this.__vertexInfo = vertexInfo.locationObject;
-  this.__storeAggregate = storeAggregate;
+VertexMessageQueue.prototype._clear = function () {
+  this._inc = [];
+  this._pos = 0;
 };
 
-// Target is id now, has to be modified to contian vertex data
-Queue.prototype.sendTo = function(target, data, sendLocation) {
+VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
   if (sendLocation !== false) {
     sendLocation = true; 
   }
@@ -122,11 +95,85 @@ Queue.prototype.sendTo = function(target, data, sendLocation) {
   if (sendLocation) {
     toSend.sender = this.__vertexInfo;
   }
-  this.__storeAggregate(this.__nextStep, target, toSend);
+  this._parent._send(target, toSend);
 };
 
-Queue.prototype.getMessages = function () {
-  return new InMessages(this.__workCollection.name(), this.__step, this.__from);
+// End of Vertex Message queue
+
+var Queue = function (executionNumber, vertices, aggregate) {
+  var self = this;
+  this.__vertices = vertices;
+  this.__executionNumber = executionNumber;
+  this.__collection = pregel.getMsgCollection(executionNumber);
+  this.__workCollection = pregel.getWorkCollection(executionNumber);
+  this.__step = 0;
+  if (aggregate) {
+    this.__aggregate = aggregate;
+  }
+  this.__queues = [];
+  _.each(vertices, function(v) {
+    var id = v._locationInfo._id;
+    self.__queues.push(id);
+    self[id] = new VertexMessageQueue(self, v._locationInfo);
+  });
+  this.__output = {};
+};
+
+Queue.prototype._fillQueues = function () {
+  var self = this;
+  _.each(this.__queues, function(q) {
+    self[q]._clear();
+  });
+  _.each(this.__output, function(ignore, shard) {
+    this.__output[shard] = {};
+  });
+  var cursor = db._query(query, {
+    "@collection": this.__workCollection.name(),
+    step: this.__step
+  });
+  var msg, vQueue;
+  this.__step++;
+  var fillQueue = function (content, key) {
+    if (key === "_key" || key === "_id" || key === "_rev"
+      || key === "toShard" || key === "step") {
+      return;
+    }
+    vQueue = self[key];
+    vQueue._fill(content);
+  };
+  while (cursor.hasNext()) {
+    msg = cursor.next();
+    _.each(msg, fillQueue);
+  }
+};
+
+//msg has data and optionally sender
+Queue.prototype._send = function (target, msg) {
+  var out = this.__output;
+  var shard = target.shard;
+  var id = target._id;
+  out[shard] = out[shard] || {};
+  out[shard][id] = out[shard][id] || {};
+  var msgContainer = out[shard][id];
+  if (msg.sender || !this.__aggregate) {
+    msgContainer.plain = msgContainer.plain || [];
+    msgContainer.plain.push(msg);
+  } else {
+    if (msgContainer.hasOwnProperty("aggregate")) {
+      msgContainer.aggregate = this.__aggregate(msg.data, msgContainer.aggregate);
+    } else {
+      msgContainer.aggregate = msg.data;
+    }
+  }
+};
+
+Queue.prototype._storeInCollection = function() {
+  var self = this;
+  _.each(this.__output, function(doc, shard) {
+    doc.toShard = shard;
+    doc.step = self.__step;
+    self.__collection.save(doc);
+  });
 };
 
 exports.MessageQueue = Queue;

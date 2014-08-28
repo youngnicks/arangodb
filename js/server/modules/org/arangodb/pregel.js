@@ -37,7 +37,7 @@ var ArangoError = arangodb.ArangoError;
 
 exports.getCollection = function () {
   return db._pregel;
-}
+};
 
 exports.getExecutionInfo = function(executionNumber) {
   return _.clone(exports.getCollection().document(executionNumber));
@@ -83,7 +83,7 @@ exports.createWorkerCollections = function (executionNumber) {
 };
 
 exports.getWorkCollection = function (executionNumber) {
-  return db._collection(exports.genWorkCollectionName(executionNumber));
+  return db[exports.genWorkCollectionName(executionNumber)];
 };
 
 exports.getTimeoutConst = function (executionNumber) {

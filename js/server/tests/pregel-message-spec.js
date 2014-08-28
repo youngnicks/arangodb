@@ -39,58 +39,320 @@ describe("Pregel MessageQueue", function () {
   var testee, executionNumber, senderId, receiverId, step, msgCollectionName, vertexCollectionName,
     workCollectionName, globalCollectionName, msgCollection, workCollection, shardName, globalCollection, map;
 
+  var sumAggregate = function (newVal, oldVal) {
+    return newVal + oldVal;
+  };
+
+
   beforeEach(function () {
-    var createMapEntry = function (src, tar, type) {
-      var res = {};
-      res.type = type;
-      res.resultCollection = tar;
-      res.orignalShards = {};
-      res.orignalShards[src] = "localhost";
-      res.resultShards = {};
-      res.resultShards[tar] = "localhost";
-      return res;
-    };
-
-
     executionNumber = "UnitTest123";
-    vertexCollectionName = "UnitTestVertices";
     msgCollectionName = pregel.genMsgCollectionName(executionNumber);
     workCollectionName = pregel.genWorkCollectionName(executionNumber);
-    globalCollectionName = pregel.genGlobalCollectionName(executionNumber);
-    step = 2;
-    senderId = vertexCollectionName + "/sender";
-    receiverId = vertexCollectionName + "/receiver";
-    if (ArangoServerState.role() === "PRIMARY") {
-      shardName = "UnitTestShard";
-    } else {
-      shardName = vertexCollectionName;
-    }
-    db._drop(vertexCollectionName);
     db._drop(msgCollectionName);
     db._drop(workCollectionName);
-    db._drop(globalCollectionName);
-    db._create(vertexCollectionName);
-    globalCollection = db._create(globalCollectionName);
-    db._createEdgeCollection(msgCollectionName).ensureHashIndex("toShard");
-    db._createEdgeCollection(workCollectionName);
+    db._create(msgCollectionName).ensureHashIndex("toShard");
+    db._create(workCollectionName);
     msgCollection = pregel.getMsgCollection(executionNumber);
     workCollection = pregel.getWorkCollection(executionNumber);
-    map = {
-      _key: "map"
-    };
-    map[vertexCollectionName] = createMapEntry(vertexCollectionName, "resultCol", 2);
-
-    globalCollection.save(map);
-    testee = new Queue(executionNumber, {_id: senderId}, step);
-    spyOn(ArangoClusterInfo, "getResponsibleShard").and.returnValue(shardName);
-    spyOn(pregel, "getResponsibleShard").and.callThrough();
   });
 
   afterEach(function () {
-    db._drop(vertexCollectionName);
     db._drop(msgCollectionName);
+    db._drop(workCollectionName);
   });
 
+  describe("during task execution", function () {
+
+    var queue, target1, target2, target3, shard1, shard2;
+
+    beforeEach(function () {
+      shard1 = "shard1";
+      shard2 = "shard2";
+      target1 = {
+        _id: "target/1",
+        shard: shard1
+      };
+      target2 = {
+        _id: "target/2",
+        shard: shard1
+      };
+      target3 = {
+        _id: "target/3",
+        shard: shard2
+      };
+    });
+
+    describe("low level message send",  function () {
+
+      describe("without aggregate", function () {
+
+        beforeEach(function () {
+          queue = new Queue(executionNumber, []);
+        });
+
+        it("should store the message in output", function () {
+          var msg = {
+            data: 2
+          };
+          queue._send(target1, msg);
+          queue._send(target2, msg);
+          queue._send(target3, msg);
+
+          expect(queue.__output[shard1]).toBeDefined();
+          expect(queue.__output[shard2]).toBeDefined();
+          expect(queue.__output[shard1][target1._id]).toBeDefined();
+          expect(queue.__output[shard1][target2._id]).toBeDefined();
+          expect(queue.__output[shard2][target3._id]).toBeDefined();
+
+          expect(queue.__output[shard1][target1._id].aggregate).toBeUndefined();
+          expect(queue.__output[shard1][target2._id].aggregate).toBeUndefined();
+          expect(queue.__output[shard2][target3._id].aggregate).toBeUndefined();
+
+          expect(queue.__output[shard1][target1._id].plain).toEqual([msg]);
+          expect(queue.__output[shard1][target2._id].plain).toEqual([msg]);
+          expect(queue.__output[shard2][target3._id].plain).toEqual([msg]);
+        });
+
+        it("should create an array of messages if no aggregate is given", function () {
+          var msg1 = {
+            data: 2
+          };
+          var msg2 = {
+            data: 4,
+            sender: 123
+          };
+          var msg3 = {
+            data: 8,
+            sender: "peter"
+          };
+          queue._send(target1, msg1);
+          queue._send(target1, msg2);
+          queue._send(target1, msg3);
+          expect(queue.__output[shard1][target1._id].plain).toEqual([msg1, msg2, msg3]);
+        });
+
+      });
+
+      describe("with aggregate", function () {
+
+        beforeEach(function () {
+          queue = new Queue(executionNumber, [], sumAggregate);
+        });
+
+        it("should aggregate messages to the same vertex", function () {
+          var msg1 = {
+            data: 2
+          };
+          var msg2 = {
+            data: 4
+          };
+          var msg3 = {
+            data: 8
+          };
+          queue._send(target1, msg1);
+          queue._send(target1, msg2);
+          queue._send(target1, msg3);
+          expect(queue.__output[shard1][target1._id].aggregate).toEqual(14);
+          expect(queue.__output[shard1][target1._id].plain).toBeUndefined();
+        });
+
+        it("should not aggregate messages with a sender", function () {
+          var msg1 = {
+            data: 2
+          };
+          var msg2 = {
+            data: 4,
+            sender: "self"
+          };
+          var msg3 = {
+            data: 8
+          };
+          queue._send(target1, msg1);
+          queue._send(target1, msg2);
+          queue._send(target1, msg3);
+          expect(queue.__output[shard1][target1._id].aggregate).toEqual(10);
+          expect(queue.__output[shard1][target1._id].plain).toEqual([msg2]);
+        });
+
+      });
+
+    });
+
+    describe("vertex message queues", function () {
+
+      it("should create a queue for each vertex on setup", function () {
+        var v1 = "v/1";
+        var v2 = "v/2";
+        var vertices = [];
+        vertices.push({
+          _locationInfo: {
+            _id: v1,
+            shard: "s100"
+          }
+        });
+        vertices.push({
+          _locationInfo: {
+            _id: v2,
+            shard: "s101"
+          }
+        });
+        queue = new Queue(executionNumber, vertices);
+        expect(queue.__queues.sort()).toEqual([v1, v2].sort());
+        expect(queue[v1]).toBeDefined();
+        expect(queue[v2]).toBeDefined();
+      });
+
+      describe("messages in the queue", function () {
+
+        var vertices, v1, v2, v3, firstMsg, secondMsg, thirdMsg;
+
+        beforeEach(function () {
+          vertices = [];
+          v1 = "v/1";
+          v2 = "v/2";
+          v3 = "v/3";
+          vertices.push({
+            _locationInfo: {
+              _id: v1,
+              shard: "s100"
+            }
+          });
+          vertices.push({
+            _locationInfo: {
+              _id: v2,
+              shard: "s101"
+            }
+          });
+          vertices.push({
+            _locationInfo: {
+              _id: v3,
+              shard: "s100"
+            }
+          });
+          queue = new Queue(executionNumber, vertices);
+          var msgContent = {
+            toShard: "s100",
+            step: 0
+          };
+          firstMsg = {
+            data: "first",
+            sender: {_id: "v/3", shard: "s101"}
+          };
+          secondMsg = {
+            data: "second",
+            sender: {_id: "v/3", shard: "s101"}
+          };
+          thirdMsg = {
+            data: 15,
+            sender: {_id: "v/3", shard: "s101"}
+          };
+          msgContent[v1] = {
+            aggregate: 15
+          };
+          msgContent[v2] = {
+            plain: [firstMsg, secondMsg]
+          };
+          msgContent[v3] = {
+            aggregate: 1,
+            plain: [thirdMsg]
+          };
+          workCollection.save(msgContent);
+          workCollection.save(msgContent);
+          queue._fillQueues();
+        });
+
+        it("should contain all aggregates of a vertex", function () {
+          var vQueue = queue[v1];
+          expect(vQueue.count()).toEqual(2);
+          expect(vQueue.hasNext()).toEqual(true);
+          expect(vQueue.next()).toEqual({data: 15});
+          expect(vQueue.hasNext()).toEqual(true);
+          expect(vQueue.next()).toEqual({data: 15});
+          expect(vQueue.hasNext()).toEqual(false);
+          expect(vQueue.next()).toEqual(null);
+        });
+
+        it("should concatenate plain messages in the query cursor", function () {
+          var vQueue = queue[v2];
+          expect(vQueue.count()).toEqual(4);
+          expect(vQueue.hasNext()).toEqual(true);
+          expect(vQueue.next()).toEqual(firstMsg);
+          expect(vQueue.hasNext()).toEqual(true);
+          expect(vQueue.next()).toEqual(secondMsg);
+          expect(vQueue.hasNext()).toEqual(true);
+          expect(vQueue.next()).toEqual(firstMsg);
+          expect(vQueue.hasNext()).toEqual(true);
+          expect(vQueue.next()).toEqual(secondMsg);
+          expect(vQueue.hasNext()).toEqual(false);
+          expect(vQueue.next()).toEqual(null);
+        });
+
+        it("should put the aggregate as the first entry of each msg list", function () {
+          var vQueue = queue[v3];
+          expect(vQueue.count()).toEqual(4);
+          expect(vQueue.hasNext()).toEqual(true);
+          expect(vQueue.next()).toEqual({data: 1});
+          expect(vQueue.hasNext()).toEqual(true);
+          expect(vQueue.next()).toEqual(thirdMsg);
+          expect(vQueue.hasNext()).toEqual(true);
+          expect(vQueue.next()).toEqual({data: 1});
+          expect(vQueue.hasNext()).toEqual(true);
+          expect(vQueue.next()).toEqual(thirdMsg);
+          expect(vQueue.hasNext()).toEqual(false);
+          expect(vQueue.next()).toEqual(null);
+        });
+
+      });
+    });
+
+    it("should fill the message collection", function () {
+      queue = new Queue(executionNumber, [], sumAggregate);
+      queue._fillQueues();
+      var msg1 = {
+        data: 2
+      };
+      var msg2 = {
+        data: 4
+      };
+      var msg3 = {
+        data: 8
+      };
+      queue._send(target1, msg1);
+      queue._send(target1, msg2);
+      queue._send(target2, msg2);
+      queue._send(target2, msg3);
+      queue._send(target3, msg1);
+      queue._send(target3, msg3);
+
+      expect(msgCollection.count()).toEqual(0);
+
+      queue._storeInCollection();
+
+      expect(msgCollection.count()).toEqual(2);
+      var list = msgCollection.toArray();
+
+      var toS1, toS2;
+      if (list[0].toShard === "shard1") {
+        toS1 = list[0];
+        toS2 = list[1];
+      } else {
+        toS1 = list[1];
+        toS2 = list[0];
+      }
+      expect(toS1.step).toEqual(1);
+      expect(toS1[target1._id].aggregate).toEqual(6);
+      expect(toS1[target2._id].aggregate).toEqual(12);
+      expect(toS1[target3._id]).toBeUndefined();
+
+      expect(toS2.step).toEqual(1);
+      expect(toS2[target1._id]).toBeUndefined();
+      expect(toS2[target2._id]).toBeUndefined();
+      expect(toS2[target3._id].aggregate).toEqual(10);
+    });
+
+  });
+
+  /*
   describe("outgoing", function () {
 
     it("should send text messages", function () {
@@ -185,5 +447,6 @@ describe("Pregel MessageQueue", function () {
     });
 
   });
+  */
 
 });
