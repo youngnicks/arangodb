@@ -106,23 +106,6 @@ exports.getMap = function (executionNumber) {
   return exports.getGlobalCollection(executionNumber).document("map").map;
 };
 
-exports.getAggregator = function (executionNumber) {
-  var t = p.stopWatch();
-  var col = exports.getGlobalCollection(executionNumber);
-  if (col.exists("aggregator")) {
-    p.storeWatch("loadAggregator", t);
-    return col.document("aggregator").func;
-  }
-  p.storeWatch("loadAggregator", t);
-};
-
-exports.saveAggregator = function (executionNumber, func) {
-  exports.getGlobalCollection(executionNumber).save({
-    _key: "aggregator",
-    func: func
-  });
-};
-
 var saveMapping = function (executionNumber, name, map) {
   var col = exports.getGlobalCollection(executionNumber);
   map._key = name;
@@ -158,91 +141,6 @@ var loadMapping = function (executionNumber, name) {
   var res = exports.getGlobalCollection(executionNumber).document(name);
   p.storeWatch("loadMapping", t);
   return res;
-};
-
-exports.storeAggregate = function(executionNumber) {
-  var msg = exports.genMsgCollectionName(executionNumber);
-  var agg = exports.getAggregator(executionNumber);
-  if (agg) {
-    var f = new Function("newMessage", "oldMessage", "return (" +  agg + ")(newMessage,oldMessage);");
-    return function(step, target, info) {
-      var t = p.stopWatch();
-      db._executeTransaction({
-        collections: {
-          write: [msg]
-        },
-        action: function(params) {
-          var db = require("internal").db;
-          var col = db[params.col];
-          var old = col.firstExample({
-            step: params.step,
-            _toVertex: target._id
-          });
-          if (old) {
-            old.data = [params.func(params.info.data, old.data[0])];
-            col.replace(old._key, old);
-            return;
-          }
-          var toSend = {
-            _toVertex: target._id,
-            data: [params.info.data],
-            step: params.step,
-            toShard: target.shard
-          };
-          col.save(toSend);
-        },
-        params: {
-          info: info,
-          target: target,
-          col: msg,
-          step: step,
-          func: f
-        }
-      });
-      p.storeWatch("UserAggregate", t);
-    };
-  }
-  return function(step, target, info) {
-    var t = p.stopWatch();
-    db._executeTransaction({
-      collections: {
-        write: [msg]
-      },
-      action: function(params) {
-        var db = require("internal").db;
-        var col = db[params.col];
-        var old = col.firstExample({
-          step: params.step,
-          _toVertex: target._id
-        });
-        if (old) {
-          old.data.push(params.info.data);
-          if (old.sender) {
-            old.sender.push(params.info.sender);
-          }
-          col.update(old._key, old);
-          return;
-        }
-        var toSend = {
-          _toVertex: target._id,
-          data: [params.info.data],
-          step: params.step,
-          toShard: target.shard
-        };
-        if (info.sender) {
-          toSend.sender = [params.info.sender];
-        }
-        col.save(toSend);
-      },
-      params: {
-        info: info,
-        target: target,
-        col: msg,
-        step: step
-      }
-    });
-    p.storeWatch("DefaultAggregate", t);
-  };
 };
 
 exports.Conductor = require("org/arangodb/pregel/conductor");

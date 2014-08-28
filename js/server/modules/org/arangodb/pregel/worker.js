@@ -55,22 +55,9 @@ var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
 var WORKERS = 8;
-var QUEUESIZE = 15000;
 
 var queryGetAllSourceEdges = "FOR e IN @@original RETURN "
   + "{ _key: e._key, _from: e._from, _to: e._to";
-
-var queryInsertDefaultEdge = "FOR v IN @@original "
-  + "LET from = PARSE_IDENTIFIER(v._from) "
-  + "LET to = PARSE_IDENTIFIER(v._to) ";
-
-var queryInsertDefaultEdgeInsertPart = "INSERT {'_key' : v._key, 'deleted' : false, 'result' : {}, "
-  + "'_from' : CONCAT(TRANSLATE(from.collection, @collectionMapping), "
-  + "'/', from.key), "
-  + "'_to' : CONCAT(TRANSLATE(to.collection, @collectionMapping), "
-  + "'/', to.key)";
-
-var queryInsertDefaultEdgeIntoPart = "} INTO  @@result";
 
 var queryInsertDefaultVertex = "FOR v IN @@original INSERT {"
   + " '_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {},"
@@ -84,9 +71,6 @@ var queryActivateVertices = "FOR v IN @@work "
   + "UPDATE PARSE_IDENTIFIER(v._toVertex).key WITH "
   + "{'active' : true} IN @@result";
 
-var queryUpdateCounter = "LET oldCount = DOCUMENT(@@global, 'counter').count "
-  + "UPDATE 'counter' WITH {count: oldCount - 1} IN @@global";
-
 var queryMessageByShard = "FOR v IN @@message "
   + "FILTER v.toShard == @shardId "
   + "RETURN v";
@@ -95,8 +79,8 @@ var queryCountStillActiveVertices = "LET c = (FOR i in @@collection"
   + " FILTER i.active == true && i.deleted == false"
   + " RETURN 1) RETURN LENGTH(c)";
 
-var getQueueName = function (executionNumber) {
-  return "P_QUEUE_" + executionNumber;
+var getQueueName = function (executionNumber, counter) {
+  return "P_QUEUE_" + executionNumber + "_" + counter;
 };
 
 var translateId = function (id, mapping) {
@@ -106,68 +90,45 @@ var translateId = function (id, mapping) {
   return mapping.getResultCollection(col) + "/" + key;
 };
 
-var algorithmToString = function (algorithm) {
-  return "var time = require('org/arangodb/profiler').stopWatch();"
-    + "var executionNumber = params.executionNumber; "
-    + "var step = params.step;"
-    + "var vertexInfo = params.vertexInfo;"
-    + "var pregel = require('org/arangodb/pregel');"
-    + "var mapping = new pregel.Mapping(executionNumber);"
-    + "var worker = pregel.Worker;"
-    + "var vertex = new pregel.Vertex(mapping, vertexInfo);"
-    + "var messages = new pregel.MessageQueue(executionNumber, vertexInfo, step);"
-    + "var global = params.global;"
-    + "global.step = step;"
-    + "try {"
-    + "  (" + algorithm + ")(vertex,messages,global);"
-    + " require('org/arangodb/profiler').storeWatch('singleVertex', time);"
-    + "  worker.vertexDone(executionNumber, vertex, global, mapping);"
-    + "} catch (err) {"
-    + "  worker.vertexDone(executionNumber, vertex, global, mapping, err);"
-    + "}";
-};
-
-var algorithmForQueue = function (algorithm, finalAlgorithm, executionNumber) {
+var algorithmForQueue = function (algorithms, vertices,  executionNumber) {
   return "(function() {"
-    + "var t1 = require('org/arangodb/profiler').stopWatch();"
     + "var executionNumber = " + executionNumber + ";"
     + "var pregel = require('org/arangodb/pregel');"
-    + "var countCol = pregel.getCountCollection(executionNumber);"
-    + "var mapping = new pregel.Mapping(executionNumber);"
     + "var worker = pregel.Worker;"
-    + "var storeAggregate = pregel.storeAggregate(executionNumber);"
-    + "require('org/arangodb/profiler').storeWatch('contextSetup', t1);"
+    + "if (algorithms.aggregator) {"
+    + "  aggregator = new Function('a', 'b', aggregate + '(a,b);');"
+    + "}"
+    + "var vertices = vertices";
+    + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
     + "return function(params) {"
-    + "var t2 = require('org/arangodb/profiler').stopWatch();"
     + "var step = params.step;"
-    + "var vertexInfo = params.vertexInfo;"
-    + "var vertex = new pregel.Vertex(mapping, vertexInfo);"
-    + "var messages = new pregel.MessageQueue(executionNumber, vertexInfo, step, storeAggregate);"
+    + "queue._fillQueues();"
     + "var global = params.global;"
     + "global.step = step;"
-    + "try {"
-    + " if (global.final === true) {"
-    + "  (" + finalAlgorithm + ")(vertex,messages,global);"
-    + "  require('org/arangodb/profiler').storeWatch('singleVertex', t2);"
-    + "  worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol);"
-    + " } else {"
-    + "  (" + algorithm + ")(vertex,messages,global);"
-    + "  require('org/arangodb/profiler').storeWatch('singleVertex', t2);"
-    + "  worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol);"
+    + "Object.keys(vertices).forEach(function (v) {"
+    + " var vertex = vertices[v];"
+    + " try {"
+    + "   if (global.final === true) {"
+    + "     (" + algorithms.finalAlgorithm + ")(vertex,queue[vertex._id],global);"
+    + "     worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol);"
+    + "   } else {"
+    + "     (" + algorithms.algorithm + ")(vertex,queue[vertex._id],global);"
+    + "     worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol);"
+    + "   }"
+    + " } catch (err) {"
+    + "   worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol, err);"
     + " }"
-    + "} catch (err) {"
-    + "  worker.vertexDone(executionNumber, vertex, global, mapping, params.vertexCount, countCol, err);"
-    + "}"
+    + "});"
     + "}"
     + "}())";
 };
 
-var createTaskQueue = function (executionNumber, algorithm, finalAlgorithm) {
+var  createTaskQueue = function (executionNumber, vertices,  algorithms, workerIndex) {
   tasks.createNamedQueue({
-    name: getQueueName(executionNumber),
-    threads: WORKERS,
-    size: QUEUESIZE,
-    worker: algorithmForQueue(algorithm, finalAlgorithm, executionNumber)
+    name: getQueueName(executionNumber, workerIndex),
+    threads: 1,
+    size: 1,
+    worker: algorithmForQueue(algorithms, vertices, executionNumber)
   });
 };
 
@@ -208,14 +169,12 @@ var setup = function(executionNumber, options) {
   global.save({_key: COUNTER, count: -1});
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
-  if (options.aggregator) {
-    pregel.saveAggregator(executionNumber, options.aggregator); 
-  }
+
   saveMapping(executionNumber, options.map);
-  createTaskQueue(executionNumber, options.algorithm, options.finalAlgorithm);
+
   var map = options.map.map;
   var collectionMapping = {};
-
+  var pregelMapping = new pregel.Mapping(executionNumber);
   var shardKeysAmount = 0;
   _.each(map, function(mapping, collection) {
     collectionMapping[collection] = mapping.resultCollection;
@@ -223,57 +182,21 @@ var setup = function(executionNumber, options) {
       shardKeysAmount = mapping.shardKeys.length;
     }
   });
-  var pregelMapping = new pregel.Mapping(executionNumber);
-
-  _.each(map, function(mapping) {
-    var shards = Object.keys(mapping.originalShards);
-    var resultShards = Object.keys(mapping.resultShards);
-    var i;
-    var bindVars;
-    var iterator;
-    var q;
-    var edgeToStore;
-    var resultCol;
-    var from;
-    var to;
-    var edgeQuery = queryGetAllSourceEdges;
-    for (iterator = 0; iterator < shardKeysAmount; iterator++) {
-      edgeQuery += ", shard_" + iterator + ": e.shard_" + iterator;
-      edgeQuery += ", to_shard_" + iterator + ": e.to_shard_" + iterator;
-    }
-    edgeQuery += "}";
-    for (i = 0; i < shards.length; i++) {
-      if (mapping.originalShards[shards[i]] === pregel.getServerName()) {
-        bindVars = {
-          '@original' : shards[i]
-        };
-        if (mapping.type === 3) {
-          q = db._query(edgeQuery, bindVars); 
-          resultCol = db[resultShards[i]];
-          while (q.hasNext()) {
-            edgeToStore = q.next();
-            edgeToStore._targetVertex = pregelMapping.getToLocationObject(edgeToStore);
-            edgeToStore.deleted = false;
-            edgeToStore.result = {};
-            from = translateId(edgeToStore._from, pregelMapping);
-            to = translateId(edgeToStore._to, pregelMapping);
-            resultCol.save(from, to, edgeToStore);
-          }
-        } else {
-          bindVars['@result'] = resultShards[i];
-          var shardKeyMap = "", count = 0;
-          mapping.shardKeys.forEach(function (sk) {
-            shardKeyMap += ", shard_" + count + " : v." + sk;
-            count++;
+  var shards = Object.keys(mapping.originalShards);
+  for (var w = 0; w < WORKERS; w++) {
+    var vertices = {};
+    _.each(map, function(mapping) {
+      var i;
+      for (i = 0; i < shards.length; i++) {
+        if (mapping.originalShards[shards[i]] === pregel.getServerName()) {
+          shards[i].NTH(w, WORKERS).documents.forEach(function (d)  {
+            vertices[d._id] = new pregel.Vertex(d, pregelMapping, shards[i]);
           });
-          bindVars.origShard = shards[i];
-          db._query(
-            queryInsertDefaultVertex + shardKeyMap + queryInsertDefaultVertexIntoPart, bindVars
-          ).execute();
         }
       }
-    }
-  });
+    });
+    createTaskQueue(executionNumber, vertices, options, w);
+  }
 };
 
 
