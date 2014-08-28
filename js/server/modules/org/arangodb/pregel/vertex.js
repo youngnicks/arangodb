@@ -35,34 +35,27 @@ var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Vertex = function (mapping, vertexInfo) {
+var Vertex = function (jsonData, mapping, shard) {
   var t = p.stopWatch();
   var Edge = pregel.Edge;
-  var vertexId = vertexInfo._id;
-  var resultShard = vertexInfo.shard;
   var self = this;
-
-  //get attributes from original collection
-  this._locationInfo = vertexInfo.locationObject;
-  var collection = this._locationInfo.shard;
-  var data = db[collection].document(vertexId.split("/")[1]);
-
-  //write attributes to vertex
-  _.each(data, function(val, key) {
+  _.each(jsonData, function(val, key) {
     self[key] = val;
   });
-  this._resCol = db._collection(resultShard);
-  this.__hasChanged = false;
-  this._doc = vertexInfo._doc;
-
-  this._result = this._doc.result;
-
-  var respEdges = mapping.getResponsibleEdgeShards(collection);
+  this.__resultShard = db[mapping.getResultShard(shard)];
+  this._locationInfo = {
+    shard: shard,
+    _id: this._id
+  };
+  this.__active = true;
+  this.__deleted = false;
+  this.__result = {};
+  var respEdges = mapping.getResponsibleEdgeShards(shard);
   this._outEdges = [];
   _.each(respEdges, function(edgeShard) {
     var outEdges = db[edgeShard].outEdges(self._id);
     _.each(outEdges, function (json) {
-      var e = new Edge(mapping, json, edgeShard);
+      var e = new Edge(json, mapping, edgeShard);
       self._outEdges.push(e);
     });
   });
@@ -70,28 +63,31 @@ var Vertex = function (mapping, vertexInfo) {
 };
 
 Vertex.prototype._deactivate = function () {
-  this._doc.active = false;
-  this.__hasChanged = true;
+  this.__active = false;
 };
 
 Vertex.prototype._activate = function () {
-  this._doc.active = true;
-  this.__hasChanged = true;
+  this.__active = true;
 };
 
+Vertex.prototype._isActive = function () {
+  return this.__active;
+};
+
+Vertex.prototype._isDeleted = function () {
+  return this.__deleted;
+};
 
 Vertex.prototype._delete = function () {
-  this._doc.deleted = true;
-  this.__hasChanged = true;
+  this.__deleted = true;
 };
 
 Vertex.prototype._getResult = function () {
-  return this._result;
+  return this.__result;
 };
 
 Vertex.prototype._setResult = function (result) {
-  this.__hasChanged = true;
-  this._result = result;
+  this.__result = result;
 };
 
 Vertex.prototype._save = function () {
@@ -99,10 +95,10 @@ Vertex.prototype._save = function () {
   this._outEdges.forEach(function(e) {
     e._save();
   });
-  if (this.__hasChanged) {
-    this._doc.result = this._result;
-    this._resCol.replace(this._key, this._doc);
-  }
+  this.__resultShard.save({
+    _key: this._key,
+    result: this._getResult()
+  });
   p.storeWatch("SaveVertex", t);
 };
 
