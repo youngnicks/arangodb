@@ -106,6 +106,7 @@ var Queue = function (executionNumber, vertices, aggregate) {
   this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
   this.__workCollection = pregel.getWorkCollection(executionNumber);
+  this.__workCollectionName = this.__workCollection.name();
   this.__step = 0;
   if (aggregate) {
     this.__aggregate = aggregate;
@@ -128,10 +129,10 @@ Queue.prototype._fillQueues = function () {
     self[q]._clear();
   });
   _.each(this.__output, function(ignore, shard) {
-    this.__output[shard] = {};
+    delete self.__output[shard];
   });
   var cursor = db._query(query, {
-    "@collection": this.__workCollection.name(),
+    "@collection": this.__workCollectionName,
     step: this.__step
   });
   var msg, vQueue;
@@ -142,8 +143,10 @@ Queue.prototype._fillQueues = function () {
       return;
     }
     vQueue = self[key];
-    vQueue._fill(content);
-    self.__vertices[key]._activate();
+    if (vQueue) {
+      vQueue._fill(content);
+      self.__vertices[key]._activate();
+    }
   };
   while (cursor.hasNext()) {
     msg = cursor.next();

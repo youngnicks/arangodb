@@ -35,7 +35,7 @@ var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Vertex = function (jsonData, mapping) {
+var Vertex = function (jsonData, mapping, parent) {
   var t = p.stopWatch();
   var Edge = pregel.Edge;
   var self = this;
@@ -44,6 +44,7 @@ var Vertex = function (jsonData, mapping) {
   });
   var shard = this._locationInfo.shard;
   this.__resultShard = db[mapping.getResultShard(shard)];
+  this.__parent = parent;
   this.__active = true;
   this.__deleted = false;
   this.__result = {};
@@ -60,15 +61,21 @@ var Vertex = function (jsonData, mapping) {
 };
 
 Vertex.prototype._deactivate = function () {
+  if (this._isActive()) {
+    this.__parent.__actives--;
+  }
   this.__active = false;
 };
 
 Vertex.prototype._activate = function () {
+  if (!this._isActive()) {
+    this.__parent.__actives++;
+  }
   this.__active = true;
 };
 
 Vertex.prototype._isActive = function () {
-  return this.__active;
+  return this.__active && !this.__deleted;
 };
 
 Vertex.prototype._isDeleted = function () {
@@ -76,6 +83,9 @@ Vertex.prototype._isDeleted = function () {
 };
 
 Vertex.prototype._delete = function () {
+  if (this._isActive()) {
+    this.__parent.__actives--;
+  }
   this.__deleted = true;
 };
 

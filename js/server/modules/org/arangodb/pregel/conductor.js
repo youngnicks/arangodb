@@ -220,7 +220,7 @@ var initNextStep = function (executionNumber) {
   if (globals && globals.conductorAlgorithm) {
     var t2 = p.stopWatch();
     globals.step = info[step] -1;
-    var x = new Function("a", "b", "c", "return " + globals.conductorAlgorithm + "(a,b,c);");
+    var x = new Function("a", "b", "return " + globals.conductorAlgorithm + "(a,b);");
     x(globals, stepInfo);
     saveGlobals(executionNumber, globals);
     p.storeWatch("SuperStepAlgo", t2);
@@ -496,7 +496,6 @@ var finishedStep = function(executionNumber, serverName, info) {
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message;
     throw err;
   }
-
 
   var transactionBody = {
     collections: {

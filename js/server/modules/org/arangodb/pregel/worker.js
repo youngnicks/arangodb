@@ -100,29 +100,37 @@ var algorithmForQueue = function (algorithms, vertices,  executionNumber) {
     + "var vertices = " + JSON.stringify(vertices) + ";"
     + "Object.keys(vertices).forEach(function(key) {"
     +   "if(key === '__actives'){ return; }"
-    +   "vertices[key] = new pregel.Vertex(vertices[key], pregelMapping);"
+    +   "vertices[key] = new pregel.Vertex(vertices[key], pregelMapping, vertices);"
     + "});"
     + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
     + "return function(params) {"
+    + "if (params.cleanUp) {"
+    +   "Object.keys(vertices).forEach(function(key) {"
+    +     "if(key === '__actives'){ return; }"
+    +     "vertices[key]._save();"
+    +   "});"
+    + "  return;"
+    + "}"
     + "var step = params.step;"
     + "queue._fillQueues();"
     + "var global = params.global;"
     + "global.step = step;"
-    + "Object.keys(vertices).forEach(function (v) {"
-    + " if (v === '__actives') return;"
-    + " var vertex = vertices[v];"
-    + " try {"
-    + "   if (global.final === true) {"
-    + "     (" + algorithms.finalAlgorithm + ")(vertex,queue[vertex._id],global);"
-    + "   } else {"
-    + "     require('internal').print(vertex._key);"
-    + "     (" + algorithms.algorithm + ")(vertex,queue[vertex._id],global);"
-    + "   }"
-    + "   worker.queueDone(executionNumber, global, vertex.__actives, pregelMapping);"
-    + " } catch (err) {"
-    + "   worker.queueDone(executionNumber, global, vertex.__actives, pregelMapping, err);"
-    + " }"
-    + "});"
+    + "try {"
+    + "  Object.keys(vertices).forEach(function (v) {"
+    + "    if (v === '__actives') return;"
+    + "    var vertex = vertices[v];"
+    + "    if (!vertex._isActive()) { return; }"
+    + "    if (global.final === true) {"
+    + "      (" + algorithms.finalAlgorithm + ")(vertex,queue[vertex._id],global);"
+    + "    } else {"
+    + "      (" + algorithms.algorithm + ")(vertex,queue[vertex._id],global);"
+    + "    }"
+    + "  });"
+    + "  queue._storeInCollection();"
+    + "  worker.queueDone(executionNumber, global, vertices.__actives, pregelMapping);"
+    + "  } catch (err) {"
+    + "    worker.queueDone(executionNumber, global, vertices.__actives, pregelMapping, err);"
+    + "  }"
     + "}"
     + "}())";
 };
@@ -142,6 +150,15 @@ var addTask = function (queue, stepNumber, globals) {
     {
       step: stepNumber,
       global: globals
+    }
+  );
+};
+
+var addCleanUpTask = function (queue) {
+  tasks.addJob(
+    queue,
+    {
+      cleanUp: true
     }
   );
 };
@@ -168,7 +185,7 @@ var setup = function(executionNumber, options) {
   pregel.createWorkerCollections(executionNumber);
   p.setup();
   var global = pregel.getGlobalCollection(executionNumber);
-  global.save({_key: COUNTER, count: -1});
+  global.save({_key: COUNTER, count: 0, active: 0});
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
 
@@ -320,11 +337,11 @@ var sendMessages = function (executionNumber, mapping) {
   msgCol.truncate();
 };
 
-var finishedStep = function (executionNumber, global, mapping, final) {
+var finishedStep = function (executionNumber, global, mapping, active) {
   var t = p.stopWatch();
   var messages = pregel.getMsgCollection(executionNumber).count();
-  var active = countActiveVertices(mapping);
   var error = getError(executionNumber);
+  var final = global.final;
   if (!error) {
     var t2 = p.stopWatch();
     sendMessages(executionNumber, mapping);
@@ -361,7 +378,6 @@ var finishedStep = function (executionNumber, global, mapping, final) {
 };
 
 var queueDone = function (executionNumber, global, actives, mapping, err) {
-  require("internal").print(global);
   var t = p.stopWatch();
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
@@ -373,23 +389,30 @@ var queueDone = function (executionNumber, global, actives, mapping, err) {
   if (err && !getError(executionNumber)) {
     globalCol.update(ERR, {error: err});
   }
-  var done = db._executeTransaction({
+  var countActive = db._executeTransaction({
     collections: {
       write: [globalCol.name()]
     },
     action: function() {
       var c = globalCol.document("counter");
+      var active = c.active + actives;
       if (c.count + 1 === WORKERS) {
-        globalCol.update("counter", {count: 0});
-        return true;
+        globalCol.update("counter", {
+          count: 0,
+          active: 0
+        });
+        return active;
       }
-      globalCol.update("counter", {count: c.count + 1});
+      globalCol.update("counter", {
+        count: c.count + 1,
+        active: active
+      });
       return false;
     }
   });
   p.storeWatch("VertexDone", t);
-  if (done) {
-    finishedStep(executionNumber, global, mapping);
+  if (countActive !== false) {
+    finishedStep(executionNumber, global, mapping, countActive);
   }
 };
 
@@ -398,13 +421,13 @@ var executeStep = function(executionNumber, step, options, globals) {
   if (step === 0) {
     setup(executionNumber, options);
   }
-  var mapping = new pregel.Mapping(executionNumber);
   var t = p.stopWatch();
   globals = globals || {};
   globals.final = options.final;
   var i = 0;
+  var queue;
   for (i = 0; i < WORKERS; i++) {
-    var queue = getQueueName(executionNumber, i);
+    queue = getQueueName(executionNumber, i);
     addTask(queue, step, globals);
   }
   p.storeWatch("AddingAllTasks", t);
@@ -415,6 +438,11 @@ var cleanUp = function(executionNumber) {
   db._drop(pregel.genWorkCollectionName(executionNumber));
   db._drop(pregel.genMsgCollectionName(executionNumber));
   db._drop(pregel.genGlobalCollectionName(executionNumber));
+  var i, queue;
+  for (i = 0; i < WORKERS; i++) {
+    queue = getQueueName(executionNumber, i);
+    addCleanUpTask(queue);
+  }
 };
 
 

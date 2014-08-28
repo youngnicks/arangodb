@@ -43,6 +43,10 @@ var Edge = function (edgeJSON, mapping, shard) {
   this.__resultShard = db._collection(mapping.getResultShard(shard));
   this.__result = {};
   this.__deleted = false;
+  var fromSplit = this._from.split("/");
+  this.__from = mapping.getResultCollection(fromSplit[0]) + "/" + fromSplit[1]; 
+  var toSplit = this._to.split("/");
+  this.__to = mapping.getResultCollection(toSplit[0]) + "/" + toSplit[1]; 
   this._targetVertex = mapping.getToLocationObject(this);
   p.storeWatch("ConstructEdge", t);
 };
@@ -65,7 +69,7 @@ Edge.prototype._setResult = function (result) {
 
 Edge.prototype._save = function () {
   var t = p.stopWatch();
-  this.__resultShard.save({
+  this.__resultShard.save(this.__from, this.__to, {
     _key: this._key,
     result: this._getResult()
   });
