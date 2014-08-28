@@ -51,10 +51,10 @@ describe("Pregel PageRank", function () {
         if (global.step === 0) {
           edgeCount = vertex._outEdges.length;
           var initPR = 1 / total;
-          vertex._setResult = {
+          vertex._setResult({
             rank: initPR,
             edgeCount: edgeCount
-          };
+          });
           send = initPR / edgeCount;
           vertex._outEdges.forEach(function (e) {
             message.sendTo(e._targetVertex, send, false);
@@ -65,30 +65,29 @@ describe("Pregel PageRank", function () {
         edgeCount = result.edgeCount;
         var alpha = global.alpha;
         var newPR = 0;
-        var inc = message.getMessages();
         var next;
-        while (inc.hasNext()) {
-          next = inc.next();
+        while (message.hasNext()) {
+          next = message.next();
           newPR += next.data;
         }
         newPR *= alpha;
         newPR += (1 - alpha) / total;
         result.rank = newPR;
         vertex._setResult(result);
+        if (global.step === 30) {
+          vertex._deactivate();
+          return;
+        }
         send = newPR / edgeCount;
         vertex._outEdges.forEach(function (e) {
           message.sendTo(e._targetVertex, send, false);
         });
       },
-      superStep = function (graph, globals) {
+      superStep = function (globals) {
         require("internal").print(globals.step, String(require("internal").time() % 1000).replace(".", ","));
-        if (globals.step === 30) {
-          graph._stopExecution();
-          return;
-        }
-        /*      },
+      },
       aggregator = function (message, oldMessage) {
-        return message + oldMessage; */
+        return message + oldMessage;
       };
 
     beforeEach(function () {
@@ -146,6 +145,9 @@ describe("Pregel PageRank", function () {
       saveEdge(9, 5);
       saveEdge(10, 5);
       saveEdge(11, 5);
+      if (!graph._exists("max")) {
+        graph._create("max", [graph._undirectedRelation("E", ["V"])]);
+      }
       p.setup();
     });
 
@@ -156,7 +158,7 @@ describe("Pregel PageRank", function () {
 
     it("should compute the pageRank", function () {
       // gN = "lager";
-      gN = "max";
+      // gN = "max";
       // gN = "caesar";
       var gr = require("org/arangodb/general-graph")._graph(gN);
       require("internal").print("Start", String(require("internal").time() % 1000).replace(".", ","));
@@ -164,15 +166,16 @@ describe("Pregel PageRank", function () {
       var id = conductor.startExecution(gN, {
         base: pageRank.toString(),
         superstep: superStep.toString(),
-      //  aggregator: aggregator.toString()
+        aggregator: aggregator.toString()
       }, {
         alpha: 0.85,
         vertexCount: vC
       });
+      require("internal").print("Execution", id);
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
- //     require("internal").wait(40);
+      require("internal").wait(1);
       while (count < 1000) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "finished") {
@@ -193,6 +196,7 @@ describe("Pregel PageRank", function () {
         var resG = graph._graph(resGraph);
         var vc = resG._vertexCollections()[0];
         var resultVertices = vc.toArray();
+        expect(resultVertices.length).toEqual(11);
         _.each(resultVertices, function (v) {
           var exp;
           switch (v._key) {
