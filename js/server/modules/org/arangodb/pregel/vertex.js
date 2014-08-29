@@ -68,6 +68,9 @@ Vertex.prototype._deactivate = function () {
 };
 
 Vertex.prototype._activate = function () {
+  if (this._isDeleted()) {
+    return;
+  }
   if (!this._isActive()) {
     this.__parent.__actives++;
   }

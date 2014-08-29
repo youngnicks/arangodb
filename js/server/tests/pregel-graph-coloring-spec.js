@@ -48,7 +48,6 @@ describe("Graph coloring Pregel execution", function () {
 
     var gN, v, e, g,
       graphColoring = function (vertex, message, global) {
-        var inc = message.getMessages();
         var next, color = "#25262a";
         if (global.color) {
           color = global.color;
@@ -83,8 +82,8 @@ describe("Graph coloring Pregel execution", function () {
             }
             result.phase = PHASE_INITIALIZATION;
             if (result.degree === undefined) {
-              while (inc.hasNext()) {
-                next = inc.next();
+              while (message.hasNext()) {
+                next = message.next();
                 if (Object.keys(result.neighbors).indexOf(next.sender._id) === -1) {
                   result.neighbors[next.sender._id] = next.sender.shard;
                 }
@@ -106,8 +105,8 @@ describe("Graph coloring Pregel execution", function () {
             result.phase = PHASE_CONFLICT_RESOLUTION;
             var iDs = [vertex._id];
             if (result.type === STATE_TENTATIVELY_IN) {
-              while (inc.hasNext()) {
-                next = inc.next();
+              while (message.hasNext()) {
+                next = message.next();
                 iDs.push(next.data.id);
               }
               if (vertex._id === iDs.sort()[0]) {
@@ -131,8 +130,8 @@ describe("Graph coloring Pregel execution", function () {
 
           case PHASE_CONFLICT_RESOLUTION:
             result.phase = NOT_IN_S_AND_DEGREE_ADJUSTING1;
-            while (inc.hasNext()) {
-              next = inc.next();
+            while (message.hasNext()) {
+              next = message.next();
               if (next.data.msg ===  MSG_NEIGHBOR) {
                 result.type = NOT_IN;
                 delete result.neighbors[next.data.id];
@@ -155,8 +154,8 @@ describe("Graph coloring Pregel execution", function () {
 
           case NOT_IN_S_AND_DEGREE_ADJUSTING1:
             result.phase = PHASE_PRE_INITIALIZATION;
-            while (inc.hasNext()) {
-              next = inc.next();
+            while (message.hasNext()) {
+              next = message.next();
               if (result.type === STATE_UNKNOWN) {
                 result.degree = result.degree -1;
               }
@@ -182,6 +181,9 @@ describe("Graph coloring Pregel execution", function () {
             });
         }
         vertex._setResult(result);
+        if (global.retype === true) {
+          result.type = STATE_UNKNOWN;
+        }
       };
 
     beforeEach(function () {
@@ -271,7 +273,6 @@ describe("Graph coloring Pregel execution", function () {
       var finalAlgorithm = function (vertex, message, global) {
         var result = vertex._getResult();
         if (result.type === 4) {
-          require("console").log("activating ", vertex._id)
           vertex._activate();
         }
       };
@@ -284,7 +285,7 @@ describe("Graph coloring Pregel execution", function () {
         }
       );
       profiler.setup();
-      /*var id = conductor.startExecution("ff", {
+     /* var id = conductor.startExecution("ff", {
           base : graphColoring.toString(),
           superstep : conductorAlgorithm.toString(),
           aggregator : null
