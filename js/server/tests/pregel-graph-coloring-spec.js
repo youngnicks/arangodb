@@ -285,9 +285,10 @@ describe("Graph coloring Pregel execution", function () {
         }
       );
       profiler.setup();
-     /* var id = conductor.startExecution("ff", {
+      /*var id = conductor.startExecution("ff", {
           base : graphColoring.toString(),
           superstep : conductorAlgorithm.toString(),
+          final : finalAlgorithm.toString(),
           aggregator : null
         }
       );*/

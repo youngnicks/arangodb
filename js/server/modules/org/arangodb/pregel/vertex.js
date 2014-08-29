@@ -89,7 +89,9 @@ Vertex.prototype._delete = function () {
   if (this._isActive()) {
     this.__parent.__actives--;
   }
+  this._save();
   this.__deleted = true;
+  delete this.__parent[this._id];
 };
 
 Vertex.prototype._getResult = function () {

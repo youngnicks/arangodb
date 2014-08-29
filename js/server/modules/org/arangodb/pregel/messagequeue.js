@@ -145,7 +145,11 @@ Queue.prototype._fillQueues = function () {
     vQueue = self[key];
     if (vQueue) {
       vQueue._fill(content);
-      self.__vertices[key]._activate();
+      if (self.__vertices[key]) {
+        self.__vertices[key]._activate();
+      } else {
+        delete self[key];
+      }
     }
   };
   while (cursor.hasNext()) {

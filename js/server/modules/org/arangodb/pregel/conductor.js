@@ -225,7 +225,6 @@ var initNextStep = function (executionNumber) {
     saveGlobals(executionNumber, globals);
     p.storeWatch("SuperStepAlgo", t2);
   }
-
   if( stepInfo[active] > 0 || stepInfo[messages] > 0) {
     p.storeWatch("initNextStep", t);
     startNextStep(executionNumber);
