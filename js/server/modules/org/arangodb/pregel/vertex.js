@@ -109,6 +109,7 @@ Vertex.prototype._save = function () {
   });
   this.__resultShard.save({
     _key: this._key,
+    _deleted : this.__deleted,
     result: this._getResult()
   });
   p.storeWatch("SaveVertex", t);

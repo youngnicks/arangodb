@@ -148,6 +148,7 @@ Queue.prototype._fillQueues = function () {
       if (self.__vertices[key]) {
         self.__vertices[key]._activate();
       } else {
+        self.__queues.splice(this.__queues.indexOf(key), 1);
         delete self[key];
       }
     }
