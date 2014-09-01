@@ -63,6 +63,9 @@ var Vertex = function (jsonData, mapping, parent) {
 
 
 Vertex.prototype._incrInactiveSince = function () {
+  if (this.__inactiveSince === -1) {
+    return;
+  }
   if (this.__inactiveSince > 3) {
     this.__inactiveSince = -1;
     this._save(true);
