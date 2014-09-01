@@ -46,6 +46,7 @@ var Vertex = function (jsonData, mapping, parent) {
   this.__resultShard = db[mapping.getResultShard(shard)];
   this.__parent = parent;
   this.__active = true;
+  this.__inactiveSince = 0;
   this.__deleted = false;
   this.__result = {};
   var respEdges = mapping.getResponsibleEdgeShards(shard);
@@ -58,6 +59,17 @@ var Vertex = function (jsonData, mapping, parent) {
     });
   });
   p.storeWatch("ConstructVertex", t);
+};
+
+
+Vertex.prototype._incrInactiveSince = function () {
+  if (this.__inactiveSince > 3) {
+    this.__inactiveSince = -1;
+    this._save(true);
+    this.__result = {};
+  } else {
+    this.__inactiveSince++;
+  }
 };
 
 Vertex.prototype._deactivate = function () {
@@ -75,6 +87,10 @@ Vertex.prototype._activate = function () {
     this.__parent.__actives++;
   }
   this.__active = true;
+  if (this.__inactiveSince === -1) {
+    this.__inactiveSince = 0;
+    this.__result = this.__resultShard.document(this._key).result;
+  }
 };
 
 Vertex.prototype._isActive = function () {
@@ -102,11 +118,13 @@ Vertex.prototype._setResult = function (result) {
   this.__result = result;
 };
 
-Vertex.prototype._save = function () {
+Vertex.prototype._save = function (dontSaveEdges) {
   var t = p.stopWatch();
-  this._outEdges.forEach(function(e) {
-    e._save();
-  });
+  if (dontSaveEdges) {
+    this._outEdges.forEach(function(e) {
+      e._save();
+    });
+  }
   this.__resultShard.save({
     _key: this._key,
     _deleted : this.__deleted,
@@ -114,5 +132,6 @@ Vertex.prototype._save = function () {
   });
   p.storeWatch("SaveVertex", t);
 };
+
 
 exports.Vertex = Vertex;
