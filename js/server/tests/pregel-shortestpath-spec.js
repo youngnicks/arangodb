@@ -46,7 +46,6 @@ describe("ShortestPath Pregel execution", function () {
       connectedSets = function (vertex, message, global) {
         _ = require("underscore");
         var distanceAttrib;
-        var inc = message.getMessages();
         var next;
 
         var getDistance = function (edge) {
@@ -99,8 +98,8 @@ describe("ShortestPath Pregel execution", function () {
           saveResult = true;
 
         } else if (global.step === 1) {
-          while (inc.hasNext()) {
-            next = inc.next();
+          while (message.hasNext()) {
+            next = message.next();
             var data = {};
             Object.keys(next.data).forEach(function (v) {
               data[v] = {};
@@ -116,8 +115,8 @@ describe("ShortestPath Pregel execution", function () {
             result.inBound.push(next.sender);
           }
         } else if (global.step === 2) {
-          while (inc.hasNext()) {
-            next = inc.next();
+          while (message.hasNext()) {
+            next = message.next();
             Object.keys(next.data[vertex._id]).forEach(function(t) {
               if (vertex._id === t) {
                 return;
@@ -144,8 +143,8 @@ describe("ShortestPath Pregel execution", function () {
           });
         } else {
           var send = false;
-          while (inc.hasNext()) {
-            next = inc.next();
+          while (message.hasNext()) {
+            next = message.next();
             Object.keys(next.data).forEach(function(t) {
               next.data[t].paths = mergePaths(result.shortestPaths[next.sender._id].paths, next.data[t].paths);
               next.data[t].distance = next.data[t].distance + result.shortestPaths[next.sender._id].distance;
@@ -186,7 +185,7 @@ describe("ShortestPath Pregel execution", function () {
         vertex._deactivate();
       };
 
-   /* beforeEach(function () {
+    beforeEach(function () {
       gN = "UnitTestPregelGraph";
       v = "UnitTestVertices";
       e = "UnitTestEdges";
@@ -202,7 +201,8 @@ describe("ShortestPath Pregel execution", function () {
         db._createEdgeCollection(e, {
           numberOfShards: numShards,
           distributeShardsLike: v,
-          shardKeys: ["shard_0"]
+          shardKeys: ["shard_0"],
+          allowUserKeys : true
         });
       }
       g = graph._create(
@@ -215,7 +215,7 @@ describe("ShortestPath Pregel execution", function () {
       };
       var saveEdge = function (from, to, distance) {
         g[e].save(v + "/" + from, v + "/" + to, {
-          _key : "" +from+to,
+          //_key : "" +from+to,
           shard_0: String(from),
           to_shard_0: String(to),
           distance: distance
@@ -243,13 +243,13 @@ describe("ShortestPath Pregel execution", function () {
 
     afterEach(function () {
       graph._drop(gN, true);
-    });*/
+    });
 
     it("should identify all distinct graphs", function () {
-      //var id = conductor.startExecution(gN, connectedSets.toString());
-      var id = conductor.startExecution("ff", {
+      var id = conductor.startExecution(gN, {base : connectedSets.toString()});
+      /*var id = conductor.startExecution("ff", {
         base : connectedSets.toString()
-      });
+      });*/
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
