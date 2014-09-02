@@ -123,7 +123,6 @@ var algorithmForQueue = function (algorithms, vertices,  executionNumber) {
     + "      (" + algorithms.finalAlgorithm + ")(vertex,queue[vertex._id],global);"
     + "    } else {"
     + "      if (!vertex._isActive()) {"
-    + "        vertex._incrInactiveSince++; "
     + "        return; "
     + "      }"
     + "      (" + algorithms.algorithm + ")(vertex,queue[vertex._id],global);"
