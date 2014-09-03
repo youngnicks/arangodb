@@ -94,7 +94,7 @@ describe("Graph coloring Pregel execution", function () {
             if (1.0/(2*result.degree) <= random  || result.degree === 0) {
               result.type = STATE_TENTATIVELY_IN;
               Object.keys(result.neighbors).forEach(function (e) {
-                message.sendTo({_id : e, shard : result.neighbors[e]}, {id : vertex._id, msg : MSG_TIS});
+                message.sendTo({_id : e, shard : result.neighbors[e]}, {id : vertex._id, msg : MSG_TIS, degree : result.degree});
               });
             }
             break;
@@ -103,13 +103,20 @@ describe("Graph coloring Pregel execution", function () {
 
           case PHASE_INITIALIZATION:
             result.phase = PHASE_CONFLICT_RESOLUTION;
-            var iDs = [vertex._id];
             if (result.type === STATE_TENTATIVELY_IN) {
+              var isInS = true;
               while (message.hasNext()) {
                 next = message.next();
-                iDs.push(next.data.id);
+                if (next.data.degree <  result.degree ||
+                    (next.data.degree === result.degree &&
+                    [vertex._id, next.data.id].sort()[0] !== vertex._id
+                    )
+                  ) {
+                  isInS = false;
+                  break;
+                }
               }
-              if (vertex._id === iDs.sort()[0]) {
+              if (isInS) {
                 result.type = STATE_IN;
                 result.color = color;
                 Object.keys(result.neighbors).forEach(function (e) {
@@ -154,13 +161,12 @@ describe("Graph coloring Pregel execution", function () {
 
           case NOT_IN_S_AND_DEGREE_ADJUSTING1:
             result.phase = PHASE_PRE_INITIALIZATION;
-            while (message.hasNext()) {
-              next = message.next();
-              if (result.type === STATE_UNKNOWN) {
+            if (result.type === STATE_UNKNOWN) {
+              while (message.hasNext()) {
+                next = message.next();
                 result.degree = result.degree -1;
               }
-            }
-            if (result.type !== STATE_UNKNOWN) {
+            } else {
               vertex._deactivate();
             }
 
@@ -277,21 +283,21 @@ describe("Graph coloring Pregel execution", function () {
         }
       };
 
-      var id = conductor.startExecution(gN, {
-          base : graphColoring.toString(),
-          superstep : conductorAlgorithm.toString(),
-          final : finalAlgorithm.toString(),
-          aggregator : null
-        }
-      );
-      profiler.setup();
-      /*var id = conductor.startExecution("ff", {
+      /*var id = conductor.startExecution(gN, {
           base : graphColoring.toString(),
           superstep : conductorAlgorithm.toString(),
           final : finalAlgorithm.toString(),
           aggregator : null
         }
       );*/
+      profiler.setup();
+      var id = conductor.startExecution("ff", {
+          base : graphColoring.toString(),
+          superstep : conductorAlgorithm.toString(),
+          final : finalAlgorithm.toString(),
+          aggregator : null
+        }
+      );
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
