@@ -5131,14 +5131,18 @@ function CALCULATE_SHORTEST_PATHES_WITH_FLOYD_WARSHALL (graphData, options) {
       }
       paths[e._from][e._to] =  {distance : DETERMINE_WEIGHT(e, options.weight,
         options.defaultWeight)
-        , paths : [{edges : [e], vertices : [e._from, e._to]}]};
+        , paths : [{edges : [e], vertices :
+          [graph.fromVerticesIDs[e._from], graph.toVerticesIDs[e._to]]}]
+      };
     } else if (options.direction === "inbound") {
       if (!paths[e._to]) {
         paths[e._to] = {};
       }
       paths[e._to][e._from] =  {distance : DETERMINE_WEIGHT(e, options.weight,
         options.defaultWeight)
-        , paths : [{edges : [e], vertices : [e._from, e._to]}]};
+        , paths : [{edges : [e], vertices :
+          [graph.fromVerticesIDs[e._from], graph.toVerticesIDs[e._to]]}]
+      };
     } else {
       if (!paths[e._from]) {
         paths[e._from] = {};
@@ -5154,7 +5158,9 @@ function CALCULATE_SHORTEST_PATHES_WITH_FLOYD_WARSHALL (graphData, options) {
       } else {
         paths[e._from][e._to] = {distance : DETERMINE_WEIGHT(e, options.weight,
           options.defaultWeight)
-          , paths : [{edges : [e], vertices : [e._from, e._to]}]};
+          , paths : [{edges : [e], vertices :
+            [graph.fromVerticesIDs[e._from], graph.toVerticesIDs[e._to]]}]
+        };
       }
       if (paths[e._to][e._from]) {
         paths[e._to][e._from].distance =
@@ -5163,7 +5169,9 @@ function CALCULATE_SHORTEST_PATHES_WITH_FLOYD_WARSHALL (graphData, options) {
       } else {
         paths[e._to][e._from] = {distance : DETERMINE_WEIGHT(e, options.weight,
           options.defaultWeight)
-          , paths : [{edges : [e], vertices : [e._from, e._to]}]};
+          , paths : [{edges : [e], vertices :
+            [graph.fromVerticesIDs[e._from], graph.toVerticesIDs[e._to]]}]
+        };
       }
     }
     vertices[e._to] = 1;
@@ -5358,7 +5366,8 @@ function IS_EXAMPLE_SET (example) {
   return (
       example && (
         (Array.isArray(example) && example.length > 0) ||
-        (typeof example === "object" && Object.keys(example) > 0)
+        (typeof example === "object" && Object.keys(example) > 0) ||
+         typeof example === "string"
         )
     );
 
