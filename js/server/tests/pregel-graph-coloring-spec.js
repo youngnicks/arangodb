@@ -73,6 +73,7 @@ describe("Graph coloring Pregel execution", function () {
         if (global.retype === true) {
           result.type = STATE_UNKNOWN;
         }
+        global.data.push("Piplangstrumpf" +  global.step);
 
         switch(result.phase) {
           case PHASE_PRE_INITIALIZATION:
@@ -283,21 +284,21 @@ describe("Graph coloring Pregel execution", function () {
         }
       };
 
-      /*var id = conductor.startExecution(gN, {
-          base : graphColoring.toString(),
-          superstep : conductorAlgorithm.toString(),
-          final : finalAlgorithm.toString(),
-          aggregator : null
-        }
-      );*/
-      profiler.setup();
-      var id = conductor.startExecution("ff", {
+      var id = conductor.startExecution(gN, {
           base : graphColoring.toString(),
           superstep : conductorAlgorithm.toString(),
           final : finalAlgorithm.toString(),
           aggregator : null
         }
       );
+      profiler.setup();
+      /*var id = conductor.startExecution("ff", {
+          base : graphColoring.toString(),
+          superstep : conductorAlgorithm.toString(),
+          final : finalAlgorithm.toString(),
+          aggregator : null
+        }
+      );*/
       var count = 0;
       var resGraph = "LostInBattle";
       var res;

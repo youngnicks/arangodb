@@ -49,6 +49,7 @@ var stateFinished = "finished";
 var stateRunning = "running";
 var stateError = "error";
 var COUNTER = "counter";
+var DATA = "data";
 var ERR = "error";
 var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
@@ -96,6 +97,8 @@ var algorithmForQueue = function (algorithms, vertices,  executionNumber) {
     + "var pregel = require('org/arangodb/pregel');"
     + "var pregelMapping = new pregel.Mapping(executionNumber);"
     + "var worker = pregel.Worker;"
+    + "var data = [];"
+    + "var lastStep;"
     + (algorithms.aggregator ? "  var aggregator = (" + algorithms.aggregator + ");" : "var aggregator = null;")
     + "var vertices = " + JSON.stringify(vertices) + ";"
     + "Object.keys(vertices).forEach(function(key) {"
@@ -115,6 +118,10 @@ var algorithmForQueue = function (algorithms, vertices,  executionNumber) {
     + "queue._fillQueues();"
     + "var global = params.global;"
     + "global.step = step;"
+    + "if (step !== lastStep) {"
+    + "  data = [];"
+    + "}"
+    + "global.data = data;"
     + "try {"
     + "  Object.keys(vertices).forEach(function (v) {"
     + "    if (v === '__actives') return;"
@@ -188,6 +195,7 @@ var setup = function(executionNumber, options) {
   p.setup();
   var global = pregel.getGlobalCollection(executionNumber);
   global.save({_key: COUNTER, count: 0, active: 0});
+  global.save({_key: DATA, data: []});
   global.save({_key: ERR, error: undefined});
   global.save({_key: CONDUCTOR, name: options.conductor});
 
@@ -358,7 +366,8 @@ var finishedStep = function (executionNumber, global, mapping, active) {
       messages: messages,
       active: active,
       error: error,
-      final : final
+      final : final,
+      data : global.data
     });
     var coordOptions = {
       coordTransactionID: ArangoClusterInfo.uniqid()
@@ -374,7 +383,8 @@ var finishedStep = function (executionNumber, global, mapping, active) {
       messages: messages,
       active: active,
       error: error,
-      final : final
+      final : final,
+      data : global.data
     });
   }
 };
@@ -396,19 +406,30 @@ var queueDone = function (executionNumber, global, actives, mapping, err) {
       write: [globalCol.name()]
     },
     action: function() {
-      var c = globalCol.document("counter");
+      var c = globalCol.document(COUNTER);
+      var d = globalCol.document(DATA).data;
+      var updateGlobals = global.data.length > 0;
+      global.data = global.data.concat(d);
       var active = c.active + actives;
       if (c.count + 1 === WORKERS) {
-        globalCol.update("counter", {
+        globalCol.update(COUNTER, {
           count: 0,
           active: 0
         });
+        globalCol.update(DATA, {
+          data : []
+        });
         return active;
       }
-      globalCol.update("counter", {
+      globalCol.update(COUNTER, {
         count: c.count + 1,
         active: active
       });
+      if (updateGlobals) {
+        globalCol.update(DATA, {
+          data : global.data
+        });
+      }
       return false;
     }
   });

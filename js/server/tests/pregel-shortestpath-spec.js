@@ -45,8 +45,11 @@ describe("ShortestPath Pregel execution", function () {
     var gN, v, e, g,
       connectedSets = function (vertex, message, global) {
         _ = require("underscore");
-        var distanceAttrib
+        var distanceAttrib;
         var next;
+
+        var CALC_PATHS = "paths";
+        var CALC_CENTRALITY = "centralityMeasures";
 
         var getDistance = function (edge) {
           if (distanceAttrib) {
@@ -65,140 +68,156 @@ describe("ShortestPath Pregel execution", function () {
           });
           return r
         };
+
         var result = vertex._getResult(), saveResult = false;
-        if (global.step === 0 && !result.pathStep) {
-          result={
-            inBound : [],
-            sP : {
+
+        switch (result.finalStep) {
+          case CALC_CENTRALITY:
+            result.eccentricity = (1 / result.absEccentricity)  / global.maxRevEccentricity;
+            result.closeness = (result.absCloseness)  / global.maxCloseness;
+            result.diameter = global.diameter;
+            result.radius = global.radius;
+            saveResult = true;
+            break;
+
+          case  CALC_PATHS:
+            while (message.hasNext()) {
+              next = message.next();
+              if (!next.data.finish) {
+                if (!result.sP[next.data.t]) {
+                  continue;
+                }
+                if (Math.abs(next.data.d - result.sP[next.data.t].distance) > 0.00001) {
+                  continue;
+                }
+
+                if (result.sP[next.data.t].done) {
+                  message.sendTo(next.data.r, {
+                      finish : mergePaths(next.data.p, result.sP[next.data.t].paths),
+                      t :next.data.t
+                    }
+                  );
+                } else {
+                  vertex._outEdges.forEach(function (e) {
+                    message.sendTo(e._targetVertex, {
+                      r: next.data.r,
+                      t : next.data.t,
+                      d : result.sP[next.data.t].distance - result.sP[e._to].distance,
+                      p :  mergePaths(next.data.p, result.sP[e._to].paths)
+                    });
+                  });
+                }
+              } else {
+                if (!result.sP[next.data.t].paths) {
+                  result.sP[next.data.t].paths = next.data.finish;
+                } else {
+                  result.sP[next.data.t].paths = result.sP[next.data.t].paths.concat(next.data.finish);
+                }
+                result.sP[next.data.t].done = true;
+                saveResult = true;
+              }
 
             }
-          };
-          result.sP[vertex._id] = {
-            distance : 0,
-            shard : vertex._locationInfo.shard
-          };
-          vertex._outEdges.forEach(function (e) {
-            var data = {};
-            data[e._from] = {};
-            data[e._from][e._to] = {
-              //paths : [ [e._from + "_" + e._to] ],
-              distance : getDistance(e),
-              shard : e._targetVertex.shard
-            };
 
-            result.sP[e._to] = data[e._from][e._to];
-            message.sendTo(e._targetVertex, data);
-          });
-          saveResult = true;
+            break;
 
-        } else if (global.step === 1 && !result.pathStep)  {
-          while (message.hasNext()) {
-            next = message.next();
-            var data = {};
-            Object.keys(next.data).forEach(function (v) {
-              data[v] = {};
-              Object.keys(result.sP).forEach(function (s) {
-                data[v][s] = {
-                  distance : next.data[v][vertex._id].distance + result.sP[s].distance,
-                  shard : result.sP[s].shard
+          default :
+            if (global.step === 0) {
+              result={
+                inBound : [],
+                sP : {
+
+                }
+              };
+              result.sP[vertex._id] = {
+                distance : 0,
+                shard : vertex._locationInfo.shard
+              };
+              vertex._outEdges.forEach(function (e) {
+                var data = {};
+                data[e._from] = {};
+                data[e._from][e._to] = {
+                  //paths : [ [e._from + "_" + e._to] ],
+                  distance : getDistance(e),
+                  shard : e._targetVertex.shard
                 };
+
+                result.sP[e._to] = data[e._from][e._to];
+                message.sendTo(e._targetVertex, data);
               });
-              message.sendTo(next.sender, data);
-            });
-            saveResult = true;
-            result.inBound.push(next.sender);
-          }
-        } else if (global.step === 2 && !result.pathStep) {
-          while (message.hasNext()) {
-            next = message.next();
-            Object.keys(next.data[vertex._id]).forEach(function(t) {
-              if (vertex._id === t) {
-                return;
-              }
-              if (!result.sP[t]) {
-                result.sP[t] = {
-                  //paths : [[]],
-                  distance : Infinity,
-                  shard : next.data[vertex._id][t].shard
-                };
-                saveResult = true;
-              }
+              saveResult = true;
 
-              if (result.sP[t].distance > next.data[vertex._id][t].distance) {
-                saveResult = true;
-                result.sP[t] = next.data[vertex._id][t]
-              }
-            });
-          }
-          result.inBound.forEach(function (i) {
-            message.sendTo(i, result.sP);
-          });
-        } else if (!result.pathStep) {
-          var send = false;
-          while (message.hasNext()) {
-            next = message.next();
-            Object.keys(next.data).forEach(function(t) {
-              next.data[t].distance = next.data[t].distance + result.sP[next.sender._id].distance;
-              if (vertex._id === t) {
-                return;
-              }
-              if (!result.sP[t]) {
-                result.sP[t] = {
-                  distance : Infinity,
-                  shard : next.data[t].shard
-                };
-                saveResult = true;
-              }
-              if (result.sP[t].distance > next.data[t].distance) {
-                result.sP[t] = next.data[t]
-                saveResult = true;
-                send = true;
-              }
-            });
-          }
-          if (send) {
-            result.inBound.forEach(function (i) {
-              message.sendTo(i, result.sP);
-            });
-          }
-        } else {
-          while (message.hasNext()) {
-            next = message.next();
-            if (!next.data.finish) {
-              if (!result.sP[next.data.t]) {
-                continue;
-              }
-              if (Math.abs(next.data.d - result.sP[next.data.t].distance) > 0.00001) {
-                continue;
-              }
-
-              if (result.sP[next.data.t].done) {
-                message.sendTo(next.data.r, {
-                    finish : mergePaths(next.data.p, result.sP[next.data.t].paths),
-                    t :next.data.t
-                  }
-                );
-              } else {
-                vertex._outEdges.forEach(function (e) {
-                  message.sendTo(e._targetVertex, {
-                    r: next.data.r,
-                    t : next.data.t,
-                    d : result.sP[next.data.t].distance - result.sP[e._to].distance,
-                    p :  mergePaths(next.data.p, result.sP[e._to].paths)
+            } else if (global.step === 1)  {
+              while (message.hasNext()) {
+                next = message.next();
+                var data = {};
+                Object.keys(next.data).forEach(function (v) {
+                  data[v] = {};
+                  Object.keys(result.sP).forEach(function (s) {
+                    data[v][s] = {
+                      distance : next.data[v][vertex._id].distance + result.sP[s].distance,
+                      shard : result.sP[s].shard
+                    };
                   });
+                  message.sendTo(next.sender, data);
+                });
+                saveResult = true;
+                result.inBound.push(next.sender);
+              }
+            } else if (global.step === 2) {
+              while (message.hasNext()) {
+                next = message.next();
+                Object.keys(next.data[vertex._id]).forEach(function(t) {
+                  if (vertex._id === t) {
+                    return;
+                  }
+                  if (!result.sP[t]) {
+                    result.sP[t] = {
+                      //paths : [[]],
+                      distance : Infinity,
+                      shard : next.data[vertex._id][t].shard
+                    };
+                    saveResult = true;
+                  }
+
+                  if (result.sP[t].distance > next.data[vertex._id][t].distance) {
+                    saveResult = true;
+                    result.sP[t] = next.data[vertex._id][t]
+                  }
                 });
               }
+              result.inBound.forEach(function (i) {
+                message.sendTo(i, result.sP);
+              });
             } else {
-              if (!result.sP[next.data.t].paths) {
-                result.sP[next.data.t].paths = next.data.finish;
-              } else {
-                result.sP[next.data.t].paths = result.sP[next.data.t].paths.concat(next.data.finish);
+              var send = false;
+              while (message.hasNext()) {
+                next = message.next();
+                Object.keys(next.data).forEach(function(t) {
+                  next.data[t].distance = next.data[t].distance + result.sP[next.sender._id].distance;
+                  if (vertex._id === t) {
+                    return;
+                  }
+                  if (!result.sP[t]) {
+                    result.sP[t] = {
+                      distance : Infinity,
+                      shard : next.data[t].shard
+                    };
+                    saveResult = true;
+                  }
+                  if (result.sP[t].distance > next.data[t].distance) {
+                    result.sP[t] = next.data[t]
+                    saveResult = true;
+                    send = true;
+                  }
+                });
               }
-              result.sP[next.data.t].done = true;
-              saveResult = true;
+              if (send) {
+                result.inBound.forEach(function (i) {
+                  message.sendTo(i, result.sP);
+                });
+              }
             }
-
-          }
         }
 
         if (saveResult === true) {
@@ -269,65 +288,110 @@ describe("ShortestPath Pregel execution", function () {
 
     var finalAlgorithm = function (vertex, message, global) {
       var distanceAttrib;
-      if (!global.calculatePathes) {
-        return;
-      }
 
-      var getDistance = function (edge) {
-        if (distanceAttrib) {
-          return edge[distanceAttrib];
-        } else {
-          return 1;
-        }
-      };
       var result = vertex._getResult();
       var sP = result.sP;
 
-      var done = true;
-      Object.keys(sP).forEach(function (target) {
-        if (!sP[target].done) {
-          done = false;
-        }
-      });
-      if (done) {
+      if (!global.calculate) {
         return;
       }
-      result.pathStep = true;
-
-      vertex._outEdges.forEach(function (e) {
-        if (getDistance(e) === result.sP[e._to].distance) {
-          result.sP[e._to].paths = [[e._from + "_" + e._to]];
-          result.sP[e._to].done = true;
-        }
-      });
-      Object.keys(sP).forEach(function (target) {
-        if (result.sP[target].done) {return;}
-        if (target === vertex._id) {
-          result.sP[target].paths = [];
-          result.sP[target].done = true;
+      if (global.calculate === "paths") {
+        var getDistance = function (edge) {
+          if (distanceAttrib) {
+            return edge[distanceAttrib];
+          } else {
+            return 1;
+          }
+        };
+        var done = true;
+        Object.keys(sP).forEach(function (target) {
+          if (!sP[target].done) {
+            done = false;
+          }
+        });
+        if (done) {
           return;
         }
+        result.finalStep = global.calculate;
+
         vertex._outEdges.forEach(function (e) {
-          message.sendTo(e._targetVertex, {
-            r: vertex._locationInfo,
-            t : target,
-            d : result.sP[target].distance - result.sP[e._to].distance,
-            p : [[e._from + "_" + e._to]]
-          });
+          if (getDistance(e) === result.sP[e._to].distance) {
+            result.sP[e._to].paths = [[e._from + "_" + e._to]];
+            result.sP[e._to].done = true;
+          }
         });
-      })
+        Object.keys(sP).forEach(function (target) {
+          if (result.sP[target].done) {return;}
+          if (target === vertex._id) {
+            result.sP[target].paths = [];
+            result.sP[target].done = true;
+            return;
+          }
+          vertex._outEdges.forEach(function (e) {
+            message.sendTo(e._targetVertex, {
+              r: vertex._locationInfo,
+              t : target,
+              d : result.sP[target].distance - result.sP[e._to].distance,
+              p : [[e._from + "_" + e._to]]
+            });
+          });
+        })
+      }
+      if (global.calculate === "centralityMeasures" && !global.maxRevEccentricity) {
+        Object.keys(sP).forEach(function (t) {
+          if (!result.absEccentricity) {
+            result.absEccentricity = sP[t].distance;
+          } else {
+            result.absEccentricity = Math.max(result.absEccentricity, sP[t].distance);
+          }
+          if (!result.absCloseness) {
+            result.absCloseness = sP[t].distance === 0 ?  0 : 1 / sP[t].distance;
+          } else {
+            result.absCloseness = result.absCloseness + sP[t].distance === 0 ?  0 : 1 / sP[t].distance;
+          }
+        });
+        global.data.push({e : result.absEccentricity, c : result.absCloseness});
+        result.finalStep = global.calculate;
+        message.sendTo(vertex._locationInfo, {} );
+      }
+    };
+
+    var conductorAlgorithm = function (globals, stepInfo) {
+      if (globals.calculate === "centralityMeasures" && stepInfo.final) {
+        var max = 0, tmp, radius = Infinity, diameter = 0, maxCloseness = 0;
+        stepInfo.data.forEach(function (r) {
+          tmp = r.e === 0 ? 0 : 1 / r.e;
+          if (tmp > max) {
+            max = tmp;
+          }
+          if (r.e > diameter) {
+            diameter = r.e;
+          }
+          if (r.e < radius) {
+            radius = r.e;
+          }
+          if (r.c > maxCloseness) {
+            maxCloseness = r.c;
+          }
+        });
+        globals.diameter = diameter;
+        globals.radius = radius;
+        globals.maxCloseness = maxCloseness;
+        globals.maxRevEccentricity = max;
+      }
     };
 
     it("should identify all distinct graphs", function () {
-      //var graph = gN;
-      var graph = "ff";
+      var graph = gN;
+      //var graph = "ff";
       var id = conductor.startExecution(graph, {
           base : connectedSets.toString(),
+          superstep : conductorAlgorithm.toString(),
           final : finalAlgorithm.toString()
         },
         {
           //distanceAttrib: "",
-          calculatePathes: true
+          calculate: "centralityMeasures" // centralityMeasures, paths
         }
       );
       var count = 0;

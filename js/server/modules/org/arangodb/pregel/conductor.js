@@ -45,6 +45,7 @@ var waitForAnswer = "waitForAnswer";
 var active = "active";
 var final = "final";
 var state = "state";
+var data = "data";
 var messages = "messages";
 var error = "error";
 var stateFinished = "finished";
@@ -209,6 +210,7 @@ var initNextStep = function (executionNumber) {
   var stepInfo = info[stepContent][info[step]];
   info[stepContent].push({
     active: 0,
+    data : [],
     messages: 0,
     final: stepInfo[active] === 0 && stepInfo[messages] === 0 ? true : false
   });
@@ -216,7 +218,6 @@ var initNextStep = function (executionNumber) {
   updateExecutionInfo(executionNumber, info);
 
   var globals = getGlobals(executionNumber);
-
   if (globals && globals.conductorAlgorithm) {
     var t2 = p.stopWatch();
     globals.step = info[step] -1;
@@ -420,8 +421,9 @@ var startExecution = function(graphName, algorithms,  options) {
   infoObject[state] = stateRunning;
   stepContentObject[active] = graph._countVertices();
   stepContentObject[messages] = 0;
+  stepContentObject[data] = [];
   stepContentObject[final] = false;
-  infoObject[stepContent] = [stepContentObject, {active: 0 , messages: 0, final : false}];
+  infoObject[stepContent] = [stepContentObject, {active: 0 , messages: 0, data : [],  final : false}];
   var key = saveExecutionInfo(infoObject, options)._key;
   try {
     /*jslint evil : true */
@@ -512,6 +514,8 @@ var finishedStep = function(executionNumber, serverName, info) {
       var transStep = transRunInfo["step"] + 1;
       transRunInfo["stepContent"][transStep].messages += transInfo.messages;
       transRunInfo["stepContent"][transStep].active += transInfo.active;
+      transRunInfo["stepContent"][transStep].data =
+        transRunInfo["stepContent"][transStep].data.concat(transInfo.data);
       transRunInfo.error = transInfo.error;
       var transServerName = params.serverName;
       var transAwaiting = transRunInfo["waitForAnswer"];
