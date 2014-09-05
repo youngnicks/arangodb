@@ -354,10 +354,11 @@ describe("ShortestPath Pregel execution", function () {
         result.finalStep = global.calculate;
         message.sendTo(vertex._locationInfo, {} );
       }
+      vertex._deactivate();
     };
 
     var conductorAlgorithm = function (globals, stepInfo) {
-      if (globals.calculate === "centralityMeasures" && stepInfo.final) {
+      if (globals.calculate === "centralityMeasures" && stepInfo.final && stepInfo.data.length > 0) {
         var max = 0, tmp, radius = Infinity, diameter = 0, maxCloseness = 0;
         stepInfo.data.forEach(function (r) {
           tmp = r.e === 0 ? 0 : 1 / r.e;
@@ -378,12 +379,14 @@ describe("ShortestPath Pregel execution", function () {
         globals.radius = radius;
         globals.maxCloseness = maxCloseness;
         globals.maxRevEccentricity = max;
+      } else {
+        return;
       }
     };
 
     it("should identify all distinct graphs", function () {
-      var graph = gN;
-      //var graph = "ff";
+      //var graph = gN;
+      var graph = "ff";
       var id = conductor.startExecution(graph, {
           base : connectedSets.toString(),
           superstep : conductorAlgorithm.toString(),
