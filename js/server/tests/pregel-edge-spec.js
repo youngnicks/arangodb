@@ -64,19 +64,23 @@ describe("Pregel Edge", function () {
       _key: "myEdge"
     };
     var e = orig.save(edgeJSON._from, edgeJSON._to, edgeJSON);
-    res.save(
-      edgeJSON._from,
-      edgeJSON._to,
-      {
-        _key: e._key,
-        deleted: false,
-        result: "old result"
+    var mapping = {
+      getResultShard: function () {
+        return eResName;
+      },
+      getResultCollection: function () {
+        return eResName;
+      },
+      getToLocationObject: function () {
+        return {
+          _id: vName + "/2",
+          shard: vName
+        };
       }
-    );
+    };
     edgeId = e._id;
-    execNr = "UnitTestPregel";
-    spyOn(pregel, "getResultCollection").and.returnValue(eResName);
-    testee = new Edge(execNr, orig.document(edgeId));
+    testee = new Edge(orig.document(edgeId), mapping, eOrigName);
+    testee._setResult({a: "old result"});
   });
 
   afterEach(function () {
@@ -92,11 +96,12 @@ describe("Pregel Edge", function () {
   });
 
   it("should contain the result stored in result collection", function () {
-    expect(testee._result).toEqual("old result");
+    expect(testee._getResult().a).toEqual("old result");
   });
 
   it("should delete the edge", function () {
     testee._delete();
+    testee._save();
     expect(res.any().deleted).toBeTruthy();
   });
 
@@ -108,10 +113,25 @@ describe("Pregel Edge", function () {
 
   it("should store a new result", function () {
     var newRes = "new result";
-    testee._result = newRes;
+    testee._setResult(newRes);
     testee._save();
     expect(res.any().result).toEqual(newRes);
   });
 
+  it("should store a new sub result", function () {
+    var newRes = "new result";
+    testee._setResult({a: newRes});
+    testee._save();
+    expect(res.any().result.a).toEqual(newRes);
+  });
+
+  it("should delete removed key", function () {
+    var newRes = "new result";
+    testee._setResult({b: newRes});
+    testee._save();
+    var result = res.any().result;
+    expect(result.b).toEqual(newRes);
+    expect(result.a).toBeUndefined();
+  });
 });
 

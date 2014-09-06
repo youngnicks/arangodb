@@ -68,11 +68,16 @@ Edge.prototype._setResult = function (result) {
 };
 
 Edge.prototype._save = function () {
+  if (this.__isSaved) {
+    return;
+  }
   var t = p.stopWatch();
   this.__resultShard.save(this.__from, this.__to, {
     _key: this._key,
-    result: this._getResult()
+    result: this._getResult(),
+    deleted: this._isDeleted()
   });
+  this.__isSaved = true;
   p.storeWatch("SaveEdge", t);
 };
 
