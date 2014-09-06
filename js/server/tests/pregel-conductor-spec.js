@@ -69,15 +69,18 @@ describe("Pregel Conductor", function () {
         stepContent: [
           {
             active: 100,
-            messages: 0
+            messages: 0,
+            data: []
           },
           {
             active: 20,
-            messages: 5
+            messages: 5,
+            data: []
           },
           {
             active: 5,
-            messages: 2
+            messages: 2,
+            data: []
           }
         ],
         waitForAnswer: {
@@ -174,15 +177,18 @@ describe("Pregel Conductor", function () {
         stepContent: [
           {
             active: 100,
-            messages: 0
+            messages: 0,
+            data: []
           },
           {
             active: 30,
-            messages: 10
+            messages: 10,
+            data: []
           },
           {
             active: 0,
-            messages: 0
+            messages: 0,
+            data: []
           }
         ],
         waitForAnswer: {
@@ -322,6 +328,7 @@ describe("Pregel Conductor", function () {
       });
 
       it("should start execution", function () {
+        spyOn(worker, "cleanUp");
         conductor.startExecution(graphName, "function(){}");
         expect(db._pregel.toArray().length).toEqual(1);
         expect(db._pregel.toArray()[0].step).toEqual(0);
@@ -330,20 +337,24 @@ describe("Pregel Conductor", function () {
         expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
         expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
         expect(db._graphs.document("P_" + id + "_RESULT_" + graphName)).not.toEqual(undefined);
+        expect(worker.cleanUp).not.toHaveBeenCalled();
       });
 
       it("should start execution and finish steps", function () {
+        spyOn(worker, "cleanUp");
         conductor.startExecution(graphName, "function(){}");
-        expect(db._pregel.toArray().length).toEqual(1);
-        expect(db._pregel.toArray()[0].step).toEqual(0);
-        expect(db._pregel.toArray()[0].stepContent[0].active).toEqual(4);
-        var id = db._pregel.toArray()[0]._key;
+        var pregelCont = db._pregel.toArray();
+        expect(pregelCont.length).toEqual(1);
+        expect(pregelCont[0].step).toEqual(0);
+        expect(pregelCont[0].stepContent[0].active).toEqual(4);
+        var id = pregelCont[0]._key;
         expect(db["P_" + id + "_RESULT_" + vc1]).not.toEqual(undefined);
         expect(db["P_" + id + "_RESULT_" + vc2]).not.toEqual(undefined);
         expect(db._graphs.document("P_" + id + "_RESULT_" + graphName)).not.toEqual(undefined);
         Object.keys(db._pregel.toArray()[0].waitForAnswer).forEach(function (dbserv) {
           conductor.finishedStep(id, dbserv, {step : 0, messages : 0, active : 0});
         });
+        expect(worker.cleanUp).toHaveBeenCalled();
       });
     });
 
@@ -389,6 +400,7 @@ describe("Pregel Conductor", function () {
           });
         } else {
           clusterServer = ["localhost"];
+          spyOn(worker, "cleanUp");
           spyOn(worker, "executeStep").and.callFake(function (executionNumber, step) {
             if (!execNr) {
               execNr = executionNumber;

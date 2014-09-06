@@ -507,20 +507,19 @@ var finishedStep = function(executionNumber, serverName, info) {
     action: function (params) {
       var pregel = require("org/arangodb/pregel");
       var _ = require("underscore");
-      var db = require("internal").db;
       var transInfo = params.info;
       var transExecutionNumber = params.executionNumber;
-      var transRunInfo = _.clone(db[params.dbName].document(transExecutionNumber));
-      var transStep = transRunInfo["step"] + 1;
-      transRunInfo["stepContent"][transStep].messages += transInfo.messages;
-      transRunInfo["stepContent"][transStep].active += transInfo.active;
-      transRunInfo["stepContent"][transStep].data =
-        transRunInfo["stepContent"][transStep].data.concat(transInfo.data);
+      var transRunInfo = _.clone(pregel.getExecutionInfo(transExecutionNumber));
+      var transStep = transRunInfo.step + 1;
+      var transStepCont = transRunInfo.stepContent[transStep];
+      transStepCont.messages += transInfo.messages;
+      transStepCont.active += transInfo.active;
+      transStepCont.data = transStepCont.data.concat(transInfo.data);
       transRunInfo.error = transInfo.error;
       var transServerName = params.serverName;
-      var transAwaiting = transRunInfo["waitForAnswer"];
+      var transAwaiting = transRunInfo.waitForAnswer;
       transAwaiting[transServerName] = true;
-      db[params.dbName].update(transExecutionNumber, transRunInfo)
+      pregel.getCollection().update(transExecutionNumber, transRunInfo);
       var transEveryServerResponded = true;
       Object.keys(transAwaiting).forEach(function(s) {
         if (transAwaiting[s] === false) {
@@ -530,14 +529,13 @@ var finishedStep = function(executionNumber, serverName, info) {
       return {
         respond: transEveryServerResponded,
         error: transRunInfo.error,
-        active: transRunInfo["stepContent"][transStep].active
+        active: transStepCont.active
       };
     },
     params: {
       serverName: serverName,
       executionNumber: executionNumber,
-      info: info,
-      dbName : "_pregel"
+      info: info
     }
   };
 
