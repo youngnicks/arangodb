@@ -30,6 +30,7 @@
 var p = require("org/arangodb/profiler");
 
 var internal = require("internal");
+var time = internal.time;
 var db = internal.db;
 var graphModule = require("org/arangodb/general-graph");
 var pregel = require("org/arangodb/pregel");
@@ -80,6 +81,22 @@ var getGlobals = function(executionNumber) {
 
 var saveGlobals = function(executionNumber, globals) {
   return getCollection().update(executionNumber, {globalValues : globals});
+};
+
+var startTimer = function (executionNumber) {
+  updateExecutionInfo(executionNumber, {timeUsed: {__ongoing: time()}});
+};
+
+var storeTime = function (executionNumber, title) {
+  var oldTime = getExecutionInfo(executionNumber).timeUsed.__ongoing;
+  var updateObj = {timeUsed: {__ongoing: time()}};
+  updateObj.timeUsed[title] = Math.round(1000 * (time() - oldTime));
+  updateExecutionInfo(executionNumber, updateObj);
+};
+
+var clearTimer = function (executionNumber) {
+  updateExecutionInfo(executionNumber, {timeUsed: {__ongoing: null}});
+
 };
 
 var getWaitForAnswerMap = function() {
@@ -185,6 +202,8 @@ var cleanUp = function (executionNumber, err) {
     httpOptions.type = "POST";
     require("org/arangodb/pregel").Worker.cleanUp(executionNumber);
   }
+  storeTime(executionNumber, "CleanUp");
+  clearTimer(executionNumber);
 };
 
 var timeOutExecution = function (executionNumber) {
@@ -212,7 +231,7 @@ var initNextStep = function (executionNumber) {
     active: 0,
     data : [],
     messages: 0,
-    final: stepInfo[active] === 0 && stepInfo[messages] === 0 ? true : false
+    final: (stepInfo[active] === 0 && stepInfo[messages] === 0)
   });
   info[waitForAnswer] = getWaitForAnswerMap();
   updateExecutionInfo(executionNumber, info);
@@ -423,6 +442,7 @@ var startExecution = function(graphName, algorithms,  options) {
   stepContentObject[messages] = 0;
   stepContentObject[data] = [];
   stepContentObject[final] = false;
+  stepContentObject.time = time();
   infoObject[stepContent] = [stepContentObject, {active: 0 , messages: 0, data : [],  final : false}];
   var key = saveExecutionInfo(infoObject, options)._key;
   try {
@@ -435,6 +455,7 @@ var startExecution = function(graphName, algorithms,  options) {
     err.errorMessage = arangodb.errors.ERROR_BAD_PARAMETER.message;
     throw err;
   }
+  startTimer(key);
 
   options.algorithm = pregelAlgorithm;
   if (aggregator) {
@@ -443,6 +464,7 @@ var startExecution = function(graphName, algorithms,  options) {
 
   options.map = createResultGraph(graph, key);
   p.storeWatch("startExecution", t);
+  storeTime(key, "Setup");
   startNextStep(key, options);
   return key;
 };
@@ -562,6 +584,7 @@ var finishedStep = function(executionNumber, serverName, info) {
     checks = db._executeTransaction(transactionBody);
   }
   if (checks.respond && !checks.error) {
+    storeTime(executionNumber, "Step" + info.step);
     if (ArangoServerState.isCoordinator()) {
       tasks.unregister(genTaskId(executionNumber));
     }
