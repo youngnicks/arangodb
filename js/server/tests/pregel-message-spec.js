@@ -207,28 +207,37 @@ describe("Pregel MessageQueue", function () {
         var vertices, v1, v2, v3, firstMsg, secondMsg, thirdMsg;
 
         beforeEach(function () {
-          vertices = [];
+          vertices = {};
           v1 = "v/1";
           v2 = "v/2";
           v3 = "v/3";
-          vertices.push({
+          vertices[v1] = {
+            _activate: function () {
+              return undefined;
+            },
             _locationInfo: {
               _id: v1,
               shard: "s100"
             }
-          });
-          vertices.push({
+          };
+          vertices[v2] = {
+            _activate: function () {
+              return undefined;
+            },
             _locationInfo: {
               _id: v2,
               shard: "s101"
             }
-          });
-          vertices.push({
+          };
+          vertices[v3] = {
+            _activate: function () {
+              return undefined;
+            },
             _locationInfo: {
               _id: v3,
               shard: "s100"
             }
-          });
+          };
           queue = new Queue(executionNumber, vertices);
           var msgContent = {
             toShard: "s100",
