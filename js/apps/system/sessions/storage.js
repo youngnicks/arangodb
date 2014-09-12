@@ -1,4 +1,3 @@
-/*jslint indent: 2, nomen: true, maxlen: 120, es5: true */
 /*global require, exports, applicationContext */
 (function () {
   'use strict';
@@ -7,8 +6,6 @@
     internal = require('internal'),
     arangodb = require('org/arangodb'),
     db = arangodb.db,
-    addCookie = require('org/arangodb/actions').addCookie,
-    crypto = require('org/arangodb/crypto'),
     Foxx = require('org/arangodb/foxx'),
     errors = require('./errors'),
     cfg = applicationContext.configuration,
@@ -45,7 +42,7 @@
       now = Number(new Date()),
       session = new Session({
         _key: sid,
-        sid: sid,
+        uid: null,
         sessionData: sessionData || {},
         userData: {},
         created: now,
@@ -103,61 +100,35 @@
     return null;
   }
 
-  function fromCookie(req, cookieName, secret) {
-    var session = null,
-      value = req.cookies[cookieName],
-      signature;
-    if (value) {
-      if (secret) {
-        signature = req.cookies[cookieName + '_sig'] || '';
-        if (!crypto.constantEquals(signature, crypto.hmac(secret, value))) {
-          return null;
-        }
-      }
-      try {
-        session = getSession(value);
-      } catch (e) {
-        if (!(e instanceof errors.SessionNotFound)) {
-          throw e;
-        }
-      }
-    }
-    return session;
-  }
-
   _.extend(Session.prototype, {
     enforceTimeout: function () {
-      if (!cfg.timeToLive) {
-        return;
-      }
-      var now = Number(new Date()),
-        prop = cfg.ttlType;
-      if (!prop || !this.get(prop)) {
-        prop = 'created';
-      }
-      if (cfg.timeToLive < (now - this.get(prop))) {
+      if (this.hasExpired()) {
         throw new errors.SessionExpired(this.get('_key'));
       }
     },
-    addCookie: function (res, cookieName, secret) {
-      var value = this.get('_key'),
-        ttl = cfg.timeToLive;
-      ttl = ttl ? Math.floor(ttl / 1000) : undefined;
-      addCookie(res, cookieName, value, ttl);
-      if (secret) {
-        addCookie(res, cookieName + '_sig', crypto.hmac(secret, value), ttl);
-      }
+    hasExpired: function () {
+      return this.getTTL() === 0;
     },
-    clearCookie: function (res, cookieName, secret) {
-      addCookie(res, cookieName, '', -(7 * 24 * 60 * 60));
-      if (secret) {
-        addCookie(res, cookieName + '_sig', '', -(7 * 24 * 60 * 60));
+    getTTL: function () {
+      if (!cfg.timeToLive) {
+        return Infinity;
       }
+      return Math.max(0, this.getExpiry() - Date.now());
+    },
+    getExpiry: function () {
+      if (!cfg.timeToLive) {
+        return Infinity;
+      }
+      var prop = cfg.ttlType;
+      if (!prop || !this.get(prop)) {
+        prop = 'created';
+      }
+      return this.get(prop) + cfg.timeToLive;
     },
     setUser: function (user) {
       var session = this;
       if (user) {
-        session.set('uid', user.get('_key'));
+        session.set('uid', user.get('_id'));
         session.set('userData', user.get('userData'));
       } else {
         delete session.attributes.uid;
@@ -190,7 +161,6 @@
     }
   });
 
-  exports.fromCookie = fromCookie;
   exports.create = createSession;
   exports.get = getSession;
   exports.delete = deleteSession;

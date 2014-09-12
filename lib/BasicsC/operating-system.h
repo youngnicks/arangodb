@@ -92,15 +92,16 @@
 /// @brief available functions
 ////////////////////////////////////////////////////////////////////////////////
 
+#define TRI_GETRUSAGE_MAXRSS_UNIT           1
 #define TRI_HAVE_GETGRGID                   1
 #define TRI_HAVE_GETGRNAM                   1
 #define TRI_HAVE_GETPPID                    1
 #define TRI_HAVE_GETPWNAM                   1
 #define TRI_HAVE_GETPWUID                   1
 #define TRI_HAVE_GETRUSAGE                  1
-#define TRI_GETRUSAGE_MAXRSS_UNIT           1
 #define TRI_HAVE_GETTIMEOFDAY               1
 #define TRI_HAVE_GMTIME_R                   1
+#define TRI_HAVE_INITGROUPS                 1
 #define TRI_HAVE_SETGID                     1
 #define TRI_HAVE_SETUID                     1
 #define TRI_HAVE_STRTOLL                    1
@@ -176,10 +177,13 @@
 #define TRI_RMDIR                       rmdir
 #define TRI_UNLINK                      unlink
 #define TRI_WRITE                       write
+#define TRI_STAT                        stat
+#define TRI_FSTAT                       fstat
 
 #define TRI_write_t                     size_t
 #define TRI_read_t                      size_t
 #define TRI_lseek_t                     off_t
+#define TRI_stat_t                      struct stat
 
 #define TRI_LAST_ERROR_STR              strerror(errno)
 
@@ -322,10 +326,13 @@
 #define TRI_RMDIR                       rmdir
 #define TRI_UNLINK                      unlink
 #define TRI_WRITE                       write
+#define TRI_STAT                        stat
+#define TRI_FSTAT                       fstat
 
 #define TRI_write_t                     size_t
 #define TRI_read_t                      size_t
 #define TRI_lseek_t                     off_t
+#define TRI_stat_t                      struct stat
 
 #define TRI_LAST_ERROR_STR              strerror(errno)
 
@@ -417,6 +424,7 @@
 /// @brief available functions
 ////////////////////////////////////////////////////////////////////////////////
 
+#define TRI_GETRUSAGE_MAXRSS_UNIT           1024
 #define TRI_HAVE_GETGRGID                   1
 #define TRI_HAVE_GETGRNAM                   1
 #define TRI_HAVE_GETLINE                    1
@@ -424,9 +432,9 @@
 #define TRI_HAVE_GETPWNAM                   1
 #define TRI_HAVE_GETPWUID                   1
 #define TRI_HAVE_GETRUSAGE                  1
-#define TRI_GETRUSAGE_MAXRSS_UNIT           1024
 #define TRI_HAVE_GETTIMEOFDAY               1
 #define TRI_HAVE_GMTIME_R                   1
+#define TRI_HAVE_INITGROUPS                 1
 #define TRI_HAVE_PRCTL                      1
 #define TRI_HAVE_SETGID                     1
 #define TRI_HAVE_SETUID                     1
@@ -486,10 +494,13 @@
 #define TRI_RMDIR                       rmdir
 #define TRI_UNLINK                      unlink
 #define TRI_WRITE                       write
+#define TRI_STAT                        stat
+#define TRI_FSTAT                       fstat
 
 #define TRI_write_t                     size_t
 #define TRI_read_t                      size_t
 #define TRI_lseek_t                     off_t
+#define TRI_stat_t                      struct stat
 
 #define TRI_LAST_ERROR_STR              strerror(errno)
 
@@ -698,10 +709,13 @@ typedef unsigned char bool;
 #define TRI_RMDIR                       _rmdir
 #define TRI_UNLINK                      _unlink
 #define TRI_WRITE                       _write
+#define TRI_STAT                        _stat64
+#define TRI_FSTAT                       _fstat64
 
 #define TRI_write_t                     unsigned int
 #define TRI_read_t                      unsigned int
 #define TRI_lseek_t                     __int64
+#define TRI_stat_t                      struct _stat64
 
 #define TRI_LAST_ERROR_STR              strerror(errno)
 

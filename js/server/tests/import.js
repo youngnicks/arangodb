@@ -172,6 +172,36 @@ function importTestSuite () {
     },
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief test csv import
+////////////////////////////////////////////////////////////////////////////////
+    
+    testCsvImport3 : function () {
+      var expected = [ 
+        { name: "Bar", password: "wow!\nthis is a\nmultiline password!" },
+        { name: "Bartholomew \"Bart\" Simpson", password: "Milhouse" },
+        { name: "Foo", password: "r4\\nd\\\\om\"123!" }
+      ];
+      
+      var actual = getQueryResults("FOR i IN UnitTestsImportCsv3 SORT i.name RETURN i");
+      assertEqual(expected, actual);
+    },
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief test csv import
+////////////////////////////////////////////////////////////////////////////////
+    
+    testCsvImport4 : function () {
+      var expected = [ 
+        { name: "Bar", password: "wow!\nthis is a\nmultiline password!" },
+        { name: "Bartholomew \"Bart\" Simpson", password: "Milhouse" },
+        { name: "Foo", password: "r4\\nd\\\\om\"123!" }
+      ];
+      
+      var actual = getQueryResults("FOR i IN UnitTestsImportCsv4 SORT i.name RETURN i");
+      assertEqual(expected, actual);
+    },
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief test tsv import
 ////////////////////////////////////////////////////////////////////////////////
     

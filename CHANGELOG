@@ -1,4 +1,4 @@
-v2.3.0 (XXXX-XX-XX)
+v2.4.0 (XXXX-XX-XX)
 ------------------
 
 * Implemented a version of Pregel's algorithm
@@ -17,6 +17,35 @@ v2.3.0 (XXXX-XX-XX)
 * `Cursor.next(n)` now accepts an optional first parameter, which allows to request
   the next `n` elements instead of only the next one element.
 
+v2.3.0 (XXXX-XX-XX)
+-------------------
+* Added a _relation function in the general-graph module.
+ 
+  This deprecated _directedRelation and _undirectedRelation.
+  ArangoDB does not offer any constraints for undirected edges
+  which caused some confusion of users how undirected relations
+  have to be handled. Relation now only supports directed relations
+  and the user can actively simulate undirected relations.
+
+* changed return value of Foxx.applicationContext#collectionName:
+
+  Previously, the function could return invalid collection names because
+  invalid characters were not replaced in the application name prefix, only
+  in the collection name passed.
+
+  Now, the function replaces invalid characters also in the application name
+  prefix, which might to slightly different results for application names that
+  contained any characters outside the ranges [a-z], [A-Z] and [0-9].
+
+* prevent XSS in AQL editor and logs view
+
+* integrated tutorial into ArangoShell and web interface
+
+* added option `--backslash-escape` for arangoimp when running CSV file imports
+
+* front-end: added download feature for (filtered) documents
+
+* front-end: added download feature for the results of a user query
 
 * front-end: added function to move documents to another collection
 
@@ -69,7 +98,7 @@ v2.3.0 (XXXX-XX-XX)
 * front-end: fetching and filtering of documents, statistics, and query operations are now
   handled with asynchronous ajax calls.
 
-* front-end: added process indicator if the front-end is waiting for a server operation.
+* front-end: added progress indicator if the front-end is waiting for a server operation.
 
 * front-end: fixed wrong count of documents in the documents view of a collection.
 
@@ -82,6 +111,78 @@ v2.3.0 (XXXX-XX-XX)
 * automatically call `toJSON` function of JavaScript objects (if present)
   when serializing them into database documents. This change allows
   storing JavaScript date objects in the database in a sensible manner.
+
+
+v2.2.4 (2014-XX-XX)
+-------------------
+
+* fixed issue #1016: AQL editor bug
+
+* fixed issue #1014: WITHIN function returns wrong distance
+
+* fixed AQL shortest path calculation in function `GRAPH_SHORTEST_PATH` to return
+  complete vertex objects instead of just vertex ids
+
+* allow changing of attributes of documents stored in server-side JavaScript variables 
+
+  Previously, the following did not work:
+
+      var doc = db.collection.document(key);
+      doc._key = "abc"; // overwriting internal attributes not supported
+      doc.value = 123;  // overwriting existing attributes not supported 
+
+  Now, modifying documents stored in server-side variables (e.g. `doc` in the above case)
+  is supported. Modifying the variables will not update the documents in the database,
+  but will modify the JavaScript object (which can be written back to the database using
+  `db.collection.update` or `db.collection.replace`)
+
+* fixed issue #997: arangoimp apparently doesn't support files >2gig on Windows
+
+  large file support (requires using `_stat64` instead of `stat`) is now supported on 
+  Windows
+
+
+v2.2.3 (2014-09-02)
+-------------------
+
+* added `around` for Foxx controller
+
+* added `type` option for HTTP API `GET /_api/document?collection=...`
+
+  This allows controlling the type of results to be returned. By default, paths to
+  documents will be returned, e.g. 
+
+      [
+        `/_api/document/test/mykey1`,
+        `/_api/document/test/mykey2`,
+        ...
+      ]
+
+  To return a list of document ids instead of paths, the `type` URL parameter can be 
+  set to `id`:
+
+      [
+        `test/mykey1`,
+        `test/mykey2`,
+        ...
+      ]
+
+  To return a list of document keys only, the `type` URL parameter can be set to `key`:
+
+      [
+        `mykey1`,
+        `mykey2`,
+        ...
+      ]
+
+
+* properly capitalize HTTP response header field names in case the `x-arango-async`
+  HTTP header was used in a request.
+
+* fixed several documentation issues
+
+* speedup for several general-graph functions, AQL functions starting with `GRAPH_`
+  and traversals
 
 
 v2.2.2 (2014-08-08)

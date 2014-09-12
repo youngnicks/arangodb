@@ -1,4 +1,4 @@
-/*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
+/*jshint strict: false, unused: false */
 /*global ArangoAgency, ArangoClusterComm, ArangoClusterInfo, ArangoServerState, require, exports */
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -35,12 +35,11 @@ var ArangoError = arangodb.ArangoError;
 var PortFinder = require("org/arangodb/cluster/planner").PortFinder;
 var Planner = require("org/arangodb/cluster/planner").Planner;
 var Kickstarter = require("org/arangodb/cluster/kickstarter").Kickstarter;
-var internal = require("internal");
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief get values from Plan or Current by a prefix
 ////////////////////////////////////////////////////////////////////////////////
-  
+
 function getByPrefix (values, prefix) {
   var result = { };
   var a;
@@ -59,7 +58,7 @@ function getByPrefix (values, prefix) {
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief get values from Plan or Current by a prefix
 ////////////////////////////////////////////////////////////////////////////////
-  
+
 function getByPrefix3d (values, prefix) {
   var result = { };
   var a;
@@ -85,7 +84,7 @@ function getByPrefix3d (values, prefix) {
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief get values from Plan or Current by a prefix
 ////////////////////////////////////////////////////////////////////////////////
-  
+
 function getByPrefix4d (values, prefix) {
   var result = { };
   var a;
@@ -132,7 +131,7 @@ function getShardMap (plannedCollections) {
 
           for (shard in shards) {
             if (shards.hasOwnProperty(shard)) {
-              shardMap[shard] = shards[shard]; 
+              shardMap[shard] = shards[shard];
             }
           }
         }
@@ -154,7 +153,7 @@ function getIndexMap (shard) {
   for (i = 0; i < idx.length; ++i) {
     // fetch id without collection name
     var id = idx[i].id.replace(/^[a-zA-Z0-9_\-]*?\/([0-9]+)$/, '$1');
- 
+
     idx[i].id = id;
     indexes[id] = idx[i];
   }
@@ -178,14 +177,14 @@ function writeLocked (lockInfo, cb, args) {
   }
 
   ArangoAgency.lockWrite(lockInfo.part, ttl, timeout);
-  
+
   try {
     cb.apply(this, args);
     ArangoAgency.increaseVersion(lockInfo.part + "/Version");
-    ArangoAgency.unlockWrite(lockInfo.part, timeout); 
+    ArangoAgency.unlockWrite(lockInfo.part, timeout);
   }
   catch (err) {
-    ArangoAgency.unlockWrite(lockInfo.part, timeout); 
+    ArangoAgency.unlockWrite(lockInfo.part, timeout);
     throw err;
   }
 }
@@ -220,8 +219,8 @@ function getLocalCollections () {
     if (name.substr(0, 1) !== '_' && name.substr(0, 2) !== 'P_') {
       var data = { 
         id: collection._id,
-        name: name, 
-        type: collection.type(), 
+        name: name,
+        type: collection.type(),
         status: collection.status(),
         planId: collection.planId()
       };
@@ -249,14 +248,14 @@ function getLocalCollections () {
 function createLocalDatabases (plannedDatabases) {
   var ourselves = ArangoServerState.id();
 
-  var createDatabaseAgency = function (payload) { 
-    ArangoAgency.set("Current/Databases/" + payload.name + "/" + ourselves, 
+  var createDatabaseAgency = function (payload) {
+    ArangoAgency.set("Current/Databases/" + payload.name + "/" + ourselves,
                      payload);
   };
-  
+
   var db = require("internal").db;
   db._useDatabase("_system");
-  
+
   var localDatabases = getLocalDatabases();
   var name;
 
@@ -287,9 +286,9 @@ function createLocalDatabases (plannedDatabases) {
           payload.errorMessage = err.errorMessage;
         }
       }
-        
-      writeLocked({ part: "Current" }, 
-                  createDatabaseAgency, 
+
+      writeLocked({ part: "Current" },
+                  createDatabaseAgency,
                   [ payload ]);
     }
   }
@@ -302,7 +301,7 @@ function createLocalDatabases (plannedDatabases) {
 function dropLocalDatabases (plannedDatabases) {
   var ourselves = ArangoServerState.id();
 
-  var dropDatabaseAgency = function (payload) { 
+  var dropDatabaseAgency = function (payload) {
     try {
       ArangoAgency.remove("Current/Databases/" + payload.name + "/" + ourselves);
     }
@@ -310,10 +309,10 @@ function dropLocalDatabases (plannedDatabases) {
       // ignore errors
     }
   };
-  
+
   var db = require("internal").db;
   db._useDatabase("_system");
-  
+
   var localDatabases = getLocalDatabases();
   var name;
 
@@ -325,9 +324,9 @@ function dropLocalDatabases (plannedDatabases) {
 
         console.info("dropping local database '%s'", name);
         db._dropDatabase(name);
-        
-        writeLocked({ part: "Current" }, 
-                    dropDatabaseAgency, 
+
+        writeLocked({ part: "Current" },
+                    dropDatabaseAgency,
                     [ { name: name } ]);
       }
     }
@@ -341,7 +340,7 @@ function dropLocalDatabases (plannedDatabases) {
 function cleanupCurrentDatabases () {
   var ourselves = ArangoServerState.id();
 
-  var dropDatabaseAgency = function (payload) { 
+  var dropDatabaseAgency = function (payload) {
     try {
       ArangoAgency.remove("Current/Databases/" + payload.name + "/" + ourselves);
     }
@@ -349,12 +348,12 @@ function cleanupCurrentDatabases () {
       // ignore errors
     }
   };
-  
+
   var db = require("internal").db;
   db._useDatabase("_system");
 
   var all = ArangoAgency.get("Current/Databases", true);
-  var currentDatabases = getByPrefix3d(all, "Current/Databases/"); 
+  var currentDatabases = getByPrefix3d(all, "Current/Databases/");
   var localDatabases = getLocalDatabases();
   var name;
 
@@ -366,9 +365,9 @@ function cleanupCurrentDatabases () {
         if (currentDatabases[name].hasOwnProperty(ourselves)) {
           // we are entered for a database that we don't have locally
           console.info("cleaning up entry for unknown database '%s'", name);
-        
-          writeLocked({ part: "Current" }, 
-                      dropDatabaseAgency, 
+
+          writeLocked({ part: "Current" },
+                      dropDatabaseAgency,
                       [ { name: name } ]);
         }
 
@@ -382,11 +381,11 @@ function cleanupCurrentDatabases () {
 ////////////////////////////////////////////////////////////////////////////////
 
 function handleDatabaseChanges (plan, current) {
-  var plannedDatabases = getByPrefix(plan, "Plan/Databases/"); 
+  var plannedDatabases = getByPrefix(plan, "Plan/Databases/");
 
   createLocalDatabases(plannedDatabases);
-  dropLocalDatabases(plannedDatabases);  
-  cleanupCurrentDatabases();  
+  dropLocalDatabases(plannedDatabases);
+  cleanupCurrentDatabases();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -396,11 +395,11 @@ function handleDatabaseChanges (plan, current) {
 function createLocalCollections (plannedCollections) {
   var ourselves = ArangoServerState.id();
 
-  var createCollectionAgency = function (database, shard, payload) { 
-    ArangoAgency.set("Current/Collections/" + database + "/" + payload.planId + "/" + shard, 
+  var createCollectionAgency = function (database, shard, payload) {
+    ArangoAgency.set("Current/Collections/" + database + "/" + payload.planId + "/" + shard,
                      payload);
   };
-  
+
   var db = require("internal").db;
   db._useDatabase("_system");
   var localDatabases = getLocalDatabases();
@@ -429,7 +428,7 @@ function createLocalCollections (plannedCollections) {
               var payload = collections[collection];
               var shards = payload.shards;
               var shard;
-            
+
               payload.planId = payload.id;
               delete payload.id;  // must not actually set it here
 
@@ -440,12 +439,12 @@ function createLocalCollections (plannedCollections) {
 
                     if (! localCollections.hasOwnProperty(shard)) {
                       // must create this shard
-                      console.info("creating local shard '%s/%s' for central '%s/%s'", 
-                                   database, 
-                                   shard, 
+                      console.info("creating local shard '%s/%s' for central '%s/%s'",
+                                   database,
+                                   shard,
                                    database,
                                    payload.planId);
-           
+
                       try {
                         if (payload.type === ArangoCollection.TYPE_EDGE) {
                           db._createEdgeCollection(shard, payload);
@@ -463,33 +462,33 @@ function createLocalCollections (plannedCollections) {
                         payload.errorMessage = err2.errorMessage;
 
                         console.error("creating local shard '%s/%s' for central '%s/%s' failed: %s",
-                                      database, 
-                                      shard, 
                                       database,
-                                      payload.planId, 
+                                      shard,
+                                      database,
+                                      payload.planId,
                                       JSON.stringify(err2));
                       }
 
                       payload.DBServer = ourselves;
-                      writeLocked({ part: "Current" }, 
-                                  createCollectionAgency, 
+                      writeLocked({ part: "Current" },
+                                  createCollectionAgency,
                                   [ database, shard, payload ]);
                     }
                     else {
                       if (localCollections[shard].status !== payload.status) {
-                        console.info("detected status change for local shard '%s/%s'", 
-                                     database, 
+                        console.info("detected status change for local shard '%s/%s'",
+                                     database,
                                      shard);
 
                         if (payload.status === ArangoCollection.STATUS_UNLOADED) {
-                          console.info("unloading local shard '%s/%s'", 
-                                       database, 
+                          console.info("unloading local shard '%s/%s'",
+                                       database,
                                        shard);
                           db._collection(shard).unload();
                         }
                         else if (payload.status === ArangoCollection.STATUS_LOADED) {
-                          console.info("loading local shard '%s/%s'", 
-                                       database, 
+                          console.info("loading local shard '%s/%s'",
+                                       database,
                                        shard);
                           db._collection(shard).load();
                         }
@@ -498,8 +497,8 @@ function createLocalCollections (plannedCollections) {
                         payload.errorMessage = "no error";
                         payload.DBServer = ourselves;
 
-                        writeLocked({ part: "Current" }, 
-                                    createCollectionAgency, 
+                        writeLocked({ part: "Current" },
+                                    createCollectionAgency,
                                     [ database, shard, payload ]);
                       }
 
@@ -515,10 +514,10 @@ function createLocalCollections (plannedCollections) {
                       }
 
                       if (Object.keys(properties).length > 0) {
-                        console.info("updating properties for local shard '%s/%s'", 
-                                     database, 
+                        console.info("updating properties for local shard '%s/%s'",
+                                     database,
                                      shard);
-                        
+
                         try {
                           db._collection(shard).properties(properties);
                           payload.error = false;
@@ -532,8 +531,8 @@ function createLocalCollections (plannedCollections) {
                         }
 
                         payload.DBServer = ourselves;
-                        writeLocked({ part: "Current" }, 
-                                    createCollectionAgency, 
+                        writeLocked({ part: "Current" },
+                                    createCollectionAgency,
                                     [ database, shard, payload ]);
                       }
                     }
@@ -546,10 +545,10 @@ function createLocalCollections (plannedCollections) {
                       for (i = 0; i < payload.indexes.length; ++i) {
                         index = payload.indexes[i];
 
-                        if (index.type !== "primary" && index.type !== "edge" && 
+                        if (index.type !== "primary" && index.type !== "edge" &&
                             ! indexes.hasOwnProperty(index.id)) {
-                          console.info("creating index '%s/%s': %s", 
-                                       database, 
+                          console.info("creating index '%s/%s': %s",
+                                       database,
                                        shard,
                                        JSON.stringify(index));
 
@@ -568,9 +567,9 @@ function createLocalCollections (plannedCollections) {
                           }
 
                           payload.DBServer = ourselves;
-                        
-                          writeLocked({ part: "Current" }, 
-                                      createCollectionAgency, 
+
+                          writeLocked({ part: "Current" },
+                                      createCollectionAgency,
                                       [ database, shard, payload ]);
                         }
                       }
@@ -578,7 +577,7 @@ function createLocalCollections (plannedCollections) {
                       for (idx in indexes) {
                         if (indexes.hasOwnProperty(idx)) {
                           // found an index in the index map, check if it must be deleted
-                        
+
                           if (indexes[idx].type !== "primary" && indexes[idx].type !== "edge") {
                             var found = false;
                             for (i = 0; i < payload.indexes.length; ++i) {
@@ -592,8 +591,8 @@ function createLocalCollections (plannedCollections) {
                               // found an index to delete locally
                               index = indexes[idx];
 
-                              console.info("dropping index '%s/%s': %s", 
-                                            database, 
+                              console.info("dropping index '%s/%s': %s",
+                                            database,
                                             shard,
                                             JSON.stringify(index));
 
@@ -602,9 +601,9 @@ function createLocalCollections (plannedCollections) {
                               delete indexes[idx];
                               payload.indexes.splice(i, i);
                               payload.DBServer = ourselves;
-                            
-                              writeLocked({ part: "Current" }, 
-                                          createCollectionAgency, 
+
+                              writeLocked({ part: "Current" },
+                                          createCollectionAgency,
                                           [ database, shard, payload ]);
                             }
                           }
@@ -637,7 +636,7 @@ function dropLocalCollections (plannedCollections) {
   var ourselves = ArangoServerState.id();
 
   var dropCollectionAgency = function (database, shardID, id) {
-    try { 
+    try {
       ArangoAgency.remove("Current/Collections/" + database + "/" + id + "/" + shardID);
     }
     catch (err) {
@@ -648,7 +647,7 @@ function dropLocalCollections (plannedCollections) {
   var db = require("internal").db;
   db._useDatabase("_system");
   var shardMap = getShardMap(plannedCollections);
-  
+
   var localDatabases = getLocalDatabases();
   var database;
 
@@ -656,7 +655,7 @@ function dropLocalCollections (plannedCollections) {
   for (database in localDatabases) {
     if (localDatabases.hasOwnProperty(database)) {
       var removeAll = ! plannedCollections.hasOwnProperty(database);
-        
+
       // save old database name
       var previousDatabase = db._name();
       // switch into other database
@@ -671,22 +670,22 @@ function dropLocalCollections (plannedCollections) {
           if (collections.hasOwnProperty(collection)) {
             // found a local collection
             // check if it is in the plan and we are responsible for it
-              
-            var remove = removeAll || 
+
+            var remove = removeAll ||
                          (! shardMap.hasOwnProperty(collection)) ||
                          (shardMap[collection] !== ourselves);
 
             if (remove) {
-              console.info("dropping local shard '%s/%s' of '%s/%s", 
-                           database, 
+              console.info("dropping local shard '%s/%s' of '%s/%s",
+                           database,
                            collection,
                            database,
                            collections[collection].planId);
 
               db._drop(collection);
-                        
-              writeLocked({ part: "Current" }, 
-                          dropCollectionAgency, 
+
+              writeLocked({ part: "Current" },
+                          dropCollectionAgency,
                           [ database, collection, collections[collection].planId ]);
             }
           }
@@ -708,32 +707,32 @@ function cleanupCurrentCollections (plannedCollections) {
   var ourselves = ArangoServerState.id();
 
   var dropCollectionAgency = function (database, collection, shardID) {
-    try { 
+    try {
       ArangoAgency.remove("Current/Collections/" + database + "/" + collection + "/" + shardID);
     }
     catch (err) {
       // ignore errors
     }
   };
-  
+
   var db = require("internal").db;
   db._useDatabase("_system");
 
   var all = ArangoAgency.get("Current/Collections", true);
-  var currentCollections = getByPrefix4d(all, "Current/Collections/"); 
+  var currentCollections = getByPrefix4d(all, "Current/Collections/");
   var shardMap = getShardMap(plannedCollections);
   var database;
 
   for (database in currentCollections) {
     if (currentCollections.hasOwnProperty(database)) {
-      var collections = currentCollections[database]; 
+      var collections = currentCollections[database];
       var collection;
 
       for (collection in collections) {
         if (collections.hasOwnProperty(collection)) {
           var shards = collections[collection];
           var shard;
-                
+
           for (shard in shards) {
             if (shards.hasOwnProperty(shard)) {
 
@@ -741,13 +740,13 @@ function cleanupCurrentCollections (plannedCollections) {
                   (! shardMap.hasOwnProperty(shard) ||
                    shardMap[shard] !== ourselves)) {
                 // found a shard we are entered for but that we don't have locally
-                console.info("cleaning up entry for unknown shard '%s' of '%s/%s", 
+                console.info("cleaning up entry for unknown shard '%s' of '%s/%s",
                              shard,
                              database,
                              collection);
 
-                writeLocked({ part: "Current" }, 
-                            dropCollectionAgency, 
+                writeLocked({ part: "Current" },
+                            dropCollectionAgency,
                             [ database, collection, shard ]);
               }
             }
@@ -764,7 +763,7 @@ function cleanupCurrentCollections (plannedCollections) {
 ////////////////////////////////////////////////////////////////////////////////
 
 function handleCollectionChanges (plan, current) {
-  var plannedCollections = getByPrefix3d(plan, "Plan/Collections/"); 
+  var plannedCollections = getByPrefix3d(plan, "Plan/Collections/");
 
   createLocalCollections(plannedCollections);
   dropLocalCollections(plannedCollections);
@@ -788,7 +787,7 @@ var raiseError = function (code, msg) {
   var err = new ArangoError();
   err.errorNum = code;
   err.errorMessage = msg;
-  
+
   throw err;
 };
 
@@ -802,7 +801,7 @@ var shardList = function (dbName, collectionName) {
   if (ci === undefined || typeof ci !== 'object') {
     throw "unable to determine shard list for '" + dbName + "/" + collectionName + "'";
   }
-      
+
   var shards = [ ], shard;
   for (shard in ci.shards) {
     if (ci.shards.hasOwnProperty(shard)) {
@@ -811,7 +810,7 @@ var shardList = function (dbName, collectionName) {
   }
 
   if (shards.length === 0) {
-    raiseError(arangodb.errors.ERROR_ARANGO_COLLECTION_NOT_FOUND.code, 
+    raiseError(arangodb.errors.ERROR_ARANGO_COLLECTION_NOT_FOUND.code,
                arangodb.errors.ERROR_ARANGO_COLLECTION_NOT_FOUND.message);
   }
 
@@ -828,22 +827,22 @@ var wait = function (data, shards) {
   while (received.length < shards.length) {
     var result = ArangoClusterComm.wait(data);
     var status = result.status;
-        
+
     if (status === "ERROR") {
-      raiseError(arangodb.errors.ERROR_INTERNAL.code, 
+      raiseError(arangodb.errors.ERROR_INTERNAL.code,
                  "received an error from a DB server");
     }
     else if (status === "TIMEOUT") {
-      raiseError(arangodb.errors.ERROR_CLUSTER_TIMEOUT.code, 
+      raiseError(arangodb.errors.ERROR_CLUSTER_TIMEOUT.code,
                  arangodb.errors.ERROR_CLUSTER_TIMEOUT.message);
     }
     else if (status === "DROPPED") {
-      raiseError(arangodb.errors.ERROR_INTERNAL.code, 
+      raiseError(arangodb.errors.ERROR_INTERNAL.code,
                  "the operation was dropped");
     }
     else if (status === "RECEIVED") {
       received.push(result);
-      
+
       if (result.headers && result.headers.hasOwnProperty('x-arango-response-code')) {
         var code = parseInt(result.headers['x-arango-response-code'].substr(0, 3), 10);
 
@@ -854,11 +853,11 @@ var wait = function (data, shards) {
             body = JSON.parse(result.body);
           }
           catch (err) {
-            raiseError(arangodb.errors.ERROR_INTERNAL.code, 
+            raiseError(arangodb.errors.ERROR_INTERNAL.code,
                        "received an error from a DB server");
           }
 
-          raiseError(body.errorNum, 
+          raiseError(body.errorNum,
                      body.errorMessage);
         }
       }
@@ -941,7 +940,7 @@ var handlePlanChange = function () {
   try {
     var plan    = ArangoAgency.get("Plan", true);
     var current = ArangoAgency.get("Current", true);
- 
+
     handleChanges(plan, current);
     console.info("plan change handling successful");
   }
@@ -967,7 +966,7 @@ var dispatcherDisabled = function () {
 var coordinatorId = function () {
   if (! isCoordinator()) {
     console.error("not a coordinator");
-  }  
+  }
   return ArangoServerState.id();
 };
 

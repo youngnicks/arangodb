@@ -1,5 +1,5 @@
-/*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, Graph, arguments */
+/*jshint strict: false */
+/*global require, exports, ArangoClusterComm */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Graph functionality
@@ -169,7 +169,7 @@ var wrapCollection = function(col) {
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_general_graph_example_description
-/// 
+///
 /// For many of the following functions *examples* can be passed in as a parameter.
 /// *Examples* are used to filter the result set for objects that match the conditions.
 /// These *examples* can have the following values:
@@ -276,7 +276,7 @@ AQLStatement.prototype.isNeighborQuery = function() {
 AQLStatement.prototype.allowsRestrict = function() {
   return this.isEdgeQuery()
     || this.isVertexQuery()
-    || this.isNeighborQuery(); 
+    || this.isNeighborQuery();
 };
 
 // -----------------------------------------------------------------------------
@@ -519,7 +519,7 @@ AQLGenerator.prototype.outEdges = function(example) {
 /// @brief Select all inbound edges for the vertices selected before.
 ///
 /// `graph_query.inEdges(examples)`
-/// 
+///
 ///
 /// Creates an AQL statement to select all *inbound* edges for each of the vertices selected
 /// in the step before.
@@ -730,7 +730,7 @@ AQLGenerator.prototype.fromVertices = function(example) {
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_general_graph_fluent_aql_toVertices
 /// @brief Select all vertices targeted by the edges selected before.
-/// 
+///
 /// `graph_query.toVertices(examples)`
 ///
 /// Creates an AQL statement to select the set of vertices where the edges selected
@@ -866,7 +866,7 @@ AQLGenerator.prototype.pathEdges = function() {
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_general_graph_fluent_aql_neighbors
 /// @brief Select all neighbors of the vertices selected in the step before.
-/// 
+///
 /// `graph_query.neighbors(examples, options)`
 ///
 /// Creates an AQL statement to select all neighbors for each of the vertices selected
@@ -879,7 +879,7 @@ AQLGenerator.prototype.pathEdges = function() {
 /// See [Definition of examples](#definition_of_examples)
 ///
 /// @PARAM{options, object, optional}
-///   An object defining further options. Can have the following values: 
+///   An object defining further options. Can have the following values:
 ///   * *direction*: The direction of the edges. Possible values are *outbound*, *inbound* and *any* (default).
 ///   * *edgeExamples*: Filter the edges to be followed, see [Definition of examples](#definition_of_examples)
 ///   * *edgeCollectionRestriction* : One or a list of edge-collection names that should be
@@ -981,7 +981,7 @@ AQLGenerator.prototype._getLastRestrictableStatementInfo = function() {
 /// to a specific set of collections within the graph.
 /// Restriction is only applied to this one part of the query.
 /// It does not effect earlier or later statements.
-/// 
+///
 /// @PARAMS
 ///
 /// @PARAM{restrictions, array, optional}
@@ -991,7 +991,7 @@ AQLGenerator.prototype._getLastRestrictableStatementInfo = function() {
 /// @EXAMPLES
 ///
 /// Request all directly connected vertices unrestricted:
-/// 
+///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphFluentAQLUnrestricted}
 ///   var examples = require("org/arangodb/graph-examples/example-graph.js");
 ///   var graph = examples.loadGraph("social");
@@ -1056,7 +1056,7 @@ AQLGenerator.prototype.restrict = function(restrictions) {
 ///
 /// This can be used to further specfiy the expected result of the query.
 /// The result set is reduced to the set of elements that matches the given *examples*.
-/// 
+///
 /// @PARAMS
 ///
 /// @PARAM{examples, object, optional}
@@ -1065,7 +1065,7 @@ AQLGenerator.prototype.restrict = function(restrictions) {
 /// @EXAMPLES
 ///
 /// Request vertices unfiltered:
-///  
+///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphFluentAQLUnfilteredVertices}
 ///   var examples = require("org/arangodb/graph-examples/example-graph.js");
 ///   var graph = examples.loadGraph("social");
@@ -1074,7 +1074,7 @@ AQLGenerator.prototype.restrict = function(restrictions) {
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 ///
 /// Request vertices filtered:
-///  
+///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphFluentAQLFilteredVertices}
 ///   var examples = require("org/arangodb/graph-examples/example-graph.js");
 ///   var graph = examples.loadGraph("social");
@@ -1083,7 +1083,7 @@ AQLGenerator.prototype.restrict = function(restrictions) {
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 ///
 /// Request edges unfiltered:
-///  
+///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphFluentAQLUnfilteredEdges}
 ///   var examples = require("org/arangodb/graph-examples/example-graph.js");
 ///   var graph = examples.loadGraph("social");
@@ -1092,7 +1092,7 @@ AQLGenerator.prototype.restrict = function(restrictions) {
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 ///
 /// Request edges filtered:
-///  
+///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphFluentAQLFilteredEdges}
 ///   var examples = require("org/arangodb/graph-examples/example-graph.js");
 ///   var graph = examples.loadGraph("social");
@@ -1191,7 +1191,7 @@ AQLGenerator.prototype.toArray = function() {
 ///
 /// @EXAMPLES
 ///
-/// To count the number of matched elements: 
+/// To count the number of matched elements:
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphFluentAQLCount}
 ///   var examples = require("org/arangodb/graph-examples/example-graph.js");
@@ -1223,7 +1223,7 @@ AQLGenerator.prototype.count = function() {
 ///
 /// @EXAMPLES
 ///
-/// Start query execution with hasNext: 
+/// Start query execution with hasNext:
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphFluentAQLHasNext}
 ///   var examples = require("org/arangodb/graph-examples/example-graph.js");
@@ -1233,7 +1233,7 @@ AQLGenerator.prototype.count = function() {
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 ///
 /// Iterate over the result as long as it has more elements:
-/// 
+///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphFluentAQLHasNextIteration}
 ///   var examples = require("org/arangodb/graph-examples/example-graph.js");
 ///   var graph = examples.loadGraph("social");
@@ -1244,7 +1244,7 @@ AQLGenerator.prototype.count = function() {
 ///   }
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 /// @endDocuBlock
-/// 
+///
 ////////////////////////////////////////////////////////////////////////////////
 
 AQLGenerator.prototype.hasNext = function() {
@@ -1268,7 +1268,7 @@ AQLGenerator.prototype.hasNext = function() {
 ///
 /// @EXAMPLES
 ///
-/// Request some elements with next: 
+/// Request some elements with next:
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphFluentAQLNext}
 ///   var examples = require("org/arangodb/graph-examples/example-graph.js");
@@ -1302,6 +1302,9 @@ AQLGenerator.prototype.next = function() {
 // --SECTION--                                                 public functions
 // -----------------------------------------------------------------------------
 
+////////////////////////////////////////////////////////////////////////////////
+/// Deprecated block
+////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_general_graph_undirectedRelation
 /// @brief Define an undirected relation.
@@ -1343,6 +1346,9 @@ AQLGenerator.prototype.next = function() {
 ////////////////////////////////////////////////////////////////////////////////
 
 
+////////////////////////////////////////////////////////////////////////////////
+/// Deprecated block
+////////////////////////////////////////////////////////////////////////////////
 var _undirectedRelation = function (relationName, vertexCollections) {
   var err;
   if (arguments.length < 2) {
@@ -1372,8 +1378,9 @@ var _undirectedRelation = function (relationName, vertexCollections) {
     to: stringToArray(vertexCollections)
   };
 };
-
-
+////////////////////////////////////////////////////////////////////////////////
+/// Deprecated block
+////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_general_graph_directedRelation
 /// @brief Define a directed relation.
@@ -1410,8 +1417,49 @@ var _undirectedRelation = function (relationName, vertexCollections) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_general_graph_relation
+/// @brief Define a directed relation.
+///
+/// `graph_module._relation(relationName, fromVertexCollections, toVertexCollections)`
+///
+/// The *relationName* defines the name of this relation and references to the underlying edge collection.
+/// The *fromVertexCollections* is an Array of document collections holding the start vertices.
+/// The *toVertexCollections* is an Array of document collections holding the target vertices.
+/// Relations are only allowed in the direction from any collection in *fromVertexCollections*
+/// to any collection in *toVertexCollections*.
+///
+/// @PARAMS
+///
+/// @PARAM{relationName, string, required}
+///   The name of the edge collection where the edges should be stored.
+///   Will be created if it does not yet exist.
+///
+/// @PARAM{fromVertexCollections, array, required}
+///   One or a list of collection names. Source vertices for the edges
+///   have to be stored in these collections. Collections will be created if they do not exist.
+///
+/// @PARAM{toVertexCollections, array, required}
+///   One or a list of collection names. Target vertices for the edges
+///   have to be stored in these collections. Collections will be created if they do not exist.
+///
+/// @EXAMPLES
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphRelationDefinition}
+///   var graph_module = require("org/arangodb/general-graph");
+///   graph_module._relation("has_bought", ["Customer", "Company"], ["Groceries", "Electronics"]);
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphRelationDefinitionSingle}
+///   var graph_module = require("org/arangodb/general-graph");
+///   graph_module._relation("has_bought", "Customer", "Product");
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+///
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 
-var _directedRelation = function (
+var _relation = function (
   relationName, fromVertexCollections, toVertexCollections) {
   var err;
   if (arguments.length < 3) {
@@ -1499,8 +1547,8 @@ var _listObjects = function() {
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphEdgeDefinitions}
 ///   var graph_module = require("org/arangodb/general-graph");
-///   directed_relation = graph_module._directedRelation("lives_in", "user", "city");
-///   undirected_relation = graph_module._undirectedRelation("knows", "user");
+///   directed_relation = graph_module._relation("lives_in", "user", "city");
+///   undirected_relation = graph_module._relation("knows", "user", "user");
 ///   edgedefinitions = graph_module._edgeDefinitions(directed_relation, undirected_relation);
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 ///
@@ -1541,8 +1589,8 @@ var _edgeDefinitions = function () {
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphEdgeDefinitionsExtend}
 ///   var graph_module = require("org/arangodb/general-graph");
-///   directed_relation = graph_module._directedRelation("lives_in", "user", "city");
-///   undirected_relation = graph_module._undirectedRelation("knows", "user");
+///   directed_relation = graph_module._relation("lives_in", "user", "city");
+///   undirected_relation = graph_module._relation("knows", "user", "user");
 ///   edgedefinitions = graph_module._edgeDefinitions(directed_relation);
 ///   edgedefinitions = graph_module._extendEdgeDefinitions(undirected_relation);
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
@@ -1604,7 +1652,7 @@ var sortEdgeDefinition = function(edgeDefinition) {
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphCreateGraphHowTo3}
 /// ~ var graph_module = require("org/arangodb/general-graph");
 /// ~ var graph = graph_module._create("myGraph");
-///   var rel = graph_module._directedRelation("isCustomer", ["shop"], ["customer"]);
+///   var rel = graph_module._relation("isCustomer", ["shop"], ["customer"]);
 ///   graph._extendEdgeDefinitions(rel);
 ///   graph;
 /// ~ graph_module._drop("myGraph", true);
@@ -1653,7 +1701,7 @@ var sortEdgeDefinition = function(edgeDefinition) {
 /// @EXAMPLE_ARANGOSH_OUTPUT{generalGraphCreateGraph2}
 ///   var graph_module = require("org/arangodb/general-graph");
 /// | graph = graph_module._create("myGraph",
-///   [graph_module._undirectedRelation("myRelation", ["male", "female"])], ["sessions"]);
+///   [graph_module._relation("myRelation", ["male", "female"])], ["sessions"]);
 /// ~ graph_module._drop("myGraph", true);
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 ///
@@ -1721,7 +1769,7 @@ var _create = function (graphName, edgeDefinitions, orphanCollections, options) 
   );
 
   try {
-    var g = gdb.document(graphName);
+    gdb.document(graphName);
   } catch (e) {
     if (e.errorNum !== errors.ERROR_ARANGO_DOCUMENT_NOT_FOUND.code) {
       throw e;
@@ -2065,7 +2113,7 @@ var updateBindCollections = function(graph) {
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_general_graph_vertex_collection_remove
 /// @brief Removes a vertex in collection *vertexCollectionName*
-/// 
+///
 /// `graph.vertexCollectionName.remove(vertexId, options)`
 ///
 /// Additionally removes all ingoing and outgoing edges of the vertex recursively
@@ -2232,8 +2280,17 @@ var Graph = function(graphName, edgeDefinitions, vertexCollections, edgeCollecti
   if (!orphanCollections) {
     orphanCollections = [];
   }
+
+  // we can call the "fast" version of some edge functions if we are
+  // running server-side and are not a coordinator
+  var useBuiltIn = (typeof ArangoClusterComm === "object");
+  if (useBuiltIn && require("org/arangodb/cluster").isCoordinator()) {
+    useBuiltIn = false;
+  }
+
   var self = this;
   // Create Hidden Properties
+  createHiddenProperty(this, "__useBuiltIn", useBuiltIn);
   createHiddenProperty(this, "__name", graphName);
   createHiddenProperty(this, "__vertexCollections", vertexCollections);
   createHiddenProperty(this, "__edgeCollections", edgeCollections);
@@ -2244,10 +2301,7 @@ var Graph = function(graphName, edgeDefinitions, vertexCollections, edgeCollecti
   createHiddenProperty(this, "__rev", revision);
   createHiddenProperty(this, "__orphanCollections", orphanCollections);
   updateBindCollections(self);
-
 };
-
-
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_general_graph_graph
@@ -2284,7 +2338,7 @@ var _graph = function(graphName) {
 
   try {
     g = gdb.document(graphName);
-  } 
+  }
   catch (e) {
     if (e.errorNum !== errors.ERROR_ARANGO_DOCUMENT_NOT_FOUND.code) {
       throw e;
@@ -2498,22 +2552,18 @@ Graph.prototype._EDGES = function(vertexId) {
     err.errorMessage = arangodb.errors.ERROR_GRAPH_NOT_FOUND.message + ": " + vertexId;
     throw err;
   }
-  var collection = vertexId.split("/")[0];
-  if (!db._collection(collection)) {
-    err = new ArangoError();
-    err.errorNum = arangodb.errors.ERROR_GRAPH_VERTEX_COL_DOES_NOT_EXIST.code;
-    err.errorMessage = arangodb.errors.ERROR_GRAPH_VERTEX_COL_DOES_NOT_EXIST.message + ": " + collection;
-    throw err;
-  }
 
-  var edgeCollections = this._edgeCollections();
-  var result = [];
-
-  edgeCollections.forEach(
-    function(edgeCollection) {
-      result = result.concat(edgeCollection.edges(vertexId));
+  var result = [], c;
+  for (c in this.__edgeCollections) {
+    if (this.__edgeCollections.hasOwnProperty(c)) {
+      if (this.__useBuiltIn) {
+        result = result.concat(this.__edgeCollections[c].EDGES(vertexId));
+      }
+      else {
+        result = result.concat(this.__edgeCollections[c].edges(vertexId));
+      }
     }
-  );
+  }
   return result;
 };
 
@@ -2529,23 +2579,18 @@ Graph.prototype._INEDGES = function(vertexId) {
     err.errorMessage = arangodb.errors.ERROR_GRAPH_NOT_FOUND.message + ": " + vertexId;
     throw err;
   }
-  var collection = vertexId.split("/")[0];
-  if (!db._collection(collection)) {
-    err = new ArangoError();
-    err.errorNum = arangodb.errors.ERROR_GRAPH_VERTEX_COL_DOES_NOT_EXIST.code;
-    err.errorMessage = arangodb.errors.ERROR_GRAPH_VERTEX_COL_DOES_NOT_EXIST.message + ": " + collection;
-    throw err;
-  }
 
-  var edgeCollections = this._edgeCollections();
-  var result = [];
-
-
-  edgeCollections.forEach(
-    function(edgeCollection) {
-      result = result.concat(edgeCollection.inEdges(vertexId));
+  var result = [], c;
+  for (c in this.__edgeCollections) {
+    if (this.__edgeCollections.hasOwnProperty(c)) {
+      if (this.__useBuiltIn) {
+        result = result.concat(this.__edgeCollections[c].INEDGES(vertexId));
+      }
+      else {
+        result = result.concat(this.__edgeCollections[c].inEdges(vertexId));
+      }
     }
-  );
+  }
   return result;
 };
 
@@ -2561,23 +2606,18 @@ Graph.prototype._OUTEDGES = function(vertexId) {
     err.errorMessage = arangodb.errors.ERROR_GRAPH_NOT_FOUND.message + ": " + vertexId;
     throw err;
   }
-  var collection = vertexId.split("/")[0];
-  if (!db._collection(collection)) {
-    err = new ArangoError();
-    err.errorNum = arangodb.errors.ERROR_GRAPH_VERTEX_COL_DOES_NOT_EXIST.code;
-    err.errorMessage = arangodb.errors.ERROR_GRAPH_VERTEX_COL_DOES_NOT_EXIST.message + ": " + collection;
-    throw err;
-  }
 
-  var edgeCollections = this._edgeCollections();
-  var result = [];
-
-
-  edgeCollections.forEach(
-    function(edgeCollection) {
-      result = result.concat(edgeCollection.outEdges(vertexId));
+  var result = [], c;
+  for (c in this.__edgeCollections) {
+    if (this.__edgeCollections.hasOwnProperty(c)) {
+      if (this.__useBuiltIn) {
+        result = result.concat(this.__edgeCollections[c].OUTEDGES(vertexId));
+      }
+      else {
+        result = result.concat(this.__edgeCollections[c].outEdges(vertexId));
+      }
     }
-  );
+  }
   return result;
 };
 
@@ -2790,7 +2830,7 @@ Graph.prototype._getVertexCollectionByName = function(name) {
 /// @PARAM{vertexExample, object, optional}
 /// See [Definition of examples](#definition_of_examples)
 /// @PARAM{options, object, optional}
-/// An object defining further options. Can have the following values: 
+/// An object defining further options. Can have the following values:
 ///   * *direction*: The direction of the edges. Possible values are *outbound*, *inbound* and *any* (default).
 ///   * *edgeExamples*: Filter the edges, see [Definition of examples](#definition_of_examples)
 ///   * *neighborExamples*: Filter the neighbor vertices, see [Definition of examples](#definition_of_examples)
@@ -2992,7 +3032,7 @@ Graph.prototype._countCommonNeighbors = function(vertex1Example, vertex2Example,
 /// Filter the set of vertices compared to, see [Definition of examples](#definition_of_examples)
 ///
 /// @PARAM{options, object, optional}
-/// An object defining further options. Can have the following values: 
+/// An object defining further options. Can have the following values:
 ///   * *vertex1CollectionRestriction* : One or a list of vertex-collection names that should be
 ///       searched for source vertices.
 ///   * *vertex2CollectionRestriction* : One or a list of vertex-collection names that should be
@@ -3345,7 +3385,7 @@ Graph.prototype._distanceTo = function(startVertexExample, endVertexExample, opt
 /// Filter the vertices, see [Definition of examples](#definition_of_examples)
 ///
 /// @PARAM{options, object, optional}
-/// An object defining further options. Can have the following values: 
+/// An object defining further options. Can have the following values:
 ///   * *direction*: The direction of the edges. Possible values are *outbound*, *inbound* and *any* (default).
 ///   * *edgeCollectionRestriction* : One or a list of edge-collection names that should be
 ///       considered to be on the path.
@@ -3485,7 +3525,7 @@ Graph.prototype._eccentricity = function(options) {
 /// Filter the vertices, see [Definition of examples](#definition_of_examples)
 ///
 /// @PARAM{options, object, optional}
-/// An object defining further options. Can have the following values: 
+/// An object defining further options. Can have the following values:
 ///   * *direction*: The direction of the edges. Possible values are *outbound*, *inbound* and *any* (default).
 ///   * *edgeCollectionRestriction* : One or a list of edge-collection names that should be
 ///       considered to be on the path.
@@ -3627,7 +3667,7 @@ Graph.prototype._closeness = function(options) {
 /// @PARAMS
 ///
 /// @PARAM{options, object, optional}
-/// An object defining further options. Can have the following values: 
+/// An object defining further options. Can have the following values:
 ///   * *direction*: The direction of the edges. Possible values are *outbound*, *inbound* and *any* (default).
 ///   * *weight*: The name of the attribute of the edges containing the weight.
 ///   * *defaultWeight*: Only used with the option *weight*.
@@ -3754,7 +3794,7 @@ Graph.prototype._betweenness = function(options) {
 /// @PARAMS
 ///
 /// @PARAM{options, object, optional}
-/// An object defining further options. Can have the following values: 
+/// An object defining further options. Can have the following values:
 ///   * *direction*: The direction of the edges. Possible values are *outbound*, *inbound* and *any* (default).
 ///   * *algorithm*: The algorithm to calculate the shortest paths, possible values are
 ///       [Floyd-Warshall](http://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm) and
@@ -3828,7 +3868,7 @@ Graph.prototype._radius = function(options) {
 /// @PARAMS
 ///
 /// @PARAM{options, object, optional}
-/// An object defining further options. Can have the following values: 
+/// An object defining further options. Can have the following values:
 ///   * *direction*: The direction of the edges. Possible values are *outbound*, *inbound* and *any* (default).
 ///   * *algorithm*: The algorithm to calculate the shortest paths, possible values are
 ///       [Floyd-Warshall](http://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm) and
@@ -3940,8 +3980,8 @@ Graph.prototype._getCollectionsProperties = function() {
 /// @EXAMPLE_ARANGOSH_OUTPUT{general_graph__extendEdgeDefinitions}
 ///   var graph_module = require("org/arangodb/general-graph")
 /// ~ if (graph_module._exists("myGraph")){var blub = graph_module._drop("myGraph", true);}
-///   var ed1 = graph_module._directedRelation("myEC1", ["myVC1"], ["myVC2"]);
-///   var ed2 = graph_module._directedRelation("myEC2", ["myVC1"], ["myVC3"]);
+///   var ed1 = graph_module._relation("myEC1", ["myVC1"], ["myVC2"]);
+///   var ed2 = graph_module._relation("myEC2", ["myVC1"], ["myVC3"]);
 ///   var graph = graph_module._create("myGraph", [ed1]);
 ///   graph._extendEdgeDefinitions(ed2);
 /// ~ var blub = graph_module._drop("myGraph", true);
@@ -3958,7 +3998,7 @@ Graph.prototype._extendEdgeDefinitions = function(edgeDefinition) {
   //check if edgeCollection not already used
   var eC = edgeDefinition.collection;
   // ... in same graph
-  if (this.__edgeCollections[eC]  !== undefined) {
+  if (this.__edgeCollections[eC] !== undefined) {
     err = new ArangoError();
     err.errorNum = arangodb.errors.ERROR_GRAPH_COLLECTION_MULTI_USE.code;
     err.errorMessage = arangodb.errors.ERROR_GRAPH_COLLECTION_MULTI_USE.message;
@@ -4121,8 +4161,8 @@ var changeEdgeDefinitionsForGraph = function(graph, edgeDefinition, newCollectio
 /// @EXAMPLE_ARANGOSH_OUTPUT{general_graph__editEdgeDefinition}
 ///   var graph_module = require("org/arangodb/general-graph")
 /// ~ if (graph_module._exists("myGraph")){var blub = graph_module._drop("myGraph", true);}
-///   var original = graph_module._directedRelation("myEC1", ["myVC1"], ["myVC2"]);
-///   var modified = graph_module._directedRelation("myEC1", ["myVC2"], ["myVC3"]);
+///   var original = graph_module._relation("myEC1", ["myVC1"], ["myVC2"]);
+///   var modified = graph_module._relation("myEC1", ["myVC2"], ["myVC3"]);
 ///   var graph = graph_module._create("myGraph", [original]);
 ///   graph._editEdgeDefinitions(modified);
 /// ~ var blub = graph_module._drop("myGraph", true);
@@ -4200,8 +4240,8 @@ Graph.prototype._editEdgeDefinitions = function(edgeDefinition) {
 /// @EXAMPLE_ARANGOSH_OUTPUT{general_graph__deleteEdgeDefinition}
 ///   var graph_module = require("org/arangodb/general-graph")
 /// ~ if (graph_module._exists("myGraph")){var blub = graph_module._drop("myGraph", true);}
-///   var ed1 = graph_module._directedRelation("myEC1", ["myVC1"], ["myVC2"]);
-///   var ed2 = graph_module._directedRelation("myEC2", ["myVC1"], ["myVC3"]);
+///   var ed1 = graph_module._relation("myEC1", ["myVC1"], ["myVC2"]);
+///   var ed2 = graph_module._relation("myEC2", ["myVC1"], ["myVC3"]);
 ///   var graph = graph_module._create("myGraph", [ed1, ed2]);
 ///   graph._deleteEdgeDefinition("myEC1");
 ///   db._collection("myEC1");
@@ -4213,8 +4253,8 @@ Graph.prototype._editEdgeDefinitions = function(edgeDefinition) {
 /// @EXAMPLE_ARANGOSH_OUTPUT{general_graph__deleteEdgeDefinitionWithDrop}
 ///   var graph_module = require("org/arangodb/general-graph")
 /// ~ if (graph_module._exists("myGraph")){var blub = graph_module._drop("myGraph", true);}
-///   var ed1 = graph_module._directedRelation("myEC1", ["myVC1"], ["myVC2"]);
-///   var ed2 = graph_module._directedRelation("myEC2", ["myVC1"], ["myVC3"]);
+///   var ed1 = graph_module._relation("myEC1", ["myVC1"], ["myVC2"]);
+///   var ed2 = graph_module._relation("myEC2", ["myVC1"], ["myVC3"]);
 ///   var graph = graph_module._create("myGraph", [ed1, ed2]);
 ///   graph._deleteEdgeDefinition("myEC1", true);
 ///   db._collection("myEC1");
@@ -4298,7 +4338,7 @@ Graph.prototype._deleteEdgeDefinition = function(edgeCollection, dropCollection)
 /// @EXAMPLE_ARANGOSH_OUTPUT{general_graph__addVertexCollection}
 ///   var graph_module = require("org/arangodb/general-graph");
 /// ~ if (graph_module._exists("myGraph")){var blub = graph_module._drop("myGraph", true);}
-///   var ed1 = graph_module._directedRelation("myEC1", ["myVC1"], ["myVC2"]);
+///   var ed1 = graph_module._relation("myEC1", ["myVC1"], ["myVC2"]);
 ///   var graph = graph_module._create("myGraph", [ed1]);
 ///   graph._addVertexCollection("myVC3", true);
 /// ~ var blub = graph_module._drop("myGraph", true);
@@ -4358,7 +4398,7 @@ Graph.prototype._addVertexCollection = function(vertexCollectionName, createColl
 /// @EXAMPLE_ARANGOSH_OUTPUT{general_graph__orphanCollections}
 ///   var graph_module = require("org/arangodb/general-graph")
 /// ~ if (graph_module._exists("myGraph")){var blub = graph_module._drop("myGraph", true);}
-///   var ed1 = graph_module._directedRelation("myEC1", ["myVC1"], ["myVC2"]);
+///   var ed1 = graph_module._relation("myEC1", ["myVC1"], ["myVC2"]);
 ///   var graph = graph_module._create("myGraph", [ed1]);
 ///   graph._addVertexCollection("myVC3", true);
 ///   graph._orphanCollections();
@@ -4397,7 +4437,7 @@ Graph.prototype._orphanCollections = function() {
 /// @EXAMPLE_ARANGOSH_OUTPUT{general_graph__removeVertexCollections}
 ///   var graph_module = require("org/arangodb/general-graph")
 /// ~ if (graph_module._exists("myGraph")){var blub = graph_module._drop("myGraph", true);}
-///   var ed1 = graph_module._directedRelation("myEC1", ["myVC1"], ["myVC2"]);
+///   var ed1 = graph_module._relation("myEC1", ["myVC1"], ["myVC2"]);
 ///   var graph = graph_module._create("myGraph", [ed1]);
 ///   graph._addVertexCollection("myVC3", true);
 ///   graph._addVertexCollection("myVC4", true);
@@ -4462,8 +4502,13 @@ Graph.prototype._PRINT = function(context) {
 // --SECTION--                                                    MODULE EXPORTS
 // -----------------------------------------------------------------------------
 
+/// Deprecated function (announced 2.3)
 exports._undirectedRelation = _undirectedRelation;
-exports._directedRelation = _directedRelation;
+/// Deprecated function (announced 2.3)
+exports._directedRelation = function () {
+  return _relation.apply(this, arguments);
+} ;
+exports._relation = _relation;
 exports._graph = _graph;
 exports._edgeDefinitions = _edgeDefinitions;
 exports._extendEdgeDefinitions = _extendEdgeDefinitions;
@@ -4492,9 +4537,9 @@ exports._listObjects = _listObjects;
 /// @EXAMPLE_ARANGOSH_OUTPUT{general_graph_create_graph_example1}
 ///   var graph_module = require("org/arangodb/general-graph");
 ///   var edgeDefinitions = graph_module._edgeDefinitions();
-///   graph_module._extendEdgeDefinitions(edgeDefinitions, graph_module._undirectedRelation("friend_of", ["Customer"]));
+///   graph_module._extendEdgeDefinitions(edgeDefinitions, graph_module._relation("friend_of", "Customer", "Customer"));
 /// | graph_module._extendEdgeDefinitions(
-/// | edgeDefinitions, graph_module._directedRelation(
+/// | edgeDefinitions, graph_module._relation(
 ///   "has_bought", ["Customer", "Company"], ["Groceries", "Electronics"]));
 ///   graph_module._create("myStore", edgeDefinitions);
 /// ~ graph_module._drop("myStore");
@@ -4509,7 +4554,7 @@ exports._listObjects = _listObjects;
 /// @EXAMPLE_ARANGOSH_OUTPUT{general_graph_create_graph_example2}
 ///   var graph_module = require("org/arangodb/general-graph");
 /// |  var edgeDefinitions = graph_module._edgeDefinitions(
-/// |  graph_module._undirectedRelation("friend_of", ["Customer"]), graph_module._directedRelation(
+/// |  graph_module._relation("friend_of", ["Customer"]), graph_module._relation(
 ///    "has_bought", ["Customer", "Company"], ["Groceries", "Electronics"]));
 ///   graph_module._create("myStore", edgeDefinitions);
 /// ~ graph_module._drop("myStore");

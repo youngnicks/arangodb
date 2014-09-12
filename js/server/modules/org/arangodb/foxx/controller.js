@@ -1,5 +1,4 @@
-/*jslint indent: 2, nomen: true, maxlen: 120, regexp: true, vars: true */
-/*global module, require, exports */
+/*global require, exports */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Foxx Controller
@@ -31,7 +30,6 @@
 var Controller,
   RequestContext = require("org/arangodb/foxx/request_context").RequestContext,
   RequestContextBuffer = require("org/arangodb/foxx/request_context").RequestContextBuffer,
-  db = require("org/arangodb").db,
   BaseMiddleware = require("org/arangodb/foxx/base_middleware").BaseMiddleware,
   _ = require("underscore"),
   extend = _.extend,
@@ -416,6 +414,49 @@ extend(Controller.prototype, {
   },
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_foxx_controller_around
+///
+/// `FoxxController#around(path, callback)`
+///
+/// The around function takes a *path* on which it should watch and a function
+/// that it should execute around the function which normally handles the
+/// route. If you do omit the path, the function will be executed before each
+/// request, no matter the path.  Your function gets a Request and a Response
+/// object and a next funcion, which you must call to execute the handler for
+/// that route.
+///
+/// @EXAMPLES
+///
+/// ```js
+/// app.around('/high/way', function(req, res, opts, next) {
+///   //Do some crazy request logging
+///   next();
+///   //Do some more crazy request logging
+/// });
+/// ```
+/// @endDocuBlock
+////////////////////////////////////////////////////////////////////////////////
+
+  around: function (path, func) {
+    'use strict';
+
+    if (is.notExisty(func)) {
+      func = path;
+      path = "/*";
+    }
+
+    this.routingInfo.middleware.push({
+      priority: this.currentPriority = this.currentPriority + 1,
+      url: {match: path},
+      action: {
+        callback: function (req, res, opts, next) {
+          func(req, res, opts, next);
+        }
+      }
+    });
+  },
+
+////////////////////////////////////////////////////////////////////////////////
 /// @fn JSF_foxx_controller_getUsers
 /// @brief Get the users of this controller
 ////////////////////////////////////////////////////////////////////////////////
@@ -691,7 +732,7 @@ extend(Controller.prototype, {
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_foxx_controller_destroySession
 ///
-/// `FoxxController#logout(path, opts)`
+/// `FoxxController#destroySession(path, opts)`
 ///
 /// This adds a path to your app for the destroySession functionality.
 /// You can customize it with custom *before* and *after* function:

@@ -161,25 +161,34 @@ describe ArangoDB do
 ################################################################################
       
       it "fetches the empty follow log" do
-        sleep 1
+        while 1
+          cmd = api + "/logger-state"
+          doc = ArangoDB.log_get("#{prefix}-follow-empty", cmd, :body => "")
+          doc.code.should eq(200)
+          doc.parsed_response["state"]["running"].should eq(true)
+          fromTick = doc.parsed_response["state"]["lastLogTick"]
 
-        cmd = api + "/logger-state"
-        doc = ArangoDB.log_get("#{prefix}-follow-empty", cmd, :body => "")
-        doc.code.should eq(200)
-        doc.parsed_response["state"]["running"].should eq(true)
-        fromTick = doc.parsed_response["state"]["lastLogTick"]
+          cmd = api + "/logger-follow?from=" + fromTick
+          doc = ArangoDB.log_get("#{prefix}-follow-empty", cmd, :body => "", :format => :plain)
 
-        cmd = api + "/logger-follow?from=" + fromTick
-        doc = ArangoDB.log_get("#{prefix}-follow-empty", cmd, :body => "", :format => :plain)
-        doc.code.should eq(204)
+          if doc.code != 204
+            # someone else did something else
+            doc.code.should eq(200)
+            # sleep for a second and try again
+            sleep 1
+          else
+            doc.code.should eq(204)
 
-        doc.headers["x-arango-replication-checkmore"].should eq("false")
-        doc.headers["x-arango-replication-lastincluded"].should match(/^\d+$/)
-        doc.headers["x-arango-replication-lastincluded"].should eq("0")
-        doc.headers["content-type"].should eq("application/x-arango-dump; charset=utf-8")
+            doc.headers["x-arango-replication-checkmore"].should eq("false")
+            doc.headers["x-arango-replication-lastincluded"].should match(/^\d+$/)
+            doc.headers["x-arango-replication-lastincluded"].should eq("0")
+            doc.headers["content-type"].should eq("application/x-arango-dump; charset=utf-8")
          
-        body = doc.response.body
-        body.should eq(nil)
+            body = doc.response.body
+            body.should eq(nil)
+            break
+          end
+        end
       end
       
       it "fetches a create collection action from the follow log" do
@@ -318,9 +327,11 @@ describe ArangoDB do
               c["name"].should eq("UnitTestsReplication")
               c["isVolatile"].should eq(false)
               c["waitForSync"].should eq(true)
+          
+              i = i + 1
             end
 
-          elsif i == 1
+          elsif i == 1 and document["type"] == 2300 and document["cid"] == cid
             # create document
             document.should have_key("tick") 
             document.should have_key("type") 
@@ -341,7 +352,9 @@ describe ArangoDB do
             document["data"]["_key"].should eq("test") 
             document["data"]["_rev"].should eq(rev)
             document["data"]["test"].should eq(false)
-          elsif i == 2
+              
+            i = i + 1
+          elsif i == 2 and document["type"] == 2302 and document["cid"] == cid
             # delete document
             document.should have_key("tick") 
             document.should have_key("type") 
@@ -356,7 +369,9 @@ describe ArangoDB do
             document["key"].should eq("test") 
             document["rev"].should match(/^\d+$/)
             document["rev"].should_not eq(rev)
-          elsif i == 3
+              
+            i = i + 1
+          elsif i == 3 and document["type"] == 2001 and document["cid"] == cid
             # drop collection
             document.should have_key("tick") 
             document.should have_key("type") 
@@ -366,10 +381,11 @@ describe ArangoDB do
             document["tick"].to_i.should >= fromTick.to_i
             document["type"].should eq(2001) 
             document["cid"].should eq(cid) 
+              
+            i = i + 1
           end
 
           body = body.slice(position + 1, body.length)
-          i = i + 1
         end
          
       end

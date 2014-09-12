@@ -41,6 +41,7 @@
 #include "Basics/WriteLocker.h"
 #include "BasicsC/logging.h"
 #include "BasicsC/tri-strings.h"
+#include "Dispatcher/ApplicationDispatcher.h"
 #include "Rest/HttpRequest.h"
 #include "Scheduler/ApplicationScheduler.h"
 #include "Scheduler/Scheduler.h"
@@ -486,7 +487,6 @@ void ApplicationV8::exitContext (V8Context* context) {
     _busyContexts[name].erase(context);
 
     if (performGarbageCollection) {
-      cout << "STARTING GC\n";
       guard.unlock();
 
       context->_isolate->Enter();
@@ -1192,7 +1192,7 @@ bool ApplicationV8::prepareV8Instance (const string& name, size_t i, bool useAct
 
   V8Context* context = _contexts[name][i] = new V8Context();
 
-  if (context == 0) {
+  if (context == nullptr) {
     LOG_FATAL_AND_EXIT("cannot initialize V8 context #%d", (int) i);
   }
 
@@ -1216,7 +1216,10 @@ bool ApplicationV8::prepareV8Instance (const string& name, size_t i, bool useAct
   TRI_InitV8Queries(context->_context);
 
   TRI_InitV8Cluster(context->_context);
-  TRI_InitV8Dispatcher(context->_context, _vocbase, _scheduler, _dispatcher, this);
+  if (_dispatcher->dispatcher() != nullptr) {
+    // don't initialise dispatcher if there is no scheduler (server started with --no-server option)
+    TRI_InitV8Dispatcher(context->_context, _vocbase, _scheduler, _dispatcher, this);
+  }
 
   if (useActions) {
     TRI_InitV8Actions(context->_context, _vocbase, this);

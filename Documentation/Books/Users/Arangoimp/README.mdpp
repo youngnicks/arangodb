@@ -148,24 +148,68 @@ The cell values can have different data types though. If a cell does not have
 any value, it can be left empty in the file. These values will not be imported
 so the attributes will not "be there" in document created. Values enclosed in
 quotes will be imported as strings, so to import numeric values, boolean values
-or the null value, don't enclose the value into the quotes in your file.
+or the null value, don't enclose the value in quotes in your file.
 
 We'll be using the following import for the CSV import:
 
-```js
-"first","name","age","active","dob"
+```
+"first","last","age","active","dob"
 "John","Connor",25,true,
 "Jim","O'Brady",19,,
 "Lisa","Jones",,,"1981-04-09"
+Hans,dos Santos,0123,,
+Wayne,Brewer,,false,
 ```
 
-The command line to execute the import then is:
+The command line to execute the import is:
 
     unix> arangoimp --file "data.csv" --type csv --collection "users"
 
+The above data will be imported into 5 documents which will look as follows:
+
+```js
+{ "first" : "John", "last" : "Connor", "active" : true, "age" : 25 } 
+{ "first" : "Jim", "last" : "O'Brady", "age" : 19 }
+{ "first" : "Lisa", "last" : "Jones", "dob" : "1981-04-09" } 
+{ "first" : "Hans", "last" : "dos Santos", "age" : 123 } 
+{ "first" : "Wayne", "last" : "Brewer", "active" : false } 
+```
+
+As can be seen, values left completely empty in the input file will be treated
+as absent. Numeric values not enclosed in quotes will be treated as numbers.
+Note that leading zeros in numeric values will be removed. To import numbers
+with leading zeros, please use strings.
+The literals *true* and *false* will be treated as booleans if they are not
+enclosed in quotes. Other values not enclosed in quotes will be treated as
+strings.
+Any values enclosed in quotes will be treated as strings, too.
+
+String values containing the quote character or the separator must be enclosed
+with quote characters. Within a string, the quote character itself must be
+escaped with another quote character (or with a backslash if the *--backslash-escape*
+option is used).
+
 Note that the quote and separator characters can be adjusted via the
-*--quote* and *--separator* arguments when invoking _arangoimp_.  The importer
-supports Windows (CRLF) and Unix (LF) line breaks.
+*--quote* and *--separator* arguments when invoking _arangoimp_. The quote
+character defaults to the double quote (*"*). To use a literal quote in a 
+string, you can use two quote characters. 
+To use backslash for escaping quote characters, please set the option 
+*--backslash-escape* to *true*.
+
+The importer supports Windows (CRLF) and Unix (LF) line breaks. Line breaks might
+also occur inside values that are enclosed with the quote character.
+
+Here's an example for using literal quotes and newlines inside values:
+
+```
+"name","password"
+"Foo","r4ndom""123!"
+"Bar","wow!
+this is a
+multine password!"
+"Bartholomew ""Bart"" Simpson","Milhouse"
+```
+
 
 !SUBSECTION Importing TSV Data
 

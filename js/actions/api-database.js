@@ -1,4 +1,4 @@
-/*jslint indent: 2, nomen: true, maxlen: 150, sloppy: true, vars: true, white: true, plusplus: true, stupid: true */
+/*jshint strict: false */
 /*global require, ArangoAgency */
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -349,7 +349,7 @@ function post_api_database (req, res) {
 
   var users = json.users;
 
-  if (users === undefined) {
+  if (users === undefined || users === null) {
     users = [ ];
   }
   else if (! Array.isArray(users)) {

@@ -1,4 +1,3 @@
-/*jslint es5: true, indent: 2, nomen: true, maxlen: 120 */
 /*global module, require */
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -223,6 +222,9 @@ _.extend(Queue.prototype, {
           throw result.error;
         }
         data = result.value;
+      }
+      if (type.preprocess) {
+        data = type.preprocess(data);
       }
     } else if (opts.allowUnknown) {
       console.warn('Unknown job type: ' + name);

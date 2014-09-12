@@ -9459,6 +9459,16 @@ static v8::Handle<v8::Value> CreateDatabaseCoordinator (v8::Arguments const& arg
 /// with an empty string password. This ensures that the new database will be
 /// accessible via HTTP after it is created.
 ///
+/// You can create users in a database if no initial user is specified. Switch 
+/// into the new database (username and password must be identical to the current
+/// session) and add or modify users with the following commands.
+///
+/// ```js
+///   require("org/arangodb/users").save(username, password, true);
+///   require("org/arangodb/users").update(username, password, true);
+///   require("org/arangodb/users").remove(username);
+/// ```
+///
 /// This method can only be used from within the *_system* database.
 /// @endDocuBlock
 ////////////////////////////////////////////////////////////////////////////////
@@ -9910,7 +9920,7 @@ static v8::Handle<v8::Value> MapGetNamedShapedJson (v8::Local<v8::String> name,
     // we better not throw here... otherwise this will cause a segfault
     return scope.Close(v8::Handle<v8::Value>());
   }
-
+    
   // get shaped json
   void* marker = TRI_UnwrapClass<void*>(self, WRP_SHAPED_JSON_TYPE);
 
@@ -9965,6 +9975,142 @@ static v8::Handle<v8::Value> MapGetNamedShapedJson (v8::Local<v8::String> name,
 
   // we must not throw a v8 exception here because this will cause follow up errors
   return scope.Close(v8::Handle<v8::Value>());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief copy all shaped json attributes into the object so we have regular
+/// JavaScript attributes that can be modified
+////////////////////////////////////////////////////////////////////////////////
+
+static void CopyAttributes (v8::Handle<v8::Object> self, 
+                            void* marker) {
+  TRI_barrier_t* barrier = static_cast<TRI_barrier_t*>(v8::Handle<v8::External>::Cast(self->GetInternalField(SLOT_BARRIER))->Value());
+  TRI_document_collection_t* collection = barrier->_container->_collection;
+
+  // check for array shape
+  TRI_shaper_t* shaper = collection->getShaper();  // PROTECTED by BARRIER, checked by RUNTIME
+
+  TRI_shape_sid_t sid;
+  TRI_EXTRACT_SHAPE_IDENTIFIER_MARKER(sid, marker);
+
+  TRI_shape_t const* shape = shaper->lookupShapeId(shaper, sid);
+
+  if (shape == nullptr || shape->_type != TRI_SHAPE_ARRAY) {
+    return;
+  }
+
+  TRI_array_shape_t const* s;
+  TRI_shape_aid_t const* aids;
+  char const* qtr;
+
+  // shape is an array
+  s = (TRI_array_shape_t const*) shape;
+
+  // number of entries
+  TRI_shape_size_t const n = s->_fixedEntries + s->_variableEntries;
+
+  // calculate position of attribute ids
+  qtr = (char const*) shape;
+  qtr += sizeof(TRI_array_shape_t);
+  qtr += n * sizeof(TRI_shape_sid_t);
+  aids = (TRI_shape_aid_t const*) qtr;
+  
+  TRI_shaped_json_t document;
+  TRI_EXTRACT_SHAPED_JSON_MARKER(document, marker);
+  
+  TRI_shaped_json_t json;
+
+  for (TRI_shape_size_t i = 0;  i < n;  ++i, ++aids) {
+    char const* att = shaper->lookupAttributeId(shaper, *aids);
+    
+    if (att != nullptr) {
+      TRI_shape_pid_t pid = shaper->lookupAttributePathByName(shaper, att);
+      
+      if (pid != 0) {
+        bool ok = TRI_ExtractShapedJsonVocShaper(shaper, &document, 0, pid, &json, &shape);
+  
+        if (ok && shape != nullptr) {
+          self->ForceSet(v8::String::New(att), TRI_JsonShapeData(shaper, shape, json._data.data, json._data.length));
+        }
+      }
+    }
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief sets a named attribute in the shaped json
+/// Returns the value if the setter intercepts the request. 
+/// Otherwise, returns an empty handle. 
+////////////////////////////////////////////////////////////////////////////////
+
+static v8::Handle<v8::Value> MapSetNamedShapedJson (v8::Local<v8::String> name,
+                                                    v8::Local<v8::Value> value,
+                                                    v8::AccessorInfo const& info) {
+  v8::HandleScope scope;
+
+  // sanity check
+  v8::Handle<v8::Object> self = info.Holder();
+
+  if (self->InternalFieldCount() <= SLOT_BARRIER) {
+    // we better not throw here... otherwise this will cause a segfault
+    return scope.Close(v8::Handle<v8::Value>());
+  }
+
+  // get shaped json
+  void* marker = TRI_UnwrapClass<void*>(self, WRP_SHAPED_JSON_TYPE);
+
+  if (marker == nullptr) {
+    return scope.Close(v8::Handle<v8::Value>());
+  }
+
+  if (self->HasRealNamedProperty(name)) {
+    // object already has the property. use the regular property setter
+    return scope.Close(v8::Handle<v8::Value>());
+  }
+
+  // copy all attributes from the shaped json into the object
+  CopyAttributes(self, marker);
+
+  // remove pointer to marker, so the object becomes stand-alone
+  self->SetInternalField(SLOT_CLASS, v8::External::New(nullptr));
+  
+  // and now use the regular property setter
+  return scope.Close(v8::Handle<v8::Value>());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief deletes a named attribute from the shaped json
+/// Returns a non-empty handle if the deleter intercepts the request. 
+/// The return value is true if the property could be deleted and false otherwise. 
+////////////////////////////////////////////////////////////////////////////////
+
+static v8::Handle<v8::Boolean> MapDeleteNamedShapedJson (v8::Local<v8::String> name,
+                                                         v8::AccessorInfo const& info) {
+  v8::HandleScope scope;
+  
+  // sanity check
+  v8::Handle<v8::Object> self = info.Holder();
+
+  if (self->InternalFieldCount() <= SLOT_BARRIER) {
+    // we better not throw here... otherwise this will cause a segfault
+    return v8::Handle<v8::Boolean>(); // not intercepted
+  }
+
+  // get shaped json
+  void* marker = TRI_UnwrapClass<void*>(self, WRP_SHAPED_JSON_TYPE);
+
+  if (marker == nullptr) {
+    return scope.Close(v8::Handle<v8::Boolean>());
+  }
+  
+  // copy all attributes from the shaped json into the object
+  CopyAttributes(self, marker);
+  
+  // remove pointer to marker, so the object becomes stand-alone
+  self->SetInternalField(SLOT_CLASS, v8::External::New(nullptr));
+
+  // and now use the regular property deleter
+  return v8::Handle<v8::Boolean>(); 
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -10111,7 +10257,7 @@ static v8::Handle<v8::Integer> PropertyQueryShapedJson (v8::Local<v8::String> na
 ////////////////////////////////////////////////////////////////////////////////
 
 static v8::Handle<v8::Value> MapGetIndexedShapedJson (uint32_t idx,
-                                                      const v8::AccessorInfo& info) {
+                                                      v8::AccessorInfo const& info) {
   v8::HandleScope scope;
 
   char buffer[11];
@@ -10120,6 +10266,39 @@ static v8::Handle<v8::Value> MapGetIndexedShapedJson (uint32_t idx,
   v8::Local<v8::String> strVal = v8::String::New((char*) &buffer, (int) len);
 
   return scope.Close(MapGetNamedShapedJson(strVal, info));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief sets an indexed attribute in the shaped json
+////////////////////////////////////////////////////////////////////////////////
+
+static v8::Handle<v8::Value> MapSetIndexedShapedJson (uint32_t idx,
+                                                      v8::Local<v8::Value> value,
+                                                      v8::AccessorInfo const& info) {
+  v8::HandleScope scope;
+
+  char buffer[11];
+  size_t len = TRI_StringUInt32InPlace(idx, (char*) &buffer);
+
+  v8::Local<v8::String> strVal = v8::String::New((char*) &buffer, (int) len);
+
+  return scope.Close(MapSetNamedShapedJson(strVal, value, info));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief delete an indexed attribute in the shaped json
+////////////////////////////////////////////////////////////////////////////////
+
+static v8::Handle<v8::Boolean> MapDeleteIndexedShapedJson (uint32_t idx,
+                                                           v8::AccessorInfo const& info) {
+  v8::HandleScope scope;
+
+  char buffer[11];
+  size_t len = TRI_StringUInt32InPlace(idx, (char*) &buffer);
+
+  v8::Local<v8::String> strVal = v8::String::New((char*) &buffer, (int) len);
+
+  return scope.Close(MapDeleteNamedShapedJson(strVal, info));
 }
 
 // -----------------------------------------------------------------------------
@@ -10244,32 +10423,77 @@ static v8::Handle<v8::Object> AddBasicDocumentAttributes (T& trx,
                                                           TRI_doc_mptr_t const* mptr,
                                                           v8::Handle<v8::Object> result) {
   v8::HandleScope scope;
+   
+  void const* marker = mptr->getDataPtr();
+  TRI_ASSERT(marker != nullptr);
 
   TRI_ASSERT(mptr != nullptr);
-
-  TRI_voc_rid_t rid = mptr->_rid;
-  char const* docKey = TRI_EXTRACT_MARKER_KEY(mptr);  // PROTECTED by trx from above
-  TRI_ASSERT(rid > 0);
-  TRI_ASSERT(docKey != nullptr);
-
   CollectionNameResolver const* resolver = trx.resolver();
-  result->Set(v8g->_IdKey, V8DocumentId(resolver->getCollectionName(cid), docKey), v8::ReadOnly);
-  result->Set(v8g->_RevKey, V8RevisionId(rid), v8::ReadOnly);
-  result->Set(v8g->_KeyKey, v8::String::New(docKey), v8::ReadOnly);
 
-  TRI_df_marker_type_t type = static_cast<TRI_df_marker_t const*>(mptr->getDataPtr())->_type;  // PROTECTED by trx from above
+  // buffer that we'll use for generating _id, _key, _rev, _from and _to values
+  // using a single buffer will avoid several memory allocation
+  char buffer[TRI_COL_NAME_LENGTH + TRI_VOC_KEY_MAX_LENGTH + 2];
 
+  // _id
+  size_t len = resolver->getCollectionName(buffer, cid);
+  char const* docKey = TRI_EXTRACT_MARKER_KEY(mptr);
+  TRI_ASSERT(docKey != nullptr);
+  size_t keyLength = strlen(docKey);
+  buffer[len] = '/';
+  memcpy(buffer + len + 1, docKey, keyLength);
+  result->ForceSet(v8g->_IdKey, v8::String::New(buffer, (int) (len + keyLength + 1)));
+
+  // _key (reuses _key part in _id)
+  result->ForceSet(v8g->_KeyKey, v8::String::New(buffer + len + 1, (int) keyLength));
+
+  // _rev
+  TRI_voc_rid_t rid = mptr->_rid;
+  TRI_ASSERT(rid > 0);
+  len = TRI_StringUInt64InPlace((uint64_t) rid, (char*) &buffer);
+  result->ForceSet(v8g->_RevKey, v8::String::New((char const*) buffer, (int) len));
+
+  TRI_df_marker_type_t type = static_cast<TRI_df_marker_t const*>(marker)->_type;  // PROTECTED by trx from above
+
+  // create _from and _to for edges
   if (type == TRI_DOC_MARKER_KEY_EDGE) {
-    TRI_doc_edge_key_marker_t const* marker = static_cast<TRI_doc_edge_key_marker_t const*>(mptr->getDataPtr());  // PROTECTED by trx from above
+    TRI_doc_edge_key_marker_t const* m = static_cast<TRI_doc_edge_key_marker_t const*>(marker);  // PROTECTED by trx from above
 
-    result->Set(v8g->_FromKey, V8DocumentId(resolver->getCollectionNameCluster(marker->_fromCid), ((char*) marker) + marker->_offsetFromKey));
-    result->Set(v8g->_ToKey, V8DocumentId(resolver->getCollectionNameCluster(marker->_toCid), ((char*) marker) + marker->_offsetToKey));
+    // _from
+    len = resolver->getCollectionNameCluster(buffer, m->_fromCid);
+    keyLength = strlen(((char*) marker) + m->_offsetFromKey);
+    buffer[len] = '/';
+    memcpy(buffer + len + 1, (char*) marker + m->_offsetFromKey, keyLength);
+    result->ForceSet(v8g->_FromKey, v8::String::New(buffer, (int) (len + keyLength + 1)));
+
+    // _to
+    if (m->_fromCid != m->_toCid) {
+      // only lookup collection name if we haven't done it yet
+      len = resolver->getCollectionNameCluster(buffer, m->_toCid);
+    }
+    keyLength = strlen(((char*) marker) + m->_offsetToKey);
+    buffer[len] = '/';
+    memcpy(buffer + len + 1, (char*) marker + m->_offsetToKey, keyLength);
+    result->ForceSet(v8g->_ToKey, v8::String::New(buffer, (int) (len + keyLength + 1)));
   }
   else if (type == TRI_WAL_MARKER_EDGE) {
-    triagens::wal::edge_marker_t const* marker = static_cast<triagens::wal::edge_marker_t const*>(mptr->getDataPtr());  // PROTECTED by trx from above
+    triagens::wal::edge_marker_t const* m = static_cast<triagens::wal::edge_marker_t const*>(marker);  // PROTECTED by trx from above
 
-    result->Set(v8g->_FromKey, V8DocumentId(resolver->getCollectionNameCluster(marker->_fromCid), ((char const*) marker) + marker->_offsetFromKey));
-    result->Set(v8g->_ToKey, V8DocumentId(resolver->getCollectionNameCluster(marker->_toCid), ((char const*) marker) + marker->_offsetToKey));
+    // _from
+    len = resolver->getCollectionNameCluster(buffer, m->_fromCid);
+    keyLength = strlen(((char*) marker) + m->_offsetFromKey);
+    buffer[len] = '/';
+    memcpy(buffer + len + 1, (char*) marker + m->_offsetFromKey, keyLength);
+    result->ForceSet(v8g->_FromKey, v8::String::New(buffer, (int) (len + keyLength + 1)));
+
+    // _to
+    if (m->_fromCid != m->_toCid) {
+      // only lookup collection name if we haven't done it yet
+      len = resolver->getCollectionNameCluster(buffer, m->_toCid);
+    }
+    keyLength = strlen(((char*) marker) + m->_offsetToKey);
+    buffer[len] = '/';
+    memcpy(buffer + len + 1, (char*) marker + m->_offsetToKey, keyLength);
+    result->ForceSet(v8g->_ToKey, v8::String::New(buffer, (int) (len + keyLength + 1)));
   }
 
   return scope.Close(result);
@@ -10277,7 +10501,6 @@ static v8::Handle<v8::Object> AddBasicDocumentAttributes (T& trx,
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief wraps a TRI_shaped_json_t
-/// note: the function updates the usedBarrier variable if the barrier was used
 ////////////////////////////////////////////////////////////////////////////////
 
 template<class T>
@@ -10524,20 +10747,20 @@ void TRI_InitV8VocBridge (v8::Handle<v8::Context> context,
 
   // accessor for named properties (e.g. doc.abcdef)
   rt->SetNamedPropertyHandler(MapGetNamedShapedJson,    // NamedPropertyGetter,
-                              0,                        // NamedPropertySetter setter = 0
+                              MapSetNamedShapedJson,    // NamedPropertySetter
                               PropertyQueryShapedJson,  // NamedPropertyQuery,
-                              0,                        // NamedPropertyDeleter deleter = 0,
+                              MapDeleteNamedShapedJson, // NamedPropertyDeleter,
                               KeysOfShapedJson          // NamedPropertyEnumerator,
                                                         // Handle<Value> data = Handle<Value>());
                               );
 
   // accessor for indexed properties (e.g. doc[1])
-  rt->SetIndexedPropertyHandler(MapGetIndexedShapedJson,  // IndexedPropertyGetter,
-                                0,                        // IndexedPropertySetter setter = 0
-                                0,                        // IndexedPropertyQuery,
-                                0,                        // IndexedPropertyDeleter deleter = 0,
-                                0                         // IndexedPropertyEnumerator,
-                                                          // Handle<Value> data = Handle<Value>());
+  rt->SetIndexedPropertyHandler(MapGetIndexedShapedJson,    // IndexedPropertyGetter,
+                                MapSetIndexedShapedJson,    // IndexedPropertySetter,
+                                0,                          // IndexedPropertyQuery,
+                                MapDeleteIndexedShapedJson, // IndexedPropertyDeleter,
+                                0                           // IndexedPropertyEnumerator,
+                                                            // Handle<Value> data = Handle<Value>());
                               );
 
   v8g->ShapedJsonTempl = v8::Persistent<v8::ObjectTemplate>::New(isolate, rt);

@@ -1,4 +1,3 @@
-/*jslint indent: 2, nomen: true, maxlen: 120, es5: true */
 /*global require, applicationContext */
 (function () {
   'use strict';
@@ -6,6 +5,6 @@
     sessionsName = applicationContext.collectionName('sessions');
 
   if (db._collection(sessionsName) === null) {
-    db._create(sessionsName);
+    db._create(sessionsName, {isSystem: true});
   }
 }());
