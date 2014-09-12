@@ -104,7 +104,7 @@ Vertex.prototype._setResult = function (result) {
 
 Vertex.prototype._save = function (dontSaveEdges) {
   var t = p.stopWatch();
-  if (dontSaveEdges) {
+  if (!dontSaveEdges) {
     this._outEdges.forEach(function(e) {
       e._save();
     });
