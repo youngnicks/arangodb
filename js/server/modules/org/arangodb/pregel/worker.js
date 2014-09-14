@@ -91,20 +91,30 @@ var translateId = function (id, mapping) {
   return mapping.getResultCollection(col) + "/" + key;
 };
 
-var algorithmForQueue = function (algorithms, vertices,  executionNumber) {
+var algorithmForQueue = function (algorithms, shardList, executionNumber, workerIndex, workerCount) {
   return "(function() {"
     + "var executionNumber = " + executionNumber + ";"
+    + "var db = require('internal').db;"
     + "var pregel = require('org/arangodb/pregel');"
     + "var pregelMapping = new pregel.Mapping(executionNumber);"
     + "var worker = pregel.Worker;"
     + "var data = [];"
     + "var lastStep;"
     + (algorithms.aggregator ? "  var aggregator = (" + algorithms.aggregator + ");" : "var aggregator = null;")
-    + "var vertices = " + JSON.stringify(vertices) + ";"
-    + "Object.keys(vertices).forEach(function(key) {"
-    +   "if(key === '__actives'){ return; }"
-    +   "vertices[key] = new pregel.Vertex(vertices[key], pregelMapping, vertices);"
-    + "});"
+    + "var vertices = {};"
+    + "vertices.__actives = 0;"
+    + "var shardList = " + JSON.stringify(shardList) + ";"
+    + "var i;"
+    + "for (i = 0; i < shardList.length; i++) {"
+    +   "db[shardList[i]].NTH(" + workerIndex + ", " + workerCount + ").documents.forEach(function (d)  {"
+    +     "vertices.__actives++;"
+    +     "d._locationInfo = {"
+    +       "shard: shardList[i],"
+    +       "_id: d._id"
+    +     "};"
+    +     "vertices[d._id] = new pregel.Vertex(d, pregelMapping, vertices);"
+    +   "});"
+    + "}"
     + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
     + "return function(params) {"
     + "if (params.cleanUp) {"
@@ -144,12 +154,32 @@ var algorithmForQueue = function (algorithms, vertices,  executionNumber) {
     + "}())";
 };
 
-var  createTaskQueue = function (executionNumber, vertices,  algorithms, workerIndex) {
-  tasks.createNamedQueue({
-    name: getQueueName(executionNumber, workerIndex),
-    threads: 1,
-    size: 1,
-    worker: algorithmForQueue(algorithms, vertices, executionNumber)
+var  createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount) {
+  tasks.register({
+    command: function(params) {
+      var queueName = params.queueName;
+      var worker = params.worker;
+      var glob = params.globals;
+      var tasks = require("org/arangodb/tasks");
+      tasks.createNamedQueue({
+        name: queueName,
+        threads: 1,
+        size: 1,
+        worker: worker
+      });
+      tasks.addJob(
+        queueName,
+        {
+          step: 0,
+          global: glob
+        }
+      );
+    },
+    params: {
+      queueName: getQueueName(executionNumber, workerIndex),
+      worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount),
+      globals: globals
+    }
   });
 };
 
@@ -189,7 +219,7 @@ var getError = function(executionNumber) {
   return pregel.getGlobalCollection(executionNumber).document(ERR).error;
 };
 
-var setup = function(executionNumber, options) {
+var setup = function(executionNumber, options, globals) {
   // create global collection
   pregel.createWorkerCollections(executionNumber);
   p.setup();
@@ -201,28 +231,14 @@ var setup = function(executionNumber, options) {
 
   saveMapping(executionNumber, options.map);
 
-  var map = options.map.map;
-  var collectionMapping = {};
   var pregelMapping = new pregel.Mapping(executionNumber);
   var w;
-  var vertices;
+  var shardList = [];
+  _.each(pregelMapping.getLocalCollectionShardMapping(), function (shards) {
+    shardList = shardList.concat(shards);
+  });
   for (w = 0; w < WORKERS; w++) {
-    vertices = {};
-    vertices.__actives = 0;
-    _.each(pregelMapping.getLocalCollectionShardMapping(), function (shards) {
-      var i;
-      for (i = 0; i < shards.length; i++) {
-        db[shards[i]].NTH(w, WORKERS).documents.forEach(function (d)  {
-          vertices[d._id] = d;
-          vertices.__actives++;
-          vertices[d._id]._locationInfo = {
-            shard: shards[i],
-            _id: d._id
-          };
-        });
-      }
-    });
-    createTaskQueue(executionNumber, vertices, options, w);
+    createTaskQueue(executionNumber, shardList, options, globals, w, WORKERS);
   }
 };
 
@@ -441,12 +457,13 @@ var queueDone = function (executionNumber, global, actives, mapping, err) {
 
 var executeStep = function(executionNumber, step, options, globals) {
   id = ArangoServerState.id() || "localhost";
-  if (step === 0) {
-    setup(executionNumber, options);
-  }
-  var t = p.stopWatch();
   globals = globals || {};
   globals.final = options.final;
+  if (step === 0) {
+    setup(executionNumber, options, globals);
+    return;
+  }
+  var t = p.stopWatch();
   var i = 0;
   var queue;
   for (i = 0; i < WORKERS; i++) {
