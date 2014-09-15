@@ -79,7 +79,7 @@
         return {
           username: "root",
           passwd: ""
-        }
+        };
       },
       startUp = function(req, res) {
         cleanUp();
@@ -175,9 +175,16 @@
       var list = req.body();
       var options = {};
       var result = [];
+      var base64Encode = require("internal").base64Encode;
       _.each(list, function(info) {
         var host = info.host;
         var port = info.port;
+        if (info.user) {
+          options.headers = {
+            "Authorization": "Basic " + base64Encode(info.user + ":" +
+              info.passwd)
+          };
+        }
         var url = "http://" + host + ":" + port + "/_api/version";
         var resi = load(url, "", options);
         if (resi.code !== 200) {
@@ -185,6 +192,7 @@
         } else {
           result.push(true);
         }
+        delete options.headers;
       });
       res.json(result);
     });

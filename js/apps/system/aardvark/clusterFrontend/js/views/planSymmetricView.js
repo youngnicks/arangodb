@@ -15,11 +15,11 @@
       "click .add"                  : "addEntry",
       "click .delete"               : "removeEntry",
       "click #cancel"               : "cancel",
-      "click #test-all-connections" : "checkAllConnectionsNew",
-      "focusout .host"              : "checkAllConnectionsNew",
-      "focusout .port"              : "checkAllConnectionsNew",
-      "focusout .user"              : "checkAllConnectionsNew",
-      "focusout .passwd"            : "checkAllConnectionsNew"
+      "click #test-all-connections" : "checkAllConnections",
+      "focusout .host"              : "checkAllConnections",
+      "focusout .port"              : "checkAllConnections",
+      "focusout .user"              : "checkAllConnections",
+      "focusout .passwd"            : "checkAllConnections"
     },
 
     cancel: function() {
@@ -207,7 +207,7 @@
       return res;
     },
 
-    checkAllConnectionsNew: function() {
+    checkAllConnections: function() {
       var self = this;
       var connectionValidationKey = Math.random();
       this.connectionValidationKey = connectionValidationKey;
@@ -252,72 +252,6 @@
       }
     },
 
-    autoCheckConnections: function (e) {
-      var host,
-        port,
-        user,
-        passwd,
-        parentElement = $(e.currentTarget).parent();
-      host = $(parentElement).children('.host').val();
-      port = $(parentElement).children('.port').val();
-      user = $(parentElement).children('.user').val();
-      passwd = $(parentElement).children('.passwd').val();
-
-      if (host !== '' && port !== '') {
-        this.checkAllConnections();
-      }
-    },
-
-    checkConnection: function(
-      host,
-      port,
-      user,
-      passwd,
-      target,
-      i,
-      dispatcherArray,
-      connectionValidationKey
-    ) {
-      var self = this;
-      $(target).find('.cluster-connection-check-success').remove();
-      $(target).find('.cluster-connection-check-fail').remove();
-      try {
-        $.ajax({
-          async: true,
-          cache: false,
-          type: "GET",
-          xhrFields: {
-            withCredentials: true
-          },
-          url: "http://" + host + ":" + port + "/_api/version",
-          success: function() {
-            if (connectionValidationKey === self.connectionValidationKey) {
-              $(target).append(
-                '<span class="cluster-connection-check-success">Connection: ok</span>'
-              );
-              dispatcherArray[i] = true;
-              self.checkDispatcherArray(dispatcherArray, connectionValidationKey);
-            }
-          },
-          error: function(p) {
-            if (connectionValidationKey === self.connectionValidationKey) {
-              $(target).append(
-                '<span class="cluster-connection-check-fail">Connection: fail</span>'
-              );
-              dispatcherArray[i] = false;
-            }
-          },
-          beforeSend: function(xhr) {
-            xhr.setRequestHeader("Authorization", "Basic " + btoa(user + ":" + passwd));
-            //send this header to prevent the login box
-            xhr.setRequestHeader("X-Omit-Www-Authenticate", "content");
-          }
-        });
-      } catch (e) {
-        this.disableLaunchButton();
-      }
-    },
-
     checkDispatcherArray: function(dispatcherArray, connectionValidationKey) {
       if(
         (_.every(dispatcherArray, function (e) {return e;}))
@@ -325,39 +259,6 @@
         ) {
         this.enableLaunchButton();
       }
-    },
-
-    checkAllConnections: function() {
-      this.connectionValidationKey = Math.random();
-      this.disableLaunchButton();
-      var numOfDispatcher = $('.dispatcher').length,
-        dispatcherArray = [],
-        idx;
-      for (idx = 0; idx < numOfDispatcher; idx++) {
-        dispatcherArray.push(false);
-      }
-
-      //Object mit #dispatcher + random key
-      var self = this;
-      $('.dispatcher').each(
-        function(i, dispatcher) {
-          var target = $('.controls', dispatcher)[0];
-          var host = $('.host', dispatcher).val();
-          var port = $('.port', dispatcher).val();
-          var user = $('.user', dispatcher).val();
-          var passwd = $('.passwd', dispatcher).val();
-          self.checkConnection(
-            host,
-            port,
-            user,
-            passwd,
-            target,
-            i,
-            dispatcherArray,
-            self.connectionValidationKey
-          );
-        }
-      );
     },
 
     disableLaunchButton: function() {
