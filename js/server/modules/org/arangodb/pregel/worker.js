@@ -38,6 +38,7 @@ var pregel = require("org/arangodb/pregel");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 var tasks = require("org/arangodb/tasks");
+var Foxx = require("org/arangodb/foxx");
 
 var step = "step";
 var stepContent = "stepContent";
@@ -56,6 +57,28 @@ var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
 var WORKERS = 8;
+
+var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
+
+Foxx.queues.registerJobType("pregel-register-job", function(params) {
+  var queueName = params.queueName;
+  var worker = params.worker;
+  var glob = params.globals;
+  var tasks = require("org/arangodb/tasks");
+  tasks.createNamedQueue({
+    name: queueName,
+    threads: 1,
+    size: 1,
+    worker: worker
+  });
+  tasks.addJob(
+    queueName,
+    {
+      step: 0,
+      global: glob
+    }
+  );
+});
 
 var queryGetAllSourceEdges = "FOR e IN @@original RETURN "
   + "{ _key: e._key, _from: e._from, _to: e._to";
@@ -154,32 +177,11 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "}())";
 };
 
-var  createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount) {
-  tasks.register({
-    command: function(params) {
-      var queueName = params.queueName;
-      var worker = params.worker;
-      var glob = params.globals;
-      var tasks = require("org/arangodb/tasks");
-      tasks.createNamedQueue({
-        name: queueName,
-        threads: 1,
-        size: 1,
-        worker: worker
-      });
-      tasks.addJob(
-        queueName,
-        {
-          step: 0,
-          global: glob
-        }
-      );
-    },
-    params: {
-      queueName: getQueueName(executionNumber, workerIndex),
-      worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount),
-      globals: globals
-    }
+var createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount) {
+  jobRegisterQueue.push("pregel-register-job", {
+    queueName: getQueueName(executionNumber, workerIndex),
+    worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount),
+    globals: globals
   });
 };
 
