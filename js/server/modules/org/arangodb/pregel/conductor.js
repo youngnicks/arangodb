@@ -578,9 +578,7 @@ var finishedStep = function(executionNumber, serverName, info) {
     transactionBody.action = transactionBody.action.toString();
     ArangoClusterComm.asyncRequest("POST","server:" + endpoint, db._name(),
       "/_api/transaction/",JSON.stringify(transactionBody), {}, coordOptions);
-    var info2 = ArangoClusterComm.wait(coordOptions);
-    require("console").log(info2);
-    checks = JSON.parse(info2.body).result;
+    checks = JSON.parse(ArangoClusterComm.wait(coordOptions).body).result;
 
   } else {
     checks = db._executeTransaction(transactionBody);
