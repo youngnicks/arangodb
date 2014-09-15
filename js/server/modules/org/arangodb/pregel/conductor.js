@@ -527,11 +527,10 @@ var finishedStep = function(executionNumber, serverName, info) {
       ]
     },
     action: function (params) {
-      var pregel = require("org/arangodb/pregel");
-      var _ = require("underscore");
       var transInfo = params.info;
       var transExecutionNumber = params.executionNumber;
-      var transRunInfo = _.clone(pregel.getExecutionInfo(transExecutionNumber));
+      var collection = require("internal").db._collection(params.dbName);
+      var transRunInfo = collection.document(transExecutionNumber);
       var transStep = transRunInfo.step + 1;
       var transStepCont = transRunInfo.stepContent[transStep];
       transStepCont.messages += transInfo.messages;
@@ -541,7 +540,7 @@ var finishedStep = function(executionNumber, serverName, info) {
       var transServerName = params.serverName;
       var transAwaiting = transRunInfo.waitForAnswer;
       transAwaiting[transServerName] = true;
-      pregel.getCollection().update(transExecutionNumber, transRunInfo);
+      collection.update(transExecutionNumber, transRunInfo);
       var transEveryServerResponded = true;
       Object.keys(transAwaiting).forEach(function(s) {
         if (transAwaiting[s] === false) {
@@ -557,7 +556,8 @@ var finishedStep = function(executionNumber, serverName, info) {
     params: {
       serverName: serverName,
       executionNumber: executionNumber,
-      info: info
+      info: info,
+      dbName: "_pregel"
     }
   };
 
@@ -578,7 +578,9 @@ var finishedStep = function(executionNumber, serverName, info) {
     transactionBody.action = transactionBody.action.toString();
     ArangoClusterComm.asyncRequest("POST","server:" + endpoint, db._name(),
       "/_api/transaction/",JSON.stringify(transactionBody), {}, coordOptions);
-    checks = JSON.parse(ArangoClusterComm.wait(coordOptions).body).result;
+    var info2 = ArangoClusterComm.wait(coordOptions);
+    require("console").log(info2);
+    checks = JSON.parse(info2.body).result;
 
   } else {
     checks = db._executeTransaction(transactionBody);
