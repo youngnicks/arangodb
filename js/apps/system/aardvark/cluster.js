@@ -34,6 +34,7 @@
   var FoxxController = require("org/arangodb/foxx").Controller,
     controller = new FoxxController(applicationContext),
     cluster = require("org/arangodb/cluster"),
+    load = require("internal").download,
     _ = require("underscore");
 
   /** Plan and start a new cluster
@@ -49,7 +50,7 @@
     res.json(!cluster.dispatcherDisabled());
   });
 
-  if (! cluster.dispatcherDisabled()) {
+  if (!cluster.dispatcherDisabled()) {
     var Plans = require("./repositories/plans.js"),
       plans = new Plans.Repository(
         require("internal").db._collection(
@@ -168,6 +169,24 @@
     controller.del("/plan/cleanUp", function(req, res) {
       cleanUp();
       res.json("ok");
+    });
+
+    controller.post("/communicationCheck", function(req, res) {
+      var list = req.body();
+      var options = {};
+      var result = [];
+      _.each(list, function(info) {
+        var host = info.host;
+        var port = info.port;
+        var url = "http://" + host + ":" + port + "/_api/version";
+        var resi = load(url, "", options);
+        if (resi.code !== 200) {
+          result.push(false);
+        } else {
+          result.push(true);
+        }
+      });
+      res.json(result);
     });
 
     controller.del("/plan", function(req, res) {
