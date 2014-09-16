@@ -58,27 +58,29 @@ var MAP = "map";
 var id;
 var WORKERS = 8;
 
-var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
+if (pregel.getServerName === "localhost") {
+  var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
 
-Foxx.queues.registerJobType("pregel-register-job", function(params) {
-  var queueName = params.queueName;
-  var worker = params.worker;
-  var glob = params.globals;
-  var tasks = require("org/arangodb/tasks");
-  tasks.createNamedQueue({
-    name: queueName,
-    threads: 1,
-    size: 1,
-    worker: worker
+  Foxx.queues.registerJobType("pregel-register-job", function(params) {
+    var queueName = params.queueName;
+    var worker = params.worker;
+    var glob = params.globals;
+    var tasks = require("org/arangodb/tasks");
+    tasks.createNamedQueue({
+      name: queueName,
+      threads: 1,
+      size: 1,
+      worker: worker
+    });
+    tasks.addJob(
+      queueName,
+      {
+        step: 0,
+        global: glob
+      }
+    );
   });
-  tasks.addJob(
-    queueName,
-    {
-      step: 0,
-      global: glob
-    }
-  );
-});
+}
 
 var queryGetAllSourceEdges = "FOR e IN @@original RETURN "
   + "{ _key: e._key, _from: e._from, _to: e._to";
@@ -128,16 +130,8 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "vertices.__actives = 0;"
     + "var shardList = " + JSON.stringify(shardList) + ";"
     + "var i;"
-    + "var gcCounter = 0;"
-    + "var wait = require('internal').wait;"
     + "for (i = 0; i < shardList.length; i++) {"
     +   "db[shardList[i]].NTH(" + workerIndex + ", " + workerCount + ").documents.forEach(function (d)  {"
-    +     "if(gcCounter === 100000) {"
-    +       "wait(0);"
-    +       "gcCounter = 0;"
-    +     "}else{"
-    +       "gcCounter++;"
-    +     "}"
     +     "vertices.__actives++;"
     +     "d._locationInfo = {"
     +       "shard: shardList[i],"
@@ -186,11 +180,41 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
 };
 
 var createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount) {
-  jobRegisterQueue.push("pregel-register-job", {
-    queueName: getQueueName(executionNumber, workerIndex),
-    worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount),
-    globals: globals
-  });
+  // TODO hack for cluster setup. Foxx Queues not working...
+  if (pregel.getServerName !== "localhost") {
+    tasks.register({
+      command: function(params) {
+        var queueName = params.queueName;
+        var worker = params.worker;
+        var glob = params.globals;
+        var tasks = require("org/arangodb/tasks");
+        tasks.createNamedQueue({
+          name: queueName,
+          threads: 1,
+          size: 1,
+          worker: worker
+        });
+        tasks.addJob(
+          queueName,
+          {
+            step: 0,
+            global: glob
+          }
+        );
+      },
+      params: {
+        queueName: getQueueName(executionNumber, workerIndex),
+        worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount),
+        globals: globals
+      }
+    });
+  } else {
+    jobRegisterQueue.push("pregel-register-job", {
+      queueName: getQueueName(executionNumber, workerIndex),
+      worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount),
+      globals: globals
+    });
+  }
 };
 
 var addTask = function (queue, stepNumber, globals) {
