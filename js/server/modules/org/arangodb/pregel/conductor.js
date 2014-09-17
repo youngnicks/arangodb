@@ -599,6 +599,12 @@ var finishedStep = function(executionNumber, serverName, info) {
   }
 };
 
+var dropResult = function(executionNumber) {
+  var info = pregel.getExecutionInfo(executionNumber);
+  graphModule._drop(info.graphName, true);
+  pregel.removeExecutionInfo(executionNumber);
+};
+
 // -----------------------------------------------------------------------------
 // --SECTION--                                                    MODULE EXPORTS
 // -----------------------------------------------------------------------------
@@ -607,6 +613,7 @@ var finishedStep = function(executionNumber, serverName, info) {
 exports.startExecution = startExecution;
 exports.getResult = getResult;
 exports.getInfo = getInfo;
+exports.dropResult = dropResult;
 
 // Internal functions
 exports.finishedStep = finishedStep;
