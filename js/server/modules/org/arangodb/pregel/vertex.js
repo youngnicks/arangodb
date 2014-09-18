@@ -35,14 +35,29 @@ var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Vertex = function (jsonData, mapping, parent) {
+var Vertex = function (jsonData, shard, mapping, parent) {
   var t = p.stopWatch();
   var Edge = pregel.Edge;
+
+  // Do copy plain
   var self = this;
   _.each(jsonData, function(val, key) {
     self[key] = val;
   });
-  var shard = this._locationInfo.shard;
+  // End Do copy plain
+  
+  this._locationInfo = {
+    _id: jsonData._id,
+    shard: shard
+  };
+
+  // Do not copy
+  /*
+  this._id = jsonData._id;
+  this._key = jsonData._key;
+  */
+  // End Do not copy
+  
   this.__resultShard = db[mapping.getResultShard(shard)];
   this.__parent = parent;
   this.__active = true;

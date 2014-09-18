@@ -36,11 +36,23 @@ var _ = require("underscore");
 
 var Edge = function (edgeJSON, mapping, shard) {
   var t = p.stopWatch();
+  // Do copy plain
   var self = this;
   _.each(edgeJSON, function(v, k) {
     self[k] = v;
   });
-  this.__resultShard = db._collection(mapping.getResultShard(shard));
+  // End Do copy plain
+
+  // Do not copy
+  /*
+  this._id = edgeJSON._id;
+  this._key = edgeJSON._key;
+  this._to = edgeJSON._to;
+  this._from = edgeJSON._from;
+  */
+  // End Do not copy
+
+  this.__resultShard = db[mapping.getResultShard(shard)];
   this.__result = {};
   this.__deleted = false;
   var fromSplit = this._from.split("/");

@@ -47,6 +47,10 @@ exports.updateExecutionInfo = function(executionNumber, infoObject) {
   return exports.getCollection().update(executionNumber, infoObject);
 };
 
+exports.removeExecutionInfo = function(executionNumber) {
+  return exports.getCollection().remove(executionNumber);
+};
+
 exports.getServerName = function () {
   return ArangoServerState.id() || "localhost";
 };
