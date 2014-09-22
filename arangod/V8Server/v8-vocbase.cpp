@@ -9918,7 +9918,6 @@ static void WeakBarrierCallback (v8::Isolate* isolate,
 static v8::Handle<v8::Value> MapGetNamedShapedJson (v8::Local<v8::String> name,
                                                     v8::AccessorInfo const& info) {
   v8::HandleScope scope;
-std::cout << "GET NAMED\n";  
 
   // sanity check
   v8::Handle<v8::Object> self = info.Holder();
@@ -10023,7 +10022,6 @@ static void CopyAttributes (v8::Handle<v8::Object> self,
     return;
   }
 
-std::cout << "COPY\n";  
   // copy _key and _rev
   TRI_v8_global_t* v8g = static_cast<TRI_v8_global_t*>(v8::Isolate::GetCurrent()->GetData());
   char buffer[TRI_VOC_KEY_MAX_LENGTH + 1];
@@ -10087,7 +10085,6 @@ static v8::Handle<v8::Value> MapSetNamedShapedJson (v8::Local<v8::String> name,
                                                     v8::Local<v8::Value> value,
                                                     v8::AccessorInfo const& info) {
   v8::HandleScope scope;
-std::cout << "SET NAMED\n";  
 
   // sanity check
   v8::Handle<v8::Object> self = info.Holder();
@@ -10131,7 +10128,6 @@ static v8::Handle<v8::Boolean> MapDeleteNamedShapedJson (v8::Local<v8::String> n
   
   // sanity check
   v8::Handle<v8::Object> self = info.Holder();
-std::cout << "DELETE NAMED\n";  
 
   if (self->InternalFieldCount() <= SLOT_BARRIER) {
     // we better not throw here... otherwise this will cause a segfault
@@ -10162,7 +10158,6 @@ std::cout << "DELETE NAMED\n";
 static v8::Handle<v8::Array> KeysOfShapedJson (const v8::AccessorInfo& info) {
   v8::HandleScope scope;
 
-std::cout << "KEYS OF\n";  
   // sanity check
   v8::Handle<v8::Object> self = info.Holder();
 
@@ -10242,7 +10237,6 @@ std::cout << "KEYS OF\n";
 static v8::Handle<v8::Integer> PropertyQueryShapedJson (v8::Local<v8::String> name,
                                                         const v8::AccessorInfo& info) {
   v8::HandleScope scope;
-std::cout << "PROPERTY QUERY\n";  
 
   v8::Handle<v8::Object> self = info.Holder();
 
@@ -10311,7 +10305,6 @@ std::cout << "PROPERTY QUERY\n";
 static v8::Handle<v8::Value> MapGetIndexedShapedJson (uint32_t idx,
                                                       v8::AccessorInfo const& info) {
   v8::HandleScope scope;
-std::cout << "GET INDEXED\n";  
 
   char buffer[11];
   size_t len = TRI_StringUInt32InPlace(idx, (char*) &buffer);
@@ -10329,7 +10322,6 @@ static v8::Handle<v8::Value> MapSetIndexedShapedJson (uint32_t idx,
                                                       v8::Local<v8::Value> value,
                                                       v8::AccessorInfo const& info) {
   v8::HandleScope scope;
-std::cout << "SET INDEXED\n";  
 
   char buffer[11];
   size_t len = TRI_StringUInt32InPlace(idx, (char*) &buffer);
@@ -10346,7 +10338,6 @@ std::cout << "SET INDEXED\n";
 static v8::Handle<v8::Boolean> MapDeleteIndexedShapedJson (uint32_t idx,
                                                            v8::AccessorInfo const& info) {
   v8::HandleScope scope;
-std::cout << "DELETE INDEXED\n";  
 
   char buffer[11];
   size_t len = TRI_StringUInt32InPlace(idx, (char*) &buffer);
