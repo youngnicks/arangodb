@@ -116,7 +116,7 @@ var Queue = function (executionNumber, vertices, aggregate) {
     if (k === "__actives") {
       return;
     }
-    var id = v._locationInfo._id;
+    var id = v._id;
     self.__queues.push(id);
     self[id] = new VertexMessageQueue(self, v._locationInfo);
   });
@@ -138,10 +138,6 @@ Queue.prototype._fillQueues = function () {
   var msg, vQueue;
   this.__step++;
   var fillQueue = function (content, key) {
-    if (key === "_key" || key === "_id" || key === "_rev"
-      || key === "toShard" || key === "step") {
-      return;
-    }
     vQueue = self[key];
     if (vQueue) {
       vQueue._fill(content);
@@ -155,7 +151,7 @@ Queue.prototype._fillQueues = function () {
   };
   while (cursor.hasNext()) {
     msg = cursor.next();
-    _.each(msg, fillQueue);
+    _.each(JSON.parse(msg.messages), fillQueue);
   }
 };
 
@@ -182,9 +178,12 @@ Queue.prototype._send = function (target, msg) {
 Queue.prototype._storeInCollection = function() {
   var self = this;
   _.each(this.__output, function(doc, shard) {
-    doc.toShard = shard;
-    doc.step = self.__step;
-    self.__collection.save(doc);
+    var toSave = {
+      toShard: shard,
+      messages: JSON.stringify(doc),
+      step: self.__step
+    };
+    self.__collection.save(toSave);
   });
 };
 
