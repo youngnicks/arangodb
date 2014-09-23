@@ -529,13 +529,16 @@ var finishedStep = function(executionNumber, serverName, info) {
     action: function (params) {
       var transInfo = params.info;
       var transExecutionNumber = params.executionNumber;
-      var collection = require("internal").db._collection(params.dbName);
+      var collection = require("internal").db._pregel;
       var transRunInfo = collection.document(transExecutionNumber);
       var transStep = transRunInfo.step + 1;
+      // Shaped JSON avoidance
+      transRunInfo.stepContent = _.clone(transRunInfo.stepContent);
       var transStepCont = transRunInfo.stepContent[transStep];
       transStepCont.messages += transInfo.messages;
       transStepCont.active += transInfo.active;
       transStepCont.data = transStepCont.data.concat(transInfo.data);
+      transRunInfo.stepContent[transStep] = transStepCont;
       transRunInfo.error = transInfo.error;
       var transServerName = params.serverName;
       var transAwaiting = transRunInfo.waitForAnswer;
@@ -556,8 +559,7 @@ var finishedStep = function(executionNumber, serverName, info) {
     params: {
       serverName: serverName,
       executionNumber: executionNumber,
-      info: info,
-      dbName: "_pregel"
+      info: info
     }
   };
 
