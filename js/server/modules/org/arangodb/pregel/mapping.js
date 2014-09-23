@@ -53,7 +53,7 @@ Mapping.prototype.transformToFindShard = function (col, params, prefix) {
   var locParams = {};
   var i;
   for (i = 0; i < keys.length; i++) {
-    locParams[keys[i]] = params[prefix + i];
+    locParams[keys[i]] = params._doc[prefix + i];
   }
   p.storeWatch("transformToFindShard", t);
   return locParams;
@@ -110,8 +110,8 @@ Mapping.prototype.getResponsibleEdgeShards = function (shard) {
 Mapping.prototype.getToLocationObject = function (edge) {
   var t = p.stopWatch();
   var obj = {};
-  obj._id = edge._to;
-  var toCol = edge._to.split("/")[0];
+  obj._id = edge._doc._to;
+  var toCol = edge._doc._to.split("/")[0];
   if (ArangoServerState.role() === "PRIMARY") {
     var locParams = this.transformToFindShard(toCol, edge, "to_shard_"); 
     locParams._id = obj._id; 
