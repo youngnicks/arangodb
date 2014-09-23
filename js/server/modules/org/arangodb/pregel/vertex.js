@@ -39,34 +39,23 @@ var Vertex = function (jsonData, shard, mapping, parent) {
   var t = p.stopWatch();
   var Edge = pregel.Edge;
 
-  // Do copy plain
-  var self = this;
-  _.each(jsonData, function(val, key) {
-    self[key] = val;
-  });
-  // End Do copy plain
+  this._doc = jsonData;
   
   this._locationInfo = {
     _id: jsonData._id,
     shard: shard
   };
 
-  // Do not copy
-  /*
-  this._id = jsonData._id;
-  this._key = jsonData._key;
-  */
-  // End Do not copy
-  
   this.__resultShard = db[mapping.getResultShard(shard)];
   this.__parent = parent;
   this.__active = true;
   this.__deleted = false;
   this.__result = {};
+  var self = this;
   var respEdges = mapping.getResponsibleEdgeShards(shard);
   this._outEdges = [];
   _.each(respEdges, function(edgeShard) {
-    var outEdges = db[edgeShard].outEdges(self._id);
+    var outEdges = db[edgeShard].outEdges(self._doc._id);
     _.each(outEdges, function (json) {
       var e = new Edge(json, mapping, edgeShard);
       self._outEdges.push(e);
@@ -106,7 +95,7 @@ Vertex.prototype._delete = function () {
   }
   this._save();
   this.__deleted = true;
-  delete this.__parent[this._id];
+  delete this.__parent[this._doc._id];
 };
 
 Vertex.prototype._getResult = function () {
@@ -125,7 +114,7 @@ Vertex.prototype._save = function (dontSaveEdges) {
     });
   }
   this.__resultShard.save({
-    _key: this._key,
+    _key: this._doc._key,
     _deleted : this.__deleted,
     result: this._getResult()
   });
