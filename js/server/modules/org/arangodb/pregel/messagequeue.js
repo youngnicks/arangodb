@@ -27,6 +27,7 @@
 /// @author Michael Hackstein
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
+var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
 var _ = require("underscore");
@@ -61,8 +62,8 @@ VertexMessageQueue.prototype.next = function () {
 };
 
 VertexMessageQueue.prototype._fill = function (msg) {
-  if (msg.aggregate) {
-    this._inc.push({data: msg.aggregate});
+  if (msg.a) {
+    this._inc.push({data: msg.a});
   }
   if (msg.plain) {
     this._inc = this._inc.concat(msg.plain);
@@ -75,6 +76,7 @@ VertexMessageQueue.prototype._clear = function () {
 };
 
 VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
+  var t = p.stopWatch();
   if (sendLocation !== false) {
     sendLocation = true; 
   }
@@ -96,6 +98,7 @@ VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
     toSend.sender = this._vertexInfo;
   }
   this._parent._send(target, toSend);
+  p.storeWatch("sendTo", t);
 };
 
 // End of Vertex Message queue
@@ -124,20 +127,28 @@ var Queue = function (executionNumber, vertices, aggregate) {
 };
 
 Queue.prototype._fillQueues = function () {
+  var t = p.stopWatch();
   var self = this;
+  var t3 = p.stopWatch();
   _.each(this.__queues, function(q) {
     self[q]._clear();
   });
+  p.storeWatch("fillQueueFirstEach", t3);
+  var t4 = p.stopWatch();
   _.each(this.__output, function(ignore, shard) {
     delete self.__output[shard];
   });
+  p.storeWatch("fillQueueSecEach", t4);
+  var t1 = p.stopWatch();
   var cursor = db._query(query, {
     "@collection": this.__workCollectionName,
     step: this.__step
   });
+  p.storeWatch("fillQueueQuery", t1);
   var msg, vQueue;
   this.__step++;
   var fillQueue = function (content, key) {
+  var t1 = p.stopWatch();
     vQueue = self[key];
     if (vQueue) {
       vQueue._fill(content);
@@ -148,34 +159,55 @@ Queue.prototype._fillQueues = function () {
         delete self[key];
       }
     }
+  p.storeWatch("fillQueueInternal", t1);
   };
+  var t2 = p.stopWatch();
   while (cursor.hasNext()) {
     msg = cursor.next();
-    _.each(JSON.parse(msg.messages), fillQueue);
+    // _.each(JSON.parse(msg.messages), fillQueue);
+    var doc = JSON.parse(msg.messages);
+    for (var key in doc) {
+      if(doc.hasOwnProperty(key)) {
+        if (this.hasOwnProperty(key)) {
+          var vQueue = this[key];
+          vQueue._fill(content);
+          if (this.__vertices.hasOwnProperty(key)) {
+            this.__vertices[key]._activate();
+          } else {
+            this.__queues.splice(this.__queues.indexOf(key), 1);
+            delete this[key];
+          } 
+        }
+      }
+    }
   }
+  p.storeWatch("fillQueueWhile", t2);
+  p.storeWatch("fillQueue", t);
 };
 
 //msg has data and optionally sender
 Queue.prototype._send = function (target, msg) {
+  var t = p.stopWatch();
   var out = this.__output;
   var shard = target.shard;
   var id = target._id;
   out[shard] = out[shard] || {};
   out[shard][id] = out[shard][id] || {};
   var msgContainer = out[shard][id];
-  if (msg.sender || !this.__aggregate) {
+  if (msg.hasOwnProperty("sender") || !this.__aggregate) {
     msgContainer.plain = msgContainer.plain || [];
-    msgContainer.plain.push(msg);
   } else {
-    if (msgContainer.hasOwnProperty("aggregate")) {
-      msgContainer.aggregate = this.__aggregate(msg.data, msgContainer.aggregate);
+    if (msgContainer.hasOwnProperty("a")) {
+      msgContainer.a = this.__aggregate(msg.data, msgContainer.a);
     } else {
-      msgContainer.aggregate = msg.data;
+      msgContainer.a = msg.data;
     }
   }
+  p.storeWatch("_send", t);
 };
 
 Queue.prototype._storeInCollection = function() {
+  var t = p.stopWatch();
   var self = this;
   _.each(this.__output, function(doc, shard) {
     var toSave = {
@@ -185,6 +217,7 @@ Queue.prototype._storeInCollection = function() {
     };
     self.__collection.save(toSave);
   });
+  p.storeWatch("storeInCol", t);
 };
 
 exports.MessageQueue = Queue;

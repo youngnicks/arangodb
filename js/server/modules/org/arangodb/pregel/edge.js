@@ -45,7 +45,7 @@ var Edge = function (edgeJSON, mapping, shard) {
   this.__from = mapping.getResultCollection(fromSplit[0]) + "/" + fromSplit[1]; 
   var toSplit = this._doc._to.split("/");
   this.__to = mapping.getResultCollection(toSplit[0]) + "/" + toSplit[1]; 
-  this._targetVertex = mapping.getToLocationObject(this);
+  this._targetVertex = mapping.getToLocationObject(this, toSplit[0]);
   p.storeWatch("ConstructEdge", t);
 };
 

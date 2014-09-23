@@ -37,6 +37,7 @@ var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
 var Mapping = function(executionNumber) {
+  this._isPrimary = ArangoServerState.role() === "PRIMARY";
   this._map = pregel.getGlobalCollection(executionNumber).document("map");
 };
 
@@ -107,12 +108,11 @@ Mapping.prototype.getResponsibleEdgeShards = function (shard) {
   return res;
 };
 
-Mapping.prototype.getToLocationObject = function (edge) {
+Mapping.prototype.getToLocationObject = function (edge, toCol) {
   var t = p.stopWatch();
   var obj = {};
   obj._id = edge._doc._to;
-  var toCol = edge._doc._to.split("/")[0];
-  if (ArangoServerState.role() === "PRIMARY") {
+  if (this._isPrimary) {
     var locParams = this.transformToFindShard(toCol, edge, "to_shard_"); 
     locParams._id = obj._id; 
     var colId = ArangoClusterInfo.getCollectionInfo(db._name(), toCol).id;

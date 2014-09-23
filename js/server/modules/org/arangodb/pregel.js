@@ -150,6 +150,7 @@ var loadMapping = function (executionNumber, name) {
 exports.Conductor = require("org/arangodb/pregel/conductor");
 exports.Worker = require("org/arangodb/pregel/worker");
 exports.Vertex = require("org/arangodb/pregel/vertex").Vertex;
+// exports.VertexList = require("org/arangodb/pregel/vertex").VertexList;
 exports.GraphAccess = require("org/arangodb/pregel/graphAccess").GraphAccess;
 exports.Edge = require("org/arangodb/pregel/edge").Edge;
 exports.MessageQueue = require("org/arangodb/pregel/messagequeue").MessageQueue;

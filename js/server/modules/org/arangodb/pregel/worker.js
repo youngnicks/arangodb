@@ -56,7 +56,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 8;
+var WORKERS = 4;
 
 if (pregel.getServerName === "localhost") {
   var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
@@ -119,6 +119,7 @@ var translateId = function (id, mapping) {
 var algorithmForQueue = function (algorithms, shardList, executionNumber, workerIndex, workerCount) {
   return "(function() {"
     + "var executionNumber = " + executionNumber + ";"
++ "var p = require('org/arangodb/profiler');"
     + "var db = require('internal').db;"
     + "var pregel = require('org/arangodb/pregel');"
     + "var pregelMapping = new pregel.Mapping(executionNumber);"
@@ -143,6 +144,7 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     +     "if(key === '__actives'){ return; }"
     +     "vertices[key]._save();"
     +   "});"
++ "p.aggregate();"
     + "  return;"
     + "}"
     + "var step = params.step;"
