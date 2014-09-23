@@ -29,7 +29,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 var db = require("internal").db;
 var t = require("internal").time;
-var colName = "_profile";
+var _ = require("underscore");
+var colName = "profiler";
 var updateQuery = "for x in @@col filter x._key == @name "
   + "let t = x.duration let i = x.invocations "
   + "update x with {duration: t + @time, invocations: i + 1} "
@@ -39,7 +40,9 @@ var aggregateAll = "FOR x IN @@col COLLECT name = x.func INTO g "
   + "IN @@col";
 var deleteSingle = "FOR x IN @@col FILTER HAS(x, 'func') REMOVE x._key IN @@col";
 
-var disabled = true;
+var disabled = false;
+
+var timers = {};
 
 exports.setup = function() {
   if (disabled) {
@@ -60,17 +63,29 @@ exports.storeWatch = function(name, time) {
     return;
   }
   time = t() - time;
-  var col = db[colName];
-  col.save({
-    func: name,
-    duration: time
-  });
+  timers[name] = timers[name] || {
+    count: 0,
+    time: 0
+  };
+  timers[name].count++;
+  timers[name].time += time;
 };
 
 exports.aggregate = function() {
   if (disabled) {
     return;
   }
+  var col = db[colName];
+  _.each(timers, function(doc, key) {
+    col.save({
+      func: key,
+      duration: doc.time,
+      count: doc.count
+    });
+  });
+  timers = {};
+  /*
   db._query(aggregateAll, {"@col": colName}).execute();
   db._query(deleteSingle, {"@col": colName}).execute();
+  */
 };
