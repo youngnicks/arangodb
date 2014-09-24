@@ -31,8 +31,6 @@
 var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
-var pregel = require("org/arangodb/pregel");
-var _ = require("underscore");
 
 var Edge = function (edgeJSON, mapping, shard) {
   var t = p.stopWatch();
@@ -66,16 +64,15 @@ Edge.prototype._setResult = function (result) {
 };
 
 Edge.prototype._save = function () {
-  if (this.__isSaved) {
-    return;
-  }
   var t = p.stopWatch();
   this.__resultShard.save(this.__from, this.__to, {
     _key: this._doc._key,
-    result: this._getResult(),
-    deleted: this._isDeleted()
+    result: this.__result,
+    deleted: this.__deleted
+  },
+  { 
+    silent: true
   });
-  this.__isSaved = true;
   p.storeWatch("SaveEdge", t);
 };
 
