@@ -132,10 +132,14 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "var shardList = " + JSON.stringify(shardList) + ";"
     + "var i;"
     + "for (i = 0; i < shardList.length; i++) {"
+    +   "var t = p.stopWatch();"
     +   "db[shardList[i]].NTH(" + workerIndex + ", " + workerCount + ").documents.forEach(function (d)  {"
     +     "vertices.__actives++;"
+    +   "var tInt = p.stopWatch();"
     +     "vertices[d._id] = new pregel.Vertex(d, shardList[i], pregelMapping, vertices);"
+    +   "p.storeWatch('CompleteDocSetup', tInt);"
     +   "});"
+    +   "p.storeWatch('CompleteDocSetup', t);"
     + "}"
     + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
     + "return function(params) {"
@@ -180,6 +184,9 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
 
 var createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount) {
   // TODO hack for cluster setup. Foxx Queues not working...
+  // KEYSPACE_CREATE("wartung", 1, true);
+  KEYSPACE_CREATE("P_" + executionNumber, 2, true);
+  KEY_SET("P_" + executionNumber, "done", 0);
   if (pregel.getServerName !== "localhost") {
     tasks.register({
       command: function(params) {
@@ -482,42 +489,40 @@ var queueDone = function (executionNumber, global, actives, mapping, err) {
   if (err && !getError(executionNumber)) {
     globalCol.update(ERR, {error: err});
   }
-  var countActive = db._executeTransaction({
-    collections: {
-      write: [globalCol.name()]
-    },
-    action: function() {
-      var c = globalCol.document(COUNTER);
+  var keyList = "P_" + executionNumber;
+
+  var countDone = KEY_INCR(keyList, "done");
+  var countActive = KEY_INCR(keyList, "actives", actives);
+
+
+  p.storeWatch("VertexDone", t);
+  /*
+  if (!KEY_EXISTS("wartung", "sleep")) {
+    KEY_SET("wartung", "sleep", require("internal").time());
+  }
+  */
+  if (countDone === WORKERS) {
+    // var time = KEY_GET("wartung", "sleep");
+    // require("internal").print("Sleeptime", require("internal").time() - time);
+    // KEY_REMOVE("wartung", "sleep");
+    KEY_SET(keyList, "actives", 0);
+    finishedStep(executionNumber, global, mapping, countActive);
+  }
+  /*
+   WTF? Nochmal nachdenken was das machen soll
       var d = globalCol.document(DATA).data;
-      var updateGlobals = global.data.length > 0;
-      global.data = global.data.concat(d);
-      var active = c.active + actives;
-      if (c.count + 1 === WORKERS) {
-        globalCol.update(COUNTER, {
-          count: 0,
-          active: 0
-        });
         globalCol.update(DATA, {
           data : []
         });
-        return active;
       }
-      globalCol.update(COUNTER, {
-        count: c.count + 1,
-        active: active
-      });
-      if (updateGlobals) {
+      if (global.data.length > 0) {
         globalCol.update(DATA, {
-          data : global.data
+          data : global.data.concat(d)
         });
       }
-      return false;
     }
   });
-  p.storeWatch("VertexDone", t);
-  if (countActive !== false) {
-    finishedStep(executionNumber, global, mapping, countActive);
-  }
+  */
 };
 
 var executeStep = function(executionNumber, step, options, globals) {
@@ -528,6 +533,7 @@ var executeStep = function(executionNumber, step, options, globals) {
     setup(executionNumber, options, globals);
     return;
   }
+  KEY_SET("P_" + executionNumber, "done", 0);
   var t = p.stopWatch();
   var i = 0;
   var queue;
