@@ -28,22 +28,22 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #ifdef _WIN32
-#include "BasicsC/win-utils.h"
+#include "Basics/win-utils.h"
 #endif
 
 #include "vocbase.h"
 
 #include <regex.h>
 
-#include "BasicsC/conversions.h"
-#include "BasicsC/files.h"
-#include "BasicsC/hashes.h"
-#include "BasicsC/locks.h"
-#include "BasicsC/logging.h"
-#include "BasicsC/memory-map.h"
-#include "BasicsC/random.h"
-#include "BasicsC/tri-strings.h"
-#include "BasicsC/threads.h"
+#include "Basics/conversions.h"
+#include "Basics/files.h"
+#include "Basics/hashes.h"
+#include "Basics/locks.h"
+#include "Basics/logging.h"
+#include "Basics/memory-map.h"
+#include "Basics/random.h"
+#include "Basics/tri-strings.h"
+#include "Basics/threads.h"
 
 #include "Utils/Exception.h"
 #include "Utils/transactions.h"
@@ -57,6 +57,7 @@
 #include "VocBase/server.h"
 #include "VocBase/transaction.h"
 #include "VocBase/vocbase-defaults.h"
+#include "V8Server/v8-user-structures.h"
 #include "Wal/LogfileManager.h"
 
 #include "Ahuacatl/ahuacatl-functions.h"
@@ -416,6 +417,8 @@ static bool DropCollectionCallback (TRI_collection_t* col,
         
       // perform the rename
       res = TRI_RenameFile(collection->_path, newFilename);
+
+      LOG_TRACE("renaming collection directory from '%s' to '%s'", collection->_path, newFilename);
 
       if (res != TRI_ERROR_NO_ERROR) {
         LOG_ERROR("cannot rename dropped collection '%s' from '%s' to '%s': %s",
@@ -1340,6 +1343,7 @@ TRI_vocbase_t* TRI_CreateInitialVocBase (TRI_server_t* server,
   vocbase->_hasCompactor       = false;
   vocbase->_isOwnAppsDirectory = true;
   vocbase->_replicationApplier = nullptr;
+  vocbase->_userStructures     = nullptr;
 
   vocbase->_oldTransactions    = nullptr;
 
@@ -1401,6 +1405,8 @@ TRI_vocbase_t* TRI_CreateInitialVocBase (TRI_server_t* server,
   TRI_InitCondition(&vocbase->_compactorCondition);
   TRI_InitCondition(&vocbase->_cleanupCondition);
 
+  TRI_CreateUserStructuresVocBase(vocbase);
+  
   return vocbase;
 }
 
@@ -1409,6 +1415,10 @@ TRI_vocbase_t* TRI_CreateInitialVocBase (TRI_server_t* server,
 ////////////////////////////////////////////////////////////////////////////////
 
 void TRI_DestroyInitialVocBase (TRI_vocbase_t* vocbase) {
+  if (vocbase->_userStructures != nullptr) {
+    TRI_FreeUserStructuresVocBase(vocbase);
+  }
+
   // free replication
   if (vocbase->_replicationApplier != nullptr) {
     TRI_FreeReplicationApplier(vocbase->_replicationApplier);
@@ -2006,7 +2016,8 @@ int TRI_DropCollectionVocBase (TRI_vocbase_t* vocbase,
 
   TRI_ASSERT(collection != nullptr);
 
-  if (! collection->_canDrop &&  ! triagens::wal::LogfileManager::instance()->isInRecovery()) {
+  if (! collection->_canDrop && 
+      ! triagens::wal::LogfileManager::instance()->isInRecovery()) {
     return TRI_set_errno(TRI_ERROR_FORBIDDEN);
   }
 
@@ -2048,7 +2059,11 @@ int TRI_DropCollectionVocBase (TRI_vocbase_t* vocbase,
     if (! info._deleted) {
       info._deleted = true;
 
-      res = TRI_SaveCollectionInfo(collection->_path, &info, vocbase->_settings.forceSyncProperties);
+      // we don't need to fsync if we are in the recovery phase
+      bool doSync = (vocbase->_settings.forceSyncProperties &&
+                     ! triagens::wal::LogfileManager::instance()->isInRecovery());
+
+      res = TRI_SaveCollectionInfo(collection->_path, &info, doSync);
       TRI_FreeCollectionInfoOptions(&info);
 
       if (res != TRI_ERROR_NO_ERROR) {
@@ -2105,8 +2120,11 @@ int TRI_DropCollectionVocBase (TRI_vocbase_t* vocbase,
 
   else if (collection->_status == TRI_VOC_COL_STATUS_LOADED || collection->_status == TRI_VOC_COL_STATUS_UNLOADING) {
     collection->_collection->_info._deleted = true;
+      
+    bool doSync = (vocbase->_settings.forceSyncProperties &&
+                   ! triagens::wal::LogfileManager::instance()->isInRecovery());
 
-    int res = TRI_UpdateCollectionInfo(vocbase, collection->_collection, nullptr);
+    int res = TRI_UpdateCollectionInfo(vocbase, collection->_collection, nullptr, doSync);
 
     if (res != TRI_ERROR_NO_ERROR) {
       TRI_WRITE_UNLOCK_STATUS_VOCBASE_COL(collection);

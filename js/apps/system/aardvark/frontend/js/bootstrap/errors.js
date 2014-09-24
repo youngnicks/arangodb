@@ -1,10 +1,4 @@
-/*jslint indent: 2,
-         nomen: true,
-         maxlen: 240,
-         sloppy: true,
-         vars: true,
-         white: true,
-         plusplus: true */
+/*jshint maxlen: 240 */
 /*global require */
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -12,6 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 (function () {
+  "use strict";
   var internal = require("internal");
 
   internal.errors = {
@@ -42,6 +37,7 @@
     "ERROR_LEGEND_INCOMPLETE"      : { "code" : 24, "message" : "internal error if a legend could not be created" }, 
     "ERROR_IP_ADDRESS_INVALID"     : { "code" : 25, "message" : "IP address is invalid" }, 
     "ERROR_LEGEND_NOT_IN_WAL_FILE" : { "code" : 26, "message" : "internal error if a legend for a marker does not yet exist in the same WAL file" }, 
+    "ERROR_FILE_EXISTS"            : { "code" : 27, "message" : "file exists" }, 
     "ERROR_HTTP_BAD_PARAMETER"     : { "code" : 400, "message" : "bad parameter" }, 
     "ERROR_HTTP_UNAUTHORIZED"      : { "code" : 401, "message" : "unauthorized" }, 
     "ERROR_HTTP_FORBIDDEN"         : { "code" : 403, "message" : "forbidden" }, 
@@ -160,7 +156,7 @@
     "ERROR_QUERY_TOO_MANY_COLLECTIONS" : { "code" : 1522, "message" : "too many collections" }, 
     "ERROR_QUERY_DOCUMENT_ATTRIBUTE_REDECLARED" : { "code" : 1530, "message" : "document attribute '%s' is assigned multiple times" }, 
     "ERROR_QUERY_FUNCTION_NAME_UNKNOWN" : { "code" : 1540, "message" : "usage of unknown function '%s()'" }, 
-    "ERROR_QUERY_FUNCTION_ARGUMENT_NUMBER_MISMATCH" : { "code" : 1541, "message" : "invalid number of arguments for function '%s()'" }, 
+    "ERROR_QUERY_FUNCTION_ARGUMENT_NUMBER_MISMATCH" : { "code" : 1541, "message" : "invalid number of arguments for function '%s()', expected number of arguments: minimum: %d, maximum: %d" }, 
     "ERROR_QUERY_FUNCTION_ARGUMENT_TYPE_MISMATCH" : { "code" : 1542, "message" : "invalid argument type used in call to function '%s()'" }, 
     "ERROR_QUERY_INVALID_REGEX"    : { "code" : 1543, "message" : "invalid regex argument value used in call to function '%s()'" }, 
     "ERROR_QUERY_BIND_PARAMETERS_INVALID" : { "code" : 1550, "message" : "invalid structure of bind parameters" }, 
@@ -179,6 +175,7 @@
     "ERROR_QUERY_MODIFY_IN_SUBQUERY" : { "code" : 1574, "message" : "modify operation in subquery" }, 
     "ERROR_QUERY_COMPILE_TIME_OPTIONS" : { "code" : 1575, "message" : "query options must be readable at query compile time" }, 
     "ERROR_QUERY_EXCEPTION_OPTIONS" : { "code" : 1576, "message" : "query options expected" }, 
+    "ERROR_QUERY_BAD_JSON_PLAN"    : { "code" : 1577, "message" : "JSON describing execution plan was bad" }, 
     "ERROR_QUERY_FUNCTION_INVALID_NAME" : { "code" : 1580, "message" : "invalid user function name" }, 
     "ERROR_QUERY_FUNCTION_INVALID_CODE" : { "code" : 1581, "message" : "invalid user function code" }, 
     "ERROR_QUERY_FUNCTION_NOT_FOUND" : { "code" : 1582, "message" : "user function '%s()' not found" }, 
