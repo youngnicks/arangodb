@@ -145,6 +145,7 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     +     "vertices[key]._save();"
     +   "});"
 + "p.aggregate();"
+    +   "worker.cleanUpDone(executionNumber);"
     + "  return;"
     + "}"
     + "var step = params.step;"
@@ -437,6 +438,38 @@ var finishedStep = function (executionNumber, global, mapping, active) {
   }
 };
 
+var cleanUpDone = function (executionNumber) {
+  var globalCol = pregel.getGlobalCollection(executionNumber);
+  var done = db._executeTransaction({
+    collections: {
+      write: [globalCol.name()]
+    },
+    action: function() {
+      var c = globalCol.document(COUNTER);
+      if (c.count + 1 === WORKERS) {
+        globalCol.update(COUNTER, {
+          count: 0,
+          active: 0
+        });
+        return true;
+      }
+      globalCol.update(COUNTER, {
+        count: c.count + 1,
+        active: 0
+      });
+      return false;
+    }
+  });
+  if (done !== false) {
+    db._drop(pregel.genGlobalCollectionName(executionNumber));
+    if (ArangoServerState.role() === "PRIMARY") {
+      //TODO
+    } else {
+      pregel.Conductor.finishedCleanUp(executionNumber, pregel.getServerName());
+    }
+  }
+};
+
 var queueDone = function (executionNumber, global, actives, mapping, err) {
   var t = p.stopWatch();
   if (err && err instanceof ArangoError === false) {
@@ -509,7 +542,6 @@ var cleanUp = function(executionNumber) {
   // queues.delete("P_" + executionNumber); To be done for new queue
   db._drop(pregel.genWorkCollectionName(executionNumber));
   db._drop(pregel.genMsgCollectionName(executionNumber));
-  db._drop(pregel.genGlobalCollectionName(executionNumber));
   var i, queue;
   for (i = 0; i < WORKERS; i++) {
     queue = getQueueName(executionNumber, i);
@@ -527,3 +559,4 @@ exports.executeStep = executeStep;
 exports.cleanUp = cleanUp;
 exports.finishedStep = finishedStep;
 exports.queueDone = queueDone;
+exports.cleanUpDone = cleanUpDone;

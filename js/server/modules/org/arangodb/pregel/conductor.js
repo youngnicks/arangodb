@@ -202,8 +202,6 @@ var cleanUp = function (executionNumber, err) {
     httpOptions.type = "POST";
     require("org/arangodb/pregel").Worker.cleanUp(executionNumber);
   }
-  storeTime(executionNumber, "CleanUp");
-  clearTimer(executionNumber);
 };
 
 var timeOutExecution = function (executionNumber) {
@@ -495,6 +493,102 @@ var getInfo = function(executionNumber) {
   return result;
 };
 
+var finishedCleanupTransactionFunc = function (params) {
+  var transExecutionNumber = params.executionNumber;
+  var collection = require("internal").db._pregel;
+  var transRunInfo = collection.document(transExecutionNumber);
+  var transServerName = params.serverName;
+  var transAwaiting = transRunInfo.waitForAnswer;
+  transAwaiting[transServerName] = true;
+  collection.update(transExecutionNumber, transRunInfo);
+  var transEveryServerResponded = true;
+  Object.keys(transAwaiting).forEach(function(s) {
+    if (transAwaiting[s] === false) {
+      transEveryServerResponded = false;
+    }
+  });
+  return transEveryServerResponded;
+};
+
+
+var finishedTransActionFunc = function (params) {
+  var transInfo = params.info;
+  var transExecutionNumber = params.executionNumber;
+  var collection = require("internal").db._pregel;
+  var transRunInfo = collection.document(transExecutionNumber);
+  var transStep = transRunInfo.step + 1;
+  // Shaped JSON avoidance
+  transRunInfo.stepContent = _.clone(transRunInfo.stepContent);
+  var transStepCont = transRunInfo.stepContent[transStep];
+  transStepCont.messages += transInfo.messages;
+  transStepCont.active += transInfo.active;
+  transStepCont.data = transStepCont.data.concat(transInfo.data);
+  transRunInfo.stepContent[transStep] = transStepCont;
+  transRunInfo.error = transInfo.error;
+  var transServerName = params.serverName;
+  var transAwaiting = transRunInfo.waitForAnswer;
+  transAwaiting[transServerName] = true;
+  collection.update(transExecutionNumber, transRunInfo);
+  var transEveryServerResponded = true;
+  Object.keys(transAwaiting).forEach(function(s) {
+    if (transAwaiting[s] === false) {
+      transEveryServerResponded = false;
+    }
+  });
+  return {
+    respond: transEveryServerResponded,
+    error: transRunInfo.error,
+    active: transStepCont.active
+  };
+};
+
+var finishedCleanUp = function(executionNumber, serverName) {
+  executionNumber = String(executionNumber);
+
+  var transactionBody = {
+    collections: {
+      write: [
+        "_pregel"
+      ]
+    },
+    action: finishedCleanupTransactionFunc, 
+    params: {
+      serverName: serverName,
+      executionNumber: executionNumber
+    }
+  };
+
+  var check;
+
+  if (ArangoServerState.isCoordinator()) {
+    var coordOptions = {
+      coordTransactionID: ArangoClusterInfo.uniqid()
+    };
+    var objInfo = ArangoClusterInfo.getCollectionInfo("_system", "_pregel");
+    var endpoint = objInfo.shards[Object.keys(objInfo.shards)[0]];
+    transactionBody.collections = {
+      write: [
+        Object.keys(objInfo.shards)[0]
+      ]
+    };
+    transactionBody.params.dbName = Object.keys(objInfo.shards)[0];
+    transactionBody.action = transactionBody.action.toString();
+    ArangoClusterComm.asyncRequest("POST","server:" + endpoint, db._name(),
+      "/_api/transaction/",JSON.stringify(transactionBody), {}, coordOptions);
+    check = JSON.parse(ArangoClusterComm.wait(coordOptions).body).result;
+  } else {
+    check = db._executeTransaction(transactionBody);
+  }
+  if (check) {
+    storeTime(executionNumber, "CleanUp");
+    clearTimer(executionNumber);
+    if (ArangoServerState.isCoordinator()) {
+      tasks.unregister(genTaskId(executionNumber));
+    }
+  }
+};
+
+
 var finishedStep = function(executionNumber, serverName, info) {
   var t = p.stopWatch();
   executionNumber = String(executionNumber);
@@ -526,36 +620,7 @@ var finishedStep = function(executionNumber, serverName, info) {
         "_pregel"
       ]
     },
-    action: function (params) {
-      var transInfo = params.info;
-      var transExecutionNumber = params.executionNumber;
-      var collection = require("internal").db._pregel;
-      var transRunInfo = collection.document(transExecutionNumber);
-      var transStep = transRunInfo.step + 1;
-      // Shaped JSON avoidance
-      transRunInfo.stepContent = _.clone(transRunInfo.stepContent);
-      var transStepCont = transRunInfo.stepContent[transStep];
-      transStepCont.messages += transInfo.messages;
-      transStepCont.active += transInfo.active;
-      transStepCont.data = transStepCont.data.concat(transInfo.data);
-      transRunInfo.stepContent[transStep] = transStepCont;
-      transRunInfo.error = transInfo.error;
-      var transServerName = params.serverName;
-      var transAwaiting = transRunInfo.waitForAnswer;
-      transAwaiting[transServerName] = true;
-      collection.update(transExecutionNumber, transRunInfo);
-      var transEveryServerResponded = true;
-      Object.keys(transAwaiting).forEach(function(s) {
-        if (transAwaiting[s] === false) {
-          transEveryServerResponded = false;
-        }
-      });
-      return {
-        respond: transEveryServerResponded,
-        error: transRunInfo.error,
-        active: transStepCont.active
-      };
-    },
+    action: finishedTransActionFunc,
     params: {
       serverName: serverName,
       executionNumber: executionNumber,
@@ -619,4 +684,5 @@ exports.dropResult = dropResult;
 
 // Internal functions
 exports.finishedStep = finishedStep;
+exports.finishedCleanUp = finishedCleanUp;
 exports.timeOutExecution = timeOutExecution;
