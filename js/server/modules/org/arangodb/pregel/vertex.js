@@ -30,7 +30,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 var p = require("org/arangodb/profiler");
 
-var internal = require("internal");
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
@@ -116,10 +115,12 @@ Vertex.prototype._save = function (dontSaveEdges) {
   this.__resultShard.save({
     _key: this._doc._key,
     _deleted : this.__deleted,
-    result: this._getResult()
+    result: this.__result
+  }, 
+  { 
+    silent: true 
   });
   p.storeWatch("SaveVertex", t);
 };
-
 
 exports.Vertex = Vertex;
