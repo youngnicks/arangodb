@@ -119,7 +119,7 @@ var Queue = function (executionNumber, vertices, aggregate) {
     if (k === "__actives") {
       return;
     }
-    var id = v._id;
+    var id = v._doc._id;
     self.__queues.push(id);
     self[id] = new VertexMessageQueue(self, v._locationInfo);
   });
@@ -145,32 +145,17 @@ Queue.prototype._fillQueues = function () {
     step: this.__step
   });
   p.storeWatch("fillQueueQuery", t1);
-  var msg, vQueue;
+  var msg, vQueue, doc, key;
   this.__step++;
-  var fillQueue = function (content, key) {
-  var t1 = p.stopWatch();
-    vQueue = self[key];
-    if (vQueue) {
-      vQueue._fill(content);
-      if (self.__vertices[key]) {
-        self.__vertices[key]._activate();
-      } else {
-        self.__queues.splice(self.__queues.indexOf(key), 1);
-        delete self[key];
-      }
-    }
-  p.storeWatch("fillQueueInternal", t1);
-  };
   var t2 = p.stopWatch();
   while (cursor.hasNext()) {
     msg = cursor.next();
-    // _.each(JSON.parse(msg.messages), fillQueue);
-    var doc = JSON.parse(msg.messages);
-    for (var key in doc) {
+    doc = JSON.parse(msg.messages);
+    for (key in doc) {
       if(doc.hasOwnProperty(key)) {
         if (this.hasOwnProperty(key)) {
-          var vQueue = this[key];
-          vQueue._fill(content);
+          vQueue = this[key];
+          vQueue._fill(doc[key]);
           if (this.__vertices.hasOwnProperty(key)) {
             this.__vertices[key]._activate();
           } else {
