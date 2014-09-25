@@ -62,29 +62,33 @@
   * [Graph Operations](Aql/GraphOperations.md)
   * [Advanced Features](Aql/Advanced.md)
   * [Extending AQL](AqlExtending/README.md)
-    * [Conventions](AqlExtending/Conventions.md)
-    * [Registering Functions](AqlExtending/Functions.md)
+  * [Conventions](AqlExtending/Conventions.md)
+  * [Registering Functions](AqlExtending/Functions.md)
   * [AQL Examples](AqlExamples/README.md)
-    * [Collection based queries](AqlExamples/CollectionQueries.md)
-    * [Data-modification queries](AqlExamples/DataModificationQueries.md)
-    * [Projections and filters](AqlExamples/ProjectionsAndFilters.md)
-    * [Joins](AqlExamples/Join.md)
-    * [Grouping](AqlExamples/Grouping.md)
+  * [Collection based queries](AqlExamples/CollectionQueries.md)
+  * [Data-modification queries](AqlExamples/DataModificationQueries.md)
+  * [Projections and filters](AqlExamples/ProjectionsAndFilters.md)
+  * [Joins](AqlExamples/Join.md)
+  * [Grouping](AqlExamples/Grouping.md)
 <!-- 12 -->
 * [General Graphs](General-Graphs/README.md)
   * [Graph Management](General-Graphs/Management.md)
   * [Graph Functions](General-Graphs/Functions.md)
   * [Fluent Query Interface](General-Graphs/FluentAQLInterface.md)
 <!-- 13 -->
+* [Large-scale graph computing](PregelAlgorithm/README.md)
+  * [Pregel module](PregelAlgorithm/Module.md)
+  * [Pregel Examples](PregelAlgorithm/Examples.md)
+<!-- 14 -->
 * [Blueprint Graphs](Blueprint-Graphs/README.md)
   * [Graph Constructor](Blueprint-Graphs/GraphConstructor.md)
   * [Vertex Methods](Blueprint-Graphs/VertexMethods.md)
   * [Edge Methods](Blueprint-Graphs/EdgeMethods.md)
-<!-- 14 -->
+<!-- 15 -->
 * [Traversals](Traversals/README.md)
   * [Using Traversal Objects](Traversals/UsingTraversalObjects.md)
   * [Example Data](Traversals/ExampleData.md)
-<!-- 15 -->
+<!-- 16 -->
 * [Foxx](Foxx/README.md)
   * [Handling Requests](Foxx/HandlingRequest.md)
   * [Manifest](Foxx/FoxxManifest.md)
@@ -99,35 +103,35 @@
   * [Foxx Sessions](Foxx/FoxxSessions.md)
   * [Optional Functionality](Foxx/FoxxOptional.md)
   * [Bundled Applications](FoxxBundledApps/README.md)
-    * [Session Storage](FoxxBundledApps/Sessions.md)
-    * [User Storage](FoxxBundledApps/Users.md)
-    * [Simple Authentication](FoxxBundledApps/SimpleAuth.md)
-<!-- 16 -->
+  * [Session Storage](FoxxBundledApps/Sessions.md)
+  * [User Storage](FoxxBundledApps/Users.md)
+  * [Simple Authentication](FoxxBundledApps/SimpleAuth.md)
+<!-- 17 -->
 * [Foxx Manager](FoxxManager/README.md)
   * [First Steps](FoxxManager/FirstSteps.md)
   * [Behind the scenes](FoxxManager/BehindTheScenes.md)
   * [Multiple Databases](FoxxManager/MultipleDatabases.md)
   * [Manager Commands](FoxxManager/ManagerCommands.md)
   * [Frequently Used Options](FoxxManager/FrequentlyUsedOptions.md)
-<!-- 17 -->
+<!-- 18 -->
 * [ArangoDB's Actions](ArangoActions/README.md)
   * [Delivering HTML Pages](ArangoActions/HtmlExample.md)
   * [Json Objects](ArangoActions/JsonExample.md)
   * [Modifying](ArangoActions/Modifying.md)
-<!-- 18 -->
+<!-- 19 -->
 * [Replication](Replication/README.md)
   * [Components](Replication/Components.md)
   * [Example Setup](Replication/ExampleSetup.md)
   * [Replication Limitations](Replication/Limitations.md)
   * [Replication Overhead](Replication/Overhead.md)
   * [Replication Events](Replication/Events.md)
-<!-- 19 -->
+<!-- 20 -->
 * [Sharding](Sharding/README.md)
   * [How to try it out](Sharding/HowTo.md)
   * [Implementation](Sharding/StatusOfImplementation.md)
   * [Authentication](Sharding/Authentication.md)
   * [Firewall setup](Sharding/FirewallSetup.md)
-<!-- 20 -->
+<!-- 21 -->
 * [Configure ArangoDB](ConfigureArango/README.md)
   * [Arangod options](ConfigureArango/Arangod.md)
   * [Write-ahead log options](ConfigureArango/Wal.md)
@@ -138,13 +142,13 @@
   * [Random numbers](ConfigureArango/RandomNumbers.md)
   * [Authentication](ConfigureArango/Authentication.md)
   * [Emergency Console](ConfigureArango/EmergencyConsole.md)
-<!-- 21 -->
-* [Arangoimp](Arangoimp/README.md)
 <!-- 22 -->
-* [Arangodump](Arangodump/README.md)
+* [Arangoimp](Arangoimp/README.md)
 <!-- 23 -->
-* [Arangorestore](Arangorestore/README.md)
+* [Arangodump](Arangodump/README.md)
 <!-- 24 -->
+* [Arangorestore](Arangorestore/README.md)
+<!-- 25 -->
 * [HTTP API](HttpApi/README.md)
   * [Databases](HttpDatabase/README.md)
     * [To-Endpoint](HttpDatabase/DatabaseEndpoint.md)
@@ -178,6 +182,7 @@
     * [Management](HttpGharial/Management.md)
     * [Vertices](HttpGharial/Vertices.md)
     * [Edges](HttpGharial/Edges.md)
+  * [Pregel Algorithm Execution](HttpPregel/README.md)
   * [Graphs](HttpGraphs/README.md)
     * [Vertex](HttpGraphs/Vertex.md)
     * [Edges](HttpGraphs/Edge.md)
@@ -198,7 +203,7 @@
   * [Sharding](HttpShardingInterface/README.md)
   * [Miscellaneous functions](HttpMiscellaneousFunctions/README.md)
   * [General Handling](GeneralHttp/README.md)
-<!-- 25 -->
+<!-- 26 -->
 * [Javascript Modules](ModuleJavaScript/README.md)
   * ["console"](ModuleConsole/README.md)
   * ["fs"](ModuleFs/README.md)
@@ -211,24 +216,24 @@
   * [Write-ahead log](ModuleWal/README.md)
   * [Task Management](ModuleTasks/README.md)
   * [Using jsUnity](UsingJsUnity/README.md)
-<!-- 26 -->
-* [Administrating ArangoDB](AdministratingArango/README.md)
 <!-- 27 -->
+* [Administrating ArangoDB](AdministratingArango/README.md)
+<!-- 28 -->
 * [Handling Indexes](IndexHandling/README.md)
   * [Cap Constraint](IndexHandling/Cap.md)
   * [Geo Indexes](IndexHandling/Geo.md)
   * [Fulltext Indexes](IndexHandling/Fulltext.md)
   * [Hash Indexes](IndexHandling/Hash.md)
   * [Skip-Lists](IndexHandling/Skiplist.md)
-<!-- 28 -->
-* [Datafile Debugger](DatafileDebugger/README.md)
 <!-- 29 -->
+* [Datafile Debugger](DatafileDebugger/README.md)
+<!-- 30 -->
 * [Naming Conventions](NamingConventions/README.md)
   * [Database Names](NamingConventions/DatabaseNames.md)
   * [Collection Names](NamingConventions/CollectionNames.md)
   * [Document Keys](NamingConventions/DocumentKeys.md)
   * [Attribute Names](NamingConventions/AttributeNames.md)
-<!-- 30 -->
-* [Error codes and meanings](ErrorCodes/README.md)
 <!-- 31 -->
+* [Error codes and meanings](ErrorCodes/README.md)
+<!-- 32 -->
 * [Glossary](Glossary/README.md)

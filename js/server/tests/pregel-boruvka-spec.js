@@ -319,8 +319,8 @@ describe("boruvka", function () {
      };
 
     it("should identify all distinct graphs", function () {
-      var graph = gN;
-      //var graph = "ff";
+      //var graph = gN;
+      var graph = "ff";
       var id = conductor.startExecution(graph, {
           base : boruvka.toString(),
           final : finalAlgorithm.toString()

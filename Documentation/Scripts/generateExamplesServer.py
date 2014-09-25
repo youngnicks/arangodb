@@ -125,7 +125,7 @@ def appendInput (partialCmd, cmd, addNL):
         nl = "\\n"
 
     if partialCmd == "":
-        return "arangosh> " + cmd + nl
+        return "arangod> " + cmd + nl
     else:
         return partialCmd + "........> " + cmd + nl
 
@@ -294,6 +294,7 @@ for filename in filenames:
 gr1 = re.compile(r'^[ \n]*(while|if|var|throw|for) ')
 
 def generateArangoshOutput():
+    print "function main () {"
     print "var internal = require('internal');"
     print "var db = internal.db;"
     print "var fs = require('fs');"
@@ -343,6 +344,7 @@ def generateArangoshOutput():
 
     for key in ArangoshOutput:
         print "fs.write('%s/%s.generated', ArangoshOutput['%s']);" % (OutputDir, key, key)
+    print "}"
 
 ################################################################################
 ### @brief generate arangosh run

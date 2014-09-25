@@ -417,6 +417,49 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
 };
 
 
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_start_execution
+/// @brief starts a pregel run on the given graph.
+///
+/// `pregel.startExecution(graphName, algorithms,  options)`
+///
+/// Starts the execution of the algorithms defined in *algorithms' on the graph defined
+/// by *graphName*.
+///
+/// @PARAMS
+///
+/// @PARAM{graphName, string, required}
+/// @PARAM{algorithms, object, required}
+/// An object containing the required and optional parts of the pregel algorithm as strings.
+/// See [here](#the_algorithms_parameter).
+///   * *base* (required): The pregel algorithm. This has to be a function with the following signature:
+///     function (vertex, message, global) {}.
+///   * *superstep* (optional): The superstep algorithm, this has to be a function with the following
+///     signature: function (globals) {}.
+///   * *aggregator* (optional): The superstep algorithm, this has to be a function with the following
+///     signature: function (message, oldMessage) {}.
+///   * *final* (optional): The final algorithm, this has to be a function with the following
+///     signature: function (vertex, message, global) {}.
+/// @PARAM{options, object, optional}
+/// An object defining user defined values that are available within the pregel run.
+///
+///
+/// @EXAMPLES
+///
+/// To request unfiltered edges:
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelStartExecution}
+///   var examples = require("org/arangodb/graph-examples/example-graph.js");
+///   var graph = examples.loadGraph("social");
+///   var pregel = require("org/arangodb/pregel");
+///   var baseAlgorithm = function (vertex, message, global) {vertex._deactivate();};
+///   var executionNumber = pregel.Conductor.startExecution("social", {base : baseAlgorithm.toString()});
+///   require("internal").wait(5);
+///   require("internal").print(executionNumber);
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 var startExecution = function(graphName, algorithms,  options) {
   var t = p.stopWatch();
   var graph = graphModule._graph(graphName), infoObject = {},
@@ -481,7 +524,6 @@ var getResult = function (executionNumber) {
   }
   return result;
 };
-
 
 var getInfo = function(executionNumber) {
   var info = getExecutionInfo(executionNumber);

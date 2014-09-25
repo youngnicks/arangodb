@@ -1,0 +1,59 @@
+!CHAPTER The Pregel Module
+
+This chapter describes the *pregel* module.
+It allows you to define your own pregel algorithms and execute them on a graph.
+To use the pregel module one needs to create a graph in arango to execute your algorithm on.
+
+!SECTION Pregel Objects
+
+When a pregel execution starts a result graph is created as a copy from the original graph.
+The name of the graph (and its collections) is generated to be *P_executionNumber_RESULT_originalName*.
+The pregel algorithm is only executed on the result graph, the original graph remains unchanged. 
+Whithin your pregel algorithm the framwork calls your algorithm with the parameters *vertex*, *message* and *global*.
+The next chapter will explain these Objects.
+
+!SUBSECTION  pregel.Vertex
+
+TBD
+
+!SUBSECTION  pregel.Edge
+
+TBD
+
+!SUBSECTION  pregel.VertexMessageQueue
+
+The pregel VertexMessageQueue object is provided to the users algorithm by the framework and can not be instantiated.
+It is basically a curser on a vertex message queue and hence has the following functions:
+
+@startDocuBlock JSF_pregel_vertex_message_count
+@startDocuBlock JSF_pregel_vertex_message_hasNext
+@startDocuBlock JSF_pregel_vertex_message_next
+@startDocuBlock JSF_pregel_vertex_message_fill
+@startDocuBlock JSF_pregel_vertex_message_clear
+@startDocuBlock JSF_pregel_vertex_message_sendTo
+
+
+!SECTION The API
+
+!SUBSECTION  Define your pregel algorithm.
+
+!SUBSECTION  startExecution
+
+@startDocuBlock JSF_pregel_start_execution
+
+!SECTION Get state of current Pregel run.
+
+!SUBSECTION  getResult
+
+!SUBSECTION  getInfo
+
+!SUBSECTION  dropResult
+
+
+
+
+
+
+
+
+

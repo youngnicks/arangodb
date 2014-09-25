@@ -338,11 +338,9 @@ static v8::Handle<v8::Value> JS_CreateNamedQueue (v8::Arguments const& argv) {
   if (GlobalDispatcher == nullptr) {
     TRI_V8_EXCEPTION_MESSAGE(scope, TRI_ERROR_INTERNAL, "no dispatcher found");
   }
-
   if (argv.Length() != 1 || ! argv[0]->IsObject()) {
     TRI_V8_EXCEPTION_USAGE(scope, "createNamedQueue(<options>)");
   }
-
   v8::Handle<v8::Object> obj = argv[0].As<v8::Object>();
 
   // name of the queue
@@ -356,6 +354,7 @@ static v8::Handle<v8::Value> JS_CreateNamedQueue (v8::Arguments const& argv) {
   if (! obj->HasOwnProperty(TRI_V8_SYMBOL("threads"))) {
     TRI_V8_EXCEPTION_USAGE(scope, "<options>.threads is missing");
   }
+std::cout << "heinz4 erzeugt " << name << "\n" ;
 
   int nrThreads = static_cast<int>(TRI_ObjectToInt64(obj->Get(TRI_V8_SYMBOL("threads"))));
 
@@ -395,11 +394,9 @@ static v8::Handle<v8::Value> JS_CreateNamedQueue (v8::Arguments const& argv) {
     (void*) TRI_DuplicateString(name.c_str()),
     nrThreads,
     size);
-
   if (result == TRI_ERROR_QUEUE_ALREADY_EXISTS) {
     TRI_V8_EXCEPTION_MESSAGE(scope, result, "named queue already exists");
   }
-
   if (result != TRI_ERROR_NO_ERROR) {
     TRI_V8_EXCEPTION_MESSAGE(scope, TRI_ERROR_INTERNAL, "cannot create queue");
   }

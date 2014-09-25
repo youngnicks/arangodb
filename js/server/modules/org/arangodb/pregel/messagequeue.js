@@ -44,14 +44,81 @@ var VertexMessageQueue = function(parent, vertexInfo) {
   this._pos = 0;
 };
 
+
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_vertex_message_count
+/// @brief counts the messages in the vertex' message queue
+///
+/// `pregel.VertexMessageQueue.count()`
+///
+/// Counts the messages in the vertex message queue.
+///
+/// @EXAMPLES
+///
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueueCount}
+/// ~  var pregel = require("org/arangodb/pregel");
+///   var queue = new pregel.MessageQueue(1, [{_locationInfo : {_id : 1}}, {_locationInfo : {_id : 2}}]);
+///   var vertexMessageQueue = queue[1];
+///   require("internal").print(vertexMessageQueue.count());
+///   vertexMessageQueue._fill({plain : "This is a message"});
+///   require("internal").print(vertexMessageQueue.count());
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype.count = function () {
   return this._inc.length;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_vertex_message_hasNext
+/// @brief returns true if the message queue contains more messages.
+///
+/// `pregel.VertexMessageQueue.hasNext()`
+///
+/// Checks for more elements in the message queue.
+///
+/// @EXAMPLES
+///
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueuehasNext}
+/// ~  var pregel = require("org/arangodb/pregel");
+///   var queue = new pregel.MessageQueue(1, [{_locationInfo : {_id : 1}}, {_locationInfo : {_id : 2}}]);
+///   var vertexMessageQueue = queue[1];
+///   require("internal").print(vertexMessageQueue.hasNext());
+///   vertexMessageQueue._fill({plain : "This is a message"});
+///   require("internal").print(vertexMessageQueue.hasNext());
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype.hasNext = function () {
   return this._pos < this.count();
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_vertex_message_next
+/// @brief Returns the next message in the vertex' message queue
+///
+/// `pregel.VertexMessageQueue.next()`
+///
+/// Returns the next message in the vertex message queue.
+///
+/// @EXAMPLES
+///
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueueNext}
+/// ~  var pregel = require("org/arangodb/pregel");
+///   var queue = new pregel.MessageQueue(1, [{_locationInfo : {_id : 1}}, {_locationInfo : {_id : 2}}]);
+///   var vertexMessageQueue = queue[1];
+///   require("internal").print(vertexMessageQueue.next());
+///   vertexMessageQueue._fill({plain : "This is a message"});
+///   require("internal").print(vertexMessageQueue.next());
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype.next = function () {
   if (!this.hasNext()) {
     return null;
@@ -61,6 +128,28 @@ VertexMessageQueue.prototype.next = function () {
   return next;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_vertex_message_fill
+/// @brief Addes messages to the vertex' message queue
+///
+/// `pregel.VertexMessageQueue._fill()`
+///
+/// Counts Addes messages to the vertex' message queue.
+///
+/// @EXAMPLES
+///
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueueFill}
+/// ~  var pregel = require("org/arangodb/pregel");
+///   var queue = new pregel.MessageQueue(1, [{_locationInfo : {_id : 1}}, {_locationInfo : {_id : 2}}]);
+///   var vertexMessageQueue = queue[1];
+///   require("internal").print(vertexMessageQueue.next());
+///   vertexMessageQueue._fill({plain : "This is a message"});
+///   require("internal").print(vertexMessageQueue.next());
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype._fill = function (msg) {
   if (msg.a) {
     this._inc.push({data: msg.a});
@@ -109,7 +198,6 @@ var Queue = function (executionNumber, vertices, aggregate) {
   this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
   this.__workCollection = pregel.getWorkCollection(executionNumber);
-  this.__workCollectionName = this.__workCollection.name();
   this.__step = 0;
   if (aggregate) {
     this.__aggregate = aggregate;
@@ -141,7 +229,7 @@ Queue.prototype._fillQueues = function () {
   p.storeWatch("fillQueueSecEach", t4);
   var t1 = p.stopWatch();
   var cursor = db._query(query, {
-    "@collection": this.__workCollectionName,
+    "@collection": this.__workCollection.name(),
     step: this.__step
   });
   p.storeWatch("fillQueueQuery", t1);

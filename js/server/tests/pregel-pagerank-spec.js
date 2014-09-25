@@ -91,6 +91,8 @@ describe("Pregel PageRank", function () {
       };
 
     beforeEach(function () {
+      //db.fE.load();
+      //db.fV.load();
       gN = "UnitTestPregelGraph";
       v = "UnitTestVertices";
       e = "UnitTestEdges";
@@ -159,7 +161,7 @@ describe("Pregel PageRank", function () {
     it("should compute the pageRank", function () {
       // gN = "lager";
       // gN = "max";
-      // gN = "caesar";
+      gN = "ff";
       var gr = require("org/arangodb/general-graph")._graph(gN);
       require("internal").print("Start", String(require("internal").time() % 1000).replace(".", ","));
       var vC = gr._vertices().count();
