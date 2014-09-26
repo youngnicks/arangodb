@@ -46,6 +46,8 @@
 ///   - "http_server"
 ///   - "ssl_server"
 ///   - "shell_client"
+///   - "single_client" : run one test suite isolated via the arangosh
+///   - "single_server" : run one test suite on the server
 ///   - "dump"
 ///   - "arangob"
 ///   - "import"
@@ -74,8 +76,6 @@
 ///   - `cluster`: if set to true the tests are run with the coordinator
 ///     of a small local cluster
 ///   - `test`: path to single test to execute for "single" test target
-///   - `skipServer`: flag for "single" test target to skip the server test
-///   - `skipClient`: flag for "single" test target to skip the client test
 ///   - `cleanup`: if set to true (the default), the cluster data files
 ///     and logs are removed after termination of the test.
 ///   - `jasmineReportFormat`: this option is passed on to the `format`
@@ -111,8 +111,6 @@ var optionsDefaults = { "cluster": false,
                         "username": "root",
                         "password": "",
                         "test": undefined,
-                        "skipServer": false,
-                        "skipClient": false,
                         "cleanup": true,
                         "jsonReply": false};
 
@@ -387,11 +385,10 @@ function runThere (options, instanceInfo, file) {
     if (!r.error && r.code === 200) {
       r = JSON.parse(r.body);
     }
-/*
-    else {
-      print("Error on the remote arangod:\n" + r.body);
+    if (file.indexOf("-spec") !== -1) {
+      // remoting a jasmine suite... 
+      r = {status: r, message: ''};
     }
-*/
   }
   catch (err) {
     r = err;
@@ -403,10 +400,15 @@ function executeAndWait (cmd, args) {
   var pid = executeExternal(cmd, args);
   var res = statusExternal(pid, true);
   if (res.status === "TERMINATED") {
-    return { status: (res.exit === 0), message: ""};
+    if (res.exit === 0) {
+      return { status: true, message: "" };
+    }
+    else {
+      return { status: false, message: "exit code was " + res.exit};
+    }
   }
   else {
-    return { status: (res === 0), message: res.exit};
+    return { status: false, message: "irregular termination: " + res.status};
   }
 }
 
@@ -584,32 +586,47 @@ testFuncs.boost = function (options) {
   return results;
 };
 
-testFuncs.single = function (options) {
+testFuncs.single_server = function (options) {
   var instanceInfo = startInstance("tcp", options, [], "single");
   var result = { };
   if (options.test !== undefined) {
     var te = options.test;
-    result.test = te;
-    if (!options.skipServer) {
-      print("\nTrying",te,"on server...");
-      result.server = runThere(options, instanceInfo, makePath(te));
-    }
-    if (!options.skipClient) {
-      var topDir = findTopDir();
-      var args = makeTestingArgsClient(options);
-      args.push("--server.endpoint");
-      args.push(instanceInfo.endpoint);
-      args.push("--javascript.unit-tests");
-      args.push(fs.join(topDir,te));
-      print("\nTrying",te,"on client...");
-      var arangosh = fs.join("bin","arangosh");
-      result.client = executeAndWait(arangosh, args);
-    }
+    print("\nTrying",te,"on server...");
+    result = {};
+    result[te] = runThere(options, instanceInfo, makePath(te));
+    print("Shutting down...");
+    shutdownInstance(instanceInfo,options);
+    print("done.");
+    return result
   }
-  print("Shutting down...");
-  shutdownInstance(instanceInfo,options);
-  print("done.");
-  return result;
+  else {
+    return { status: false, message: "No test specified!"};
+  }
+};
+
+testFuncs.single_client = function (options) {
+  var instanceInfo = startInstance("tcp", options, [], "single");
+  var result = { };
+  if (options.test !== undefined) {
+    var te = options.test;
+    var topDir = findTopDir();
+    var args = makeTestingArgsClient(options);
+    args.push("--server.endpoint");
+    args.push(instanceInfo.endpoint);
+    args.push("--javascript.unit-tests");
+    args.push(fs.join(topDir,te));
+    print("\nTrying",te,"on client...");
+    var arangosh = fs.join("bin","arangosh");
+    result = {};
+    result[te] = executeAndWait(arangosh, args);
+    print("Shutting down...");
+    shutdownInstance(instanceInfo,options);
+    print("done.");
+    return result
+  }
+  else {
+    return { status: false, message: "No test specified!"};
+  }
 };
 
 function rubyTests (options, ssl) {
@@ -657,12 +674,17 @@ function rubyTests (options, ssl) {
         var r = statusExternal(pid, true);
 
         if (r.status === "TERMINATED") {
-          result[n] =  { status: (r.exit === 0), message: r.exit};
+          if (r.exit === 0) {
+            result[n] =  { status: true, message: "" };
+          }
+          else {
+            result[n] = { status: false, message: "exit code was " + r.exit};
+          }
         }
         else {
-          result[n] = { status: (r === 0), message: r.exit};
+          result[n] = { status: false, message: "irregular termination: " + r.status};
         }
-        if (r.exit !== 0 && !options.force) {
+        if (r.status === false && !options.force) {
           break;
         }
       }
@@ -975,6 +997,7 @@ testFuncs.authentication_parameters = function (options) {
   var i;
   var expectAuthFullRC = [401, 401, 401, 401, 401, 401, 401];
   var all_ok = true;
+  print("Starting Full test");
   results.auth_full = {};
   for (i = 0; i < urlsTodo.length; i++) {
     r = download(instanceInfo.url+urlsTodo[i],"",{followRedirects:false,returnBodyOnError:true});
@@ -991,9 +1014,9 @@ testFuncs.authentication_parameters = function (options) {
   }
   results.auth_full.status = all_ok;
 
-  print("Shutting down...");
+  print("Shutting down Full test...");
   shutdownInstance(instanceInfo,options);
-  print("done.");
+  print("done with Full test.");
   // Only system authentication:
   instanceInfo = startInstance("tcp", options,
                    ["--server.disable-authentication", "false",
@@ -1001,6 +1024,7 @@ testFuncs.authentication_parameters = function (options) {
                    "authparams2");
   var expectAuthSystemRC = [401, 401, 401, 401, 401, 404, 404];
   all_ok = true;
+  print("Starting System test");
   results.auth_system = {};
   for (i = 0;i < urlsTodo.length;i++) {
     r = download(instanceInfo.url+urlsTodo[i],"",{followRedirects:false,returnBodyOnError:true});
@@ -1017,9 +1041,9 @@ testFuncs.authentication_parameters = function (options) {
   }
   results.auth_system.status = all_ok;
 
-  print("Shutting down...");
+  print("Shutting down System test...");
   shutdownInstance(instanceInfo,options);
-  print("done.");
+  print("done with System test.");
   // No authentication:
   instanceInfo = startInstance("tcp", options,
                    ["--server.disable-authentication", "true",
@@ -1028,6 +1052,7 @@ testFuncs.authentication_parameters = function (options) {
   var expectAuthNoneRC = [404, 404, 200, 301, 301, 404, 404];
   results.auth_none = {};
   all_ok = true;
+  print("Starting None test");
   for (i = 0;i < urlsTodo.length;i++) {
     r = download(instanceInfo.url+urlsTodo[i],"",{followRedirects:false,returnBodyOnError:true});
     if (r.code === expectAuthNoneRC[i]) {
@@ -1043,39 +1068,48 @@ testFuncs.authentication_parameters = function (options) {
   }
   results.auth_none.status = all_ok;
 
-  print("Shutting down...");
+  print("Shutting down None test...");
   shutdownInstance(instanceInfo,options);
-  print("done.");
+  print("done with None test.");
   return results;
 };
 
 var internalMembers = ["code", "error", "status", "duration", "failed", "total"];
 
 function unitTestPrettyPrintResults(r) {
-  for (var testrun in r) {    
-    if (r.hasOwnProperty(testrun) && (testrun !== 'all_ok')) {
-      print("Testrun: " + testrun);
-      for (var test in  r[testrun]) {
-        if (r[testrun].hasOwnProperty(test) && (test !== 'ok')) {
-          if (r[testrun][test].status) {
-            print("     " + test + ": Success");
-          }
-          else {
-            if (r[testrun][test].hasOwnProperty('message')) {
-              print("     " + test + ": Fail - Whole testsuite failed!");
-              print(r[testrun][test].message);
-              if (r[testrun][test].message.hasOwnProperty('body')) {
-                print(r[testrun][test].message.body);
-              }
+  var testrun;
+  var test;
+  var oneTest;
+
+  try {
+    for (testrun in r) {    
+      if (r.hasOwnProperty(testrun) && (testrun !== 'all_ok')) {
+        print("Testrun: " + testrun);
+        for (test in  r[testrun]) {
+          if (r[testrun].hasOwnProperty(test) && (test !== 'ok')) {
+            if (r[testrun][test].status) {
+              print("     " + test + ": Success");
             }
             else {
-              print("     " + test + ": Fail");
-              for (var oneTest in r[testrun][test]) {
-                if ((r[testrun][test].hasOwnProperty(oneTest)) && 
-                    (internalMembers.indexOf(oneTest) === -1) &&
-                    (!r[testrun][test][oneTest].status)) {
-                  print("          -> " + oneTest + " Failed; Verbose message:");
-                  print(r[testrun][test][oneTest].message);
+              if (r[testrun][test].hasOwnProperty('message')) {
+                print("     " + test + ": Fail - Whole testsuite failed!");
+                if (typeof r[testrun][test].message === "object" &&
+                    r[testrun][test].message.hasOwnProperty('body')) {
+                  print(r[testrun][test].message.body);
+                }
+                else {
+                  print(r[testrun][test].message);
+                }
+              }
+              else {
+                print("     " + test + ": Fail");
+                for (oneTest in r[testrun][test]) {
+                  if ((r[testrun][test].hasOwnProperty(oneTest)) && 
+                      (internalMembers.indexOf(oneTest) === -1) &&
+                      (!r[testrun][test][oneTest].status)) {
+                    print("          -> " + oneTest + " Failed; Verbose message:");
+                    print(r[testrun][test][oneTest].message);
+                  }
                 }
               }
             }
@@ -1083,8 +1117,13 @@ function unitTestPrettyPrintResults(r) {
         }
       }
     }
+    print("Overall state: " + ((r.all_ok === true) ? "Success" : "Fail"));
   }
-  print("Overal state: " + ((r.all_ok === true) ? "Success" : "Fail"));
+  catch (x) {
+    print("exception caught while pretty printing result: ");
+    print(x.message);
+    print(JSON.stringify(r));
+  }
 }
 
 
@@ -1095,7 +1134,6 @@ var allTests =
     "shell_server",
     "shell_server_ahuacatl",
     "shell_server_aql",
-    "shell_server_perf",
     "http_server",
     "ssl_server",
     "shell_client",
