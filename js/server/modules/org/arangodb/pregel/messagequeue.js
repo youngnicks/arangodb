@@ -115,14 +115,15 @@ var Queue = function (executionNumber, vertices, aggregate) {
     this.__aggregate = aggregate;
   }
   this.__queues = [];
-  _.each(vertices, function(v, k) {
-    if (k === "__actives") {
-      return;
-    }
-    var id = v._doc._id;
-    self.__queues.push(id);
-    self[id] = new VertexMessageQueue(self, v._locationInfo);
-  });
+  vertices.reset();
+  var v, id;
+  while (vertices.hasNext()) {
+    v = vertices.next();
+    id = v._get("_id");
+    this.__queues.push(id);
+    this[id] = new VertexMessageQueue(this, v._get("._locationInfo"));
+  }
+  vertices.reset();
   this.__output = {};
 };
 

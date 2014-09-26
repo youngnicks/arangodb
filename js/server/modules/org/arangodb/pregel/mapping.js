@@ -111,7 +111,7 @@ Mapping.prototype.getResponsibleEdgeShards = function (shard) {
 Mapping.prototype.getToLocationObject = function (edge, toCol) {
   var t = p.stopWatch();
   var obj = {};
-  obj._id = edge._doc._to;
+  obj._id = edge._to;
   if (this._isPrimary) {
     var locParams = this.transformToFindShard(toCol, edge, "to_shard_"); 
     locParams._id = obj._id; 

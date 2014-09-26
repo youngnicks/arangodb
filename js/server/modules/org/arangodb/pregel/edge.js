@@ -31,19 +31,19 @@
 var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
+var pregel = require("org/arangodb/pregel");
+var _ = require("underscore");
 
-var Edge = function (edgeJSON, mapping, shard) {
+var Edge = function (edgeJSON, resultShard, from, to, targetVertex) {
   var t = p.stopWatch();
   this._doc = edgeJSON;
 
-  this.__resultShard = db[mapping.getResultShard(shard)];
+  this.__resultShard = resultShard;
   this.__result = {};
   this.__deleted = false;
-  var fromSplit = this._doc._from.split("/");
-  this.__from = mapping.getResultCollection(fromSplit[0]) + "/" + fromSplit[1]; 
-  var toSplit = this._doc._to.split("/");
-  this.__to = mapping.getResultCollection(toSplit[0]) + "/" + toSplit[1]; 
-  this._targetVertex = mapping.getToLocationObject(this, toSplit[0]);
+  this.__from = from;
+  this.__to = to;
+  this._targetVertex = targetVertex;
   p.storeWatch("ConstructEdge", t);
 };
 
@@ -67,13 +67,47 @@ Edge.prototype._save = function () {
   var t = p.stopWatch();
   this.__resultShard.save(this.__from, this.__to, {
     _key: this._doc._key,
-    result: this.__result,
-    deleted: this.__deleted
-  },
-  { 
-    silent: true
+    result: this._getResult(),
+    deleted: this._isDeleted()
   });
   p.storeWatch("SaveEdge", t);
 };
 
 exports.Edge = Edge;
+
+var EdgeList = function (mapping) {
+  this.mapping = mapping;
+  this.sourceList = [];
+};
+
+EdgeList.prototype.addShard = function () {
+  this.sourceList.push([]);
+};
+
+EdgeList.prototype.addVertex = function (shard) {
+  this.sourceList[shard].push([]);
+};
+
+EdgeList.prototype.addShardContent = function (shard, edgeShard, vertex, edges) {
+  var mapping = this.mapping;
+  var self = this;
+  var resultShard = db[mapping.getResultShard(edgeShard)];
+  _.each(edges, function(e) {
+    var fromSplit = e._from.split("/");
+    var from = mapping.getResultCollection(fromSplit[0]) + "/" + fromSplit[1]; 
+    var toSplit = e._to.split("/");
+    var to = mapping.getResultCollection(toSplit[0]) + "/" + toSplit[1]; 
+    var targetVertex = mapping.getToLocationObject(e, toSplit[0]);
+    self.sourceList[shard][vertex].push(new Edge(e, resultShard, from, to, targetVertex));
+  });
+};
+
+EdgeList.prototype.save = function (shard, id) {
+  _.each(this.sourceList[shard][id], function(e) { e._save();});
+};
+
+EdgeList.prototype.loadEdges = function (shard, id) {
+  return this.sourceList[shard][id];
+}
+
+exports.EdgeList = EdgeList;
