@@ -104,7 +104,6 @@ VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
 // End of Vertex Message queue
 
 var Queue = function (executionNumber, vertices, aggregate) {
-  var self = this;
   this.__vertices = vertices;
   this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
@@ -119,9 +118,9 @@ var Queue = function (executionNumber, vertices, aggregate) {
   var v, id;
   while (vertices.hasNext()) {
     v = vertices.next();
-    id = v._get("_id");
+    id = v._id;
     this.__queues.push(id);
-    this[id] = new VertexMessageQueue(this, v._get("._locationInfo"));
+    this[id] = new VertexMessageQueue(this, v._getLocationInfo());
   }
   vertices.reset();
   this.__output = {};

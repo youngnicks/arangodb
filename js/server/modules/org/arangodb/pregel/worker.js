@@ -133,7 +133,8 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "var shard;"
     + "for (i = 0; i < shardList.length; i++) {"
     +   "shard = shardList[i];"
-    +   "vertices.addShardContent(shard, db[shard].NTH(" + workerIndex + ", " + workerCount + ").documents);"
+    +   "vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),"
+    +      "db[shard].NTH2(" + workerIndex + ", " + workerCount + ").documents);"
     + "}"
     + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
     + "return function(params) {"
@@ -159,13 +160,13 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     +   "if (global.final === true) {"
     +     "while(vertices.hasNext()) {"
     +       "vertex = vertices.next();"
-    +       "msgQueue = queue[vertex._get('_id')];"
-    +       "(" + algorithms.finalAlgorithm + ")(vertex, queue[vertex._get('_id')], global);"
+    +       "msgQueue = queue[vertex._id];"
+    +       "(" + algorithms.finalAlgorithm + ")(vertex, msgQueue, global);"
     +     "}"
     +   "} else {"
     +     "while(vertices.hasNext()) {"
     +       "vertex = vertices.next();"
-    +       "msgQueue = queue[vertex._get('_id')];"
+    +       "msgQueue = queue[vertex._id];"
     +       "if (vertex._isActive() || msgQueue.count > 0) {"
     +         "vertex._activate();"
     +         "(" + algorithms.algorithm + ")(vertex, msgQueue, global);"
@@ -412,6 +413,7 @@ var finishedStep = function (executionNumber, global, mapping, active) {
     p.storeWatch("ShiftMessages", t2);
   }
   if (ArangoServerState.role() === "PRIMARY") {
+    require("console").log("call back");
     var conductor = getConductor(executionNumber);
     var body = JSON.stringify({
       server: pregel.getServerName(),
@@ -429,7 +431,7 @@ var finishedStep = function (executionNumber, global, mapping, active) {
     ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
       "/_api/pregel/finishedStep", body, {}, coordOptions);
     var debug = ArangoClusterComm.wait(coordOptions);
-
+    require("console").log(debug);
   } else {
     p.storeWatch("FinishStep", t);
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
