@@ -12,17 +12,17 @@ The pregel algorithm is only executed on the result graph, the original graph re
 Whithin your pregel algorithm the framwork calls your algorithm with the parameters *vertex*, *message* and *global*.
 The next chapter will explain these Objects.
 
-!SUBSECTION  pregel.Vertex
+!SUBSECTION  Vertex
 
 TBD
 
-!SUBSECTION  pregel.Edge
+!SUBSECTION  Edge
 
 TBD
 
-!SUBSECTION  pregel.VertexMessageQueue
+!SUBSECTION  VertexMessageQueue
 
-The pregel VertexMessageQueue object is provided to the users algorithm by the framework and can not be instantiated.
+The VertexMessageQueue object is provided to the users algorithm by the framework and can not be instantiated.
 It is basically a curser on a vertex message queue and hence has the following functions:
 
 @startDocuBlock JSF_pregel_vertex_message_count
@@ -32,23 +32,29 @@ It is basically a curser on a vertex message queue and hence has the following f
 @startDocuBlock JSF_pregel_vertex_message_clear
 @startDocuBlock JSF_pregel_vertex_message_sendTo
 
-
 !SECTION The API
 
+This section will describe the pregel api. 
+
 !SUBSECTION  Define your pregel algorithm.
+
+This section will explain the api and give an insight in how to define your own pregel algorithm.
 
 !SUBSECTION  startExecution
 
 @startDocuBlock JSF_pregel_start_execution
 
-!SECTION Get state of current Pregel run.
+!SUBSECTION Get state of a pregel run.
 
-!SUBSECTION  getResult
+@startDocuBlock JSF_pregel_get_info
 
-!SUBSECTION  getInfo
+!SUBSECTION  Get result of a pregel run
 
-!SUBSECTION  dropResult
+@startDocuBlock JSF_pregel_get_result
 
+!SUBSECTION  Drop pregel result.
+
+@startDocuBlock JSF_pregel_drop_result
 
 
 

@@ -354,7 +354,6 @@ static v8::Handle<v8::Value> JS_CreateNamedQueue (v8::Arguments const& argv) {
   if (! obj->HasOwnProperty(TRI_V8_SYMBOL("threads"))) {
     TRI_V8_EXCEPTION_USAGE(scope, "<options>.threads is missing");
   }
-std::cout << "heinz4 erzeugt " << name << "\n" ;
 
   int nrThreads = static_cast<int>(TRI_ObjectToInt64(obj->Get(TRI_V8_SYMBOL("threads"))));
 

@@ -77,7 +77,7 @@
   * [Fluent Query Interface](General-Graphs/FluentAQLInterface.md)
 <!-- 13 -->
 * [Large-scale graph computing](PregelAlgorithm/README.md)
-  * [Pregel module](PregelAlgorithm/Module.md)
+  * [Pregel Module](PregelAlgorithm/Module.md)
   * [Pregel Examples](PregelAlgorithm/Examples.md)
 <!-- 14 -->
 * [Blueprint Graphs](Blueprint-Graphs/README.md)

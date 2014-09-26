@@ -47,22 +47,22 @@ var VertexMessageQueue = function(parent, vertexInfo) {
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_pregel_vertex_message_count
-/// @brief counts the messages in the vertex' message queue
+/// @brief **VertexMessageQueue.count**
 ///
 /// `pregel.VertexMessageQueue.count()`
 ///
-/// Counts the messages in the vertex message queue.
+/// Returns the amount of messages in the vertex message queue.
 ///
 /// @EXAMPLES
 ///
-///
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueueCount}
 /// ~  var pregel = require("org/arangodb/pregel");
-///   var queue = new pregel.MessageQueue(1, [{_locationInfo : {_id : 1}}, {_locationInfo : {_id : 2}}]);
+/// | var queue = new pregel.MessageQueue(1, [{_doc : {_id : 1}, _locationInfo :
+///   {_id : 1}}, {_doc : {_id : 2}, _locationInfo : {_id : 2}}]);
 ///   var vertexMessageQueue = queue[1];
-///   require("internal").print(vertexMessageQueue.count());
+///   vertexMessageQueue.count();
 ///   vertexMessageQueue._fill({plain : "This is a message"});
-///   require("internal").print(vertexMessageQueue.count());
+///   vertexMessageQueue.count();
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 /// @endDocuBlock
 ///
@@ -73,22 +73,22 @@ VertexMessageQueue.prototype.count = function () {
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_pregel_vertex_message_hasNext
-/// @brief returns true if the message queue contains more messages.
+/// @brief **VertexMessageQueue.hasNext**
 ///
 /// `pregel.VertexMessageQueue.hasNext()`
 ///
-/// Checks for more elements in the message queue.
+/// Returns true if the message queue contains more messages.
 ///
 /// @EXAMPLES
 ///
-///
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueuehasNext}
 /// ~  var pregel = require("org/arangodb/pregel");
-///   var queue = new pregel.MessageQueue(1, [{_locationInfo : {_id : 1}}, {_locationInfo : {_id : 2}}]);
+/// | var queue = new pregel.MessageQueue(1, [{_doc : {_id : 1}, _locationInfo : {_id : 1}},
+///   {_doc : {_id : 2}, _locationInfo : {_id : 2}}]);
 ///   var vertexMessageQueue = queue[1];
-///   require("internal").print(vertexMessageQueue.hasNext());
+///   vertexMessageQueue.hasNext();
 ///   vertexMessageQueue._fill({plain : "This is a message"});
-///   require("internal").print(vertexMessageQueue.hasNext());
+///   vertexMessageQueue.hasNext();
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 /// @endDocuBlock
 ///
@@ -99,7 +99,7 @@ VertexMessageQueue.prototype.hasNext = function () {
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_pregel_vertex_message_next
-/// @brief Returns the next message in the vertex' message queue
+/// @brief **VertexMessageQueue.next**
 ///
 /// `pregel.VertexMessageQueue.next()`
 ///
@@ -107,14 +107,14 @@ VertexMessageQueue.prototype.hasNext = function () {
 ///
 /// @EXAMPLES
 ///
-///
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueueNext}
 /// ~  var pregel = require("org/arangodb/pregel");
-///   var queue = new pregel.MessageQueue(1, [{_locationInfo : {_id : 1}}, {_locationInfo : {_id : 2}}]);
+/// | var queue = new pregel.MessageQueue(1, [{_doc : {_id : 1}, _locationInfo : {_id : 1}},
+///   {_doc : {_id : 2}, _locationInfo : {_id : 2}}]);
 ///   var vertexMessageQueue = queue[1];
-///   require("internal").print(vertexMessageQueue.next());
+///   vertexMessageQueue.next();
 ///   vertexMessageQueue._fill({plain : "This is a message"});
-///   require("internal").print(vertexMessageQueue.next());
+///   vertexMessageQueue.next();
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 /// @endDocuBlock
 ///
@@ -130,22 +130,25 @@ VertexMessageQueue.prototype.next = function () {
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @startDocuBlock JSF_pregel_vertex_message_fill
-/// @brief Addes messages to the vertex' message queue
+/// @brief **VertexMessageQueue._fill**
 ///
-/// `pregel.VertexMessageQueue._fill()`
+/// `pregel.VertexMessageQueue._fill(msg)`
 ///
-/// Counts Addes messages to the vertex' message queue.
+/// Adds a message to the vertex' message queue.
+///
+/// @PARAMS
+/// @PARAM{msg, object, required} : The message to be added to the queue, can be a string or any object.
 ///
 /// @EXAMPLES
 ///
-///
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueueFill}
 /// ~  var pregel = require("org/arangodb/pregel");
-///   var queue = new pregel.MessageQueue(1, [{_locationInfo : {_id : 1}}, {_locationInfo : {_id : 2}}]);
+/// | var queue = new pregel.MessageQueue(1, [{_doc : {_id : 1}, _locationInfo : {_id : 1}},
+///   {_doc : {_id : 2}, _locationInfo : {_id : 2}}]);
 ///   var vertexMessageQueue = queue[1];
-///   require("internal").print(vertexMessageQueue.next());
+///   vertexMessageQueue.next();
 ///   vertexMessageQueue._fill({plain : "This is a message"});
-///   require("internal").print(vertexMessageQueue.next());
+///   vertexMessageQueue.next();
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 /// @endDocuBlock
 ///
@@ -159,11 +162,74 @@ VertexMessageQueue.prototype._fill = function (msg) {
   }
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_vertex_message_clear
+/// @brief **VertexMessageQueue._clear**
+///
+/// `pregel.VertexMessageQueue._clear()`
+///
+/// Empties the message queue.
+///
+/// @EXAMPLES
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueueClear}
+/// ~  var pregel = require("org/arangodb/pregel");
+/// | var queue = new pregel.MessageQueue(1, [{_doc : {_id : 1}, _locationInfo : {_id : 1}},
+///   {_doc : {_id : 2}, _locationInfo : {_id : 2}}]);
+///   var vertexMessageQueue = queue[1];
+///   vertexMessageQueue.count();
+///   vertexMessageQueue._fill({plain : "This is a message"});
+///   vertexMessageQueue.count();
+///   vertexMessageQueue._clear();
+///   vertexMessageQueue.count();
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype._clear = function () {
   this._inc = [];
   this._pos = 0;
 };
 
+
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_vertex_message_sendTo
+/// @brief **VertexMessageQueue.sendTo**
+///
+/// `pregel.VertexMessageQueue.sendTo(target, data, sendLocation)`
+///
+/// Sends a message to a vertex defined by target.
+///
+/// @PARAMS
+/// @PARAM{target, object, required} : The recipient of the message, can either be a vertex _id or a
+/// location object containing the attributes *_id* and *shard*.
+/// @PARAM{data, object, required} : The message's content, can be a string or an object.
+/// @PARAM{sendLocation, boolean, optional} : If false the location object of the sender is not added.
+/// as *sender* to the message.
+///
+/// @EXAMPLES
+///
+/// Send a message with information about the sender.
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueueSendTo}
+/// ~  var pregel = require("org/arangodb/pregel");
+/// | var queue = new pregel.MessageQueue(1, [{_doc : {_id : 1}, _locationInfo : {_id : 1}},
+///   {_doc : {_id : 2}, _locationInfo : {_id : 2}}]);
+///   var vertexMessageQueue = queue[1];
+///   vertexMessageQueue.sendTo({_id : 2, shard : "shard"}, {msg : "This is a message"});
+///   queue.__output;
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+/// Send a message without information about the sender.
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelVertexMessageQueueSendToWithoutSender}
+/// ~  var pregel = require("org/arangodb/pregel");
+/// | var queue = new pregel.MessageQueue(1, [{_doc : {_id : 1}, _locationInfo : {_id : 1}},
+///   {_doc : {_id : 2}, _locationInfo : {_id : 2}}]);
+///   var vertexMessageQueue = queue[1];
+///   vertexMessageQueue.sendTo({_id : 2, shard : "shard"}, {msg : "This is a message"}, false);
+///   queue.__output;
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
   var t = p.stopWatch();
   if (sendLocation !== false) {
@@ -269,6 +335,7 @@ Queue.prototype._send = function (target, msg) {
   var msgContainer = out[shard][id];
   if (msg.hasOwnProperty("sender") || !this.__aggregate) {
     msgContainer.plain = msgContainer.plain || [];
+    msgContainer.plain.push(msg);
   } else {
     if (msgContainer.hasOwnProperty("a")) {
       msgContainer.a = this.__aggregate(msg.data, msgContainer.a);
