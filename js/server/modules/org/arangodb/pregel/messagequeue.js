@@ -135,11 +135,7 @@ Queue.prototype._fillQueues = function () {
     self[q]._clear();
   });
   p.storeWatch("fillQueueFirstEach", t3);
-  var t4 = p.stopWatch();
-  _.each(this.__output, function(ignore, shard) {
-    delete self.__output[shard];
-  });
-  p.storeWatch("fillQueueSecEach", t4);
+  this.__output = {};
   var t1 = p.stopWatch();
   var cursor = db._query(query, {
     "@collection": this.__workCollectionName,
@@ -157,12 +153,6 @@ Queue.prototype._fillQueues = function () {
         if (this.hasOwnProperty(key)) {
           vQueue = this[key];
           vQueue._fill(doc[key]);
-          if (this.__vertices.hasOwnProperty(key)) {
-            this.__vertices[key]._activate();
-          } else {
-            this.__queues.splice(this.__queues.indexOf(key), 1);
-            delete this[key];
-          } 
         }
       }
     }
