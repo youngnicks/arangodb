@@ -39,7 +39,6 @@ var ArangoError = arangodb.ArangoError;
 var Mapping = function(executionNumber) {
   this._isPrimary = ArangoServerState.role() === "PRIMARY";
   this._map = pregel.getGlobalCollection(executionNumber).document("map");
-  require("internal").print(this._map);
 };
 
 Mapping.prototype.getResultCollection = function (id) {

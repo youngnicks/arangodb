@@ -144,6 +144,7 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     +     "vertices.next()._save();"
     +   "};"
 + "p.aggregate();"
+    + "  worker.queueCleanupDone(executionNumber);"
     + "  return;"
     + "}"
     + "var step = params.step;"
@@ -413,7 +414,6 @@ var finishedStep = function (executionNumber, global, mapping, active) {
     p.storeWatch("ShiftMessages", t2);
   }
   if (ArangoServerState.role() === "PRIMARY") {
-    require("console").log("call back");
     var conductor = getConductor(executionNumber);
     var body = JSON.stringify({
       server: pregel.getServerName(),
@@ -431,7 +431,6 @@ var finishedStep = function (executionNumber, global, mapping, active) {
     ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
       "/_api/pregel/finishedStep", body, {}, coordOptions);
     var debug = ArangoClusterComm.wait(coordOptions);
-    require("console").log(debug);
   } else {
     p.storeWatch("FinishStep", t);
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
@@ -443,6 +442,32 @@ var finishedStep = function (executionNumber, global, mapping, active) {
       data : global.data
     });
   }
+};
+
+var queueCleanupDone = function (executionNumber) {
+  var keyList = "P_" + executionNumber;
+  var countDone = KEY_INCR(keyList, "done");
+  if (countDone === WORKERS) {
+    KEY_SET(keyList, "actives", 0);
+    if (ArangoServerState.role() === "PRIMARY") {
+      var conductor = getConductor(executionNumber);
+      var body = JSON.stringify({
+        server: pregel.getServerName(),
+        executionNumber: executionNumber
+      });
+      var coordOptions = {
+        coordTransactionID: ArangoClusterInfo.uniqid()
+      };
+      ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
+        "/_api/pregel/finishedCleanup", body, {}, coordOptions);
+      var debug = ArangoClusterComm.wait(coordOptions);
+    } else {
+      pregel.Conductor.finishedCleanUp(executionNumber, pregel.getServerName());
+    }
+  }
+  db._drop(pregel.genWorkCollectionName(executionNumber));
+  db._drop(pregel.genMsgCollectionName(executionNumber));
+  db._drop(pregel.genGlobalCollectionName(executionNumber));
 };
 
 var queueDone = function (executionNumber, global, actives, mapping, err) {
@@ -493,20 +518,18 @@ var executeStep = function(executionNumber, step, options, globals) {
   var t = p.stopWatch();
   var i = 0;
   var queue;
+  KEY_SET("P_" + executionNumber, "done", 0);
   for (i = 0; i < WORKERS; i++) {
     queue = getQueueName(executionNumber, i);
     addTask(queue, step, globals);
   }
-  KEY_SET("P_" + executionNumber, "done", 0);
   p.storeWatch("AddingAllTasks", t);
 };
 
 var cleanUp = function(executionNumber) {
   // queues.delete("P_" + executionNumber); To be done for new queue
-  db._drop(pregel.genWorkCollectionName(executionNumber));
-  db._drop(pregel.genMsgCollectionName(executionNumber));
-  db._drop(pregel.genGlobalCollectionName(executionNumber));
   var i, queue;
+  KEY_SET("P_" + executionNumber, "done", 0);
   for (i = 0; i < WORKERS; i++) {
     queue = getQueueName(executionNumber, i);
     addCleanUpTask(queue);
@@ -523,3 +546,4 @@ exports.executeStep = executeStep;
 exports.cleanUp = cleanUp;
 exports.finishedStep = finishedStep;
 exports.queueDone = queueDone;
+exports.queueCleanupDone = queueCleanupDone;
