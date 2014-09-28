@@ -44,33 +44,33 @@ Edge.prototype._get = function (attr) {
 };
 
 Edge.prototype._delete = function () {
-  this.__edgeInfo.deleted = true;
+  this.__edgeInfo.d = true;
 };
 
 Edge.prototype._isDeleted = function () {
-  return this.__edgeInfo.deleted || false;
+  return this.__edgeInfo.d || false;
 };
 
 Edge.prototype._getResult = function () {
-  return this.__edgeInfo.result;
+  return this.__edgeInfo.r || {};
 };
 
 Edge.prototype._setResult = function (result) {
-  this.__edgeInfo.result = result;
+  this.__edgeInfo.r = result;
 };
 
 Edge.prototype._save = function (from, to) {
   var t = p.stopWatch();
-  this.__edgeInfo.resShard.save(from, to, {
+  this.__edgeInfo.rs.save(from, to, {
     _key: this.__edgeInfo.key,
     result: this._getResult(),
-    deleted: this._isDeleted()
+    _deleted: this._isDeleted()
   });
   p.storeWatch("SaveEdge", t);
 };
 
 Edge.prototype._getTarget = function () {
-  return this.__edgeInfo.target;
+  return this.__edgeInfo.t;
 };
 
 Edge.prototype._loadEdge = function (edgeInfo) {
@@ -137,10 +137,9 @@ EdgeList.prototype.addShardContent = function (shard, edgeShard, vertex, edges) 
     var toSplit = e._to.split("/");
     var edgeInfo = {
       key: e._key,
-      shard: edgeShard,
-      target: mapping.getToLocationObject(e, toSplit[0]),
-      resShard: resultShard,
-      result: {}
+      s: edgeShard,
+      t: mapping.getToLocationObject(e, toSplit[0]),
+      rs: resultShard
     };
     self.sourceList[shard][vertex].push(edgeInfo);
   });
@@ -152,14 +151,14 @@ EdgeList.prototype.save = function (shard, id) {
   var mapping = this.mapping;
   var edge = this.iterator.edge;
   if (list.length > 0) {
-    var edgeShard = list[0].shard;
+    var edgeShard = list[0].s;
     var key = list[0].key;
     var doc = db[edgeShard].document(key);
     var fromSplit = doc._from.split("/");
     var from = mapping.getResultCollection(fromSplit[0]) + "/" + fromSplit[1]; 
     _.each(list, function(e, index) {
       self.iterator.current = index;
-      edgeShard = e.shard;
+      edgeShard = e.s;
       key = e.key;
       doc = db[edgeShard].document(key);
       var toSplit = doc._to.split("/");
@@ -172,7 +171,7 @@ EdgeList.prototype.save = function (shard, id) {
 
 EdgeList.prototype.getValue = function (index, attr) {
   var list = this.sourceList[this.shard][this.id];
-  var edgeShard = list[index].shard;
+  var edgeShard = list[index].s;
   var key = list[index].key;
   return db[edgeShard].document(key)[attr];
 };

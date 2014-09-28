@@ -59,7 +59,7 @@ Vertex.prototype._deactivate = function () {
   if (this._isActive()) {
     this.__vertexList.decrActives();
   }
-  this.__resultList[this.shard][this.id].active = false;
+  this.__resultList[this.shard][this.id].a = false;
 };
 
 Vertex.prototype._activate = function () {
@@ -69,32 +69,38 @@ Vertex.prototype._activate = function () {
   if (!this._isActive()) {
     this.__vertexList.incrActives();
   }
-  this.__resultList[this.shard][this.id].active = true;
+  this.__resultList[this.shard][this.id].a = true;
 };
 
 Vertex.prototype._isActive = function () {
-  return this.__resultList[this.shard][this.id].active && !this._isDeleted();
+  if (!this._isDeleted()) {
+    if (this.__resultList[this.shard][this.id].hasOwnProperty("a")) {
+      return this.__resultList[this.shard][this.id].a;
+    }
+    return true;
+  }
+  return false;
 };
 
 Vertex.prototype._isDeleted = function () {
-  return this.__resultList[this.shard][this.id].deleted;
+  return this.__resultList[this.shard][this.id].d || false;
 };
 
 Vertex.prototype._delete = function () {
   if (this._isActive()) {
     this.__vertexList.decrActives();
   }
-  this.__resultList[this.shard][this.id].deleted = true;
+  this.__resultList[this.shard][this.id].d = true;
   this._save();
   delete this.__vertexList[this.shard][this.id];
 };
 
 Vertex.prototype._getResult = function () {
-  return this.__resultList[this.shard][this.id].result;
+  return this.__resultList[this.shard][this.id].r || {};
 };
 
 Vertex.prototype._setResult = function (result) {
-  this.__resultList[this.shard][this.id].result = result;
+  this.__resultList[this.shard][this.id].r = result;
 };
 
 Vertex.prototype._save = function () {
@@ -137,9 +143,6 @@ VertexList.prototype.addShardContent = function (shard, collection, sourceList) 
     var doc = collection + "/" + key;
     self.edgeList.addVertex(shardId);
     shardResult.push({
-      active: true,
-      deleted: false,
-      result: {},
       locationInfo: {
         _id: doc,
         shard: shard
@@ -187,7 +190,10 @@ VertexList.prototype.next = function () {
     var sn = this.shardMapping[this.shard].collection;
     if (this.sourceList[this.shard][this.current] === undefined) {
     }
-    this.vertex._loadVertex(this.shard, this.current, this.edgeList.loadEdges(this.shard, this.current), sn + "/" + this.sourceList[this.shard][this.current]);
+    this.vertex._loadVertex(this.shard, this.current,
+      this.edgeList.loadEdges(this.shard, this.current),
+      sn + "/" + this.sourceList[this.shard][this.current]
+    );
     return this.vertex;
   }
   return null;
