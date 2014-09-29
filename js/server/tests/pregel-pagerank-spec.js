@@ -48,6 +48,7 @@ describe("Pregel PageRank", function () {
         var total = global.vertexCount;
         var edgeCount;
         var send;
+        var edge;
         if (global.step === 0) {
           edgeCount = vertex._outEdges.length;
           var initPR = 1 / total;
@@ -56,9 +57,15 @@ describe("Pregel PageRank", function () {
             edgeCount: edgeCount
           });
           send = initPR / edgeCount;
-          vertex._outEdges.forEach(function (e) {
-            message.sendTo(e._targetVertex, send, false);
-          });
+          /*
+        vertex._outEdges.forEach(function (e) {
+          message.sendTo(e._targetVertex, send, false);
+        });
+        */
+          while (vertex._outEdges.hasNext()) {
+            edge = vertex._outEdges.next();
+            message.sendTo(edge._getTarget(), send, false);
+          }
           return;
         }
         var result = vertex._getResult();
@@ -66,6 +73,7 @@ describe("Pregel PageRank", function () {
         var alpha = global.alpha;
         var newPR = 0;
         var next;
+        
         while (message.hasNext()) {
           next = message.next();
           newPR += next.data;
@@ -79,9 +87,15 @@ describe("Pregel PageRank", function () {
           return;
         }
         send = newPR / edgeCount;
+        /*
         vertex._outEdges.forEach(function (e) {
           message.sendTo(e._targetVertex, send, false);
         });
+        */
+        while (vertex._outEdges.hasNext()) {
+          edge = vertex._outEdges.next();
+          message.sendTo(edge._getTarget(), send, false);
+        }
       },
       superStep = function (globals) {
         require("internal").print(globals.step, String(require("internal").time() % 1000).replace(".", ","));
@@ -221,8 +235,8 @@ describe("Pregel PageRank", function () {
           }
           expect(v.result.rank).toBeCloseTo(exp, 3, "for vertex " + v._key);
         });
+        conductor.dropResult(id);
       }
-
     });
   });
 
