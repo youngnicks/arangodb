@@ -30,9 +30,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var pageRank = function (vertex, message, global) {
+  "use strict";
   var total = global.vertexCount;
   var edgeCount;
   var send;
+  var edge;
   if (global.step === 0) {
     edgeCount = vertex._outEdges.length;
     var initPR = 1 / total;
@@ -41,9 +43,10 @@ var pageRank = function (vertex, message, global) {
       edgeCount: edgeCount
     });
     send = initPR / edgeCount;
-    vertex._outEdges.forEach(function (e) {
-      message.sendTo(e._targetVertex, send, false);
-    });
+    while (vertex._outEdges.hasNext()) {
+      edge = vertex._outEdges.next();
+      message.sendTo(edge._getTarget(), send, false);
+    }
     return;
   }
   var result = vertex._getResult();
@@ -64,20 +67,29 @@ var pageRank = function (vertex, message, global) {
     return;
   }
   send = newPR / edgeCount;
-  vertex._outEdges.forEach(function (e) {
-    message.sendTo(e._targetVertex, send, false);
-  });
+  while (vertex._outEdges.hasNext()) {
+    edge = vertex._outEdges.next();
+    message.sendTo(edge._getTarget(), send, false);
+  }
 };
 
 var aggregator = function (message, oldMessage) {
+  "use strict";
   return message + oldMessage;
 };
 
+var superStep = function (globals) {
+  "use strict";
+  require("internal").print(globals.step, String(require("internal").time() % 1000).replace(".", ","));
+};
+
 var getAlgorithm = function () {
+  "use strict";
   return {
     base: pageRank.toString(),
-    aggregator: aggregator.toString()
-  }
+    aggregator: aggregator.toString(),
+    conductorAlgorithm: superStep.toString()
+  };
 };
 
 exports.getAlgorithm = getAlgorithm;
