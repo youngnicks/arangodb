@@ -51,6 +51,15 @@ function post_pregel (req, res) {
       actions.resultOk(req, res, actions.HTTP_OK);
       break;
 
+    case ("finishedCleanup") :
+      body = JSON.parse(req.requestBody);
+      conductor.finishedCleanUp(
+        body.executionNumber,
+        body.server
+      );
+      actions.resultOk(req, res, actions.HTTP_OK);
+      break;
+
     case ("finishedStep") :
       body = JSON.parse(req.requestBody);
       conductor.finishedStep(
