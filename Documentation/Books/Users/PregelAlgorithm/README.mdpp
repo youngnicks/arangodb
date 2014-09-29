@@ -1,0 +1,44 @@
+!CHAPTER Large-scale graph computing - The Pregel module
+
+While performing calculations on very large, often distributed graphs one soon reaches the limitatons of memory usage and tolerable performance.
+A way to solve this in ArangoDB is provided with the pregel module. Pregel is a system for large-scale graph processing introduced by Google. 
+It provides a fault-tolerant framework for the execution of [graph](../General-Graphs/README.md) algorithms in parallel over multiple machines.
+
+
+!SECTION The Concept
+
+The main concept behing pregel is the abstract [BSP](http://en.wikipedia.org/wiki/Bulk_synchronous_parallel) computer. 
+In Arangos pregel implementation each database server in a cluster acts as a BSP and executes a pregel algorithm on all its local vertices. 
+The BSP Wiki page describes the way a pregel algorithm's step is executed:
+
+“A BSP computer consists of processors connected by a communication network. Each processor has a fast local memory, and may follow different threads of computation. 
+A BSP computation proceeds in a series of global supersteps. A superstep consists of three ordered stages:
+
+* Concurrent computation: Several computations take place on every participating processor. Each process only uses values stored in the local memory of the processor. The computations are independent in the sense that they occur asynchronously of all the others.
+* Communication: At this stage, the processes exchange data between themselves.
+* Barrier synchronisation: When a process reaches this point (the barrier), it waits until all other processes have finished their communication actions."
+
+This concept depends on a computer to "orchestrate" these BSP workers, this job is done by the cluster coordinator which receives the pregel request.
+If a pregel algorithm is executed via the [HTTP-API](../HttpApi/HttpPregel/README.md) or the pregel module the adressed cluster coordinator takes the role of a *conductor*, 
+creates a copy of the original graph to store the result and passes the parameters of the pregel execution to all DB Servers (the *workers*). These execute the given algorithm on all 
+vertices located on their shards, eventually send messages to other vertices and send a callback to the coordinator (*conductor*) containing the amount of still active vertices and sent messages.
+When every *worker* called back the *conductor* initializes a further step if there are still actives vertices or messages have been sent or finishes the execution.
+
+
+!SUBSECTION Pregel execution in ArangoDB
+
+ArangoDB Pregel implementation allowes the user to define the following algorithms:
+
+* *base* (required) : The actual pregel algorithm executed on each worker for every active vertex.
+* *superstep* : An optional function executed on the conductor between each pregel step.
+* *aggregator* : An optional function to aggregate the messages on each worker. This function can help to reduce network traffic.
+* *final* : An optional function executed when there are no more active vertices and no messages have been sent. Unlike the *base* algorithm this function is executed for inactive vertices too, so this step can be used to reactivate the pregel execution.
+
+In each Pregel step the *base* algorithm is executed on each worker for every local vertex. If a message is sent during this execution and an *aggregator* function has been defined it aggregates the messages created so far.
+After each worker has finished and called back to the conductor the *superstep* is executed if defined. 
+If there are no more active vertices and no messages have been sent the conductor tells each worker to execute the *final* algorithm if provided. 
+Please not that the final step can be called more than once within a pregel run as it can result in the continuation of the *base' algorithm.
+
+
+
+

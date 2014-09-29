@@ -36,6 +36,7 @@ var graph = require("org/arangodb/general-graph");
 var _ = require("underscore");
 var ERRORS = require("org/arangodb").errors;
 var coordinator = ArangoServerState.isCoordinator();
+var graphColoring = require("org/arangodb/pregel/examples/graph-coloring-algorithm");
 var helper = require("org/arangodb/aql-helper");
 var getQueryResults = helper.getQueryResults;
 var profiler = require("org/arangodb/profiler");
@@ -46,152 +47,7 @@ describe("Graph coloring Pregel execution", function () {
 
   describe("a small graph", function () {
 
-    var gN, v, e, g,
-      graphColoring = function (vertex, message, global) {
-        var next, color = "#25262a";
-        if (global.color) {
-          color = global.color;
-        }
-
-        var PHASE_PRE_INITIALIZATION = "1";
-        var PHASE_INITIALIZATION = "2";
-        var PHASE_CONFLICT_RESOLUTION = "3";
-        var NOT_IN_S_AND_DEGREE_ADJUSTING1 = "4";
-
-        var STATE_UNKNOWN = 1;
-        var STATE_TENTATIVELY_IN = 2;
-        var STATE_IN = 3;
-        var NOT_IN = 4;
-
-        var MSG_NEIGHBOR = 1;
-        var MSG_DECREMENT = 2;
-        var MSG_CONTACT = 3;
-        var MSG_TIS = 4
-
-        var result = vertex._getResult();
-
-        if (global.retype === true) {
-          result.type = STATE_UNKNOWN;
-        }
-        global.data.push("Piplangstrumpf" +  global.step);
-
-        switch(result.phase) {
-          case PHASE_PRE_INITIALIZATION:
-            if (result.type !== STATE_UNKNOWN) {
-              vertex._deactivate();
-              return;
-            }
-            result.phase = PHASE_INITIALIZATION;
-            if (result.degree === undefined) {
-              while (message.hasNext()) {
-                next = message.next();
-                if (Object.keys(result.neighbors).indexOf(next.sender._id) === -1) {
-                  result.neighbors[next.sender._id] = next.sender.shard;
-                }
-              }
-              result.degree = Object.keys(result.neighbors).length;
-            }
-            var random = Math.random();
-            if (1.0/(2*result.degree) <= random  || result.degree === 0) {
-              result.type = STATE_TENTATIVELY_IN;
-              Object.keys(result.neighbors).forEach(function (e) {
-                message.sendTo({_id : e, shard : result.neighbors[e]}, {id : vertex._id, msg : MSG_TIS, degree : result.degree});
-              });
-            }
-            break;
-
-
-
-          case PHASE_INITIALIZATION:
-            result.phase = PHASE_CONFLICT_RESOLUTION;
-            if (result.type === STATE_TENTATIVELY_IN) {
-              var isInS = true;
-              while (message.hasNext()) {
-                next = message.next();
-                if (next.data.degree <  result.degree ||
-                    (next.data.degree === result.degree &&
-                    [vertex._id, next.data.id].sort()[0] !== vertex._id
-                    )
-                  ) {
-                  isInS = false;
-                  break;
-                }
-              }
-              if (isInS) {
-                result.type = STATE_IN;
-                result.color = color;
-                Object.keys(result.neighbors).forEach(function (e) {
-                  message.sendTo(
-                    {_id : e, shard : result.neighbors[e]},
-                    {msg : MSG_NEIGHBOR, id : vertex._id}
-                  );
-                });
-                vertex._delete();
-              } else {
-                result.type = STATE_UNKNOWN;
-              }
-            }
-
-            break;
-
-
-
-          case PHASE_CONFLICT_RESOLUTION:
-            result.phase = NOT_IN_S_AND_DEGREE_ADJUSTING1;
-            while (message.hasNext()) {
-              next = message.next();
-              if (next.data.msg ===  MSG_NEIGHBOR) {
-                result.type = NOT_IN;
-                delete result.neighbors[next.data.id];
-              }
-            }
-            if (result.type === NOT_IN) {
-              Object.keys(result.neighbors).forEach(function (e) {
-                message.sendTo(
-                  {_id : e, shard : result.neighbors[e]},
-                  {msg : MSG_DECREMENT}
-                );
-              });
-              result.phase = PHASE_PRE_INITIALIZATION;
-              vertex._deactivate();
-            }
-            break;
-
-
-
-
-          case NOT_IN_S_AND_DEGREE_ADJUSTING1:
-            result.phase = PHASE_PRE_INITIALIZATION;
-            if (result.type === STATE_UNKNOWN) {
-              while (message.hasNext()) {
-                next = message.next();
-                result.degree = result.degree -1;
-              }
-            } else {
-              vertex._deactivate();
-            }
-
-            break;
-
-
-
-
-          default:
-            result={
-              type : STATE_UNKNOWN,
-              neighbors : {},
-              phase : PHASE_PRE_INITIALIZATION
-            };
-            vertex._outEdges.forEach(function (e) {
-              result.neighbors[e._targetVertex._id] = e._targetVertex.shard;
-              message.sendTo(e._targetVertex, {msg : MSG_CONTACT});
-            });
-        }
-        vertex._setResult(result);
-        if (global.retype === true) {
-          result.type = STATE_UNKNOWN;
-        }
-      };
+    var gN, v, e, g;
 
     beforeEach(function () {
       gN = "UnitTestPregelGraph";
@@ -257,48 +113,10 @@ describe("Graph coloring Pregel execution", function () {
     it("should color a graph by pregel", function () {
       var start = require("internal").time();
 
-      var conductorAlgorithm = function (globals, stepInfo) {
-        if (!globals.usedColors) {
-          globals.usedColors = ['#25262a'];
-        }
-
-        var newColor = '#25262a';
-        if (!stepInfo.final) {
-          globals.retype = false
-        }
-
-        if( stepInfo.active === 0 && stepInfo.messages === 0) {
-          globals.retype = true;
-          while (globals.usedColors.indexOf(newColor) !== -1) {
-            newColor = '#' + Math.random().toString(16).substring(2, 8);
-          }
-          globals.usedColors.push(newColor);
-          globals.color = newColor;
-        }
-      };
-
-      var finalAlgorithm = function (vertex, message, global) {
-        var result = vertex._getResult();
-        if (result.type === 4) {
-          vertex._activate();
-        }
-      };
-
-      var id = conductor.startExecution(gN, {
-          base : graphColoring.toString(),
-          superstep : conductorAlgorithm.toString(),
-          final : finalAlgorithm.toString(),
-          aggregator : null
-        }
+      var id = conductor.startExecution(gN, graphColoring.getAlgorithm()
       );
       profiler.setup();
-      /*var id = conductor.startExecution("ff", {
-          base : graphColoring.toString(),
-          superstep : conductorAlgorithm.toString(),
-          final : finalAlgorithm.toString(),
-          aggregator : null
-        }
-      );*/
+
       var count = 0;
       var resGraph = "LostInBattle";
       var res;

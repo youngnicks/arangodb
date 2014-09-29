@@ -270,7 +270,7 @@ void Dispatcher::beginShutdown () {
   MUTEX_LOCKER(_accessDispatcher);
 
   if (_stopping == 0) {
-    LOG_DEBUG("beginning shutdown sequence of dispatcher");
+    LOG_INFO("beginning shutdown sequence of dispatcher");
 
     _stopping = 1;
 
