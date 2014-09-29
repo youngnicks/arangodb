@@ -1,5 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports, Graph, arguments, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
+/*global KEYSPACE_CREATE */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief pregel worker functionality
@@ -116,7 +117,7 @@ var translateId = function (id, mapping) {
   return mapping.getResultCollection(col) + "/" + key;
 };
 
-var algorithmForQueue = function (algorithms, shardList, executionNumber, workerIndex, workerCount) {
+var algorithmForQueue = function (algorithms, shardList, executionNumber, workerIndex, workerCount, inbox, outbox) {
   return "(function() {"
     + "var executionNumber = " + executionNumber + ";"
 + "var p = require('org/arangodb/profiler');"
@@ -129,6 +130,9 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + (algorithms.aggregator ? "  var aggregator = (" + algorithms.aggregator + ");" : "var aggregator = null;")
     + "var vertices = new pregel.VertexList(pregelMapping);"
     + "var shardList = " + JSON.stringify(shardList) + ";"
+    + "var inbox = " + JSON.stringify(inbox) + ";"
+    + "var outbox = " + JSON.stringify(outbox) + ";"
+    + "require('internal').print(inbox, outbox);"
     + "var i;"
     + "var shard;"
     + "for (i = 0; i < shardList.length; i++) {"
@@ -183,7 +187,7 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "}())";
 };
 
-var createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount) {
+var createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount, inbox, outbox) {
   // TODO hack for cluster setup. Foxx Queues not working...
   KEYSPACE_CREATE("P_" + executionNumber, 2, true);
   KEY_SET("P_" + executionNumber, "done", 0);
@@ -210,14 +214,14 @@ var createTaskQueue = function (executionNumber, shardList, algorithms, globals,
       },
       params: {
         queueName: getQueueName(executionNumber, workerIndex),
-        worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount),
-        globals: globals
+        worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount, inbox, outbox),
+        globals: globals,
       }
     });
   } else {
     jobRegisterQueue.push("pregel-register-job", {
       queueName: getQueueName(executionNumber, workerIndex),
-      worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount),
+      worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount, inbox, outbox),
       globals: globals
     });
   }
@@ -277,8 +281,46 @@ var setup = function(executionNumber, options, globals) {
   _.each(pregelMapping.getLocalCollectionShardMapping(), function (shards) {
     shardList = shardList.concat(shards);
   });
+  var inbox = {};
+  var outbox = {};
+  var myName = pregel.getServerName();
+  var i;
+  var spacePrefix = "P_" + executionNumber + "_";
+  _.each(pregelMapping.getGlobalCollectionShards(), function (shards, server) {
+    if (typeof shards === "string") {
+      if (server === myName) {
+        inbox[shards] = [
+          "In_" + spacePrefix + shards + "_0",
+          "In_" + spacePrefix + shards + "_1"
+        ];
+        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_0");
+        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_1");
+      } else {
+        outbox[shards] = "Out_" + spacePrefix + shards;
+        require("internal").print(outbox[shards]);
+        KEYSPACE_CREATE("Out_" + spacePrefix + shards);
+      }
+    } else {
+      if (server === myName) {
+        for (i = 0; i < shards.length; ++i) {
+          inbox[shards[i]] = [
+            "In_" + spacePrefix + shards[i] + "_0",
+            "In_" + spacePrefix + shards[i] + "_1"
+          ];
+          KEYSPACE_CREATE("In_" + spacePrefix + shards[i] + "_0");
+          KEYSPACE_CREATE("In_" + spacePrefix + shards[i] + "_1");
+        }
+      } else {
+        for (i = 0; i < shards.length; ++i) {
+          outbox[shards[i]] = "Out_" + spacePrefix + shards[i];
+          require("internal").print(outbox[shards[i]]);
+          KEYSPACE_CREATE("Out_" + spacePrefix + shards[i]);
+        }
+      }
+    }
+  });
   for (w = 0; w < WORKERS; w++) {
-    createTaskQueue(executionNumber, shardList, options, globals, w, WORKERS);
+    createTaskQueue(executionNumber, shardList, options, globals, w, WORKERS, inbox, outbox);
   }
 };
 
