@@ -36,6 +36,7 @@
 #include "arangod/Aql/ExecutionBlock.h"
 #include "arangod/Aql/ExecutionPlan.h"
 #include "arangod/Aql/ExecutionStats.h"
+#include "arangod/Aql/QueryRegistry.h"
 #include "Utils/AqlTransaction.h"
 
 namespace triagens {
@@ -51,15 +52,14 @@ namespace triagens {
 // --SECTION--                                        constructors / destructors
 // -----------------------------------------------------------------------------
 
-      protected:
+      public:
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief create the engine
 ////////////////////////////////////////////////////////////////////////////////
 
-        ExecutionEngine (AQL_TRANSACTION_V8* trx, Query* query);
-
-      public:
+        ExecutionEngine (AQL_TRANSACTION_V8* trx, 
+                         Query* query);
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief destroy the engine, frees all assigned blocks
@@ -74,10 +74,17 @@ namespace triagens {
       public:
 
 ////////////////////////////////////////////////////////////////////////////////
+// @brief whether or not we are a coordinator
+////////////////////////////////////////////////////////////////////////////////
+       
+        static bool isCoordinator ();
+
+////////////////////////////////////////////////////////////////////////////////
 // @brief create an execution engine from a plan
 ////////////////////////////////////////////////////////////////////////////////
 
-        static ExecutionEngine* instanciateFromPlan (AQL_TRANSACTION_V8*,
+        static ExecutionEngine* instanciateFromPlan (QueryRegistry*, 
+                                                     AQL_TRANSACTION_V8*,
                                                      Query*,
                                                      ExecutionPlan*);
 
@@ -88,6 +95,15 @@ namespace triagens {
         ExecutionBlock* root () const {
           TRI_ASSERT(_root != nullptr);
           return _root;
+        }
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief set the root block 
+////////////////////////////////////////////////////////////////////////////////
+        
+        void root (ExecutionBlock* root) {
+          TRI_ASSERT(root != nullptr);
+          _root = root;
         }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -107,11 +123,35 @@ namespace triagens {
         }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief initializeCursor, could be called multiple times
+////////////////////////////////////////////////////////////////////////////////
+
+        int initializeCursor (AqlItemBlock* items, size_t pos) {
+          return _root->initializeCursor(items, pos);
+        }
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief shutdown, will be called exactly once for the whole query
+////////////////////////////////////////////////////////////////////////////////
+
+        int shutdown () {
+          return _root->shutdown();
+        }
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief getSome
 ////////////////////////////////////////////////////////////////////////////////
 
         AqlItemBlock* getSome (size_t atLeast, size_t atMost) {
           return _root->getSome(atLeast, atMost);
+        }
+        
+////////////////////////////////////////////////////////////////////////////////
+/// @brief skipSome
+////////////////////////////////////////////////////////////////////////////////
+
+        size_t skipSome (size_t atLeast, size_t atMost) {
+          return _root->skipSome(atLeast, atMost);
         }
         
 ////////////////////////////////////////////////////////////////////////////////

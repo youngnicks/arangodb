@@ -113,6 +113,16 @@ namespace triagens {
     int distributeInCluster (Optimizer*, ExecutionPlan*, Optimizer::Rule const*);
 
     int distributeFilternCalcToCluster (Optimizer*, ExecutionPlan*, Optimizer::Rule const*);
+
+    int distributeSortToCluster (Optimizer*, ExecutionPlan*, Optimizer::Rule const*);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief try to get rid of a RemoteNode->ScatterNode combination which has
+/// only a SingletonNode and possibly some CalculationNodes as dependencies
+////////////////////////////////////////////////////////////////////////////////
+
+    int removeUnnecessaryRemoteScatter (Optimizer*, ExecutionPlan*, Optimizer::Rule const*);
+
   }  // namespace aql
 }  // namespace triagens
 

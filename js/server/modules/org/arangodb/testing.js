@@ -86,6 +86,7 @@ var _ = require("underscore");
 
 var testFuncs = {};
 var print = require("internal").print;
+var time = require("internal").time;
 var fs = require("fs");
 var download = require("internal").download;
 var wait = require("internal").wait;
@@ -222,7 +223,7 @@ function startInstance (protocol, options, addArgs, testname) {
     if (typeof(options.valgrind) === 'string') {
       var run = fs.join("bin","arangod");
       var valgrindopts = options.valgrindargs.concat(
-        ["--xml-file="+options.valgrindXmlFileBase + '_' + testname + '.xml']);
+        ["--xml-file="+options.valgrindXmlFileBase + '_' + testname + '%p.xml']);
       var newargs=valgrindopts.concat([run]).concat(args);      
       var cmdline = options.valgrind;
       instanceInfo.pid = executeExternal(cmdline, newargs);
@@ -398,17 +399,34 @@ function runThere (options, instanceInfo, file) {
 
 function executeAndWait (cmd, args) {
   var pid = executeExternal(cmd, args);
+  var startTime = time();
   var res = statusExternal(pid, true);
+  var deltaTime = time() - startTime;
+
   if (res.status === "TERMINATED") {
+    print("Finished: " + res.status + " Exitcode: " + res.exit + " Time Elapsed: " + deltaTime);
     if (res.exit === 0) {
-      return { status: true, message: "" };
+      return { status: true, message: "", duration: deltaTime};
     }
     else {
-      return { status: false, message: "exit code was " + res.exit};
+      return { status: false, message: "exit code was " + res.exit, duration: deltaTime};
     }
   }
+  else if (res.status === "ABORTED") {
+    print("Finished: " + res.status + " Signal: " + res.signal + " Time Elapsed: " + deltaTime);
+    return {
+      status: false,
+      message: "irregular termination: " + res.status + " Exit-Signal: " + res.signal,
+      duration: deltaTime
+    };
+  }
   else {
-    return { status: false, message: "irregular termination: " + res.status};
+    print("Finished: " + res.status + " Exitcode: " + res.exit + " Time Elapsed: " + deltaTime);
+    return {
+      status: false,
+      message: "irregular termination: " + res.status + " Exit-Code: " + res.exit,
+      duration: deltaTime
+    };
   }
 }
 
@@ -597,7 +615,7 @@ testFuncs.single_server = function (options) {
     print("Shutting down...");
     shutdownInstance(instanceInfo,options);
     print("done.");
-    return result
+    return result;
   }
   else {
     return { status: false, message: "No test specified!"};
@@ -622,7 +640,7 @@ testFuncs.single_client = function (options) {
     print("Shutting down...");
     shutdownInstance(instanceInfo,options);
     print("done.");
-    return result
+    return result;
   }
   else {
     return { status: false, message: "No test specified!"};
@@ -671,19 +689,35 @@ function rubyTests (options, ssl) {
                 "--format", "d", "--require", tmpname,
                 fs.join("UnitTests","HttpInterface",n)];
         var pid = executeExternal("rspec", args);
+        var startTime = time();
         var r = statusExternal(pid, true);
-
+        var deltaTime = time() - startTime;
         if (r.status === "TERMINATED") {
+          print("Finished: " + r.status + " Signal: " + r.exit + " Time Elapsed: " + deltaTime);
           if (r.exit === 0) {
-            result[n] =  { status: true, message: "" };
+            result[n] =  { status: true, message: "", duration: deltaTime };
           }
           else {
-            result[n] = { status: false, message: "exit code was " + r.exit};
+            result[n] = { status: false, message: " exit code was " + r.exit, duration: deltaTime};
           }
         }
-        else {
-          result[n] = { status: false, message: "irregular termination: " + r.status};
+        else if (r.status === "ABORTED") {
+          print("Finished: " + r.status + " Signal: " + r.exit + " Time Elapsed: " + deltaTime);
+          result[n] = {
+            status: false,
+            message: "irregular termination: " + r.status + " Exit-Signal: " + r.signal,
+            duration: deltaTime
+          };
         }
+        else {
+          print("Finished: " + r.status + " Exit Status: " + r.exit + " Time Elapsed: " + deltaTime);
+          result[n] = {
+            status: false,
+            message: "irregular termination: " + r.status + " Exit-code: " + r.exit,
+            duration: deltaTime
+          };
+        }
+
         if (r.status === false && !options.force) {
           break;
         }

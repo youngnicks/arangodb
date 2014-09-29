@@ -365,7 +365,15 @@ class KeySpace {
  
       auto found = static_cast<KeySpaceElement*>(TRI_InsertKeyAssociativePointer(&_hash, element->key, element, false));
    
-      if (found == nullptr) {
+      if (compare->IsUndefined()) {
+        if (found == nullptr) {
+          // no object saved yet
+          TRI_InsertKeyAssociativePointer(&_hash, element->key, element, false);
+          match = true;
+        }
+        else {
+          match = false;
+        }
         return TRI_ERROR_NO_ERROR;
       }
 
@@ -373,6 +381,7 @@ class KeySpace {
 
       if (other == nullptr) {
         delete element;
+        // TODO: fix error message
         return TRI_ERROR_OUT_OF_MEMORY;
       }
         
@@ -382,12 +391,13 @@ class KeySpace {
       if (res != 0) {
         delete element;
         match = false;
-        return TRI_ERROR_NO_ERROR;
+      }
+      else {
+        TRI_InsertKeyAssociativePointer(&_hash, element->key, element, true);
+        delete found;
+        match = true;
       }
 
-      TRI_InsertKeyAssociativePointer(&_hash, element->key, element, true);
-      delete found;
-      match = true;
       return TRI_ERROR_NO_ERROR;
     }
 
@@ -1160,9 +1170,14 @@ static v8::Handle<v8::Value> JS_KeySetCas (v8::Arguments const& argv) {
   std::string const&& name = TRI_ObjectToString(argv[0]);
   std::string const&& key  = TRI_ObjectToString(argv[1]);
 
+  if (argv[2]->IsUndefined()) {
+    // TODO: change error code
+    TRI_V8_EXCEPTION(scope, TRI_ERROR_INTERNAL);
+  }
+
   auto h = &(static_cast<UserStructures*>(vocbase->_userStructures)->hashes);
   int res;
-  bool match;
+  bool match = false;
   {
     READ_LOCKER(h->lock);
 
@@ -1667,11 +1682,6 @@ void TRI_FreeUserStructuresVocBase (TRI_vocbase_t* vocbase) {
 
 void TRI_InitV8UserStructures (v8::Handle<v8::Context> context) {
   v8::HandleScope scope;
-
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
-  TRI_v8_global_t* v8g = static_cast<TRI_v8_global_t*>(isolate->GetData());
-
-  TRI_ASSERT(v8g != nullptr);
 
   TRI_AddGlobalFunctionVocbase(context, "KEYSPACE_CREATE", JS_KeyspaceCreate);
   TRI_AddGlobalFunctionVocbase(context, "KEYSPACE_DROP", JS_KeyspaceDrop);

@@ -26,6 +26,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "Aql/OptimizerRules.h"
+#include "Aql/ExecutionEngine.h"
 #include "Aql/ExecutionNode.h"
 #include "Aql/Indexes.h"
 #include "Aql/Variable.h"
@@ -1615,7 +1616,7 @@ int triagens::aql::distributeInCluster (Optimizer* opt,
                                         Optimizer::Rule const* rule) {
   bool wasModified = false;
 
-  if (triagens::arango::ServerState::instance()->isCoordinator()) {
+  if (ExecutionEngine::isCoordinator()) {
     // we are a coordinator. now look in the plan for nodes of type
     // EnumerateCollectionNode and IndexRangeNode
     std::vector<ExecutionNode::NodeType> const types = { 
@@ -1640,29 +1641,55 @@ int triagens::aql::distributeInCluster (Optimizer* opt,
       bool const isRootNode = plan->isRoot(node);
       plan->unlinkNode(node, isRootNode);
 
+      auto const nodeType = node->getType();
+
+      // extract database and collection from plan node
+      TRI_vocbase_t* vocbase = nullptr;
+      Collection const* collection = nullptr;
+
+      if (nodeType == ExecutionNode::ENUMERATE_COLLECTION) {
+        vocbase = static_cast<EnumerateCollectionNode*>(node)->vocbase();
+        collection = static_cast<EnumerateCollectionNode*>(node)->collection();
+      }
+      else if (nodeType == ExecutionNode::INDEX_RANGE) {
+        vocbase = static_cast<IndexRangeNode*>(node)->vocbase();
+        collection = static_cast<IndexRangeNode*>(node)->collection();
+      }
+      else if (nodeType == ExecutionNode::INSERT ||
+               nodeType == ExecutionNode::UPDATE ||
+               nodeType == ExecutionNode::REPLACE ||
+               nodeType == ExecutionNode::REMOVE) {
+        vocbase = static_cast<ModificationNode*>(node)->vocbase();
+        collection = static_cast<ModificationNode*>(node)->collection();
+      }
+      else {
+        TRI_ASSERT(false);
+      }
+
       // insert a scatter node
-      ExecutionNode* scatterNode = new ScatterNode(plan, plan->nextId());
+      ExecutionNode* scatterNode = new ScatterNode(plan, plan->nextId(), vocbase, collection);
       plan->registerNode(scatterNode);
       scatterNode->addDependency(deps[0]);
 
       // insert a remote node
-      ExecutionNode* remoteNode = new RemoteNode(plan, plan->nextId());
+      ExecutionNode* remoteNode = new RemoteNode(plan, plan->nextId(), vocbase, collection, "", "", "");
       plan->registerNode(remoteNode);
       remoteNode->addDependency(scatterNode);
         
       // re-link with the remote node
       node->addDependency(remoteNode);
+      
 
       // insert another remote node
-      remoteNode = new RemoteNode(plan, plan->nextId());
+      remoteNode = new RemoteNode(plan, plan->nextId(), vocbase, collection, "", "", "");
       plan->registerNode(remoteNode);
       remoteNode->addDependency(node);
-     
+      
       // insert a gather node 
-      ExecutionNode* gatherNode = new GatherNode(plan, plan->nextId());
+      ExecutionNode* gatherNode = new GatherNode(plan, plan->nextId(), vocbase, collection);
       plan->registerNode(gatherNode);
       gatherNode->addDependency(remoteNode);
-       
+
       // and now link the gather node with the rest of the plan
       if (parents.size() == 1) {
         parents[0]->replaceDependency(deps[0], gatherNode);
@@ -1681,13 +1708,11 @@ int triagens::aql::distributeInCluster (Optimizer* opt,
   return TRI_ERROR_NO_ERROR;
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief move filters up in the plan
+/// @brief move filters up into the cluster distribution part of the plan
 /// this rule modifies the plan in place
 /// filters are moved as far up in the plan as possible to make result sets
 /// as small as possible as early as possible
-/// filters are not pushed beyond limits
 ////////////////////////////////////////////////////////////////////////////////
 
 int triagens::aql::distributeFilternCalcToCluster (Optimizer* opt, 
@@ -1713,41 +1738,43 @@ int triagens::aql::distributeFilternCalcToCluster (Optimizer* opt,
       auto inspectNode = parents[0];
 
       switch (inspectNode->getType()) {
-      case EN::ENUMERATE_LIST:
-      case EN::SINGLETON:
-      case EN::AGGREGATE:
-      case EN::INSERT:
-      case EN::REMOVE:
-      case EN::REPLACE:
-      case EN::UPDATE:
-        parents = inspectNode->getParents();
-        continue;
-      case EN::SUBQUERY:
-      case EN::RETURN:
-      case EN::NORESULTS:
-      case EN::SCATTER:
-      case EN::GATHER:
-      case EN::ILLEGAL:
-        //do break
-      case EN::REMOTE:
-      case EN::LIMIT:
-      case EN::SORT:
-      case EN::INDEX_RANGE:
-      case EN::ENUMERATE_COLLECTION:
-        stopSearching = true;
-        break;
-      case EN::CALCULATION:
-      case EN::FILTER:
-        // remember our cursor...
-        parents = inspectNode->getParents();
-        // then unlink the filter/calculator from the plan
-        plan->unlinkNode(inspectNode);
-        // and re-insert into plan in front of the remoteNode
-        plan->insertDependency(rn, inspectNode);
+        case EN::ENUMERATE_LIST:
+        case EN::SINGLETON:
+        case EN::AGGREGATE:
+        case EN::INSERT:
+        case EN::REMOVE:
+        case EN::REPLACE:
+        case EN::UPDATE:
+          parents = inspectNode->getParents();
+          continue;
+        case EN::SUBQUERY:
+        case EN::RETURN:
+        case EN::NORESULTS:
+        case EN::SCATTER:
+        case EN::GATHER:
+        case EN::ILLEGAL:
+          //do break
+        case EN::REMOTE:
+        case EN::LIMIT:
+        case EN::SORT:
+        case EN::INDEX_RANGE:
+        case EN::ENUMERATE_COLLECTION:
+          stopSearching = true;
+          break;
+        case EN::CALCULATION:
+        case EN::FILTER:
+          // remember our cursor...
+          parents = inspectNode->getParents();
+          // then unlink the filter/calculator from the plan
+          plan->unlinkNode(inspectNode);
+          // and re-insert into plan in front of the remoteNode
+          plan->insertDependency(rn, inspectNode);
 
-        modified = true;
-        //ready to rumble!
-      };
+          modified = true;
+          //ready to rumble!
+          break;
+      }
+
       if (stopSearching) {
         break;
       }
@@ -1760,6 +1787,195 @@ int triagens::aql::distributeFilternCalcToCluster (Optimizer* opt,
   
   opt->addPlan(plan, rule->level, modified);
   
+  return TRI_ERROR_NO_ERROR;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief move sorts up into the cluster distribution part of the plan
+/// this rule modifies the plan in place
+/// sorts are moved as far up in the plan as possible to make result sets
+/// as small as possible as early as possible
+/// 
+/// filters are not pushed beyond limits
+////////////////////////////////////////////////////////////////////////////////
+
+int triagens::aql::distributeSortToCluster (Optimizer* opt, 
+                                            ExecutionPlan* plan,
+                                            Optimizer::Rule const* rule) {
+  bool modified = false;
+
+  std::vector<ExecutionNode*> nodes
+    = plan->findNodesOfType(triagens::aql::ExecutionNode::GATHER, true);
+  
+  for (auto n : nodes) {
+    auto remoteNodeList = n->getDependencies();
+    auto gatherNode = static_cast<GatherNode*>(n);
+    TRI_ASSERT(remoteNodeList.size() > 0);
+    auto rn = remoteNodeList[0];
+    auto parents = n->getParents();
+    if (parents.size() < 1) {
+      continue;
+    }
+    while (1) {
+      bool stopSearching = false;
+
+      auto inspectNode = parents[0];
+
+      switch (inspectNode->getType()) {
+        case EN::ENUMERATE_LIST:
+        case EN::SINGLETON:
+        case EN::AGGREGATE:
+        case EN::INSERT:
+        case EN::REMOVE:
+        case EN::REPLACE:
+        case EN::UPDATE:
+        case EN::CALCULATION:
+        case EN::FILTER:
+          parents = inspectNode->getParents();
+          continue;
+        case EN::SUBQUERY:
+        case EN::RETURN:
+        case EN::NORESULTS:
+        case EN::SCATTER:
+        case EN::GATHER:
+        case EN::ILLEGAL:
+          //do break
+        case EN::REMOTE:
+        case EN::LIMIT:
+        case EN::INDEX_RANGE:
+        case EN::ENUMERATE_COLLECTION:
+          stopSearching = true;
+          break;
+        case EN::SORT:
+          auto thisSortNode = static_cast<SortNode*>(inspectNode);
+      
+          // remember our cursor...
+          parents = inspectNode->getParents();
+          // then unlink the filter/calculator from the plan
+          plan->unlinkNode(inspectNode);
+          // and re-insert into plan in front of the remoteNode
+          plan->insertDependency(rn, inspectNode);
+          gatherNode->setElements(thisSortNode->getElements());
+          modified = true;
+          //ready to rumble!
+      }
+
+      if (stopSearching) {
+        break;
+      }
+    }
+  }
+  
+  if (modified) {
+    plan->findVarUsage();
+  }
+  
+  opt->addPlan(plan, rule->level, modified);
+  
+  return TRI_ERROR_NO_ERROR;
+}
+
+class ScatterToSingletonViaCalcOnlyFinder: public WalkerWorker<ExecutionNode> {
+  Optimizer* _opt;
+  ExecutionPlan* _plan;
+  bool _canThrow; 
+  Optimizer::RuleLevel _level;
+  RemoteNode* _remote;
+  ExecutionNode* _scatter;
+  
+  public: 
+    ScatterToSingletonViaCalcOnlyFinder (Optimizer* opt,
+                                         ExecutionPlan* plan,
+                                         Optimizer::RuleLevel level,
+                                         RemoteNode* nn)
+      : _opt(opt),
+        _plan(plan), 
+        _canThrow(false),
+        _level(level),
+        _remote(nn),
+        _scatter(nullptr){
+    };
+
+    ~ScatterToSingletonViaCalcOnlyFinder () {
+    }
+
+    bool before (ExecutionNode* en) {
+      _canThrow = (_canThrow || en->canThrow()); // can any node walked over throw?
+
+      switch (en->getType()) {
+        case EN::SCATTER:{
+          if (_scatter != nullptr) {
+            return true; // somehow found 2 scatter nodes . . .
+          }
+          _scatter = en;
+          return false; // continue . . .
+        }
+        case EN::CALCULATION: {
+          // do nothing, continue . . . 
+          return false;
+        }
+        case EN::SINGLETON: {
+          if (_scatter == nullptr) {
+            return true; // found no scatter nodes
+          }
+          auto newPlan = _plan->clone();
+          if (newPlan == nullptr) {
+            THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+          }
+          try {
+            newPlan->unlinkNode(newPlan->getNodeById(_remote->id()));
+            newPlan->unlinkNode(newPlan->getNodeById(_scatter->id()));
+            _opt->addPlan(newPlan, _level, true);
+          }
+          catch (...) {
+            delete newPlan;
+            throw;
+          }
+          return false;
+        }
+        case EN::ENUMERATE_LIST:
+        case EN::SUBQUERY:        
+        case EN::FILTER: 
+        case EN::AGGREGATE:
+        case EN::GATHER:
+        case EN::REMOTE:
+        case EN::INSERT:
+        case EN::REMOVE:
+        case EN::REPLACE:
+        case EN::UPDATE:
+        case EN::RETURN:
+        case EN::NORESULTS:
+        case EN::ILLEGAL:
+        case EN::LIMIT:           
+        case EN::SORT:
+        case EN::INDEX_RANGE:
+        case EN::ENUMERATE_COLLECTION: {
+          // if we meet any of the above, then we abort . . .
+        }
+      }
+      return true;
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief try to get rid of a RemoteNode->ScatterNode combination which has
+/// only a SingletonNode and possibly some CalculationNodes as dependencies
+////////////////////////////////////////////////////////////////////////////////
+
+int triagens::aql::removeUnnecessaryRemoteScatter (Optimizer* opt, 
+                                  ExecutionPlan* plan, 
+                                  Optimizer::Rule const* rule) {
+  
+  std::vector<ExecutionNode*> nodes
+    = plan->findNodesOfType(triagens::aql::ExecutionNode::REMOTE, true);
+  
+  for (auto n : nodes) {
+    auto nn = static_cast<RemoteNode*>(n);
+    ScatterToSingletonViaCalcOnlyFinder finder(opt, plan, rule->level, nn);
+    nn->walk(&finder);
+  }
+  opt->addPlan(plan, rule->level, false);
+
   return TRI_ERROR_NO_ERROR;
 }
 
