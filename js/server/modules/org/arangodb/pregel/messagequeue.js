@@ -259,7 +259,6 @@ VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
 // End of Vertex Message queue
 
 var Queue = function (executionNumber, vertices, aggregate) {
-  var self = this;
   this.__vertices = vertices;
   this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
@@ -269,14 +268,15 @@ var Queue = function (executionNumber, vertices, aggregate) {
     this.__aggregate = aggregate;
   }
   this.__queues = [];
-  _.each(vertices, function(v, k) {
-    if (k === "__actives") {
-      return;
-    }
-    var id = v._doc._id;
-    self.__queues.push(id);
-    self[id] = new VertexMessageQueue(self, v._locationInfo);
-  });
+  vertices.reset();
+  var v, id;
+  while (vertices.hasNext()) {
+    v = vertices.next();
+    id = v._id;
+    this.__queues.push(id);
+    this[id] = new VertexMessageQueue(this, v._getLocationInfo());
+  }
+  vertices.reset();
   this.__output = {};
 };
 
@@ -288,11 +288,7 @@ Queue.prototype._fillQueues = function () {
     self[q]._clear();
   });
   p.storeWatch("fillQueueFirstEach", t3);
-  var t4 = p.stopWatch();
-  _.each(this.__output, function(ignore, shard) {
-    delete self.__output[shard];
-  });
-  p.storeWatch("fillQueueSecEach", t4);
+  this.__output = {};
   var t1 = p.stopWatch();
   var cursor = db._query(query, {
     "@collection": this.__workCollection.name(),
@@ -310,12 +306,6 @@ Queue.prototype._fillQueues = function () {
         if (this.hasOwnProperty(key)) {
           vQueue = this[key];
           vQueue._fill(doc[key]);
-          if (this.__vertices.hasOwnProperty(key)) {
-            this.__vertices[key]._activate();
-          } else {
-            this.__queues.splice(this.__queues.indexOf(key), 1);
-            delete this[key];
-          } 
         }
       }
     }

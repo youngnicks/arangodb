@@ -31,49 +31,156 @@
 var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
+var pregel = require("org/arangodb/pregel");
+var _ = require("underscore");
 
-var Edge = function (edgeJSON, mapping, shard) {
-  var t = p.stopWatch();
-  this._doc = edgeJSON;
+var Edge = function (parent) {
+  this.__parent = parent;
+  this.__edgeInfo = {};
+};
 
-  this.__resultShard = db[mapping.getResultShard(shard)];
-  this.__result = {};
-  this.__deleted = false;
-  var fromSplit = this._doc._from.split("/");
-  this.__from = mapping.getResultCollection(fromSplit[0]) + "/" + fromSplit[1]; 
-  var toSplit = this._doc._to.split("/");
-  this.__to = mapping.getResultCollection(toSplit[0]) + "/" + toSplit[1]; 
-  this._targetVertex = mapping.getToLocationObject(this, toSplit[0]);
-  p.storeWatch("ConstructEdge", t);
+Edge.prototype._get = function (attr) {
+  return this.__parent.getValue(attr);
 };
 
 Edge.prototype._delete = function () {
-  this.__deleted = true;
+  this.__edgeInfo.d = true;
 };
 
 Edge.prototype._isDeleted = function () {
-  return this.__deleted;
+  return this.__edgeInfo.d || false;
 };
 
 Edge.prototype._getResult = function () {
-  return this.__result;
+  return this.__edgeInfo.r || {};
 };
 
 Edge.prototype._setResult = function (result) {
-  this.__result = result;
+  this.__edgeInfo.r = result;
 };
 
-Edge.prototype._save = function () {
+Edge.prototype._save = function (from, to) {
   var t = p.stopWatch();
-  this.__resultShard.save(this.__from, this.__to, {
-    _key: this._doc._key,
-    result: this.__result,
-    deleted: this.__deleted
-  },
-  { 
-    silent: true
+  this.__edgeInfo.rs.save(from, to, {
+    _key: this.__edgeInfo.key,
+    result: this._getResult(),
+    _deleted: this._isDeleted()
   });
   p.storeWatch("SaveEdge", t);
 };
 
+Edge.prototype._getTarget = function () {
+  return this.__edgeInfo.t;
+};
+
+Edge.prototype._loadEdge = function (edgeInfo) {
+  this.__edgeInfo = edgeInfo;
+};
+
 exports.Edge = Edge;
+
+var EdgeIterator = function (parent) {
+  this.parent = parent;
+  this.length = 0;
+  this.current = -1;
+  this.list = [];
+  this.edge = new Edge(this);
+};
+
+EdgeIterator.prototype.hasNext = function () {
+  return this.current < this.length - 1;
+};
+
+EdgeIterator.prototype.next = function () {
+  if (this.hasNext()) {
+    this.current++;
+  }
+  this.edge._loadEdge(this.list[this.current]);
+  return this.edge;
+};
+
+EdgeIterator.prototype.count = function () {
+  return this.length;
+};
+
+EdgeIterator.prototype.loadEdges = function (edgeArray) {
+  this.list = edgeArray;
+  this.current = -1;
+  this.length = edgeArray.length;
+};
+
+EdgeIterator.prototype.getValue = function (attr) {
+  return this.parent.getValue(this.current, attr);
+};
+
+var EdgeList = function (mapping) {
+  this.mapping = mapping;
+  this.iterator = new EdgeIterator(this);
+  this.sourceList = [];
+  this.shard = -1;
+  this.id = -1;
+};
+
+EdgeList.prototype.addShard = function () {
+  this.sourceList.push([]);
+};
+
+EdgeList.prototype.addVertex = function (shard) {
+  this.sourceList[shard].push([]);
+};
+
+EdgeList.prototype.addShardContent = function (shard, edgeShard, vertex, edges) {
+  var mapping = this.mapping;
+  var self = this;
+  var resultShard = db[mapping.getResultShard(edgeShard)];
+  _.each(edges, function(e) {
+    var toSplit = e._to.split("/");
+    var edgeInfo = {
+      key: e._key,
+      s: edgeShard,
+      t: mapping.getToLocationObject(e, toSplit[0]),
+      rs: resultShard
+    };
+    self.sourceList[shard][vertex].push(edgeInfo);
+  });
+};
+
+EdgeList.prototype.save = function (shard, id) {
+  var self = this;
+  var list = this.sourceList[shard][id];
+  var mapping = this.mapping;
+  var edge = this.iterator.edge;
+  if (list.length > 0) {
+    var edgeShard = list[0].s;
+    var key = list[0].key;
+    var doc = db[edgeShard].document(key);
+    var fromSplit = doc._from.split("/");
+    var from = mapping.getResultCollection(fromSplit[0]) + "/" + fromSplit[1]; 
+    _.each(list, function(e, index) {
+      self.iterator.current = index;
+      edgeShard = e.s;
+      key = e.key;
+      doc = db[edgeShard].document(key);
+      var toSplit = doc._to.split("/");
+      var to = mapping.getResultCollection(toSplit[0]) + "/" + toSplit[1]; 
+      edge._loadEdge(e);
+      edge._save(from, to);
+    });
+  }
+};
+
+EdgeList.prototype.getValue = function (index, attr) {
+  var list = this.sourceList[this.shard][this.id];
+  var edgeShard = list[index].s;
+  var key = list[index].key;
+  return db[edgeShard].document(key)[attr];
+};
+
+EdgeList.prototype.loadEdges = function (shard, id) {
+  this.shard = shard;
+  this.id = id;
+  this.iterator.loadEdges(this.sourceList[shard][id]);
+  return this.iterator;
+};
+
+exports.EdgeList = EdgeList;

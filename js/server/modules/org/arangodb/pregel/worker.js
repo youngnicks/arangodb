@@ -127,56 +127,57 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "var data = [];"
     + "var lastStep;"
     + (algorithms.aggregator ? "  var aggregator = (" + algorithms.aggregator + ");" : "var aggregator = null;")
-    + "var vertices = {};"
-    + "vertices.__actives = 0;"
+    + "var vertices = new pregel.VertexList(pregelMapping);"
     + "var shardList = " + JSON.stringify(shardList) + ";"
     + "var i;"
+    + "var shard;"
     + "for (i = 0; i < shardList.length; i++) {"
-    +   "var t = p.stopWatch();"
-    +   "db[shardList[i]].NTH(" + workerIndex + ", " + workerCount + ").documents.forEach(function (d)  {"
-    +     "vertices.__actives++;"
-    +   "var tInt = p.stopWatch();"
-    +     "vertices[d._id] = new pregel.Vertex(d, shardList[i], pregelMapping, vertices);"
-    +   "p.storeWatch('CompleteDocSetup', tInt);"
-    +   "});"
-    +   "p.storeWatch('CompleteDocSetup', t);"
+    +   "shard = shardList[i];"
+    +   "vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),"
+    +      "db[shard].NTH2(" + workerIndex + ", " + workerCount + ").documents);"
     + "}"
     + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
     + "return function(params) {"
+    + "vertices.reset();"
     + "if (params.cleanUp) {"
-    +   "Object.keys(vertices).forEach(function(key) {"
-    +     "if(key === '__actives'){ return; }"
-    +     "vertices[key]._save();"
-    +   "});"
+    +   "while(vertices.hasNext()) {"
+    +     "vertices.next()._save();"
+    +   "};"
 + "p.aggregate();"
-    +   "worker.cleanUpDone(executionNumber);"
+    + "  worker.queueCleanupDone(executionNumber);"
     + "  return;"
     + "}"
     + "var step = params.step;"
     + "queue._fillQueues();"
     + "var global = params.global;"
+    + "var msgQueue;"
     + "global.step = step;"
     + "if (step !== lastStep) {"
     + "  data = [];"
     + "}"
     + "global.data = data;"
     + "try {"
-    + "  Object.keys(vertices).forEach(function (v) {"
-    + "    if (v === '__actives') return;"
-    + "    var vertex = vertices[v];"
-    + "    if (global.final === true) {"
-    + "      (" + algorithms.finalAlgorithm + ")(vertex,queue[vertex._doc._id],global);"
-    + "    } else {"
-    + "      if (!vertex._isActive()) {"
-    + "        return; "
-    + "      }"
-    + "      (" + algorithms.algorithm + ")(vertex,queue[vertex._doc._id],global);"
-    + "    }"
-    + "  });"
+    +   "var vertex;"
+    +   "if (global.final === true) {"
+    +     "while(vertices.hasNext()) {"
+    +       "vertex = vertices.next();"
+    +       "msgQueue = queue[vertex._id];"
+    +       "(" + algorithms.finalAlgorithm + ")(vertex, msgQueue, global);"
+    +     "}"
+    +   "} else {"
+    +     "while(vertices.hasNext()) {"
+    +       "vertex = vertices.next();"
+    +       "msgQueue = queue[vertex._id];"
+    +       "if (vertex._isActive() || msgQueue.count > 0) {"
+    +         "vertex._activate();"
+    +         "(" + algorithms.algorithm + ")(vertex, msgQueue, global);"
+    +       "}"
+    +     "}"
+    +   "};"
     + "  queue._storeInCollection();"
-    + "  worker.queueDone(executionNumber, global, vertices.__actives, pregelMapping);"
+    + "  worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping);"
     + "  } catch (err) {"
-    + "    worker.queueDone(executionNumber, global, vertices.__actives, pregelMapping, err);"
+    + "    worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, err);"
     + "  }"
     + "}"
     + "}())";
@@ -184,7 +185,6 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
 
 var createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount) {
   // TODO hack for cluster setup. Foxx Queues not working...
-  // KEYSPACE_CREATE("wartung", 1, true);
   KEYSPACE_CREATE("P_" + executionNumber, 2, true);
   KEY_SET("P_" + executionNumber, "done", 0);
   if (pregel.getServerName !== "localhost") {
@@ -431,7 +431,6 @@ var finishedStep = function (executionNumber, global, mapping, active) {
     ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
       "/_api/pregel/finishedStep", body, {}, coordOptions);
     var debug = ArangoClusterComm.wait(coordOptions);
-
   } else {
     p.storeWatch("FinishStep", t);
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
@@ -445,36 +444,30 @@ var finishedStep = function (executionNumber, global, mapping, active) {
   }
 };
 
-var cleanUpDone = function (executionNumber) {
-  var globalCol = pregel.getGlobalCollection(executionNumber);
-  var done = db._executeTransaction({
-    collections: {
-      write: [globalCol.name()]
-    },
-    action: function() {
-      var c = globalCol.document(COUNTER);
-      if (c.count + 1 === WORKERS) {
-        globalCol.update(COUNTER, {
-          count: 0,
-          active: 0
-        });
-        return true;
-      }
-      globalCol.update(COUNTER, {
-        count: c.count + 1,
-        active: 0
-      });
-      return false;
-    }
-  });
-  if (done !== false) {
-    db._drop(pregel.genGlobalCollectionName(executionNumber));
+var queueCleanupDone = function (executionNumber) {
+  var keyList = "P_" + executionNumber;
+  var countDone = KEY_INCR(keyList, "done");
+  if (countDone === WORKERS) {
+    KEY_SET(keyList, "actives", 0);
     if (ArangoServerState.role() === "PRIMARY") {
-      //TODO
+      var conductor = getConductor(executionNumber);
+      var body = JSON.stringify({
+        server: pregel.getServerName(),
+        executionNumber: executionNumber
+      });
+      var coordOptions = {
+        coordTransactionID: ArangoClusterInfo.uniqid()
+      };
+      ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
+        "/_api/pregel/finishedCleanup", body, {}, coordOptions);
+      var debug = ArangoClusterComm.wait(coordOptions);
     } else {
       pregel.Conductor.finishedCleanUp(executionNumber, pregel.getServerName());
     }
   }
+  db._drop(pregel.genWorkCollectionName(executionNumber));
+  db._drop(pregel.genMsgCollectionName(executionNumber));
+  db._drop(pregel.genGlobalCollectionName(executionNumber));
 };
 
 var queueDone = function (executionNumber, global, actives, mapping, err) {
@@ -490,21 +483,10 @@ var queueDone = function (executionNumber, global, actives, mapping, err) {
     globalCol.update(ERR, {error: err});
   }
   var keyList = "P_" + executionNumber;
-
   var countDone = KEY_INCR(keyList, "done");
   var countActive = KEY_INCR(keyList, "actives", actives);
-
-
   p.storeWatch("VertexDone", t);
-  /*
-  if (!KEY_EXISTS("wartung", "sleep")) {
-    KEY_SET("wartung", "sleep", require("internal").time());
-  }
-  */
   if (countDone === WORKERS) {
-    // var time = KEY_GET("wartung", "sleep");
-    // require("internal").print("Sleeptime", require("internal").time() - time);
-    // KEY_REMOVE("wartung", "sleep");
     KEY_SET(keyList, "actives", 0);
     finishedStep(executionNumber, global, mapping, countActive);
   }
@@ -533,10 +515,10 @@ var executeStep = function(executionNumber, step, options, globals) {
     setup(executionNumber, options, globals);
     return;
   }
-  KEY_SET("P_" + executionNumber, "done", 0);
   var t = p.stopWatch();
   var i = 0;
   var queue;
+  KEY_SET("P_" + executionNumber, "done", 0);
   for (i = 0; i < WORKERS; i++) {
     queue = getQueueName(executionNumber, i);
     addTask(queue, step, globals);
@@ -546,9 +528,8 @@ var executeStep = function(executionNumber, step, options, globals) {
 
 var cleanUp = function(executionNumber) {
   // queues.delete("P_" + executionNumber); To be done for new queue
-  db._drop(pregel.genWorkCollectionName(executionNumber));
-  db._drop(pregel.genMsgCollectionName(executionNumber));
   var i, queue;
+  KEY_SET("P_" + executionNumber, "done", 0);
   for (i = 0; i < WORKERS; i++) {
     queue = getQueueName(executionNumber, i);
     addCleanUpTask(queue);
@@ -565,4 +546,4 @@ exports.executeStep = executeStep;
 exports.cleanUp = cleanUp;
 exports.finishedStep = finishedStep;
 exports.queueDone = queueDone;
-exports.cleanUpDone = cleanUpDone;
+exports.queueCleanupDone = queueCleanupDone;

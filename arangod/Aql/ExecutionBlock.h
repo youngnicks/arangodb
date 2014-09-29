@@ -1482,7 +1482,7 @@ public:
     };
 
 // -----------------------------------------------------------------------------
-// --SECTION--                                                    GatherBlock
+// --SECTION--                                                       GatherBlock
 // -----------------------------------------------------------------------------
 
     class GatherBlock : public ExecutionBlock {
@@ -1490,7 +1490,7 @@ public:
       public:
 
         GatherBlock (ExecutionEngine* engine,
-                        GatherNode const* ep)
+                     GatherNode const* ep)
           : ExecutionBlock(engine, ep) {
         }
 
@@ -1507,15 +1507,18 @@ public:
 
         int initializeCursor (AqlItemBlock* items, size_t pos);
 
-        //bool hasMore ();
-
         int64_t count () const;
 
         int64_t remaining ();
 
+        bool hasMore ();
+
         AqlItemBlock* getSome (size_t, size_t);
 
         size_t skipSome (size_t, size_t);
+        
+        // need our own shutdown method since our _buffer is different
+        int shutdown ();
 
       private:
 
@@ -1569,6 +1572,62 @@ public:
 
     };
 
+// -----------------------------------------------------------------------------
+// --SECTION--                                                      ScatterBlock
+// -----------------------------------------------------------------------------
+
+    class ScatterBlock : public ExecutionBlock {
+
+      public:
+
+        ScatterBlock (ExecutionEngine* engine,
+                      ScatterNode const* ep, 
+                      size_t nrClients)
+          : ExecutionBlock(engine, ep), _nrClients(nrClients){
+        }
+
+        ~ScatterBlock () {
+        }
+
+        int initialize () {
+          return ExecutionBlock::initialize();
+        }
+
+        int initializeCursor (AqlItemBlock* items, size_t pos);
+
+        int64_t remaining () {
+          return _dependencies[0]->remaining();
+        }
+
+        virtual bool hasMore ();
+
+        virtual AqlItemBlock* getSome (size_t atLeast, size_t atMost) {
+          TRI_ASSERT(false);
+        }
+
+        virtual size_t skipSome (size_t atLeast, size_t atMost) {
+          TRI_ASSERT(false);
+        }
+       
+        bool hasMoreForClient (size_t clientId);
+        
+        int getOrSkipSomeForClient (size_t atLeast, size_t atMost, 
+            bool skipping, AqlItemBlock*& result, size_t& skipped, size_t clientId);
+        
+        size_t skipSomeForClient (size_t atLeast, size_t atMost, size_t clientId);
+        
+        AqlItemBlock* getSomeForClient (size_t atLeast, size_t atMost, size_t clientId);
+
+      private: 
+
+        //_posForClient.at(i).second is the nr of rows of
+        //_buffer.at(posForClient.at(i).first) sent to the client with id <i>.
+        std::vector<std::pair<size_t,size_t>> _posForClient; 
+        std::vector<bool> _doneForClient;
+        size_t _nrClients;
+
+
+    };
   }  // namespace triagens::aql
 }  // namespace triagens
 

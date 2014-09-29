@@ -45,7 +45,7 @@ Mapping.prototype.getResultCollection = function (id) {
   return this._map.collectionMap[id];
 };
 
-Mapping.prototype.transformToFindShard = function (col, params, prefix) {
+Mapping.prototype.transformToFindShard = function (col, doc, prefix) {
   var t = p.stopWatch();
   if (!prefix) {
     prefix = "shard_";
@@ -54,7 +54,7 @@ Mapping.prototype.transformToFindShard = function (col, params, prefix) {
   var locParams = {};
   var i;
   for (i = 0; i < keys.length; i++) {
-    locParams[keys[i]] = params._doc[prefix + i];
+    locParams[keys[i]] = doc[prefix + i];
   }
   p.storeWatch("transformToFindShard", t);
   return locParams;
@@ -111,7 +111,7 @@ Mapping.prototype.getResponsibleEdgeShards = function (shard) {
 Mapping.prototype.getToLocationObject = function (edge, toCol) {
   var t = p.stopWatch();
   var obj = {};
-  obj._id = edge._doc._to;
+  obj._id = edge._to;
   if (this._isPrimary) {
     var locParams = this.transformToFindShard(toCol, edge, "to_shard_"); 
     locParams._id = obj._id; 
@@ -122,6 +122,21 @@ Mapping.prototype.getToLocationObject = function (edge, toCol) {
   }
   p.storeWatch("getToLocObj", t);
   return obj;
+};
+
+Mapping.prototype.findOriginalCollection = function (shard) {
+  var list = this._map.serverShardMap[pregel.getServerName()];
+  var i, col, shardList;
+  for (col in list) {
+    if (list.hasOwnProperty(col)) {
+      shardList = list[col];
+      for (i = 0; i < shardList.length; ++i) {
+        if (shard === shardList[i]) {
+          return col;
+        }
+      }
+    }
+  }
 };
 
 exports.Mapping = Mapping;

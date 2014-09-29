@@ -3474,7 +3474,6 @@ int GatherBlock::initializeCursor (AqlItemBlock* items, size_t pos) {
     return res;
   }
 
-  // handle local data (if any) TODO
   if(!isSimple()){
     _buffer.reserve(_dependencies.size());
 
@@ -3490,6 +3489,26 @@ int GatherBlock::initializeCursor (AqlItemBlock* items, size_t pos) {
     }
   }
 
+  return TRI_ERROR_NO_ERROR;
+}
+
+int GatherBlock::shutdown() {
+  //don't call default shutdown method since it does the wrong thing to _buffer
+  for (auto it = _dependencies.begin(); it != _dependencies.end(); ++it) {
+    int res = (*it)->shutdown();
+
+    if (res != TRI_ERROR_NO_ERROR) {
+      return res;
+    }
+  }
+
+  for (std::deque<AqlItemBlock*> x: _buffer) {
+    for (AqlItemBlock* y: x) {
+      delete y;
+    }
+    x.clear();
+  }
+  _buffer.clear();
   return TRI_ERROR_NO_ERROR;
 }
 
@@ -3530,6 +3549,22 @@ bool GatherBlock::getBlock (size_t i, size_t atLeast, size_t atMost) {
     res = true;
   }
   return res;
+}
+
+bool GatherBlock::hasMore () {
+  if (_done) {
+    return false;
+  }
+  for (size_t i = 0; i < _buffer.size(); i++){
+    if (!_buffer.at(i).empty()) {
+      return true;
+    } else if (getBlock(i, DefaultBatchSize, DefaultBatchSize)) {
+      _pos.at(i) = make_pair(i, 0);
+      return true;
+    }
+  }
+  _done = true;
+  return false;
 }
 
 AqlItemBlock* GatherBlock::getSome (size_t atLeast, size_t atMost) {
@@ -3630,7 +3665,7 @@ AqlItemBlock* GatherBlock::getSome (size_t atLeast, size_t atMost) {
         _buffer.at(val.first).pop_front();
         if (_buffer.at(val.first).empty()) {
           getBlock(val.first, DefaultBatchSize, DefaultBatchSize);
-          // FIXME does this have to be here? 
+          // FIXME does the below have to be here? 
           // renew the comparison function
           OurLessThan ourLessThan(_trx, _buffer, _sortRegisters, colls);
         }
@@ -3651,26 +3686,70 @@ size_t GatherBlock::skipSome (size_t atLeast, size_t atMost) {
   if (_done) {
     return 0;
   }
-  
+  // the simple case . . .  
   if (isSimple()) {
-    auto res = _dependencies.at(_atDep)->skipSome(atLeast, atMost);
-    while (res == 0 && _atDep < _dependencies.size() - 1) {
+    auto skipped = _dependencies.at(_atDep)->skipSome(atLeast, atMost);
+    while (skipped == 0 && _atDep < _dependencies.size() - 1) {
       _atDep++;
-      res = _dependencies.at(_atDep)->skipSome(atLeast, atMost);
+      skipped = _dependencies.at(_atDep)->skipSome(atLeast, atMost);
     }
-    if (res == 0) {
+    if (skipped == 0) {
       _done = true;
     }
-    return res;
-  //} else { // merge sort the results from the deps
-
+    return skipped;
   }
-  return 0; // to keep the compiler happy
-}
 
-// -----------------------------------------------------------------------------
-// --SECTION--                                      class SortBlock::OurLessThan
-// -----------------------------------------------------------------------------
+  // the non-simple case . . .
+  size_t available = 0; // nr of available rows
+  size_t index;         // an index of a non-empty buffer
+  
+  // pull more blocks from dependencies . . .
+  for (size_t i = 0; i < _dependencies.size(); i++) {
+    if (_buffer.at(i).empty()) {
+      if (getBlock(i, atLeast, atMost)) {
+        _pos.at(i) = make_pair(i,0);           
+      }
+    } else {
+      index = i;
+    }
+    available += _buffer.at(i).size();
+  }
+  
+  if (available == 0) {
+    _done = true;
+    return 0;
+  }
+  
+  size_t skipped = (std::min)(available, atMost); //nr rows in outgoing block
+  
+  // get collections for ourLessThan . . .
+  std::vector<TRI_document_collection_t const*> colls;
+  for (RegisterId i = 0; i < _sortRegisters.size(); i++) {
+    colls.push_back(_buffer.at(index).front()->getDocumentCollection(_sortRegisters[i].first));
+  }
+  
+  // comparison function 
+  OurLessThan ourLessThan(_trx, _buffer, _sortRegisters, colls);
+
+  for (size_t i = 0; i < skipped; i++) {
+    // get the next smallest row from the buffer . . .
+    std::pair<size_t, size_t> val = *(std::min_element(_pos.begin(), _pos.end(), ourLessThan));
+    // renew the buffer and comparison function if necessary . . . 
+    _pos.at(val.first).second++;
+    if (_pos.at(val.first).second == _buffer.at(val.first).front()->size()) {
+      _buffer.at(val.first).pop_front();
+      if (_buffer.at(val.first).empty()) {
+        getBlock(val.first, DefaultBatchSize, DefaultBatchSize);
+        // FIXME does the below have to be here? 
+        // renew the comparison function
+        OurLessThan ourLessThan(_trx, _buffer, _sortRegisters, colls);
+      }
+      _pos.at(val.first) = make_pair(val.first, 0);
+    }
+  }
+
+  return skipped;
+}
 
 bool GatherBlock::OurLessThan::operator() (std::pair<size_t, size_t> const& a,
                                            std::pair<size_t, size_t> const& b) {
@@ -3691,6 +3770,143 @@ bool GatherBlock::OurLessThan::operator() (std::pair<size_t, size_t> const& a,
   }
 
   return false;
+}
+
+// -----------------------------------------------------------------------------
+// --SECTION--                                                class ScatterBlock
+// -----------------------------------------------------------------------------
+
+int ScatterBlock::initializeCursor (AqlItemBlock* items, size_t pos) {
+  int res = ExecutionBlock::initializeCursor(items, pos);
+  
+  if (res != TRI_ERROR_NO_ERROR) {
+    return res;
+  }
+
+  for (size_t i = 0; i < _nrClients; i++) {
+    _posForClient.push_back(std::make_pair(0, 0));
+    _doneForClient.push_back(false);
+  }
+
+  return TRI_ERROR_NO_ERROR;
+}
+
+bool ScatterBlock::hasMoreForClient (size_t clientId){
+
+  TRI_ASSERT(0 <= clientId && clientId < _nrClients);
+
+  if (_doneForClient.at(clientId)) {
+    return false;
+  }
+
+  std::pair<size_t,size_t> pos = _posForClient.at(clientId); 
+  // (i, j) where i is the position in _buffer, and j is the position in
+  // _buffer.at(i) we are sending to <clientId>
+
+  if (pos.first > _buffer.size()) {
+    if (!getBlock(DefaultBatchSize, DefaultBatchSize)) {
+      _doneForClient.at(clientId) = true;
+      return false;
+    }
+  }
+  return true;
+}
+
+bool ScatterBlock::hasMore () {
+  
+  if (_done){
+    return false;
+  }
+
+  for(size_t i = 0; i < _nrClients; i++){
+    if (hasMoreForClient(i)){
+      return true;
+    }
+  }
+  _done = true;
+  return false;
+}
+
+int ScatterBlock::getOrSkipSomeForClient (size_t atLeast, 
+    size_t atMost, bool skipping, AqlItemBlock*& result, 
+    size_t& skipped, size_t clientId){
+  
+  TRI_ASSERT(0 < atLeast && atLeast <= atMost);
+  TRI_ASSERT(result == nullptr && skipped == 0);
+  TRI_ASSERT(0 <= clientId && clientId < _nrClients);
+  
+  if (_doneForClient.at(clientId)) {
+    return TRI_ERROR_NO_ERROR;
+  }
+  
+  std::pair<size_t, size_t> pos = _posForClient.at(clientId); 
+
+  // pull more blocks from dependency if necessary . . . 
+  if (pos.first > _buffer.size()) {
+    if (!getBlock(atLeast, atMost)) {
+      _doneForClient.at(clientId) = true;
+      return TRI_ERROR_NO_ERROR;
+    }
+  }
+  
+  size_t available = _buffer.at(pos.first)->size() - pos.second;
+  // available should be non-zero  
+  
+  skipped = std::min(available, atMost); //nr rows in outgoing block
+  
+  if(!skipping){ 
+    result = _buffer.at(pos.first)->slice(pos.second, pos.second + skipped);
+  }
+
+  // increment the position . . .
+  _posForClient.at(clientId).second += skipped;
+
+  // check if we're done at current block in buffer . . .  
+  if (_posForClient.at(clientId).second == _buffer.at(_posForClient.at(clientId).first)->size()) {
+    _posForClient.at(clientId).first++;
+    _posForClient.at(clientId).second = 0;
+
+    // check if we can pop the front of the buffer . . . 
+    bool popit = true;
+    for (size_t i = 0; i < _nrClients; i++) {
+      if (_posForClient.at(i).first == 0) {
+        popit = false;
+        break;
+      }
+    }
+    if (popit) {
+      delete(_buffer.front());
+      _buffer.pop_front();
+      // update the values in first coord of _posForClient
+      for (size_t i = 0; i < _nrClients; i++) {
+        _posForClient.at(i).first--;
+      }
+
+    }
+  }
+  return TRI_ERROR_NO_ERROR;
+}
+
+AqlItemBlock* ScatterBlock::getSomeForClient (
+                                  size_t atLeast, size_t atMost, size_t clientId) {
+  size_t skipped = 0;
+  AqlItemBlock* result = nullptr;
+  int out = getOrSkipSome(atLeast, atMost, false, result, skipped);
+  if (out != TRI_ERROR_NO_ERROR) {
+    THROW_ARANGO_EXCEPTION(out);
+  }
+  return result;
+}
+
+size_t ScatterBlock::skipSomeForClient (size_t atLeast, size_t atMost, size_t clientId) {
+  size_t skipped = 0;
+  AqlItemBlock* result = nullptr;
+  int out = getOrSkipSome(atLeast, atMost, true, result, skipped);
+  TRI_ASSERT(result == nullptr);
+  if (out != TRI_ERROR_NO_ERROR) {
+    THROW_ARANGO_EXCEPTION(out);
+  }
+  return skipped;
 }
 
 // Local Variables:

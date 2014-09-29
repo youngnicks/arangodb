@@ -1,5 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports, Graph, arguments, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
+/*global KEY_SET, KEY_GET, KEY_AT, KEY_PUSH, KEY_INCR, KEY_DECR, KEY_EXISTS, KEY_SET_CAS, KEY_REMOVE, KEYSPACE_CREATE*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Graph functionality
@@ -39,19 +40,31 @@ var tasks = require("org/arangodb/tasks");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
-var step = "step";
-var timeout = "timeout";
-var stepContent = "stepContent";
-var waitForAnswer = "waitForAnswer";
+var STEP = "step";
+var STEPCONTENT = "stepContent";
+var GLOBALS = "globals";
+var SUPERSTEP = "superstep";
+var FINALSTEP = "finalstep";
+var ACTIVE = "active";
+var MESSAGES = "messages";
+var DATA = "data";
+var COUNTER = "counter";
+var TIMEOUT = "timeout";
+var FINAL = "final";
+var ONGOING = "ongoing";
+var STATE = "state";
+var STATEFINISHED = "finished";
+var STATERUNNING = "running";
+var STATEERROR = "error";
+var ERROR = "error";
+var GRAPH = "graph";
+
 var active = "active";
 var final = "final";
 var state = "state";
 var data = "data";
 var messages = "messages";
 var error = "error";
-var stateFinished = "finished";
-var stateRunning = "running";
-var stateError = "error";
 var _ = require("underscore");
 
 function getCollection () {
@@ -60,6 +73,29 @@ function getCollection () {
 
 var genTaskId = function (executionNumber) {
   return "Pregel_Task_" + executionNumber;
+};
+
+var genKeySpaceId = function (executionNumber, postfix) {
+  return "P_C_" + executionNumber + "_" + postfix;
+};
+
+var serverKeySpace = function (executionNumber) {
+  return genKeySpaceId(executionNumber, "server");
+};
+
+var globalKeySpace = function (executionNumber) {
+  return genKeySpaceId(executionNumber, "global");
+};
+
+var timerKeySpace = function (executionNumber) {
+  return genKeySpaceId(executionNumber, "timer");
+};
+
+var prepareNextStep = function (globalSpace) {
+  KEY_SET(globalSpace, ACTIVE, 0);
+  KEY_SET(globalSpace, MESSAGES, 0);
+  KEY_SET(globalSpace, DATA, []);
+  KEY_SET(globalSpace, FINAL, false);
 };
 
 var getExecutionInfo = function(executionNumber) {
@@ -84,44 +120,41 @@ var saveGlobals = function(executionNumber, globals) {
 };
 
 var startTimer = function (executionNumber) {
-  updateExecutionInfo(executionNumber, {timeUsed: {__ongoing: time()}});
+  KEY_SET(timerKeySpace(executionNumber), ONGOING, time());
 };
 
 var storeTime = function (executionNumber, title) {
-  var oldTime = getExecutionInfo(executionNumber).timeUsed.__ongoing;
-  var updateObj = {timeUsed: {__ongoing: time()}};
-  updateObj.timeUsed[title] = Math.round(1000 * (time() - oldTime));
-  updateExecutionInfo(executionNumber, updateObj);
+  var space = timerKeySpace(executionNumber);
+  var oldTime = KEY_GET(space, ONGOING);
+  KEY_SET(space, title, Math.round(1000 * (time() - oldTime)));
+  KEY_SET(space, ONGOING, time());
 };
 
 var clearTimer = function (executionNumber) {
-  updateExecutionInfo(executionNumber, {timeUsed: {__ongoing: null}});
-
+  KEY_REMOVE(timerKeySpace(executionNumber), ONGOING);
 };
 
-var getWaitForAnswerMap = function() {
-  var waitForAnswerMap = {}, serverList;
+var getWaitForAnswerMap = function(executionNumber) {
+  var serverList;
+  var space = serverKeySpace(executionNumber);
   if (ArangoServerState.isCoordinator()) {
     serverList = ArangoClusterInfo.getDBServers();
   } else {
     serverList = ["localhost"];
   }
   serverList.forEach(function(s) {
-    waitForAnswerMap[s] = false;
+    KEY_SET(space, s, false);
   });
-  return waitForAnswerMap;
+  KEY_SET(space, COUNTER, serverList.length);
 };
 
 var startNextStep = function(executionNumber, options) {
   var t = p.stopWatch();
   var dbServers;
-  var info = getExecutionInfo(executionNumber);
+  var space = globalKeySpace(executionNumber);
   var globals = getGlobals(executionNumber);
-  var stepNo = info[step];
+  var stepNo = KEY_GET(space, STEP);
   options = options || {};
-  if (info[timeout]) {
-    options[timeout] = info[timeout];
-  }
   options.conductor = pregel.getServerName();
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
@@ -140,7 +173,7 @@ var startNextStep = function(executionNumber, options) {
     };
     tasks.register({
       id: genTaskId(executionNumber),
-      offset: options.timeout || pregel.getTimeoutConst(executionNumber),
+      offset: KEY_GET(space, TIMEOUT),
       command: function(params) {
         var c = require("org/arangodb/pregel").Conductor;
         c.timeOutExecution(params.executionNumber);
@@ -172,12 +205,13 @@ var startNextStep = function(executionNumber, options) {
 var cleanUp = function (executionNumber, err) {
   var dbServers;
   var httpOptions = {};
-  var execInfo = {state : stateFinished};
   if (err) {
-    execInfo.state = stateError;
-    execInfo.error = err;
+    var space = globalKeySpace(executionNumber);
+    KEY_SET(space, STATE, STATEERROR);
+    KEY_SET(space, ERROR, err);
+    return;
   }
-
+  getWaitForAnswerMap(executionNumber);
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
     var coordOptions = {
@@ -199,9 +233,6 @@ var cleanUp = function (executionNumber, err) {
     httpOptions.type = "POST";
     require("org/arangodb/pregel").Worker.cleanUp(executionNumber);
   }
-  updateExecutionInfo(
-    executionNumber, execInfo
-  );
 };
 
 var timeOutExecution = function (executionNumber) {
@@ -221,36 +252,33 @@ var generateResultCollectionName = function (collectionName, executionNumber) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var initNextStep = function (executionNumber) {
-  var t = p.stopWatch();
-  var info = getExecutionInfo(executionNumber);
-  info[step]++;
-  var stepInfo = info[stepContent][info[step]];
-  info[stepContent].push({
-    active: 0,
-    data : [],
-    messages: 0,
-    final: (stepInfo[active] === 0 && stepInfo[messages] === 0)
-  });
-  info[waitForAnswer] = getWaitForAnswerMap();
-  updateExecutionInfo(executionNumber, info);
-
-  var globals = getGlobals(executionNumber);
-  if (globals && globals.conductorAlgorithm) {
-    var t2 = p.stopWatch();
-    globals.step = info[step] -1;
-    var x = new Function("a", "b", "return " + globals.conductorAlgorithm + "(a,b);");
+  var space = globalKeySpace(executionNumber);
+  var step = KEY_INCR(space, STEP);
+  var active = KEY_GET(space, ACTIVE);
+  var messages = KEY_GET(space, MESSAGES);
+  var wasFinal = KEY_GET(space, FINAL);
+  var stepInfo = {
+    active: active,
+    messages: messages,
+    data: KEY_GET(space, DATA),
+    final: wasFinal 
+  };
+  KEY_PUSH(space, STEPCONTENT, stepInfo);
+  prepareNextStep(space);
+  getWaitForAnswerMap(executionNumber);
+  var globals = KEY_GET(space, GLOBALS) || {};
+  if (KEY_EXISTS(space, SUPERSTEP)) {
+    globals.step = step - 1;
+    var x = new Function("a", "b", "return " + KEY_GET(space, SUPERSTEP) + "(a,b);");
     x(globals, stepInfo);
-    saveGlobals(executionNumber, globals);
-    p.storeWatch("SuperStepAlgo", t2);
+    KEY_SET(space, GLOBALS, globals);
   }
-  if( stepInfo[active] > 0 || stepInfo[messages] > 0) {
-    p.storeWatch("initNextStep", t);
+  if( active > 0 || messages > 0) {
     startNextStep(executionNumber);
-  } else if (stepInfo[final] === false && globals && globals.finalAlgorithm)  {
-    p.storeWatch("initNextStep", t);
+  } else if (!wasFinal && KEY_EXISTS(space, FINALSTEP))  {
+    KEY_SET(space, FINAL, true);
     startNextStep(executionNumber, {final : true});
   } else {
-    p.storeWatch("initNextStep", t);
     cleanUp(executionNumber);
   }
 };
@@ -259,6 +287,7 @@ var initNextStep = function (executionNumber) {
 var createResultGraph = function (graph, executionNumber, noCreation) {
   var t = p.stopWatch();
   var properties = graph._getCollectionsProperties();
+  var space = globalKeySpace(executionNumber);
   var map = {};
   var tmpMap = {
     edge: {},
@@ -408,10 +437,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   });
   graphModule._create(generateResultCollectionName(graph.__name, executionNumber),
     resultEdgeDefinitions, orphanCollections);
-
-  updateExecutionInfo(
-    executionNumber, {graphName : generateResultCollectionName(graph.__name, executionNumber)}
-  );
+  KEY_SET(space, GRAPH, generateResultCollectionName(graph.__name, executionNumber));
   p.storeWatch("SetupResultGraph", t);
   return resMap;
 };
@@ -556,32 +582,38 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
 /// @endDocuBlock
 ///
 ////////////////////////////////////////////////////////////////////////////////
-var startExecution = function(graphName, algorithms,  options) {
+var startExecution = function(graphName, algorithms, options) {
   var t = p.stopWatch();
-  var graph = graphModule._graph(graphName), infoObject = {},
-    stepContentObject = {};
+  var graph = graphModule._graph(graphName), infoObject = {};
   var pregelAlgorithm = algorithms.base;
-  var conductorAlgorithm = algorithms.superstep;
-  var finalAlgorithm = algorithms.final;
   var aggregator = algorithms.aggregator;
-  infoObject[waitForAnswer] = getWaitForAnswerMap();
-  infoObject[step] = 0;
   options = options  || {};
-  options.conductorAlgorithm = conductorAlgorithm;
-  options.finalAlgorithm = finalAlgorithm;
   options.graphName = graphName;
-  if (options[timeout]) {
-    infoObject[timeout] = options[timeout];
-    delete options.timeout;
-  }
-  infoObject[state] = stateRunning;
-  stepContentObject[active] = graph._countVertices();
-  stepContentObject[messages] = 0;
-  stepContentObject[data] = [];
-  stepContentObject[final] = false;
-  stepContentObject.time = time();
-  infoObject[stepContent] = [stepContentObject, {active: 0 , messages: 0, data : [],  final : false}];
+  var stepInfo = {
+    active: graph._countVertices(),
+    messages: 0,
+    data: [],
+    final: false 
+  };
   var key = saveExecutionInfo(infoObject, options)._key;
+  KEYSPACE_CREATE(serverKeySpace(key));
+  getWaitForAnswerMap(key);
+  var space = globalKeySpace(key);
+  KEYSPACE_CREATE(space);
+  KEYSPACE_CREATE(timerKeySpace(key));
+  KEY_SET(space, STEP, 0);
+  KEY_SET(space, STEPCONTENT, []);
+  KEY_PUSH(space, STEPCONTENT, stepInfo);
+  KEY_SET(space, STATE, STATERUNNING);
+  KEY_SET(space, TIMEOUT, options.timeout || pregel.getTimeoutConst());
+  delete options.timeout;
+  prepareNextStep(space);
+  if (algorithms.hasOwnProperty("superstep")) {
+    KEY_SET(space, SUPERSTEP, algorithms.superstep);
+  }
+  if (algorithms.hasOwnProperty("final")) {
+    KEY_SET(space, FINALSTEP, algorithms.final);
+  }
   try {
     /*jslint evil : true */
     var x = new Function("(" + pregelAlgorithm + "())");
@@ -653,16 +685,18 @@ var startExecution = function(graphName, algorithms,  options) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var getResult = function (executionNumber) {
-  var info = getExecutionInfo(executionNumber), result = {};
-  if (info.state === stateFinished) {
+  var space = globalKeySpace(executionNumber);
+  var state = KEY_GET(space, STATE);
+  var result = {};
+  if (state === STATEFINISHED) {
     result.error = false;
-    result.result = {graphName : info.graphName, state : info.state};
-  } else if (info.state === stateRunning) {
+    result.result = {graphName : KEY_GET(space, GRAPH), state : state};
+  } else if (state === STATERUNNING) {
     result.error = false;
-    result.result = {graphName : "", state : info.state};
+    result.result = {graphName : "", state : state};
   } else {
-    result = info.error;
-    result.state = info.state;
+    result = KEY_GET(space, ERROR);
+    result.state = state;
   }
   return result;
 };
@@ -710,117 +744,38 @@ var getResult = function (executionNumber) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var getInfo = function(executionNumber) {
-  var info = getExecutionInfo(executionNumber);
-  var result = {};
-  result.step = info[step];
-  result.state = info[state];
-  result.globals = {};
-
-  return result;
-};
-
-var finishedCleanupTransactionFunc = function (params) {
-  var transExecutionNumber = params.executionNumber;
-  var collection = require("internal").db._pregel;
-  var transRunInfo = collection.document(transExecutionNumber);
-  var transServerName = params.serverName;
-  var transAwaiting = transRunInfo.waitForAnswer;
-  transAwaiting[transServerName] = true;
-  collection.update(transExecutionNumber, transRunInfo);
-  var transEveryServerResponded = true;
-  Object.keys(transAwaiting).forEach(function(s) {
-    if (transAwaiting[s] === false) {
-      transEveryServerResponded = false;
-    }
-  });
-  return transEveryServerResponded;
-};
-
-
-var finishedTransActionFunc = function (params) {
-  var transInfo = params.info;
-  var transExecutionNumber = params.executionNumber;
-  var collection = require("internal").db._pregel;
-  var transRunInfo = collection.document(transExecutionNumber);
-  var transStep = transRunInfo.step + 1;
-  // Shaped JSON avoidance
-  transRunInfo.stepContent = _.clone(transRunInfo.stepContent);
-  var transStepCont = transRunInfo.stepContent[transStep];
-  transStepCont.messages += transInfo.messages;
-  transStepCont.active += transInfo.active;
-  transStepCont.data = transStepCont.data.concat(transInfo.data);
-  transRunInfo.stepContent[transStep] = transStepCont;
-  transRunInfo.error = transInfo.error;
-  var transServerName = params.serverName;
-  var transAwaiting = transRunInfo.waitForAnswer;
-  transAwaiting[transServerName] = true;
-  collection.update(transExecutionNumber, transRunInfo);
-  var transEveryServerResponded = true;
-  Object.keys(transAwaiting).forEach(function(s) {
-    if (transAwaiting[s] === false) {
-      transEveryServerResponded = false;
-    }
-  });
+  var space = globalKeySpace(executionNumber);
   return {
-    respond: transEveryServerResponded,
-    error: transRunInfo.error,
-    active: transStepCont.active
+    step: KEY_GET(space, STEP),
+    state: KEY_GET(space, STATE),
+    globals: {}
   };
 };
 
 var finishedCleanUp = function(executionNumber, serverName) {
   executionNumber = String(executionNumber);
+  var space = globalKeySpace(executionNumber);
+  var server = serverKeySpace(executionNumber);
 
-  var transactionBody = {
-    collections: {
-      write: [
-        "_pregel"
-      ]
-    },
-    action: finishedCleanupTransactionFunc, 
-    params: {
-      serverName: serverName,
-      executionNumber: executionNumber
-    }
-  };
-
-  var check;
-
-  if (ArangoServerState.isCoordinator()) {
-    var coordOptions = {
-      coordTransactionID: ArangoClusterInfo.uniqid()
-    };
-    var objInfo = ArangoClusterInfo.getCollectionInfo("_system", "_pregel");
-    var endpoint = objInfo.shards[Object.keys(objInfo.shards)[0]];
-    transactionBody.collections = {
-      write: [
-        Object.keys(objInfo.shards)[0]
-      ]
-    };
-    transactionBody.params.dbName = Object.keys(objInfo.shards)[0];
-    transactionBody.action = transactionBody.action.toString();
-    ArangoClusterComm.asyncRequest("POST","server:" + endpoint, db._name(),
-      "/_api/transaction/",JSON.stringify(transactionBody), {}, coordOptions);
-    check = JSON.parse(ArangoClusterComm.wait(coordOptions).body).result;
-  } else {
-    check = db._executeTransaction(transactionBody);
-  }
-  if (check) {
-    storeTime(executionNumber, "CleanUp");
-    clearTimer(executionNumber);
-    if (ArangoServerState.isCoordinator()) {
-      tasks.unregister(genTaskId(executionNumber));
+  if (KEY_SET_CAS(server, serverName, true, false)) {
+    var waiting = KEY_INCR(server, COUNTER, -1);
+    if (waiting === 0) {
+      storeTime(executionNumber, "CleanUp");
+      KEY_SET(space, STATE, STATEFINISHED);
+      clearTimer(executionNumber);
+      if (ArangoServerState.isCoordinator()) {
+        tasks.unregister(genTaskId(executionNumber));
+      }
     }
   }
 };
 
-
 var finishedStep = function(executionNumber, serverName, info) {
-  var t = p.stopWatch();
   executionNumber = String(executionNumber);
   var err;
-  var runInfo = getExecutionInfo(executionNumber);
-  if (info.step === undefined || info.step !== runInfo[step]) {
+  var space = globalKeySpace(executionNumber);
+  var step = KEY_GET(space, STEP);
+  if (info.step === undefined || info.step !== step) {
     err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.code;
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_STEP_MISMATCH.message;
@@ -832,63 +787,38 @@ var finishedStep = function(executionNumber, serverName, info) {
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_MALFORMED.message;
     throw err;
   }
-  var awaiting = runInfo[waitForAnswer];
-  if (awaiting[serverName] === undefined) {
+  var server = serverKeySpace(executionNumber);
+  if (!KEY_EXISTS(server, serverName)) {
     err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.code;
     err.errorMessage = ERRORS.ERROR_PREGEL_MESSAGE_SERVER_NAME_MISMATCH.message;
     throw err;
   }
-
-  var transactionBody = {
-    collections: {
-      write: [
-        "_pregel"
-      ]
-    },
-    action: finishedTransActionFunc,
-    params: {
-      serverName: serverName,
-      executionNumber: executionNumber,
-      info: info
+  if (info.error) {
+    if (ArangoServerState.isCoordinator()) {
+      tasks.unregister(genTaskId(executionNumber));
     }
-  };
-
-  var checks;
-
-  if (ArangoServerState.isCoordinator()) {
-    var coordOptions = {
-      coordTransactionID: ArangoClusterInfo.uniqid()
-    };
-    var objInfo = ArangoClusterInfo.getCollectionInfo("_system", "_pregel");
-    var endpoint = objInfo.shards[Object.keys(objInfo.shards)[0]];
-    transactionBody.collections = {
-      write: [
-        Object.keys(objInfo.shards)[0]
-      ]
-    };
-    transactionBody.params.dbName = Object.keys(objInfo.shards)[0];
-    transactionBody.action = transactionBody.action.toString();
-    ArangoClusterComm.asyncRequest("POST","server:" + endpoint, db._name(),
-      "/_api/transaction/",JSON.stringify(transactionBody), {}, coordOptions);
-    checks = JSON.parse(ArangoClusterComm.wait(coordOptions).body).result;
-
-  } else {
-    checks = db._executeTransaction(transactionBody);
+    cleanUp(executionNumber, info.error);
+    return;
   }
-  if (checks.respond && !checks.error) {
-    storeTime(executionNumber, "Step" + info.step);
-    if (ArangoServerState.isCoordinator()) {
-      tasks.unregister(genTaskId(executionNumber));
+  if (KEY_SET_CAS(server, serverName, true, false)) {
+    KEY_INCR(space, ACTIVE, info.active);
+    KEY_INCR(space, MESSAGES, info.messages);
+    if (info.hasOwnProperty("data")) {
+      var i;
+      for (i in info.data) {
+        if (info.data.hasOwnProperty(i)) {
+          KEY_PUSH(space, DATA, info.data[i]);
+        }
+      }
     }
-    p.storeWatch("finishedStepConductor", t);
-    initNextStep(executionNumber);
-  } else if (checks.respond) {
-    if (ArangoServerState.isCoordinator()) {
-      tasks.unregister(genTaskId(executionNumber));
+    var waiting = KEY_INCR(server, COUNTER, -1);
+    if (waiting === 0) {
+      if (ArangoServerState.isCoordinator()) {
+        tasks.unregister(genTaskId(executionNumber));
+      }
+      initNextStep(executionNumber);
     }
-    p.storeWatch("finishedStepConductor", t);
-    cleanUp(executionNumber, checks.error);
   }
 };
 
@@ -939,8 +869,8 @@ var finishedStep = function(executionNumber, serverName, info) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var dropResult = function(executionNumber) {
-  var info = pregel.getExecutionInfo(executionNumber);
-  graphModule._drop(info.graphName, true);
+  var space = globalKeySpace(executionNumber);
+  graphModule._drop(KEY_GET(space, GRAPH), true);
   pregel.removeExecutionInfo(executionNumber);
 };
 

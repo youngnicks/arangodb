@@ -74,11 +74,19 @@ namespace triagens {
         AqlItemBlock (size_t nrItems, 
                       RegisterId nrRegs);
 
+        AqlItemBlock (triagens::basics::Json const& json);
+
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief destroy the block
 ////////////////////////////////////////////////////////////////////////////////
 
-        ~AqlItemBlock ();
+        ~AqlItemBlock () {
+          destroy();
+        }
+
+      private:
+
+        void destroy ();
 
 // -----------------------------------------------------------------------------
 // --SECTION--                                                    public methods
@@ -284,8 +292,7 @@ namespace triagens {
 /// be used to recreate the AqlItemBlock via the Json constructor
 ////////////////////////////////////////////////////////////////////////////////
 
-        triagens::basics::Json toJson (AQL_TRANSACTION_V8* trx,
-                          TRI_document_collection_t const* document) const;
+        triagens::basics::Json toJson (AQL_TRANSACTION_V8* trx) const;
 
 // -----------------------------------------------------------------------------
 // --SECTION--                                                 private variables

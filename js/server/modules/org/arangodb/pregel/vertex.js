@@ -30,44 +30,36 @@
 ////////////////////////////////////////////////////////////////////////////////
 var p = require("org/arangodb/profiler");
 
+var internal = require("internal");
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var _ = require("underscore");
 
-var Vertex = function (jsonData, shard, mapping, parent) {
-  var t = p.stopWatch();
-  var Edge = pregel.Edge;
+var Vertex = function (vertexList, resultList) {
+  this.__vertexList = vertexList;
+  this.__resultList = resultList;
+};
 
-  this._doc = jsonData;
-  
-  this._locationInfo = {
-    _id: jsonData._id,
-    shard: shard
-  };
+Vertex.prototype._loadVertex = function (shard, id, outEdges, _id) {
+  this.shard = shard;
+  this.id = id;
+  this._id = _id;
+  this._outEdges = outEdges;
+};
 
-  this.__resultShard = db[mapping.getResultShard(shard)];
-  this.__parent = parent;
-  this.__active = true;
-  this.__deleted = false;
-  this.__result = {};
-  var self = this;
-  var respEdges = mapping.getResponsibleEdgeShards(shard);
-  this._outEdges = [];
-  _.each(respEdges, function(edgeShard) {
-    var outEdges = db[edgeShard].outEdges(self._doc._id);
-    _.each(outEdges, function (json) {
-      var e = new Edge(json, mapping, edgeShard);
-      self._outEdges.push(e);
-    });
-  });
-  p.storeWatch("ConstructVertex", t);
+Vertex.prototype._get = function (attr) {
+  return this.__vertexList.readValue(this.shard, this.id, attr);
+};
+
+Vertex.prototype._getLocationInfo = function () {
+  return this.__vertexList.getLocationInfo(this.shard, this.id);
 };
 
 Vertex.prototype._deactivate = function () {
   if (this._isActive()) {
-    this.__parent.__actives--;
+    this.__vertexList.decrActives();
   }
-  this.__active = false;
+  this.__resultList[this.shard][this.id].a = false;
 };
 
 Vertex.prototype._activate = function () {
@@ -75,52 +67,166 @@ Vertex.prototype._activate = function () {
     return;
   }
   if (!this._isActive()) {
-    this.__parent.__actives++;
+    this.__vertexList.incrActives();
   }
-  this.__active = true;
+  this.__resultList[this.shard][this.id].a = true;
 };
 
 Vertex.prototype._isActive = function () {
-  return this.__active && !this.__deleted;
+  if (!this._isDeleted()) {
+    if (this.__resultList[this.shard][this.id].hasOwnProperty("a")) {
+      return this.__resultList[this.shard][this.id].a;
+    }
+    return true;
+  }
+  return false;
 };
 
 Vertex.prototype._isDeleted = function () {
-  return this.__deleted;
+  return this.__resultList[this.shard][this.id].d || false;
 };
 
 Vertex.prototype._delete = function () {
   if (this._isActive()) {
-    this.__parent.__actives--;
+    this.__vertexList.decrActives();
   }
+  this.__resultList[this.shard][this.id].d = true;
   this._save();
-  this.__deleted = true;
-  delete this.__parent[this._doc._id];
+  delete this.__vertexList[this.shard][this.id];
 };
 
 Vertex.prototype._getResult = function () {
-  return this.__result;
+  return this.__resultList[this.shard][this.id].r || {};
 };
 
 Vertex.prototype._setResult = function (result) {
-  this.__result = result;
+  this.__resultList[this.shard][this.id].r = result;
 };
 
-Vertex.prototype._save = function (dontSaveEdges) {
+Vertex.prototype._save = function () {
   var t = p.stopWatch();
-  if (!dontSaveEdges) {
-    this._outEdges.forEach(function(e) {
-      e._save();
-    });
-  }
-  this.__resultShard.save({
-    _key: this._doc._key,
-    _deleted : this.__deleted,
-    result: this.__result
-  }, 
-  { 
-    silent: true 
-  });
+  this.__vertexList.save(this.shard, this.id, this._getResult(), this._isDeleted());
   p.storeWatch("SaveVertex", t);
 };
 
 exports.Vertex = Vertex;
+
+var VertexList = function (mapping) {
+  this.edgeList = new pregel.EdgeList(mapping);
+  this.mapping = mapping;
+  this.current = -1;
+  this.actives = 0;
+  this.shardMapping = [];
+  this.sourceList = [];
+  this.resultList = [];
+  this.resultShards = [];
+  this.shard = 0;
+  this.vertex = new Vertex(this, this.resultList);
+};
+
+// Shard == Name of the collection
+// sourceList == shard.NTH() content of documents
+VertexList.prototype.addShardContent = function (shard, collection, sourceList) {
+  var l = sourceList.length;
+  var shardId = this.shardMapping.length;
+  this.shardMapping.push({
+    shard: db[shard],
+    collection: collection,
+    length: l
+  });
+  this.sourceList.push(sourceList);
+  var respEdges = this.mapping.getResponsibleEdgeShards(shard);
+  var shardResult = [];
+  var self = this;
+  this.edgeList.addShard();
+  _.each(sourceList, function(key, index) {
+    var doc = collection + "/" + key;
+    self.edgeList.addVertex(shardId);
+    shardResult.push({
+      locationInfo: {
+        _id: doc,
+        shard: shard
+      }
+    });
+    _.each(respEdges, function(edgeShard) {
+      self.edgeList.addShardContent(shardId, edgeShard, index, db[edgeShard].outEdges(doc));
+    });
+  });
+  this.resultList.push(shardResult);
+  this.resultShards.push(db[this.mapping.getResultShard(shard)]);
+  this.actives += l;
+};
+
+VertexList.prototype.reset = function () {
+  this.shard = 0;
+  this.current = -1;
+  this.currentLength = this.shardMapping[this.shard].length;
+};
+
+VertexList.prototype.hasNext = function () {
+  if (this.current < this.currentLength - 1) {
+    return true;
+  }
+  if (this.shard >= this.shardMapping.length - 1) {
+    return false;
+  }
+  var i;
+  for (i = this.shard + 1; i < this.shardMapping.length; ++i) {
+    if (this.shardMapping[i].length > 0) {
+      return true;
+    }
+  }
+  return false;
+};
+
+VertexList.prototype.next = function () {
+  if(this.hasNext()) {
+    this.current++;
+    if (this.current === this.currentLength) {
+      this.current = 0;
+      this.shard++;
+      this.currentLength = this.shardMapping[this.shard].length;
+    }
+    var sn = this.shardMapping[this.shard].collection;
+    if (this.sourceList[this.shard][this.current] === undefined) {
+    }
+    this.vertex._loadVertex(this.shard, this.current,
+      this.edgeList.loadEdges(this.shard, this.current),
+      sn + "/" + this.sourceList[this.shard][this.current]
+    );
+    return this.vertex;
+  }
+  return null;
+};
+
+VertexList.prototype.readValue = function (shard, id, attr) {
+  var x = this.sourceList[shard][id];
+  return this.shardMapping[shard].shard.document(x)[attr];
+};
+
+VertexList.prototype.decrActives = function () {
+  this.actives--;
+};
+
+VertexList.prototype.incrActives = function () {
+  this.actives++;
+};
+
+VertexList.prototype.countActives = function () {
+  return this.actives;
+};
+
+VertexList.prototype.save = function (shard, id, result, deleted) {
+  this.edgeList.save(shard, id);
+  this.resultShards[shard].save({
+    _key: this.readValue(shard, id, "_key"),
+    _deleted: deleted,
+    result: result
+  });
+};
+
+VertexList.prototype.getLocationInfo = function (shard, id) {
+  return this.resultList[shard][id].locationInfo;
+};
+
+exports.VertexList = VertexList;
