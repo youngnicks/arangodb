@@ -40,10 +40,10 @@ var Vertex = function (vertexList, resultList) {
   this.__resultList = resultList;
 };
 
-Vertex.prototype._loadVertex = function (shard, id, outEdges, _id) {
+Vertex.prototype._loadVertex = function (shard, id, outEdges, _key) {
   this.shard = shard;
   this.id = id;
-  this._id = _id;
+  this._key = _key;
   this._outEdges = outEdges;
 };
 
@@ -229,4 +229,7 @@ VertexList.prototype.getLocationInfo = function (shard, id) {
   return this.resultList[shard][id].locationInfo;
 };
 
+VertexList.prototype.getShardName = function (shardId) {
+  return this.shardMapping[shardId].shard.name();
+};
 exports.VertexList = VertexList;

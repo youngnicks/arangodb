@@ -57,7 +57,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 1;
+var WORKERS = 4;
 
 if (pregel.getServerName === "localhost") {
   var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
@@ -140,7 +140,7 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     +   "vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),"
     +      "db[shard].NTH2(" + workerIndex + ", " + workerCount + ").documents);"
     + "}"
-    + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
+    + "var queue = new pregel.MessageQueue(executionNumber, vertices, inbox, outbox, aggregator);"
     + "return function(params) {"
     + "vertices.reset();"
     + "if (params.cleanUp) {"
@@ -165,13 +165,13 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     +   "if (global.final === true) {"
     +     "while(vertices.hasNext()) {"
     +       "vertex = vertices.next();"
-    +       "msgQueue = queue[vertex._id];"
+    +       "msgQueue = queue._loadVertex(vertices.getShardName(vertex.shard), vertex);"
     +       "(" + algorithms.finalAlgorithm + ")(vertex, msgQueue, global);"
     +     "}"
     +   "} else {"
     +     "while(vertices.hasNext()) {"
     +       "vertex = vertices.next();"
-    +       "msgQueue = queue[vertex._id];"
+    +       "msgQueue = queue._loadVertex(vertices.getShardName(vertex.shard), vertex);"
     +       "if (vertex._isActive() || msgQueue.count > 0) {"
     +         "vertex._activate();"
     +         "(" + algorithms.algorithm + ")(vertex, msgQueue, global);"
@@ -293,11 +293,15 @@ var setup = function(executionNumber, options, globals) {
           "In_" + spacePrefix + shards + "_0",
           "In_" + spacePrefix + shards + "_1"
         ];
-        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_0");
-        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_1");
+        // Space for step % 2 === 0
+        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_00"); //0 is aggregate
+        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_01"); //1 is plain
+        // Space for step % 2 === 1
+        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_10"); 
+        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_11");
       } else {
-        outbox[shards] = "Out_" + spacePrefix + shards;
-        require("internal").print(outbox[shards]);
+        outbox[shards] = "Out_" + spacePrefix + shards + "0";
+        outbox[shards] = "Out_" + spacePrefix + shards + "1";
         KEYSPACE_CREATE("Out_" + spacePrefix + shards);
       }
     } else {
