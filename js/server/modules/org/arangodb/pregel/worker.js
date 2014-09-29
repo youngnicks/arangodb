@@ -56,7 +56,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 4;
+var WORKERS = 1;
 
 if (pregel.getServerName === "localhost") {
   var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);

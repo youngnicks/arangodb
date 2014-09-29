@@ -69,13 +69,24 @@ examples:
 		@srcdir@/js/actions \
 		@srcdir@/js/client \
 		@srcdir@/js/common \
-		@srcdir@/js/server \
 		@srcdir@/js/apps/system/gharial \
 		@srcdir@/Documentation/Books/Users \
 		@srcdir@/arangod/RestHandler \
 		@srcdir@/arangod/V8Server \
 		@srcdir@/lib/Admin \
 		> /tmp/arangosh.examples
+	python ./Documentation/Scripts/generateExamplesServer.py \
+		--output-dir ./Documentation/Examples \
+		--arangosh-setup ./Documentation/Examples/setup-arangosh.js \
+		./js/server \
+		> /tmp/arangod.examples
+
+	@rm -f "$(PIDFILE)"
+	@rm -rf "$(VOCDIR)"
+	@mkdir -p "$(VOCDIR)/databases"
+	@test -d "$(VOCDIR)"
+
+	($(VALGRIND) ./bin/arangod "$(VOCDIR)"  --server.disable-authentication true --server.threads 1 --server.disable-statistics true --javascript.script /tmp/arangod.examples --pid-file $(PIDFILE) --watch-process $(PID) && rm -rf "$(VOCDIR)")
 
 	$(MAKE) start-server PID=$(PID) SERVER_START="--server.endpoint tcp://$(VOCHOST):$(VOCPORT) --server.disable-authentication true" PROTO=http
 

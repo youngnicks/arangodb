@@ -33,6 +33,7 @@ var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 var conductor = pregel.Conductor;
 var graph = require("org/arangodb/general-graph");
+var pagerank = require("org/arangodb/pregel/examples/pagerank-algorithm");
 var _ = require("underscore");
 var ERRORS = require("org/arangodb").errors;
 var coordinator = ArangoServerState.isCoordinator();
@@ -43,68 +44,11 @@ describe("Pregel PageRank", function () {
 
   describe("on a small graph", function () {
 
-    var gN, v, e, g,
-      pageRank = function (vertex, message, global) {
-        var total = global.vertexCount;
-        var edgeCount;
-        var send;
-        var edge;
-        if (global.step === 0) {
-          edgeCount = vertex._outEdges.length;
-          var initPR = 1 / total;
-          vertex._setResult({
-            rank: initPR,
-            edgeCount: edgeCount
-          });
-          send = initPR / edgeCount;
-          /*
-        vertex._outEdges.forEach(function (e) {
-          message.sendTo(e._targetVertex, send, false);
-        });
-        */
-          while (vertex._outEdges.hasNext()) {
-            edge = vertex._outEdges.next();
-            message.sendTo(edge._getTarget(), send, false);
-          }
-          return;
-        }
-        var result = vertex._getResult();
-        edgeCount = result.edgeCount;
-        var alpha = global.alpha;
-        var newPR = 0;
-        var next;
-        
-        while (message.hasNext()) {
-          next = message.next();
-          newPR += next.data;
-        }
-        newPR *= alpha;
-        newPR += (1 - alpha) / total;
-        result.rank = newPR;
-        vertex._setResult(result);
-        if (global.step === 30) {
-          vertex._deactivate();
-          return;
-        }
-        send = newPR / edgeCount;
-        /*
-        vertex._outEdges.forEach(function (e) {
-          message.sendTo(e._targetVertex, send, false);
-        });
-        */
-        while (vertex._outEdges.hasNext()) {
-          edge = vertex._outEdges.next();
-          message.sendTo(edge._getTarget(), send, false);
-        }
-      },
-      superStep = function (globals) {
-        require("internal").print(globals.step, String(require("internal").time() % 1000).replace(".", ","));
-      },
-      aggregator = function (message, oldMessage) {
-        return message + oldMessage;
-      };
+    var gN, v, e, g;
 
     beforeEach(function () {
+      //db.fE.load();
+      //db.fV.load();
       gN = "UnitTestPregelGraph";
       v = "UnitTestVertices";
       e = "UnitTestEdges";
@@ -177,11 +121,7 @@ describe("Pregel PageRank", function () {
       var gr = require("org/arangodb/general-graph")._graph(gN);
       require("internal").print("Start", String(require("internal").time() % 1000).replace(".", ","));
       var vC = gr._vertices().count();
-      var id = conductor.startExecution(gN, {
-        base: pageRank.toString(),
-        superstep: superStep.toString(),
-        aggregator: aggregator.toString()
-      }, {
+      var id = conductor.startExecution(gN, pagerank.getAlgorithm(), {
         alpha: 0.85,
         vertexCount: vC
       });

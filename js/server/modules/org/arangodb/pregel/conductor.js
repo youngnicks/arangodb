@@ -178,9 +178,6 @@ var cleanUp = function (executionNumber, err) {
     execInfo.error = err;
   }
 
-  updateExecutionInfo(
-    executionNumber, execInfo
-  );
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
     var coordOptions = {
@@ -202,6 +199,9 @@ var cleanUp = function (executionNumber, err) {
     httpOptions.type = "POST";
     require("org/arangodb/pregel").Worker.cleanUp(executionNumber);
   }
+  updateExecutionInfo(
+    executionNumber, execInfo
+  );
 };
 
 var timeOutExecution = function (executionNumber) {
@@ -417,6 +417,145 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
 };
 
 
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_start_execution
+/// @brief starts a pregel run on the given graph.
+///
+/// `pregel.startExecution(graphName, algorithms,  options)`
+///
+/// Starts the execution of the algorithms defined in *algorithms' on the graph defined
+/// by *graphName*.
+///
+/// @PARAMS
+///
+/// @PARAM{graphName, string, required} : The name of the graph.
+/// @PARAM{algorithms, object, required} : An object containing the required and optional parts of the
+///    pregel algorithm as strings.
+///   * *base* (required): The pregel algorithm. This has to be a function with the following signature:
+///     function (vertex, message, global) {}.
+///   * *superstep* (optional): The superstep algorithm, this has to be a function with the following
+///     signature: function (globals) {}.
+///   * *aggregator* (optional): The aggregator algorithm, this has to be a function with the following
+///     signature: function (message, oldMessage) {}.
+///   * *final* (optional): The final algorithm, this has to be a function with the following
+///     signature: function (vertex, message, global) {}.
+/// @PARAM{options, object, optional}
+/// An object defining user defined values that are available within the pregel run.
+///
+///
+/// @EXAMPLES
+///
+/// We write the following pregel job :
+/// Step 0 :  Each Vertex sends a message containing the amount of it's neighbors to all neighbors.
+/// Step 1 :  Each Vertex multiples the total sum of the amounts with a variable integer provided by options.
+///           If the vertex did not receive any message it stores the string "i am so alone" instead of the total sum.
+/// Final Step : Each Vertex changes the result from Step 1 to it's inverse.
+/// Furthermore the superStep provides a random color to each vertex in each step.
+///
+/// As we only send one type of message in this job (the amount of neighbors) we can make use of the *aggregator* function
+/// So we first define this:
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelStartExecutionAggregator}
+/// | var aggregatorAlgorithm = function (message, oldMessage) {
+/// |    //We already aggregate the messages for a target vertex to reduce the amount of messages.
+/// |    //Note that the vertex might nevertheless receive more than one message as the aggregation only effects one pregel worker.
+/// |    return message + oldMessage;
+///   };
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+///
+/// Now we define the base pregel algorithm:
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelStartExecutionBase}
+/// | var baseAlgorithm  = function (vertex, message, global) {
+/// |   var result = vertex._getResult();
+/// |   if (global.step === 0) {
+/// |     //We initialize an empty list to store the random colors we receive from the superstep
+/// |     result.colorList = [];
+/// |      //Send message to neighbors without the sender information, we do not care about it here.
+/// |     vertex._outEdges.forEach(function (e) {
+/// |      message.sendTo(e._targetVertex, vertex._outEdges.length, false);
+/// |     });
+/// |     //Notice we do not deactivate the vertex because we want him to participate in the next step even if he receives no message.
+/// |     return;
+/// |   } else if (global.step === 1) {
+/// |     result.sum = 0;
+/// |     var next;
+/// |     while (message.hasNext()) {
+/// |       result.sum += next.data;
+/// |     }
+/// |     if (result.sum === 0) {
+/// |       result.sum = "i am so alone";
+/// |     } else {
+/// |       result.sum = result.sum * global.someInteger;
+/// |     }
+/// |     vertex._deactivate();
+/// |   }
+/// |   //Store random color provided by global in each step
+/// |   result.colorList.push(global.currentColor);
+/// |   vertex._setResult(result);
+///   };
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+///
+/// So every vertex would has been deactivated after step 1 and no more messages have been sent. Now the pregel algorithm
+/// would normally terminate but we want it to execute a final step.
+/// Note: If one wants to exclude vertices completely (even from the final step) one simply calls *vertex._delete()*.
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelStartExecutionFinal}
+/// | var finalAlgorithm = function (vertex, message, global) {
+/// |   var result = vertex._getResult();
+/// |   if (typeof result.sum !== "string") {
+/// |     result.sum = 1 / result.sum;
+/// |   }
+/// |   //Store random color provided by global in each step
+/// |   result.colorList.push(global.currentColor);
+/// |   vertex._setResult(result);
+///   };
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+///
+/// We have to distribute a new random color in each step so we implement a *superstep*;
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelStartExecutionSuperstep}
+/// | var superstep = function (globals, stepInfo) {
+/// |   if (!globals.usedColors) {
+/// |     globals.usedColors = [];
+/// |   }
+/// |   var newColor;
+/// |   while (globals.usedColors.indexOf(newColor) !== -1) {
+/// |     newColor = '#' + Math.random().toString(16).substring(2, 8);
+/// |     globals.usedColors.push(newColor);
+/// |     globals.color = newColor;
+/// |   }
+///   };
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+///
+/// Now the four algorithms have been defined , we can start a pregel execution:
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelStartExecution}
+/// ~ var examples = require("org/arangodb/graph-examples/example-graph.js");
+/// ~ var aggregatorAlgorithm = examples.pregelAlgorithm().aggregator;
+/// ~ var baseAlgorithm  = examples.pregelAlgorithm().base;
+/// ~ var finalAlgorithm = examples.pregelAlgorithm().final;
+/// ~ var superstep = examples.pregelAlgorithm().superstep;
+/// ~ var pregel = require("org/arangodb/pregel");
+///   var g = examples.loadGraph("routeplanner");
+/// | var executionNumber =  pregel.Conductor.startExecution("routeplanner",
+/// |   {
+/// |     base: baseAlgorithm.toString(),
+/// |     final : finalAlgorithm.toString(),
+/// |     superstep: superstep.toString(),
+/// |     aggregator: aggregatorAlgorithm.toString()
+/// |   }, {
+/// |     someInteger : 10
+/// |   }
+///   );
+///   require("internal").print(executionNumber);
+/// ~  var finished = false;
+/// ~  while (!finished) {finished = pregel.Conductor.getInfo(executionNumber).state === "finished";}
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+///
+///
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 var startExecution = function(graphName, algorithms,  options) {
   var t = p.stopWatch();
   var graph = graphModule._graph(graphName), infoObject = {},
@@ -467,6 +606,52 @@ var startExecution = function(graphName, algorithms,  options) {
   return key;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_get_result
+/// @brief Result of a pregel execution.
+///
+/// `pregel.getResult(executionNumber)`
+///
+/// Returns the result of a pregel execution defined by it's *execution number*.
+/// The result is an object containing the final state and the name of the result graph.
+///
+/// @PARAMS
+///
+/// @PARAM{executionNumber, string, required} : The execution number of a pregel execution.
+///
+/// @EXAMPLES
+///
+/// Execute the example algorithm on the "routeplanner" graph and examine the result.
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelGetResult}
+/// ~ var examples = require("org/arangodb/graph-examples/example-graph.js");
+/// ~ var aggregatorAlgorithm = examples.pregelAlgorithm().aggregator;
+/// ~ var baseAlgorithm  = examples.pregelAlgorithm().base;
+/// ~ var finalAlgorithm = examples.pregelAlgorithm().final;
+/// ~ var superstep = examples.pregelAlgorithm().superstep;
+/// ~ var pregel = require("org/arangodb/pregel");
+///   var g = examples.loadGraph("routeplanner");
+/// | var executionNumber =  pregel.Conductor.startExecution("routeplanner",
+/// |   {
+/// |     base: baseAlgorithm.toString(),
+/// |     final : finalAlgorithm.toString(),
+/// |     superstep: superstep.toString(),
+/// |     aggregator: aggregatorAlgorithm.toString()
+/// |   }, {
+/// |     someInteger : 10
+/// |   }
+///   );
+/// ~  var finished = false;
+/// ~  while (!finished) {finished = pregel.Conductor.getInfo(executionNumber).state === "finished";}
+///   pregel.Conductor.getResult(executionNumber);
+///   var graph_module = require("org/arangodb/general-graph");
+///   graph_module._graph(pregel.Conductor.getResult(executionNumber).result.graphName)._vertices().toArray();
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+///
+///
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 var getResult = function (executionNumber) {
   var info = getExecutionInfo(executionNumber), result = {};
   if (info.state === stateFinished) {
@@ -483,6 +668,47 @@ var getResult = function (executionNumber) {
 };
 
 
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_get_info
+/// @brief Information about a pregel execution.
+///
+/// `pregel.getInfo(executionNumber)`
+///
+/// Returns information about a pregel execution defined by it's *execution number*.
+///
+/// @PARAMS
+///
+/// @PARAM{executionNumber, string, required} : The execution number of a pregel execution.
+///
+/// @EXAMPLES
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelGetInfo}
+/// ~ var examples = require("org/arangodb/graph-examples/example-graph.js");
+/// ~ var aggregatorAlgorithm = examples.pregelAlgorithm().aggregator;
+/// ~ var baseAlgorithm  = examples.pregelAlgorithm().base;
+/// ~ var finalAlgorithm = examples.pregelAlgorithm().final;
+/// ~ var superstep = examples.pregelAlgorithm().superstep;
+/// ~ var pregel = require("org/arangodb/pregel");
+///   var g = examples.loadGraph("routeplanner");
+/// | var executionNumber =  pregel.Conductor.startExecution("routeplanner",
+/// |   {
+/// |     base: baseAlgorithm.toString(),
+/// |     final : finalAlgorithm.toString(),
+/// |     superstep: superstep.toString(),
+/// |     aggregator: aggregatorAlgorithm.toString()
+/// |   }, {
+/// |     someInteger : 10
+/// |   }
+///   );
+///   pregel.Conductor.getInfo(executionNumber);
+/// ~  var finished = false;
+/// ~  while (!finished) {finished = pregel.Conductor.getInfo(executionNumber).state === "finished";}
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+///
+///
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 var getInfo = function(executionNumber) {
   var info = getExecutionInfo(executionNumber);
   var result = {};
@@ -666,6 +892,52 @@ var finishedStep = function(executionNumber, serverName, info) {
   }
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/// @startDocuBlock JSF_pregel_drop_result
+/// @brief Drops the result graph of a pregel execution.
+///
+/// `pregel.dropResult(executionNumber)`
+///
+/// Deletes the result graph of a pregel execution including its collections.
+/// Furthermore the execution info is deleted from the *_pregel* system collection.
+///
+/// @PARAMS
+///
+/// @PARAM{executionNumber, string, required} : The execution number of a pregel execution.
+///
+/// @EXAMPLES
+///
+/// @EXAMPLE_ARANGOSH_OUTPUT{pregelDropResult}
+/// ~ var examples = require("org/arangodb/graph-examples/example-graph.js");
+/// ~ var aggregatorAlgorithm = examples.pregelAlgorithm().aggregator;
+/// ~ var baseAlgorithm  = examples.pregelAlgorithm().base;
+/// ~ var finalAlgorithm = examples.pregelAlgorithm().final;
+/// ~ var superstep = examples.pregelAlgorithm().superstep;
+/// ~ var pregel = require("org/arangodb/pregel");
+///   var g = examples.loadGraph("routeplanner");
+/// | var executionNumber =  pregel.Conductor.startExecution("routeplanner",
+/// |   {
+/// |     base: baseAlgorithm.toString(),
+/// |     final : finalAlgorithm.toString(),
+/// |     superstep: superstep.toString(),
+/// |     aggregator: aggregatorAlgorithm.toString()
+/// |   }, {
+/// |     someInteger : 10
+/// |   }
+///   );
+/// ~  var finished = false;
+/// ~  while (!finished) {finished = pregel.Conductor.getInfo(executionNumber).state === "finished";}
+///   var graph_module = require("org/arangodb/general-graph");
+///   var resultGraph = pregel.Conductor.getResult(executionNumber).result.graphName;
+///   graph_module._graph(resultGraph);
+///   pregel.Conductor.dropResult(executionNumber);
+///   graph_module._graph(resultGraph);
+/// @END_EXAMPLE_ARANGOSH_OUTPUT
+///
+///
+/// @endDocuBlock
+///
+////////////////////////////////////////////////////////////////////////////////
 var dropResult = function(executionNumber) {
   var info = pregel.getExecutionInfo(executionNumber);
   graphModule._drop(info.graphName, true);

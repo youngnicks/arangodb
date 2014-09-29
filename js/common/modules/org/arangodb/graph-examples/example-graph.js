@@ -112,7 +112,63 @@
     }
 
   };
+  
+  var pregelAlgorithm = function () {
+    return {
+      aggregator : function (message, oldMessage) {
+        return message + oldMessage;
+      },
+      base  : function (vertex, message, global) {
+        var result = vertex._getResult();
+        if (global.step === 0) {
+          result.colorList = [];
+          vertex._outEdges.forEach(function (e) {
+            message.sendTo(e._targetVertex, vertex._outEdges.length, false);
+          });
+          vertex._setResult(result);
+          return
+        } else if (global.step === 1) {
+          result.sum = 0;
+          var next;
+          while (message.hasNext()) {
+            next = message.next();
+            result.sum += next.data;
+          }
+          if (result.sum === 0) {
+            result.sum = "i am so alone";
+          } else {
+            result.sum = result.sum * global.someInteger;
+          }
+          vertex._deactivate();
+        }
+        result.colorList.push(global.color);
+        vertex._setResult(result);
+      },
+      final : function (vertex, message, global) {
+        var result = vertex._getResult();
+        if (typeof result.sum !== "string") {
+          result.sum = 1 / result.sum;
+        }
+        result.colorList.push(global.color);
+        vertex._setResult(result);
+      },
+      superstep : function (globals, stepInfo) {
+        if (!globals.usedColors) {
+          globals.usedColors = [];
+        }
+        var newColor;
+        while (!newColor || globals.usedColors.indexOf(newColor) !== -1) {
+          newColor = '#' + Math.random().toString(16).substring(2, 8);
+        }
+        globals.usedColors.push(newColor);
+        globals.color = newColor;
+      }
+    }
+  };
+  
+  
 
   exports.loadGraph = loadGraph;
+  exports.pregelAlgorithm = pregelAlgorithm;
   exports.dropGraph = dropGraph;
 }());
