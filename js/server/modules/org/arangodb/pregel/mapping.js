@@ -76,6 +76,10 @@ Mapping.prototype.getLocalCollectionShardMapping = function () {
   return this._map.serverShardMap[pregel.getServerName()]; 
 };
 
+Mapping.prototype.getGlobalCollectionShardMapping = function () {
+  return this._map.serverShardMap; 
+};
+
 Mapping.prototype.getLocalResultShards = function (col) {
   return this._map.serverResultShardMap[pregel.getServerName()][col]; 
 };

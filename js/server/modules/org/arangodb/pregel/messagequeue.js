@@ -278,7 +278,7 @@ var Queue = function (executionNumber, vertices, inbox, outbox, aggregate) {
   this.__workCollection = pregel.getWorkCollection(executionNumber);
   this.__inbox = inbox;
   this.__outbox = outbox;
-  this.__step = 0;
+  this.__step = -1;
   if (aggregate) {
     this.__aggregate = aggregate;
   }
@@ -357,11 +357,11 @@ Queue.prototype._send = function (target, msg) {
     do {
       if (KEY_EXISTS(space, id)) {
         old = KEY_GET(space, id);
-        check = KEY_SET_CAS(space, id, this.__aggregate(msg.data, old));
+        check = KEY_SET_CAS(space, id, this.__aggregate(msg.data, old), old);
       } else {
         check = KEY_SET(space, id, msg.data, false);
       }
-      if (!check) { require("console").log("Retry");}
+      if (!check) { KEY_INCR("RETRY", "count");}
     } while (!check);
   }
   p.storeWatch("_send", t);

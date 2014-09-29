@@ -1,6 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports, Graph, arguments, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
-/*global KEYSPACE_CREATE */
+/*global KEYSPACE_CREATE, KEYSPACE_DROP, KEY_SET, KEY_INCR */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief pregel worker functionality
@@ -132,7 +132,6 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "var shardList = " + JSON.stringify(shardList) + ";"
     + "var inbox = " + JSON.stringify(inbox) + ";"
     + "var outbox = " + JSON.stringify(outbox) + ";"
-    + "require('internal').print(inbox, outbox);"
     + "var i;"
     + "var shard;"
     + "for (i = 0; i < shardList.length; i++) {"
@@ -179,9 +178,9 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     +     "}"
     +   "};"
     + "  queue._storeInCollection();"
-    + "  worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping);"
+    + "  worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, inbox);"
     + "  } catch (err) {"
-    + "    worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, err);"
+    + "    worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, inbox, err);"
     + "  }"
     + "}"
     + "}())";
@@ -286,41 +285,30 @@ var setup = function(executionNumber, options, globals) {
   var myName = pregel.getServerName();
   var i;
   var spacePrefix = "P_" + executionNumber + "_";
-  _.each(pregelMapping.getGlobalCollectionShards(), function (shards, server) {
-    if (typeof shards === "string") {
-      if (server === myName) {
-        inbox[shards] = [
-          "In_" + spacePrefix + shards + "_0",
-          "In_" + spacePrefix + shards + "_1"
-        ];
-        // Space for step % 2 === 0
-        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_00"); //0 is aggregate
-        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_01"); //1 is plain
-        // Space for step % 2 === 1
-        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_10"); 
-        KEYSPACE_CREATE("In_" + spacePrefix + shards + "_11");
-      } else {
-        outbox[shards] = "Out_" + spacePrefix + shards + "0";
-        outbox[shards] = "Out_" + spacePrefix + shards + "1";
-        KEYSPACE_CREATE("Out_" + spacePrefix + shards);
-      }
+  _.each(pregelMapping.getGlobalCollectionShardMapping(), function (listing, server) {
+    var s;
+    if (server === myName) {
+      _.each(listing, function (shards) {
+        for (i = 0; i < shards.length; ++i) {
+          s = shards[i];
+          inbox[s] = "In_" + spacePrefix + s;
+          // Space for step % 2 === 0
+          KEYSPACE_CREATE("In_" + spacePrefix + s + "00"); //0 is aggregate
+          KEYSPACE_CREATE("In_" + spacePrefix + s + "01"); //1 is plain
+          // Space for step % 2 === 1
+          KEYSPACE_CREATE("In_" + spacePrefix + s + "10"); 
+          KEYSPACE_CREATE("In_" + spacePrefix + s + "11");
+        }
+      });
     } else {
-      if (server === myName) {
+      _.each(listing, function (shards) {
         for (i = 0; i < shards.length; ++i) {
-          inbox[shards[i]] = [
-            "In_" + spacePrefix + shards[i] + "_0",
-            "In_" + spacePrefix + shards[i] + "_1"
-          ];
-          KEYSPACE_CREATE("In_" + spacePrefix + shards[i] + "_0");
-          KEYSPACE_CREATE("In_" + spacePrefix + shards[i] + "_1");
+          s = shards[i];
+          outbox[s] = "Out_" + spacePrefix + s + "0";
+          outbox[s] = "Out_" + spacePrefix + s + "1";
+          KEYSPACE_CREATE("Out_" + spacePrefix + s);
         }
-      } else {
-        for (i = 0; i < shards.length; ++i) {
-          outbox[shards[i]] = "Out_" + spacePrefix + shards[i];
-          require("internal").print(outbox[shards[i]]);
-          KEYSPACE_CREATE("Out_" + spacePrefix + shards[i]);
-        }
-      }
+      });
     }
   });
   for (w = 0; w < WORKERS; w++) {
@@ -516,7 +504,7 @@ var queueCleanupDone = function (executionNumber) {
   db._drop(pregel.genGlobalCollectionName(executionNumber));
 };
 
-var queueDone = function (executionNumber, global, actives, mapping, err) {
+var queueDone = function (executionNumber, global, actives, mapping, inbox, err) {
   var t = p.stopWatch();
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
@@ -534,6 +522,15 @@ var queueDone = function (executionNumber, global, actives, mapping, err) {
   p.storeWatch("VertexDone", t);
   if (countDone === WORKERS) {
     KEY_SET(keyList, "actives", 0);
+    _.each(inbox, function (space) {
+      var stepSwitch = global.step % 2;
+      var s1 = space + stepSwitch + "0";
+      var s2 = space + stepSwitch + "1";
+      KEYSPACE_DROP(s1);
+      KEYSPACE_DROP(s2);
+      KEYSPACE_CREATE(s1);
+      KEYSPACE_CREATE(s2);
+    });
     finishedStep(executionNumber, global, mapping, countActive);
   }
   /*
@@ -558,6 +555,7 @@ var executeStep = function(executionNumber, step, options, globals) {
   globals = globals || {};
   globals.final = options.final;
   if (step === 0) {
+    KEYSPACE_CREATE("RETRY", 1);
     setup(executionNumber, options, globals);
     return;
   }
@@ -576,6 +574,8 @@ var cleanUp = function(executionNumber) {
   // queues.delete("P_" + executionNumber); To be done for new queue
   var i, queue;
   KEY_SET("P_" + executionNumber, "done", 0);
+  require("console").log("Retried", KEY_GET("RETRY", "count"));
+  KEYSPACE_DROP("RETRY");
   for (i = 0; i < WORKERS; i++) {
     queue = getQueueName(executionNumber, i);
     addCleanUpTask(queue);
