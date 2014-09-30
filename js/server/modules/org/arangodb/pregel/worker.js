@@ -116,6 +116,50 @@ var translateId = function (id, mapping) {
   return mapping.getResultCollection(col) + "/" + key;
 };
 
+// This funktion is intended to be used in the worker threads.
+// It has to get a scope injected, do not use it otherwise.
+var workerCode = function (params) {
+    this.vertices.reset();
+    if (params.cleanUp) {
+      while(this.vertices.hasNext()) {
+        this.vertices.next()._save();
+      }
+      p.aggregate();
+      this.worker.queueCleanupDone(this.executionNumber);
+      return;
+    }
+    var step = params.step;
+    this.queue._fillQueues();
+    var global = params.global;
+    var msgQueue;
+    global.step = step;
+    global.data = this.data;
+    try {
+      var vertex;
+      if (global.final === true) {
+        while(this.vertices.hasNext()) {
+          vertex = this.vertices.next();
+          msgQueue = this.queue[vertex._id];
+          this.finalAlgorithm(vertex, msgQueue, global);
+        }
+      } else {
+        while(this.vertices.hasNext()) {
+          vertex = this.vertices.next();
+          msgQueue = this.queue[vertex._id];
+          if (vertex._isActive() || msgQueue.count > 0) {
+            vertex._activate();
+            this.algorithm(vertex, msgQueue, global);
+          }
+        }
+      }
+      this.queue._storeInCollection();
+      this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(), this.mapping);
+    } catch (err) {
+      this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(), this.mapping, err);
+    }
+};
+
+
 var algorithmForQueue = function (algorithms, shardList, executionNumber, workerIndex, workerCount) {
   return "(function() {"
     + "var executionNumber = " + executionNumber + ";"
@@ -137,50 +181,17 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     +      "db[shard].NTH2(" + workerIndex + ", " + workerCount + ").documents);"
     + "}"
     + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
-    + "return function(params) {"
-    + "vertices.reset();"
-    + "if (params.cleanUp) {"
-    +   "while(vertices.hasNext()) {"
-    +     "vertices.next()._save();"
-    +   "};"
-+ "p.aggregate();"
-    + "  worker.queueCleanupDone(executionNumber);"
-    + "  return;"
-    + "}"
-    + "var step = params.step;"
-    + "queue._fillQueues();"
-    + "var global = params.global;"
-    + "var msgQueue;"
-    + "global.step = step;"
-    + "if (step !== lastStep) {"
-    + "  data = [];"
-    + "}"
-    + "global.data = data;"
-    + "try {"
-    +   "var vertex;"
-    +   "if (global.final === true) {"
-    +     "while(vertices.hasNext()) {"
-    +       "vertex = vertices.next();"
-    +       "msgQueue = queue[vertex._id];"
-    +       "(" + algorithms.finalAlgorithm + ")(vertex, msgQueue, global);"
-    +     "}"
-    +   "} else {"
-    +     "while(vertices.hasNext()) {"
-    +       "vertex = vertices.next();"
-    +       "msgQueue = queue[vertex._id];"
-    +       "if (vertex._isActive() || msgQueue.count > 0) {"
-    +         "vertex._activate();"
-    +         "(" + algorithms.algorithm + ")(vertex, msgQueue, global);"
-    +       "}"
-    +     "}"
-    +   "};"
-    + "  queue._storeInCollection();"
-    + "  worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping);"
-    + "  } catch (err) {"
-    + "    worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, err);"
-    + "  }"
-    + "}"
-    + "}())";
+    + "var scope = {};"
+    + "scope.vertices = vertices;"
+    + "scope.worker = worker;"
+    + "scope.executionNumber = executionNumber;"
+    + "scope.queue = queue;"
+    + "scope.mapping = pregelMapping;"
+    + "scope.algorithm = (" + algorithms.algorithm + ");"
+    + "scope.finalAlgorithm = (" + algorithms.finalAlgorithm + ");"
+    + "scope.data = data;"
+    + "return worker.workerCode.bind(scope);"
+   + "}())";
 };
 
 var createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount) {
@@ -547,3 +558,6 @@ exports.cleanUp = cleanUp;
 exports.finishedStep = finishedStep;
 exports.queueDone = queueDone;
 exports.queueCleanupDone = queueCleanupDone;
+
+// Private. Do never use externally
+exports.workerCode = workerCode;
