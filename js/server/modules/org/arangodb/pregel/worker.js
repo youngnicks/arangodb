@@ -461,7 +461,7 @@ var finishedStep = function (executionNumber, global, active, keyList, inbox, ou
   var final = global.final;
   if (!error) {
     var t2 = p.stopWatch();
-    messages = sendMessages(executionNumber, outbox);
+    // messages = sendMessages(executionNumber, outbox);
     p.storeWatch("ShiftMessages", t2);
   }
   KEY_SET(keyList, "actives", 0);
