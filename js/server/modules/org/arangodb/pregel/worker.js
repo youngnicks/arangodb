@@ -102,12 +102,8 @@ var queryMessageByShard = "FOR v IN @@message "
   + "FILTER v.toShard == @shardId "
   + "RETURN v";
 
-var getInboxName = function (execNr, shard, step, aggregate) {
-  var name = "In_P_" + execNr + shard + "_" +(step % 2);
-  if (aggregate) {
-    return name + "0";
-  }
-  return name + "1";
+var getInboxName = function (execNr, shard, step, workerId) {
+  return "In_P_" + execNr + shard + "_" +(step % 2) + "_" + workerId;
 };
 
 var extractShardFromSpace = function (execNr, space) {
@@ -599,12 +595,24 @@ var cleanUp = function(executionNumber) {
   }
 };
 
-var receiveMessages = function(executionNumber, shard, step, aggregate, messageString) {
-  var inbox = getInboxName(executionNumber, shard, step, aggregate);
+var receiveMessages = function(executionNumber, shard, step, senderName, senderWorker, messageString) {
   var msg = JSON.parse(messageString);
+  var i = 0;
+  var buckets = [];
+  var col = db[shard];
+  for (i = 0; i < WORKERS; i++) {
+    buckets.push({});
+  }
   _.each(msg, function(v, k) {
-    
+    buckets[col.NTH3(k, WORKERS)][k] = v;
+    delete msg[k];
   });
+  var inbox;
+  for (i = 0; i < WORKERS; i++) {
+    inbox = getInboxName(executionNumber, shard, step, i);
+    KEY_SET(inbox,  senderName + "_" + senderWorker, JSON.stringify(buckets[i]));
+    buckets[i] = null;
+  }
 };
 
 // -----------------------------------------------------------------------------
@@ -617,3 +625,4 @@ exports.cleanUp = cleanUp;
 exports.finishedStep = finishedStep;
 exports.queueDone = queueDone;
 exports.queueCleanupDone = queueCleanupDone;
+exports.receiveMessages = receiveMessages;
