@@ -57,7 +57,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 4;
+var WORKERS = 1;
 
 if (pregel.getServerName === "localhost") {
   var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
@@ -101,6 +101,18 @@ var queryActivateVertices = "FOR v IN @@work "
 var queryMessageByShard = "FOR v IN @@message "
   + "FILTER v.toShard == @shardId "
   + "RETURN v";
+
+var getInboxName = function (execNr, shard, step, aggregate) {
+  var name = "In_P_" + execNr + shard + "_" +(step % 2);
+  if (aggregate) {
+    return name + "0";
+  }
+  return name + "1";
+};
+
+var extractShardFromSpace = function (execNr, space) {
+  return space.substring(6 + execNr.length, space.lastIndexOf("_"));
+};
 
 var queryCountStillActiveVertices = "LET c = (FOR i in @@collection"
   + " FILTER i.active == true && i.deleted == false"
@@ -178,9 +190,9 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     +     "}"
     +   "};"
     + "  queue._storeInCollection();"
-    + "  worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, inbox);"
+    + "  worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, inbox, outbox);"
     + "  } catch (err) {"
-    + "    worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, inbox, err);"
+    + "    worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, inbox, outbox, err);"
     + "  }"
     + "}"
     + "}())";
@@ -306,7 +318,8 @@ var setup = function(executionNumber, options, globals) {
           s = shards[i];
           outbox[s] = "Out_" + spacePrefix + s + "0";
           outbox[s] = "Out_" + spacePrefix + s + "1";
-          KEYSPACE_CREATE("Out_" + spacePrefix + s);
+          KEYSPACE_CREATE("Out_" + spacePrefix + s + "0");
+          KEYSPACE_CREATE("Out_" + spacePrefix + s + "1");
         }
       });
     }
@@ -398,55 +411,69 @@ var countActiveVertices = function (mapping) {
   return count;
 };
 
-var sendMessages = function (executionNumber, mapping) {
-  var msgCol = pregel.getMsgCollection(executionNumber);
-  var workCol = pregel.getWorkCollection(executionNumber);
-  if (ArangoServerState.role() === "PRIMARY") {
-    var waitCounter = 0;
-    var shardList = mapping.getGlobalCollectionShards();
-    var batchSize = 100;
-    var bindVars = {
-      "@message": msgCol.name()
-    };
-    var coordOptions = {
-      coordTransactionID: ArangoClusterInfo.uniqid()
-    };
-    _.each(shardList, function (shard) {
-      bindVars.shardId = shard;
-      var q = db._query(queryMessageByShard, bindVars);
-      var toSend;
-      while (q.hasNext()) {
-        toSend = JSON.stringify(q.next(batchSize));
-        waitCounter++;
-        ArangoClusterComm.asyncRequest("POST","shard:" + shard, db._name(),
-          "/_api/import?type=array&collection=" + workCol.name(), toSend, {}, coordOptions);
-      }
-    });
-    var debug;
-    for (waitCounter; waitCounter > 0; waitCounter--) {
-      debug = ArangoClusterComm.wait(coordOptions);
-    }
-  } else {
-    var cursor = msgCol.all();
-    var next;
-    while(cursor.hasNext()) {
-      next = cursor.next();
-      workCol.save(next);
-    }
-  }
-  msgCol.truncate();
+var packOutbox = function(space) {
+  var t = p.stopWatch();
+  var vertices = KEYSPACE_KEYS(space);
+  var msg = {};
+  _.each(vertices, function(v) {
+    msg[v] = KEY_GET(space, v);
+  });
+  KEYSPACE_DROP(space);
+  KEYPSACE_CREATE(space);
+  var res = JSON.stringify(msg);
+  p.storeWatch("packingMessage", t);
+  return res;
 };
 
-var finishedStep = function (executionNumber, global, mapping, active) {
+var sendMessages = function (executionNumber, outbox, step) {
+  var waitCounter = 0;
+  var coordOptions = {
+    coordTransactionID: ArangoClusterInfo.uniqid()
+  };
+  var shard, msg, space, aggregate, body;
+  var dbName = db._name();
+  for (space in outbox) {
+    if (outbox.hasOwnProperty(space)) {
+      shard = extractShardFromSpace(executionNumber, space);
+      aggregate = space.charAt(space.length - 1) === "0";
+      msg = packOutbox(outbox[space], shard);
+      body = {
+        msg: msg,
+        aggregate: aggregate,
+        shard: shard,
+        execNr: executionNumber
+      };
+      waitCounter++;
+      ArangoClusterComm.asyncRequest("POST","shard:" + shard, dbName,
+        "/_api/pregel/message", body, {}, coordOptions);
+    }
+  }
+  var debug;
+  for (waitCounter; waitCounter > 0; waitCounter--) {
+    debug = ArangoClusterComm.wait(coordOptions);
+  }
+};
+
+var finishedStep = function (executionNumber, global, active, keyList, inbox, outbox) {
   var t = p.stopWatch();
-  var messages = pregel.getMsgCollection(executionNumber).count();
+  var messages = 0;
   var error = getError(executionNumber);
   var final = global.final;
   if (!error) {
     var t2 = p.stopWatch();
-    sendMessages(executionNumber, mapping);
+    messages = sendMessages(executionNumber, outbox);
     p.storeWatch("ShiftMessages", t2);
   }
+  KEY_SET(keyList, "actives", 0);
+  _.each(inbox, function (space) {
+    var stepSwitch = global.step % 2;
+    var s1 = space + stepSwitch + "0";
+    var s2 = space + stepSwitch + "1";
+    KEYSPACE_DROP(s1);
+    KEYSPACE_DROP(s2);
+    KEYSPACE_CREATE(s1);
+    KEYSPACE_CREATE(s2);
+  });
   if (ArangoServerState.role() === "PRIMARY") {
     var conductor = getConductor(executionNumber);
     var body = JSON.stringify({
@@ -504,7 +531,7 @@ var queueCleanupDone = function (executionNumber) {
   db._drop(pregel.genGlobalCollectionName(executionNumber));
 };
 
-var queueDone = function (executionNumber, global, actives, mapping, inbox, err) {
+var queueDone = function (executionNumber, global, actives, mapping, inbox, outbox, err) {
   var t = p.stopWatch();
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
@@ -521,17 +548,7 @@ var queueDone = function (executionNumber, global, actives, mapping, inbox, err)
   var countActive = KEY_INCR(keyList, "actives", actives);
   p.storeWatch("VertexDone", t);
   if (countDone === WORKERS) {
-    KEY_SET(keyList, "actives", 0);
-    _.each(inbox, function (space) {
-      var stepSwitch = global.step % 2;
-      var s1 = space + stepSwitch + "0";
-      var s2 = space + stepSwitch + "1";
-      KEYSPACE_DROP(s1);
-      KEYSPACE_DROP(s2);
-      KEYSPACE_CREATE(s1);
-      KEYSPACE_CREATE(s2);
-    });
-    finishedStep(executionNumber, global, mapping, countActive);
+   finishedStep(executionNumber, global, countActive, keyList, inbox, outbox);
   }
   /*
    WTF? Nochmal nachdenken was das machen soll
@@ -582,6 +599,13 @@ var cleanUp = function(executionNumber) {
   }
 };
 
+var receiveMessages = function(executionNumber, shard, step, aggregate, messageString) {
+  var inbox = getInboxName(executionNumber, shard, step, aggregate);
+  var msg = JSON.parse(messageString);
+  _.each(msg, function(v, k) {
+    
+  });
+};
 
 // -----------------------------------------------------------------------------
 // --SECTION--                                                    MODULE EXPORTS
