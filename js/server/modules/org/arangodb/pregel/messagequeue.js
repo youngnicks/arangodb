@@ -1,6 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports*/
-/*global KEY_EXISTS, KEY_PUSH, KEY_SET, KEY_GET, KEY_SET_CAS*/
+/*global KEY_EXISTS, KEY_PUSH, KEY_SET, KEY_GET, KEY_SET_CAS, KEYSPACE_KEYS, KEY_REMOVE*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel module. Offers all submodules of pregel.
@@ -37,6 +37,22 @@ var query = "FOR m IN @@collection FILTER m.step == @step RETURN m";
 var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
+
+var joinMessageObject = function(v, oldV, aggFunc) {
+  var aggregate = v[0];
+  var plain = v[1];
+  var oldAggr = oldV[0];
+  var oldPlain = oldV[1];
+  if (aggregate !== null) {
+    if (oldAggr !== null) {
+      oldV[0] = aggFunc(aggregate, oldAggr);
+    } else {
+      oldV[0] = aggregate;
+    }
+  }
+  oldV[1] = oldPlain.concat(plain);
+};
+
 
 var VertexMessageQueue = function(parent) {
   this._parent = parent;
@@ -237,7 +253,7 @@ VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
     target = pregel.getLocationObject(this.__executionNumber, target);
   } else if (!(
     target && typeof target === "object" &&
-                                target._id && target.shard
+                                target._key && target.shard
   )) {
     var err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.code;
@@ -254,90 +270,76 @@ VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
   p.storeWatch("sendTo", t);
 };
 
-VertexMessageQueue.prototype._loadVertex = function (space, key, vertexInfo) {
+VertexMessageQueue.prototype._loadVertex = function (msgObj, vertexInfo) {
   this._vertexInfo = vertexInfo;
   this._pos = 0;
-  require("console").log("LoadSpaces");
-  var plain = KEY_GET(space + "1", key);
-  var aggregate = KEY_GET(space + "0", key);
-  require("console").log("LoadSpaces done");
-  if (plain !== undefined) {
-    this._inc = plain;
-  } else {
-    this._inc = [];
-  }
-  if (aggregate !== undefined) {
-    this._inc.push({data: aggregate});
+  this._inc = msgObj[1];
+  if (msgObj[0] !== null) {
+    this._inc.push({data: msgObj[0]});
   }
 };
 
 // End of Vertex Message queue
 
-var Queue = function (executionNumber, vertices, inbox, outbox, aggregate) {
+var Queue = function (executionNumber, vertices, inboxSpaces, localShardList,
+    globalShardList, workerCount, aggregate) {
   this.__vertices = vertices;
   this.__executionNumber = executionNumber;
   this.__collection = pregel.getMsgCollection(executionNumber);
   this.__workCollection = pregel.getWorkCollection(executionNumber);
-  this.__inbox = inbox;
-  this.__outbox = outbox;
+  this.__spaces = inboxSpaces;
+  this.__inbox = {};
+  this.__outbox = {};
+  var i,j,shard;
+  for (i = 0; i < globalShardList.length; ++i) {
+    shard = globalShardList[i];
+    this.__outbox[shard] = [];
+    for (j = 0; j < workerCount; ++j) {
+      this.__outbox[shard].push({});
+    }
+  }
+  var hashFunc = db[localShardList[0]].NTH3;
+  this.__hash = function(key) {
+    return hashFunc(key, workerCount);
+  };
+  for (i = 0; i < localShardList.length; ++i) {
+    shard = localShardList[i];
+    this.__inbox[shard] = {};
+  }
   this.__step = -1;
   if (aggregate) {
     this.__aggregate = aggregate;
   }
   this.__queue = new VertexMessageQueue(this);
-  /*
-  this.__queues = [];
-  vertices.reset();
-  var v, id;
-  while (vertices.hasNext()) {
-    v = vertices.next();
-    id = v._id;
-    this.__queues.push(id);
-    this[id] = new VertexMessageQueue(this, v._getLocationInfo());
-  }
-  vertices.reset();
-  */
 };
 
 Queue.prototype._loadVertex = function(shard, vertex) {
-  var space = this.__inbox[shard] + (this.__step % 2);
-  this.__queue._loadVertex(space, vertex._key, vertex._getLocationInfo());
+  var msgObj = this.__inbox[shard][vertex._key] || [null, []];
+  this.__queue._loadVertex(msgObj, vertex._getLocationInfo());
   return this.__queue;
 };
 
 Queue.prototype._fillQueues = function () {
-  this.__step++; // tmp
-  return;
   var t = p.stopWatch();
-  var self = this;
-  var t3 = p.stopWatch();
-  _.each(this.__queues, function(q) {
-    self[q]._clear();
-  });
-  p.storeWatch("fillQueueFirstEach", t3);
-  this.__output = {};
-  var t1 = p.stopWatch();
-  var cursor = db._query(query, {
-    "@collection": this.__workCollection.name(),
-    step: this.__step
-  });
-  p.storeWatch("fillQueueQuery", t1);
-  var msg, vQueue, doc, key;
   this.__step++;
-  var t2 = p.stopWatch();
-  while (cursor.hasNext()) {
-    msg = cursor.next();
-    doc = JSON.parse(msg.messages);
-    for (key in doc) {
-      if(doc.hasOwnProperty(key)) {
-        if (this.hasOwnProperty(key)) {
-          vQueue = this[key];
-          vQueue._fill(doc[key]);
-        }
+  var space = this.__spaces[this.__step % 2];
+  var keys = KEYSPACE_KEYS(space);
+  var msg;
+  var aggFunc = this.__aggregate;
+  var inbox = this.__inbox;
+  _.each(keys, function(key) {
+    msg = KEY_GET(space, key);
+    KEY_REMOVE(space, key);
+    var shard = key.substr(key.lastIndexOf("_") + 1);
+    msg = JSON.parse(msg);
+    var old = inbox[shard];
+    _.each(msg, function(v, k) {
+      if (!old.hasOwnProperty(k)) {
+        old[k] = [null, []];
       }
-    }
-  }
-  p.storeWatch("fillQueueWhile", t2);
+      joinMessageObject(v, old[k], aggFunc);
+    });
+  });
   p.storeWatch("fillQueue", t);
 };
 
@@ -345,27 +347,16 @@ Queue.prototype._fillQueues = function () {
 Queue.prototype._send = function (target, msg) {
   var t = p.stopWatch();
   var shard = target.shard;
-  var id = target._id;
-  var workerId = this.__hash(id);
-  var space = this.__outbox[shard];
-  if (!space) {
-    space = this.__inbox[shard] + ((this.__step + 1) % 2);
+  var key = target._key;
+  var workerId = this.__hash(key);
+  var outbox = this.__outbox[shard][workerId];
+  if (!outbox.hasOwnProperty(key)) {
+    outbox[key] = [null, []];
   }
-  var check = false;
-  var old;
   if (msg.hasOwnProperty("sender") || !this.__aggregate) {
-    KEY_PUSH(space + "1", id, msg);
+    outbox[key][1].push(msg);
   } else {
-    space += "0";
-    do {
-      if (KEY_EXISTS(space, id)) {
-        old = KEY_GET(space, id);
-        check = KEY_SET_CAS(space, id, this.__aggregate(msg.data, old), old);
-      } else {
-        check = KEY_SET(space, id, msg.data, false);
-      }
-      if (!check) { KEY_INCR("RETRY", "count");}
-    } while (!check);
+    outbox[key][0] = this.__aggregate(msg.data, outbox[key][0]);
   }
   p.storeWatch("_send", t);
 };
@@ -386,23 +377,15 @@ Queue.prototype._integrateMessage = function(shard, workerId, incMessage) {
   var old = this.__outbox[shard][workerId];
   var aggFunc = this.__aggregate;
   _.each(incMessage, function(v, k) {
-    var aggregate = v[0];
-    var plain = v[1];
     if (!old.hasOwnProperty(k)) {
       old[k] = [null, []];
     }
-    var oldV = old[k];
-    var oldAggr = oldV[0];
-    var oldPlain = oldV[1];
-    if (aggregate !== null) {
-      if (oldAggr !== null) {
-        oldV[0] = aggFunc(aggregate, oldAggr);
-      } else {
-        oldV[0] = aggregate;
-      }
-    }
-    oldV[1] = oldPlain.concat(plain);
+    joinMessageObject(v, old[k], aggFunc);
   });
+};
+
+Queue.prototype._clear = function(shard, vertex) {
+  this.__inbox[shard][vertex._key] = [null, []];
 };
 
 exports.MessageQueue = Queue;

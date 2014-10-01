@@ -187,12 +187,9 @@ VertexList.prototype.next = function () {
       this.shard++;
       this.currentLength = this.shardMapping[this.shard].length;
     }
-    var sn = this.shardMapping[this.shard].collection;
-    if (this.sourceList[this.shard][this.current] === undefined) {
-    }
     this.vertex._loadVertex(this.shard, this.current,
       this.edgeList.loadEdges(this.shard, this.current),
-      sn + "/" + this.sourceList[this.shard][this.current]
+      this.sourceList[this.shard][this.current]
     );
     return this.vertex;
   }

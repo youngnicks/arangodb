@@ -59,8 +59,8 @@ var MAP = "map";
 var id;
 var WORKERS = 4;
 
-var getInboxName = function (execNr, shard, step, workerId) {
-  return "In_P_" + execNr + shard + "_" +(step % 2) + "_" + workerId;
+var getInboxName = function (execNr, step, workerId) {
+  return "In_P_" + execNr + "_" + (step % 2) + "_" + workerId;
 };
 
 var getOutboxName = function (execNr, firstW, secondW) {
@@ -81,8 +81,8 @@ var receiveMessages = function(executionNumber, shard, step, senderName, senderW
   });
   var inbox;
   for (i = 0; i < WORKERS; i++) {
-    inbox = getInboxName(executionNumber, shard, step, i);
-    KEY_SET(inbox,  senderName + "_" + senderWorker, JSON.stringify(buckets[i]));
+    inbox = getInboxName(executionNumber, step, i);
+    KEY_SET(inbox,  senderName + "_" + senderWorker + "_" + shard, JSON.stringify(buckets[i]));
     buckets[i] = null;
   }
 };
@@ -131,7 +131,7 @@ if (pregel.getServerName() === "localhost") {
   };
 
 } else {
-  // Define code which ahs to be executed in a cluster setup
+  // Define code which has to be executed in a cluster setup
   sendMessages = function (queue, shardList, workerId, step, execNr) {
     // TODO: Improve for local shards
     var waitCounter = 0;
@@ -193,10 +193,6 @@ var createOutboxMatrix = function (execNr) {
   }
 };
 
-var extractShardFromSpace = function (execNr, space) {
-  return space.substring(6 + execNr.length, space.lastIndexOf("_"));
-};
-
 var queryCountStillActiveVertices = "LET c = (FOR i in @@collection"
   + " FILTER i.active == true && i.deleted == false"
   + " RETURN 1) RETURN LENGTH(c)";
@@ -216,7 +212,7 @@ var dumpMessages = function(queue, shardList, workerId, execNr) {
   var i, j, space, shard;
   for (i = 0; i < WORKERS; i++) {
     if (i !== workerId) {
-      for (j = 0; j < shardList; j++) {
+      for (j = 0; j < shardList.length; j++) {
         shard = shardList[j];
         space = getOutboxName(execNr, workerId, i);
         KEY_SET(space, shard, queue._dump(shard, i));
@@ -229,7 +225,7 @@ var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
   var i, j, space, shard, incMessage;
   for (i = 0; i < WORKERS; i++) {
     if (i !== workerId) {
-      for (j = 0; j < shardList; j++) {
+      for (j = 0; j < shardList.length; j++) {
         shard = shardList[j];
         space = getOutboxName(execNr, i, workerId);
         incMessage = KEY_GET(space, shard);
@@ -263,33 +259,36 @@ var workerCode = function (params) {
   var msgQueue;
   global.step = step;
   global.data = this.data;
+  var vShard;
   try {
     var vertex;
     if (global.final === true) {
       while(this.vertices.hasNext()) {
         vertex = this.vertices.next();
-        msgQueue = this.queue._loadVertex(this.vertices.getShardName(vertex.shard), vertex);
+        vShard = this.vertices.getShardName(vertex.shard);
+        msgQueue = this.queue._loadVertex(vShard, vertex);
         this.finalAlgorithm(vertex, msgQueue, global);
+        this.queue._clear(vShard, vertex);
       }
     } else {
       while(this.vertices.hasNext()) {
         vertex = this.vertices.next();
+        vShard = this.vertices.getShardName(vertex.shard);
         msgQueue = this.queue._loadVertex(this.vertices.getShardName(vertex.shard), vertex);
         if (vertex._isActive() || msgQueue.count > 0) {
           vertex._activate();
           this.algorithm(vertex, msgQueue, global);
+          this.queue._clear(vShard, vertex);
         }
       }
     }
-    var shardList = this.queue._getShardList();
-
     // Dump Messages into Key-Value store
-    dumpMessages(this.queue, shardList, this.workerId, this.executionNumber);
+    dumpMessages(this.queue, this.shardList, this.workerId, this.executionNumber);
 
     // Collect Data from Key-Value store and aggregate
-    aggregateOtherWorkerData(this.queue, shardList, this.workerId, this.executionNumber);
+    aggregateOtherWorkerData(this.queue, this.shardList, this.workerId, this.executionNumber);
 
-    sendMessages(this.queue, shardList, this.workerId, this.executionNumber, step);
+    sendMessages(this.queue, this.shardList, this.workerId, step + 1, this.executionNumber);
     this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(),
       this.inbox, this.outbox);
   } catch (err) {
@@ -298,7 +297,7 @@ var workerCode = function (params) {
   }
 };
 
-var algorithmForQueue = function (algorithms, shardList, executionNumber, workerIndex, workerCount, inbox, outbox) {
+var algorithmForQueue = function (algorithms, localShardList, globalShardList, executionNumber, workerIndex, workerCount, inbox) {
   return "(function() {"
     + "var executionNumber = " + executionNumber + ";"
     + "var p = require('org/arangodb/profiler');"
@@ -310,19 +309,19 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "var lastStep;"
     + (algorithms.aggregator ? "  var aggregator = (" + algorithms.aggregator + ");" : "var aggregator = null;")
     + "var vertices = new pregel.VertexList(pregelMapping);"
-    + "var shardList = " + JSON.stringify(shardList) + ";"
-    + "var inbox = " + JSON.stringify(inbox) + ";"
-    + "var outbox = " + JSON.stringify(outbox) + ";"
+    + "var localShardList = " + JSON.stringify(localShardList) + ";"
+    + "var globalShardList = " + JSON.stringify(globalShardList) + ";"
     + "var i;"
     + "var shard;"
     + "var workerId = " + workerIndex + ";"
     + "var workerCount = " + workerCount + ";"
-    + "for (i = 0; i < shardList.length; i++) {"
-    +   "shard = shardList[i];"
+    + "var inbox = " + JSON.stringify(inbox) + ";"
+    + "for (i = 0; i < localShardList.length; i++) {"
+    +   "shard = localShardList[i];"
     +   "vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),"
     +      "db[shard].NTH2(workerId, workerCount).documents);"
     + "}"
-    + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
+    + "var queue = new pregel.MessageQueue(executionNumber, vertices, inbox, localShardList, globalShardList, workerCount, aggregator);"
     + "var scope = {};"
     + "scope.vertices = vertices;"
     + "scope.worker = worker;"
@@ -331,14 +330,13 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "scope.algorithm = (" + algorithms.algorithm + ");"
     + "scope.finalAlgorithm = (" + algorithms.finalAlgorithm + ");"
     + "scope.data = data;"
-    + "scope.inbox = inbox;"
-    + "scope.outbox = outbox;"
     + "scope.workerId = workerId;"
+    + "scope.shardList = globalShardList;"
     + "return worker.workerCode.bind(scope);"
    + "}())";
 };
 
-var createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount, inbox, outbox) {
+var createTaskQueue = function (executionNumber, localShardList, globalShardList, algorithms, globals, workerIndex, workerCount, inbox) {
   // TODO hack for cluster setup. Foxx Queues not working...
   KEYSPACE_CREATE("P_" + executionNumber, 2, true);
   KEY_SET("P_" + executionNumber, "done", 0);
@@ -365,14 +363,16 @@ var createTaskQueue = function (executionNumber, shardList, algorithms, globals,
       },
       params: {
         queueName: getQueueName(executionNumber, workerIndex),
-        worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount, inbox, outbox),
+        worker: algorithmForQueue(algorithms, localShardList, globalShardList,
+          executionNumber, workerIndex, workerCount, inbox),
         globals: globals,
       }
     });
   } else {
     jobRegisterQueue.push("pregel-register-job", {
       queueName: getQueueName(executionNumber, workerIndex),
-      worker: algorithmForQueue(algorithms, shardList, executionNumber, workerIndex, workerCount, inbox, outbox),
+      worker: algorithmForQueue(algorithms, localShardList, globalShardList,
+        executionNumber, workerIndex, workerCount, inbox),
       globals: globals
     });
   }
@@ -429,45 +429,25 @@ var setup = function(executionNumber, options, globals) {
 
   var pregelMapping = new pregel.Mapping(executionNumber);
   var w;
-  var shardList = [];
+  var localShardList = [];
   _.each(pregelMapping.getLocalCollectionShardMapping(), function (shards) {
-    shardList = shardList.concat(shards);
+    localShardList = localShardList.concat(shards);
   });
-  var inbox = {};
-  var outbox = {};
-  var myName = pregel.getServerName();
-  var i;
-  var spacePrefix = "P_" + executionNumber + "_";
-  _.each(pregelMapping.getGlobalCollectionShardMapping(), function (listing, server) {
-    var s;
-    if (server === myName) {
-      _.each(listing, function (shards) {
-        for (i = 0; i < shards.length; ++i) {
-          s = shards[i];
-          inbox[s] = "In_" + spacePrefix + s;
-          // Space for step % 2 === 0
-          KEYSPACE_CREATE("In_" + spacePrefix + s + "00"); //0 is aggregate
-          KEYSPACE_CREATE("In_" + spacePrefix + s + "01"); //1 is plain
-          // Space for step % 2 === 1
-          KEYSPACE_CREATE("In_" + spacePrefix + s + "10"); 
-          KEYSPACE_CREATE("In_" + spacePrefix + s + "11");
-        }
-      });
-    } else {
-      _.each(listing, function (shards) {
-        for (i = 0; i < shards.length; ++i) {
-          s = shards[i];
-          outbox[s] = "Out_" + spacePrefix + s + "0";
-          outbox[s] = "Out_" + spacePrefix + s + "1";
-          KEYSPACE_CREATE("Out_" + spacePrefix + s + "0");
-          KEYSPACE_CREATE("Out_" + spacePrefix + s + "1");
-        }
-      });
-    }
+  var globalShardList = [];
+  _.each(pregelMapping.getGlobalCollectionShardMapping(), function (listing) {
+    _.each(listing, function (shards) {
+      globalShardList = globalShardList.concat(shards);
+    });
   });
+  var inbox;
   for (w = 0; w < WORKERS; w++) {
-    require("console").log("Creating a fuckng queue");
-    createTaskQueue(executionNumber, shardList, options, globals, w, WORKERS, inbox, outbox);
+    inbox = [
+      getInboxName(executionNumber, 0, w),
+      getInboxName(executionNumber, 1, w)
+    ];
+    KEYSPACE_CREATE(inbox[0]);
+    KEYSPACE_CREATE(inbox[1]);
+    createTaskQueue(executionNumber, localShardList, globalShardList, options, globals, w, WORKERS, inbox);
   }
 };
 
@@ -572,12 +552,6 @@ var finishedStep = function (executionNumber, global, active, keyList, inbox, ou
   var messages = 0;
   var error = getError(executionNumber);
   var final = global.final;
-  if (!error) {
-    var t2 = p.stopWatch();
-    // messages = sendMessages(executionNumber, outbox);
-    p.storeWatch("ShiftMessages", t2);
-  }
-  require("console").log("buhman");
   KEY_SET(keyList, "actives", 0);
   _.each(inbox, function (space) {
     var stepSwitch = global.step % 2;
@@ -588,7 +562,6 @@ var finishedStep = function (executionNumber, global, active, keyList, inbox, ou
     KEYSPACE_CREATE(s1);
     KEYSPACE_CREATE(s2);
   });
-  require("console").log("baumn");
   if (ArangoServerState.role() === "PRIMARY") {
     var conductor = getConductor(executionNumber);
     var body = JSON.stringify({
@@ -686,7 +659,6 @@ var executeStep = function(executionNumber, step, options, globals) {
   id = ArangoServerState.id() || "localhost";
   globals = globals || {};
   globals.final = options.final;
-  require("console").log("aaqwieou");
   if (step === 0) {
     KEYSPACE_CREATE("RETRY", 1);
     setup(executionNumber, options, globals);
@@ -696,12 +668,10 @@ var executeStep = function(executionNumber, step, options, globals) {
   var i = 0;
   var queue;
   KEY_SET("P_" + executionNumber, "done", 0);
-  require("console").log("klasjd");
   for (i = 0; i < WORKERS; i++) {
     queue = getQueueName(executionNumber, i);
     addTask(queue, step, globals);
   }
-  require("console").log("aaarargh");
   p.storeWatch("AddingAllTasks", t);
 };
 
@@ -709,7 +679,6 @@ var cleanUp = function(executionNumber) {
   // queues.delete("P_" + executionNumber); To be done for new queue
   var i, queue;
   KEY_SET("P_" + executionNumber, "done", 0);
-  require("console").log("Retried", KEY_GET("RETRY", "count"));
   KEYSPACE_DROP("RETRY");
   for (i = 0; i < WORKERS; i++) {
     queue = getQueueName(executionNumber, i);
