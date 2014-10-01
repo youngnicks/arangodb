@@ -1,6 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports, Graph, arguments, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
-/*global KEYSPACE_CREATE, KEYSPACE_DROP, KEY_SET, KEY_INCR */
+/*global KEYSPACE_CREATE, KEYSPACE_DROP, KEY_SET, KEY_INCR, KEY_GET */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief pregel worker functionality
@@ -59,7 +59,40 @@ var MAP = "map";
 var id;
 var WORKERS = 4;
 
+var getInboxName = function (execNr, shard, step, workerId) {
+  return "In_P_" + execNr + shard + "_" +(step % 2) + "_" + workerId;
+};
+
+var getOutboxName = function (execNr, firstW, secondW) {
+  return "Out_P_" + execNr + "_" + firstW + "_" + secondW;
+};
+
+var receiveMessages = function(executionNumber, shard, step, senderName, senderWorker, messageString) {
+  var msg = JSON.parse(messageString);
+  var i = 0;
+  var buckets = [];
+  var col = db[shard];
+  for (i = 0; i < WORKERS; i++) {
+    buckets.push({});
+  }
+  _.each(msg, function(v, k) {
+    buckets[col.NTH3(k, WORKERS)][k] = v;
+    delete msg[k];
+  });
+  var inbox;
+  for (i = 0; i < WORKERS; i++) {
+    inbox = getInboxName(executionNumber, shard, step, i);
+    KEY_SET(inbox,  senderName + "_" + senderWorker, JSON.stringify(buckets[i]));
+    buckets[i] = null;
+  }
+};
+
+
+// Functions that behave differently on local and cluster setups
+var sendMessages;
+
 if (pregel.getServerName() === "localhost") {
+  // Define code which has to be executed in a local setup
   var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
 
   Foxx.queues.registerJobType("pregel-register-job", function(params) {
@@ -81,6 +114,53 @@ if (pregel.getServerName() === "localhost") {
       }
     );
   });
+
+  sendMessages = function (queue, shardList, workerId, step, execNr) {
+    var i, shard;
+    for (i = 0; i < shardList.length; i++) {
+      shard = shardList[i];
+      receiveMessages(
+        execNr,
+        shard,
+        step,
+        "localhost",
+        workerId,
+        queue._dump(shard, workerId)
+      );
+    }
+  };
+
+} else {
+  // Define code which ahs to be executed in a cluster setup
+  sendMessages = function (queue, shardList, workerId, step, execNr) {
+    // TODO: Improve for local shards
+    var waitCounter = 0;
+    var coordOptions = {
+      coordTransactionID: ArangoClusterInfo.uniqid()
+    };
+    var dbName = db._name();
+    var sender = pregel.getServerName();
+    var i, shard, body;
+    for (i = 0; i < shardList.length; i++) {
+      shard = shardList[i];
+      body = {
+        execNr: execNr,
+        shard: shard,
+        step: step,
+        sender: sender,
+        worker: workerId,
+        msg: queue._dump(shard, workerId)
+      };
+      waitCounter++;
+      ArangoClusterComm.asyncRequest("POST","shard:" + shard, dbName,
+        "/_api/pregel/message", body, {}, coordOptions);
+    }
+    var debug;
+    for (waitCounter; waitCounter > 0; waitCounter--) {
+      debug = ArangoClusterComm.wait(coordOptions);
+    }
+  };
+
 }
 
 var queryGetAllSourceEdges = "FOR e IN @@original RETURN "
@@ -101,14 +181,6 @@ var queryActivateVertices = "FOR v IN @@work "
 var queryMessageByShard = "FOR v IN @@message "
   + "FILTER v.toShard == @shardId "
   + "RETURN v";
-
-var getInboxName = function (execNr, shard, step, workerId) {
-  return "In_P_" + execNr + shard + "_" +(step % 2) + "_" + workerId;
-};
-
-var getOutboxName = function (execNr, firstW, secondW) {
-  return "Out_P_" + execNr + "_" + firstW + secondW;
-};
 
 var createOutboxMatrix = function (execNr) {
   var i, j;
@@ -139,6 +211,39 @@ var translateId = function (id, mapping) {
   var key = split[1];
   return mapping.getResultCollection(col) + "/" + key;
 };
+
+var dumpMessages = function(queue, shardList, workerId, execNr) {
+  var i, j, space, shard;
+  for (i = 0; i < WORKERS; i++) {
+    if (i !== workerId) {
+      for (j = 0; j < shardList; j++) {
+        shard = shardList[j];
+        space = getOutboxName(execNr, workerId, i);
+        KEY_SET(space, shard, queue._dump(shard, i));
+      }
+    }
+  }
+};
+
+var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
+  var i, j, space, shard, incMessage;
+  for (i = 0; i < WORKERS; i++) {
+    if (i !== workerId) {
+      for (j = 0; j < shardList; j++) {
+        shard = shardList[j];
+        space = getOutboxName(execNr, i, workerId);
+        incMessage = KEY_GET(space, shard);
+        while (incMessage === undefined) {
+          // Wait for other threads to dump data
+          require("internal").wait(0);
+          incMessage = KEY_GET(space, shard);
+        }
+        queue._integrateMessage(shard, workerId, JSON.parse(incMessage));
+      }
+    }
+  }
+};
+
 
 // This funktion is intended to be used in the worker threads.
 // It has to get a scope injected, do not use it otherwise.
@@ -176,7 +281,15 @@ var workerCode = function (params) {
         }
       }
     }
-    this.queue._storeInCollection();
+    var shardList = this.queue._getShardList();
+
+    // Dump Messages into Key-Value store
+    dumpMessages(this.queue, shardList, this.workerId, this.executionNumber);
+
+    // Collect Data from Key-Value store and aggregate
+    aggregateOtherWorkerData(this.queue, shardList, this.workerId, this.executionNumber);
+
+    sendMessages(this.queue, shardList, this.workerId, this.executionNumber, step);
     this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(),
       this.inbox, this.outbox);
   } catch (err) {
@@ -202,10 +315,12 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "var outbox = " + JSON.stringify(outbox) + ";"
     + "var i;"
     + "var shard;"
+    + "var workerId = " + workerIndex + ";"
+    + "var workerCount = " + workerCount + ";"
     + "for (i = 0; i < shardList.length; i++) {"
     +   "shard = shardList[i];"
     +   "vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),"
-    +      "db[shard].NTH2(" + workerIndex + ", " + workerCount + ").documents);"
+    +      "db[shard].NTH2(workerId, workerCount).documents);"
     + "}"
     + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
     + "var scope = {};"
@@ -218,6 +333,7 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     + "scope.data = data;"
     + "scope.inbox = inbox;"
     + "scope.outbox = outbox;"
+    + "scope.workerId = workerId;"
     + "return worker.workerCode.bind(scope);"
    + "}())";
 };
@@ -451,35 +567,6 @@ var packOutbox = function(space) {
   return res;
 };
 
-var sendMessages = function (executionNumber, outbox, step) {
-  var waitCounter = 0;
-  var coordOptions = {
-    coordTransactionID: ArangoClusterInfo.uniqid()
-  };
-  var shard, msg, space, aggregate, body;
-  var dbName = db._name();
-  for (space in outbox) {
-    if (outbox.hasOwnProperty(space)) {
-      shard = extractShardFromSpace(executionNumber, space);
-      aggregate = space.charAt(space.length - 1) === "0";
-      msg = packOutbox(outbox[space], shard);
-      body = {
-        msg: msg,
-        aggregate: aggregate,
-        shard: shard,
-        execNr: executionNumber
-      };
-      waitCounter++;
-      ArangoClusterComm.asyncRequest("POST","shard:" + shard, dbName,
-        "/_api/pregel/message", body, {}, coordOptions);
-    }
-  }
-  var debug;
-  for (waitCounter; waitCounter > 0; waitCounter--) {
-    debug = ArangoClusterComm.wait(coordOptions);
-  }
-};
-
 var finishedStep = function (executionNumber, global, active, keyList, inbox, outbox) {
   var t = p.stopWatch();
   var messages = 0;
@@ -630,25 +717,6 @@ var cleanUp = function(executionNumber) {
   }
 };
 
-var receiveMessages = function(executionNumber, shard, step, senderName, senderWorker, messageString) {
-  var msg = JSON.parse(messageString);
-  var i = 0;
-  var buckets = [];
-  var col = db[shard];
-  for (i = 0; i < WORKERS; i++) {
-    buckets.push({});
-  }
-  _.each(msg, function(v, k) {
-    buckets[col.NTH3(k, WORKERS)][k] = v;
-    delete msg[k];
-  });
-  var inbox;
-  for (i = 0; i < WORKERS; i++) {
-    inbox = getInboxName(executionNumber, shard, step, i);
-    KEY_SET(inbox,  senderName + "_" + senderWorker, JSON.stringify(buckets[i]));
-    buckets[i] = null;
-  }
-};
 
 // -----------------------------------------------------------------------------
 // --SECTION--                                                    MODULE EXPORTS

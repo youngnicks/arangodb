@@ -817,6 +817,7 @@ var finishedStep = function(executionNumber, serverName, info) {
       if (ArangoServerState.isCoordinator()) {
         tasks.unregister(genTaskId(executionNumber));
       }
+  require("console").log("innitor");
       initNextStep(executionNumber);
     }
   }

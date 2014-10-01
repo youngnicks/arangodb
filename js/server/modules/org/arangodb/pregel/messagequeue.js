@@ -257,8 +257,10 @@ VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
 VertexMessageQueue.prototype._loadVertex = function (space, key, vertexInfo) {
   this._vertexInfo = vertexInfo;
   this._pos = 0;
+  require("console").log("LoadSpaces");
   var plain = KEY_GET(space + "1", key);
   var aggregate = KEY_GET(space + "0", key);
+  require("console").log("LoadSpaces done");
   if (plain !== undefined) {
     this._inc = plain;
   } else {
@@ -344,6 +346,7 @@ Queue.prototype._send = function (target, msg) {
   var t = p.stopWatch();
   var shard = target.shard;
   var id = target._id;
+  var workerId = this.__hash(id);
   var space = this.__outbox[shard];
   if (!space) {
     space = this.__inbox[shard] + ((this.__step + 1) % 2);
@@ -367,20 +370,39 @@ Queue.prototype._send = function (target, msg) {
   p.storeWatch("_send", t);
 };
 
-Queue.prototype._storeInCollection = function() {
-  // TODO Rebuild for cluster
-  return;
+Queue.prototype._dump = function(shard, workerId) {
   var t = p.stopWatch();
-  var self = this;
-  _.each(this.__output, function(doc, shard) {
-    var toSave = {
-      toShard: shard,
-      messages: JSON.stringify(doc),
-      step: self.__step
-    };
-    self.__collection.save(toSave);
+  var res = JSON.stringify(this.__outbox[shard][workerId]);
+  this.__outbox[shard][workerId] = {};
+  p.storeWatch("dump queue", t);
+  return res;
+};
+
+Queue.prototype._getShardList = function() {
+  return Object.keys(this.__outbox);
+};
+
+Queue.prototype._integrateMessage = function(shard, workerId, incMessage) {
+  var old = this.__outbox[shard][workerId];
+  var aggFunc = this.__aggregate;
+  _.each(incMessage, function(v, k) {
+    var aggregate = v[0];
+    var plain = v[1];
+    if (!old.hasOwnProperty(k)) {
+      old[k] = [null, []];
+    }
+    var oldV = old[k];
+    var oldAggr = oldV[0];
+    var oldPlain = oldV[1];
+    if (aggregate !== null) {
+      if (oldAggr !== null) {
+        oldV[0] = aggFunc(aggregate, oldAggr);
+      } else {
+        oldV[0] = aggregate;
+      }
+    }
+    oldV[1] = oldPlain.concat(plain);
   });
-  p.storeWatch("storeInCol", t);
 };
 
 exports.MessageQueue = Queue;
