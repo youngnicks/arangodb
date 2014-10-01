@@ -205,7 +205,57 @@ ExecutionNode* ExecutionNode::fromJsonFactory (ExecutionPlan* plan,
 
 ExecutionNode::ExecutionNode (ExecutionPlan* plan,
                               triagens::basics::Json const& json) 
-  : ExecutionNode(plan, JsonHelper::checkAndGetNumericValue<size_t>(json.json(), "id")) {
+  :
+    _id(JsonHelper::checkAndGetNumericValue<size_t>(json.json(), "id")),
+    _estimatedCost(0.0), 
+    _estimatedCostSet(false),
+    _varUsageValid(false),
+    _plan(plan),
+    _depth(JsonHelper::checkAndGetNumericValue<size_t>(json.json(), "depth"))
+{
+  auto jsonVarInfoList = json.get("varInfoList");
+  if (!jsonVarInfoList.isList()) {
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_NOT_IMPLEMENTED, "varInfoList needs to be a json list"); 
+  }
+  
+  size_t len = jsonVarInfoList.size();
+  _varOverview->varInfo.reserve(len);
+  for (size_t i = 0; i < len; i++) {
+    auto jsonVarInfo = jsonVarInfoList.at(i);
+    if (jsonVarInfo.isArray()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_NOT_IMPLEMENTED, "one varInfoList needs to be an object"); 
+    }
+    VariableId variableId = JsonHelper::checkAndGetNumericValue<size_t>      (jsonVarInfo.json(), "VariableId");
+    RegisterId registerId = JsonHelper::checkAndGetNumericValue<size_t>      (jsonVarInfo.json(), "RegisterId");
+    unsigned int    depth = JsonHelper::checkAndGetNumericValue<unsigned int>(jsonVarInfo.json(), "depth");
+    _varOverview->varInfo.insert(make_pair(variableId, VarInfo(depth, registerId)));
+  }
+
+  auto jsonNrRegsList = json.get("nrRegs");
+  if (!jsonNrRegsList.isList()) {
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_NOT_IMPLEMENTED, "nrRegs needs to be a json list"); 
+  }
+
+  _varOverview->nrRegs.reserve(len);
+  len = jsonNrRegsList.size();
+  for (size_t i = 0; i < len; i++) {
+    RegisterId oneReg = JsonHelper::getNumericValue<size_t> (jsonNrRegsList.at(i).json(), 0);
+    _varOverview->nrRegs.push_back(oneReg);
+  }
+
+  auto jsonRegsToClearList = json.get("regsToClear");
+  if (!jsonRegsToClearList.isList()) {
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_NOT_IMPLEMENTED, "regsToClear needs to be a json list"); 
+  }
+
+  len = jsonRegsToClearList.size();
+  _regsToClear.reserve(len);
+  for (size_t i = 0; i < len; i++) {
+    RegisterId oneRegToClear = JsonHelper::getNumericValue<size_t> (jsonRegsToClearList.at(i).json(), 0);
+    _regsToClear.insert(oneRegToClear);
+  }
+
+
   // TODO: decide whether it should be allowed to create an abstract ExecutionNode at all
 }
 
@@ -405,28 +455,338 @@ triagens::basics::Json ExecutionNode::toJsonHelperGeneric (triagens::basics::Jso
     _dependencies[i]->toJsonHelper(nodes, zone, verbose);
   }
 
-  triagens::basics::Json json;
-  json = triagens::basics::Json(triagens::basics::Json::Array, 2)
-    ("type", triagens::basics::Json(getTypeString()));
+  Json json;
+
+  json = Json(Json::Array, 2)
+    ("type", Json(getTypeString()));
+
   if (verbose) {
-    json("typeID", triagens::basics::Json(static_cast<int>(getType())));
+    json("typeID", Json(static_cast<int>(getType())));
   }
-  triagens::basics::Json deps(triagens::basics::Json::List, n);
+
+  Json deps(Json::List, n);
   for (size_t i = 0; i < n; i++) {
-    deps(triagens::basics::Json(static_cast<double>(_dependencies[i]->id())));
+    deps(Json(static_cast<double>(_dependencies[i]->id())));
   }
   json("dependencies", deps);
-  triagens::basics::Json parents(triagens::basics::Json::List, _parents.size());
-  for (size_t i = 0; i < _parents.size(); i++) {
-    parents(triagens::basics::Json(static_cast<double>(_parents[i]->id())));
-  }
+
   if (verbose) {
+    Json parents(Json::List, _parents.size());
+    for (size_t i = 0; i < _parents.size(); i++) {
+      parents(triagens::basics::Json(static_cast<double>(_parents[i]->id())));
+    }
     json("parents", parents);
   }
-  json("id", triagens::basics::Json(static_cast<double>(id())));
-  json("estimatedCost", triagens::basics::Json(_estimatedCost));
 
+  json("id", Json(static_cast<double>(id())));
+  json("estimatedCost", Json(_estimatedCost));
+
+  json("depth", Json(static_cast<double>(_depth)));
+ 
+  if (_varOverview) {
+    Json jsonVarInfoList(Json::List, _varOverview->varInfo.size());
+    if (n > 0) {
+      for (auto oneVarInfo: _varOverview->varInfo) {
+        Json jsonOneVarInfoArray(Json::Array, 2);
+        jsonOneVarInfoArray(
+                            "VariableId", 
+                            Json(static_cast<double>(oneVarInfo.first)))
+          ("depth", Json(static_cast<double>(oneVarInfo.second.depth)))
+          ("RegisterId", Json(static_cast<double>(oneVarInfo.second.registerId)))
+          ;
+        jsonVarInfoList(jsonOneVarInfoArray);
+      }
+    }
+    json("varInfoList", jsonVarInfoList);
+
+    Json jsonNRRegsList(Json::List, _varOverview->nrRegs.size());
+    for (auto oneRegisterID: _varOverview->nrRegs) {
+      jsonNRRegsList(Json(static_cast<double>(oneRegisterID)));
+    }
+    json("nrRegs", jsonNRRegsList);
+
+    Json jsonRegsToClearList(Json::List, _regsToClear.size());
+    for (auto oneRegisterID: _regsToClear) {
+      jsonRegsToClearList(Json(static_cast<double>(oneRegisterID)));
+    }
+    json("regsToClear", jsonRegsToClearList);
+  }
+  else {
+    Json emptyList(Json::List);
+    json("varInfoList", emptyList);
+
+    json("nrRegs", emptyList);
+
+    json("regsToClear", emptyList);
+  }
   return json;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief static analysis debugger
+////////////////////////////////////////////////////////////////////////////////
+
+struct StaticAnalysisDebugger : public WalkerWorker<ExecutionNode> {
+  StaticAnalysisDebugger () : indent(0) {};
+  ~StaticAnalysisDebugger () {};
+
+  int indent;
+
+  bool enterSubquery (ExecutionNode*, ExecutionNode*) {
+    indent++;
+    return true;
+  }
+
+  void leaveSubquery (ExecutionNode*, ExecutionNode*) {
+    indent--;
+  }
+
+  void after (ExecutionNode* ep) {
+    for (int i = 0; i < indent; i++) {
+      std::cout << " ";
+    }
+    std::cout << ep->getTypeString() << " ";
+    std::cout << "regsUsedHere: ";
+    for (auto v : ep->getVariablesUsedHere()) {
+      std::cout << ep->getVarOverview()->varInfo.find(v->id)->second.registerId
+                << " ";
+    }
+    std::cout << "regsSetHere: ";
+    for (auto v : ep->getVariablesSetHere()) {
+      std::cout << ep->getVarOverview()->varInfo.find(v->id)->second.registerId
+                << " ";
+    }
+    std::cout << "regsToClear: ";
+    for (auto r : ep->getRegsToClear()) {
+      std::cout << r << " ";
+    }
+    std::cout << std::endl;
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief staticAnalysis
+////////////////////////////////////////////////////////////////////////////////
+
+void ExecutionNode::staticAnalysis (ExecutionNode* super) {
+  // The super is only for the case of subqueries.
+  shared_ptr<VarOverview> v;
+  if (super == nullptr) {
+    v.reset(new VarOverview());
+  }
+  else {
+    v.reset(new VarOverview(*(super->_varOverview), super->_depth));
+  }
+  v->setSharedPtr(&v);
+  walk(v.get());
+  // Now handle the subqueries:
+  for (auto s : v->subQueryNodes) {
+    auto sq = static_cast<SubqueryNode*>(s);
+    sq->getSubquery()->staticAnalysis(s);
+  }
+  v->reset();
+
+  // Just for debugging:
+  /*
+  std::cout << std::endl;
+  StaticAnalysisDebugger debugger;
+  walk(&debugger);
+  std::cout << std::endl;
+  */
+}
+
+// -----------------------------------------------------------------------------
+// --SECTION--                                 struct ExecutionNode::VarOverview
+// -----------------------------------------------------------------------------
+
+// Copy constructor used for a subquery:
+ExecutionNode::VarOverview::VarOverview (VarOverview const& v,
+                                         unsigned int newdepth)
+  : varInfo(v.varInfo),
+    nrRegsHere(v.nrRegsHere),
+    nrRegs(v.nrRegs),
+    subQueryNodes(),
+    depth(newdepth+1),
+    totalNrRegs(v.nrRegs[newdepth]),
+    me(nullptr) {
+  nrRegs.resize(depth);
+  nrRegsHere.resize(depth);
+  nrRegsHere.push_back(0);
+  nrRegs.push_back(nrRegs.back());
+}
+
+void ExecutionNode::VarOverview::after (ExecutionNode *en) {
+  switch (en->getType()) {
+    case ExecutionNode::ENUMERATE_COLLECTION: 
+    case ExecutionNode::INDEX_RANGE: {
+      depth++;
+      nrRegsHere.push_back(1);
+      nrRegs.push_back(1 + nrRegs.back());
+      auto ep = static_cast<EnumerateCollectionNode const*>(en);
+      TRI_ASSERT(ep != nullptr);
+      varInfo.insert(make_pair(ep->_outVariable->id,
+                               VarInfo(depth, totalNrRegs)));
+      totalNrRegs++;
+      break;
+    }
+    case ExecutionNode::ENUMERATE_LIST: {
+      depth++;
+      nrRegsHere.push_back(1);
+      nrRegs.push_back(1 + nrRegs.back());
+      auto ep = static_cast<EnumerateListNode const*>(en);
+      TRI_ASSERT(ep != nullptr);
+      varInfo.insert(make_pair(ep->_outVariable->id,
+                               VarInfo(depth, totalNrRegs)));
+      totalNrRegs++;
+      break;
+    }
+    case ExecutionNode::CALCULATION: {
+      nrRegsHere[depth]++;
+      nrRegs[depth]++;
+      auto ep = static_cast<CalculationNode const*>(en);
+      TRI_ASSERT(ep != nullptr);
+      varInfo.insert(make_pair(ep->_outVariable->id,
+                               VarInfo(depth, totalNrRegs)));
+      totalNrRegs++;
+      break;
+    }
+
+    case ExecutionNode::SUBQUERY: {
+      nrRegsHere[depth]++;
+      nrRegs[depth]++;
+      auto ep = static_cast<SubqueryNode const*>(en);
+      TRI_ASSERT(ep != nullptr);
+      varInfo.insert(make_pair(ep->_outVariable->id,
+                               VarInfo(depth, totalNrRegs)));
+      totalNrRegs++;
+      subQueryNodes.push_back(en);
+      break;
+    }
+
+    case ExecutionNode::AGGREGATE: {
+      depth++;
+      nrRegsHere.push_back(0);
+      nrRegs.push_back(nrRegs.back());
+
+      auto ep = static_cast<AggregateNode const*>(en);
+      for (auto p : ep->_aggregateVariables) {
+        // p is std::pair<Variable const*,Variable const*>
+        // and the first is the to be assigned output variable
+        // for which we need to create a register in the current
+        // frame:
+        nrRegsHere[depth]++;
+        nrRegs[depth]++;
+        varInfo.insert(make_pair(p.first->id,
+                                 VarInfo(depth, totalNrRegs)));
+        totalNrRegs++;
+      }
+      if (ep->_outVariable != nullptr) {
+        nrRegsHere[depth]++;
+        nrRegs[depth]++;
+        varInfo.insert(make_pair(ep->_outVariable->id,
+                                 VarInfo(depth, totalNrRegs)));
+        totalNrRegs++;
+      }
+      break;
+    }
+
+    case ExecutionNode::SORT: {
+      // sort sorts in place and does not produce new registers
+      break;
+    }
+    
+    case ExecutionNode::RETURN: {
+      // return is special. it produces a result but is the last step in the pipeline
+      break;
+    }
+
+    case ExecutionNode::REMOVE: {
+      auto ep = static_cast<RemoveNode const*>(en);
+      if (ep->_outVariable != nullptr) {
+        nrRegsHere[depth]++;
+        nrRegs[depth]++;
+        varInfo.insert(make_pair(ep->_outVariable->id,
+                                 VarInfo(depth, totalNrRegs)));
+        totalNrRegs++;
+      }
+      break;
+    }
+
+    case ExecutionNode::INSERT: {
+      auto ep = static_cast<InsertNode const*>(en);
+      if (ep->_outVariable != nullptr) {
+        nrRegsHere[depth]++;
+        nrRegs[depth]++;
+        varInfo.insert(make_pair(ep->_outVariable->id,
+                                 VarInfo(depth, totalNrRegs)));
+        totalNrRegs++;
+      }
+      break;
+    }
+
+    case ExecutionNode::UPDATE: {
+      auto ep = static_cast<UpdateNode const*>(en);
+      if (ep->_outVariable != nullptr) {
+        nrRegsHere[depth]++;
+        nrRegs[depth]++;
+        varInfo.insert(make_pair(ep->_outVariable->id,
+                                 VarInfo(depth, totalNrRegs)));
+        totalNrRegs++;
+      }
+      break;
+    }
+
+    case ExecutionNode::REPLACE: {
+      auto ep = static_cast<ReplaceNode const*>(en);
+      if (ep->_outVariable != nullptr) {
+        nrRegsHere[depth]++;
+        nrRegs[depth]++;
+        varInfo.insert(make_pair(ep->_outVariable->id,
+                                 VarInfo(depth, totalNrRegs)));
+        totalNrRegs++;
+      }
+      break;
+    }
+
+    case ExecutionNode::SINGLETON:
+    case ExecutionNode::FILTER:
+    case ExecutionNode::LIMIT:
+    case ExecutionNode::SCATTER: 
+    case ExecutionNode::GATHER: 
+    case ExecutionNode::REMOTE: 
+    case ExecutionNode::NORESULTS: {
+      // these node types do not produce any new registers
+      break;
+    }
+
+    case ExecutionNode::ILLEGAL: {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_NOT_IMPLEMENTED, "node type not implemented");
+    }
+  }
+
+  en->_depth = depth;
+  en->_varOverview = *me;
+
+  // Now find out which registers ought to be erased after this node:
+  if (en->getType() != ExecutionNode::RETURN) {
+    // ReturnNodes are special, since they return a single column anyway
+    std::unordered_set<Variable const*> const& varsUsedLater = en->getVarsUsedLater();
+    std::vector<Variable const*> const& varsUsedHere = en->getVariablesUsedHere();
+    
+    // We need to delete those variables that have been used here but are not
+    // used any more later:
+    std::unordered_set<RegisterId> regsToClear;
+    for (auto v : varsUsedHere) {
+      auto it = varsUsedLater.find(v);
+      if (it == varsUsedLater.end()) {
+        auto it2 = varInfo.find(v->id);
+        TRI_ASSERT(it2 != varInfo.end());
+        RegisterId r = it2->second.registerId;
+        regsToClear.insert(r);
+      }
+    }
+    en->setRegsToClear(regsToClear);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -487,6 +847,26 @@ void EnumerateCollectionNode::toJsonHelper (triagens::basics::Json& nodes,
   // And add it:
   nodes(json);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief clone ExecutionNode recursively
+////////////////////////////////////////////////////////////////////////////////
+
+ExecutionNode* EnumerateCollectionNode::clone (ExecutionPlan* plan,
+                                               bool withDependencies,
+                                               bool withProperties) const {
+  auto outVariable = _outVariable;
+  if (withProperties) {
+    outVariable = plan->getAst()->variables()->createVariable(outVariable);
+  }
+  auto c = new EnumerateCollectionNode(plan, _id, _vocbase, _collection, outVariable);
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief get the number of usable fields from the index (according to the
@@ -636,6 +1016,29 @@ void EnumerateListNode::toJsonHelper (triagens::basics::Json& nodes,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief clone ExecutionNode recursively
+////////////////////////////////////////////////////////////////////////////////
+
+ExecutionNode* EnumerateListNode::clone (ExecutionPlan* plan,
+                                         bool withDependencies,
+                                         bool withProperties) const {
+  auto outVariable = _outVariable;
+  auto inVariable = _inVariable;
+
+  if (withProperties) {
+    outVariable = plan->getAst()->variables()->createVariable(outVariable);
+    inVariable = plan->getAst()->variables()->createVariable(inVariable);
+  }
+
+  auto c = new EnumerateListNode(plan, _id, inVariable, outVariable);
+
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief toJson, for IndexRangeNode
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -690,6 +1093,32 @@ void IndexRangeNode::toJsonHelper (triagens::basics::Json& nodes,
 
   // And add it:
   nodes(json);
+}
+
+ExecutionNode* IndexRangeNode::clone (ExecutionPlan* plan,
+                                      bool withDependencies,
+                                      bool withProperties) const {
+  std::vector<std::vector<RangeInfo>> ranges;
+  for (size_t i = 0; i < _ranges.size(); i++){
+    ranges.push_back(std::vector<RangeInfo>());
+    
+    for (auto x: _ranges.at(i)){
+      ranges.at(i).push_back(x);
+    }
+  }
+
+  auto outVariable = _outVariable;
+
+  if (withProperties) {
+    outVariable = plan->getAst()->variables()->createVariable(outVariable);
+  }
+
+  auto c = new IndexRangeNode(plan, _id, _vocbase, _collection, 
+                              outVariable, _index, ranges, _reverse);
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -915,6 +1344,22 @@ void CalculationNode::toJsonHelper (triagens::basics::Json& nodes,
   nodes(json);
 }
 
+ExecutionNode* CalculationNode::clone (ExecutionPlan* plan,
+                                       bool withDependencies,
+                                       bool withProperties) const {
+  auto outVariable = _outVariable;
+
+  if (withProperties) {
+    outVariable = plan->getAst()->variables()->createVariable(outVariable);
+  }
+  auto c = new CalculationNode(plan, _id, _expression->clone(),
+                               outVariable);
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
+}
+
 // -----------------------------------------------------------------------------
 // --SECTION--                                           methods of SubqueryNode
 // -----------------------------------------------------------------------------
@@ -942,6 +1387,22 @@ void SubqueryNode::toJsonHelper (triagens::basics::Json& nodes,
 
   // And add it:
   nodes(json);
+}
+
+ExecutionNode* SubqueryNode::clone (ExecutionPlan* plan,
+                                    bool withDependencies,
+                                    bool withProperties) const {
+  auto outVariable = _outVariable;
+
+  if (withProperties) {
+    outVariable = plan->getAst()->variables()->createVariable(outVariable);
+  }
+  auto c = new SubqueryNode(plan, _id, _subquery->clone(plan, true, withProperties),
+                            outVariable);
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1072,6 +1533,21 @@ void FilterNode::toJsonHelper (triagens::basics::Json& nodes,
 
   // And add it:
   nodes(json);
+}
+
+ExecutionNode* FilterNode::clone (ExecutionPlan* plan,
+                                  bool withDependencies,
+                                  bool withProperties) const {
+  auto inVariable = _inVariable;
+
+  if (withProperties) {
+    inVariable = plan->getAst()->variables()->createVariable(inVariable);
+  }
+  auto c = new FilterNode(plan, _id, inVariable);
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
 }
 
 // -----------------------------------------------------------------------------
@@ -1247,6 +1723,35 @@ void AggregateNode::toJsonHelper (triagens::basics::Json& nodes,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief clone ExecutionNode recursively
+////////////////////////////////////////////////////////////////////////////////
+
+ExecutionNode* AggregateNode::clone (ExecutionPlan* plan,
+                                     bool withDependencies,
+                                     bool withProperties) const {
+  auto outVariable = _outVariable;
+  auto aggregateVariables = _aggregateVariables;
+
+  if (withProperties) {
+    outVariable = plan->getAst()->variables()->createVariable(outVariable);
+
+    for (auto oneAggregate: _aggregateVariables) {
+      auto in  = plan->getAst()->variables()->createVariable(oneAggregate.first);
+      auto out = plan->getAst()->variables()->createVariable(oneAggregate.second);
+      aggregateVariables.push_back(std::make_pair(in, out));
+    }
+
+  }
+
+  auto c = new AggregateNode(plan, _id, aggregateVariables, outVariable, _variableMap);
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief getVariablesUsedHere
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -1320,6 +1825,25 @@ void ReturnNode::toJsonHelper (triagens::basics::Json& nodes,
   nodes(json);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief clone ExecutionNode recursively
+////////////////////////////////////////////////////////////////////////////////
+ExecutionNode* ReturnNode::clone (ExecutionPlan* plan,
+                                  bool withDependencies,
+                                  bool withProperties) const {
+  auto inVariable = _inVariable;
+
+  if (withProperties) {
+    inVariable = plan->getAst()->variables()->createVariable(inVariable);
+  }
+
+  auto c = new ReturnNode(plan, _id, inVariable);
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
+}
+
 // -----------------------------------------------------------------------------
 // --SECTION--                                                  ModificationNode
 // -----------------------------------------------------------------------------
@@ -1388,6 +1912,28 @@ void RemoveNode::toJsonHelper (triagens::basics::Json& nodes,
   nodes(json);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief clone ExecutionNode recursively
+////////////////////////////////////////////////////////////////////////////////
+
+ExecutionNode* RemoveNode::clone (ExecutionPlan* plan,
+                                  bool withDependencies,
+                                  bool withProperties) const {
+  auto outVariable = _outVariable;
+  auto inVariable = _inVariable;
+
+  if (withProperties) {
+    outVariable = plan->getAst()->variables()->createVariable(outVariable);
+    inVariable = plan->getAst()->variables()->createVariable(inVariable);
+  }
+
+  auto c = new RemoveNode(plan, _id, _vocbase, _collection, _options, inVariable, outVariable);
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
+}
+
 // -----------------------------------------------------------------------------
 // --SECTION--                                             methods of InsertNode
 // -----------------------------------------------------------------------------
@@ -1425,6 +1971,30 @@ void InsertNode::toJsonHelper (triagens::basics::Json& nodes,
   // And add it:
   nodes(json);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief clone ExecutionNode recursively
+////////////////////////////////////////////////////////////////////////////////
+
+ExecutionNode* InsertNode::clone (ExecutionPlan* plan,
+                                  bool withDependencies,
+                                  bool withProperties) const {
+  auto outVariable = _outVariable;
+  auto inVariable = _inVariable;
+
+  if (withProperties) {
+    outVariable = plan->getAst()->variables()->createVariable(outVariable);
+    inVariable = plan->getAst()->variables()->createVariable(inVariable);
+  }
+
+  auto c = new InsertNode(plan, _id, _vocbase, _collection,
+                          _options, inVariable, outVariable);
+  if (withDependencies) {
+    cloneDependencies(plan,c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
+}
+
 
 // -----------------------------------------------------------------------------
 // --SECTION--                                             methods of UpdateNode
@@ -1470,6 +2040,31 @@ void UpdateNode::toJsonHelper (triagens::basics::Json& nodes,
   nodes(json);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief clone ExecutionNode recursively
+////////////////////////////////////////////////////////////////////////////////
+
+ExecutionNode* UpdateNode::clone (ExecutionPlan* plan,
+                                  bool withDependencies,
+                                  bool withProperties) const {
+  auto outVariable = _outVariable;
+  auto inKeyVariable = _inKeyVariable;
+  auto inDocVariable = _inDocVariable;
+
+  if (withProperties) {
+    outVariable = plan->getAst()->variables()->createVariable(outVariable);
+    inKeyVariable = plan->getAst()->variables()->createVariable(inKeyVariable);
+    inDocVariable = plan->getAst()->variables()->createVariable(inDocVariable);
+  }
+
+  auto c = new UpdateNode(plan, _id, _vocbase, _collection, _options, inDocVariable, inKeyVariable, outVariable);
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
+}
+
+
 // -----------------------------------------------------------------------------
 // --SECTION--                                            methods of ReplaceNode
 // -----------------------------------------------------------------------------
@@ -1514,6 +2109,32 @@ void ReplaceNode::toJsonHelper (triagens::basics::Json& nodes,
   nodes(json);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief clone ExecutionNode recursively
+////////////////////////////////////////////////////////////////////////////////
+
+ExecutionNode* ReplaceNode::clone (ExecutionPlan* plan,
+                                   bool withDependencies,
+                                   bool withProperties) const {
+  auto outVariable = _outVariable;
+  auto inKeyVariable = _inKeyVariable;
+  auto inDocVariable = _inDocVariable;
+
+  if (withProperties) {
+    outVariable = plan->getAst()->variables()->createVariable(outVariable);
+    inKeyVariable = plan->getAst()->variables()->createVariable(inKeyVariable);
+    inDocVariable = plan->getAst()->variables()->createVariable(inDocVariable);
+  }
+
+  auto c = new ReplaceNode(plan, _id, _vocbase, _collection, 
+                           _options, inDocVariable, inKeyVariable,
+                           outVariable);
+  if (withDependencies) {
+    cloneDependencies(plan, c, withProperties);
+  }
+  return static_cast<ExecutionNode*>(c);
+}
+
 // -----------------------------------------------------------------------------
 // --SECTION--                                          methods of NoResultsNode
 // -----------------------------------------------------------------------------
@@ -1546,7 +2167,10 @@ RemoteNode::RemoteNode (ExecutionPlan* plan,
                         triagens::basics::Json const& base)
   : ExecutionNode(plan, base),
     _vocbase(plan->getAst()->query()->vocbase()),
-    _collection(plan->getAst()->query()->collections()->get(JsonHelper::checkAndGetStringValue(base.json(), "collection"))) {
+    _collection(plan->getAst()->query()->collections()->get(JsonHelper::checkAndGetStringValue(base.json(), "collection"))),
+    _server(JsonHelper::checkAndGetStringValue(base.json(), "server")), 
+    _ownName(JsonHelper::checkAndGetStringValue(base.json(), "ownName")), 
+    _queryId(JsonHelper::checkAndGetStringValue(base.json(), "queryId")) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////

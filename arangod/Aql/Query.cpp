@@ -119,7 +119,8 @@ Query::Query (TRI_vocbase_t* vocbase,
               char const* queryString,
               size_t queryLength,
               TRI_json_t* bindParameters,
-              TRI_json_t* options)
+              TRI_json_t* options,
+              QueryPart part)
   : _vocbase(vocbase),
     _executor(nullptr),
     _queryString(queryString),
@@ -135,7 +136,8 @@ Query::Query (TRI_vocbase_t* vocbase,
     _plan(nullptr),
     _parser(nullptr),
     _trx(nullptr),
-    _engine(nullptr) {
+    _engine(nullptr),
+    _part(part) {
 
   TRI_ASSERT(_vocbase != nullptr);
 
@@ -146,12 +148,18 @@ Query::Query (TRI_vocbase_t* vocbase,
   
   _ast = new Ast(this);
 
+  _nodes.reserve(32);
   _strings.reserve(32);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief creates a query from Json
+////////////////////////////////////////////////////////////////////////////////
+
 Query::Query (TRI_vocbase_t* vocbase,
               triagens::basics::Json queryStruct,
-              TRI_json_t* options)
+              TRI_json_t* options,
+              QueryPart part)
   : _vocbase(vocbase),
     _executor(nullptr),
     _queryString(nullptr),
@@ -167,7 +175,8 @@ Query::Query (TRI_vocbase_t* vocbase,
     _plan(nullptr),
     _parser(nullptr),
     _trx(nullptr),
-    _engine(nullptr) {
+    _engine(nullptr),
+    _part(part) {
 
   TRI_ASSERT(_vocbase != nullptr);
 
@@ -175,6 +184,8 @@ Query::Query (TRI_vocbase_t* vocbase,
     _profile = new Profile;
   }
   enterState(INITIALIZATION);
+
+  _nodes.reserve(32);
 
   _ast = new Ast(this);
   _strings.reserve(32);
@@ -186,6 +197,7 @@ Query::Query (TRI_vocbase_t* vocbase,
 
 Query::~Query () {
   cleanupPlanAndEngine();
+
   if (_profile != nullptr) {
     delete _profile;
     _profile = nullptr;
@@ -210,6 +222,37 @@ Query::~Query () {
   for (auto it = _strings.begin(); it != _strings.end(); ++it) {
     TRI_FreeString(TRI_UNKNOWN_MEM_ZONE, const_cast<char*>(*it));
   }
+  // free nodes
+  for (auto it = _nodes.begin(); it != _nodes.end(); ++it) {
+    delete (*it);
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief clone a query
+////////////////////////////////////////////////////////////////////////////////
+
+Query* Query::clone (QueryPart part) {
+  Query* theClone = new Query(_vocbase,
+                              _queryString,
+                              _queryLength,
+                              nullptr,
+                              _options,
+                              part);
+
+  if (_plan != nullptr) {
+    theClone->_plan = _plan->clone(*theClone);
+  }
+
+  return theClone;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief add a node to the list of nodes
+////////////////////////////////////////////////////////////////////////////////
+
+void Query::addNode (AstNode* node) {
+  _nodes.push_back(node);
 }
 
 // -----------------------------------------------------------------------------
@@ -723,8 +766,7 @@ double Query::getNumericOption (char const* option, double defaultValue) const {
 ////////////////////////////////////////////////////////////////////////////////
 
 QueryResult Query::transactionError (int errorCode, 
-                                     AQL_TRANSACTION_V8 const& trx) const
-{
+                                     AQL_TRANSACTION_V8 const& trx) const {
   std::string err(TRI_errno_string(errorCode));
 
   auto detail = trx.getErrorData();
@@ -807,8 +849,10 @@ void Query::cleanupPlanAndEngine () {
   }
 
   if (_trx != nullptr) {
-    delete _trx;
-    _trx = nullptr;
+    if (_part == PART_MAIN) {
+      delete _trx;
+      _trx = nullptr;
+    }
   }
 
   if (_parser != nullptr) {
@@ -820,6 +864,17 @@ void Query::cleanupPlanAndEngine () {
     delete _plan;
     _plan = nullptr;
   }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief set the plan for the query
+////////////////////////////////////////////////////////////////////////////////
+
+void Query::setPlan (ExecutionPlan *plan) {
+  if (_plan != nullptr) {
+    delete _plan;
+  }
+  _plan = plan;
 }
 
 // -----------------------------------------------------------------------------
