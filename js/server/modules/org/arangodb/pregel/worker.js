@@ -57,9 +57,9 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 1;
+var WORKERS = 4;
 
-if (pregel.getServerName === "localhost") {
+if (pregel.getServerName() === "localhost") {
   var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
 
   Foxx.queues.registerJobType("pregel-register-job", function(params) {
@@ -106,6 +106,21 @@ var getInboxName = function (execNr, shard, step, workerId) {
   return "In_P_" + execNr + shard + "_" +(step % 2) + "_" + workerId;
 };
 
+var getOutboxName = function (execNr, firstW, secondW) {
+  return "Out_P_" + execNr + "_" + firstW + secondW;
+};
+
+var createOutboxMatrix = function (execNr) {
+  var i, j;
+  for (i = 0; i < WORKERS; i++) {
+    for (j = 0; j < WORKERS; j++) {
+      if (j !== i) {
+        KEYSPACE_CREATE(getOutboxName(execNr, i, j));
+      }
+    }
+  }
+};
+
 var extractShardFromSpace = function (execNr, space) {
   return space.substring(6 + execNr.length, space.lastIndexOf("_"));
 };
@@ -125,10 +140,55 @@ var translateId = function (id, mapping) {
   return mapping.getResultCollection(col) + "/" + key;
 };
 
+// This funktion is intended to be used in the worker threads.
+// It has to get a scope injected, do not use it otherwise.
+var workerCode = function (params) {
+  this.vertices.reset();
+  if (params.cleanUp) {
+    while(this.vertices.hasNext()) {
+      this.vertices.next()._save();
+    }
+    p.aggregate();
+    this.worker.queueCleanupDone(this.executionNumber);
+    return;
+  }
+  var step = params.step;
+  this.queue._fillQueues();
+  var global = params.global;
+  var msgQueue;
+  global.step = step;
+  global.data = this.data;
+  try {
+    var vertex;
+    if (global.final === true) {
+      while(this.vertices.hasNext()) {
+        vertex = this.vertices.next();
+        msgQueue = this.queue._loadVertex(this.vertices.getShardName(vertex.shard), vertex);
+        this.finalAlgorithm(vertex, msgQueue, global);
+      }
+    } else {
+      while(this.vertices.hasNext()) {
+        vertex = this.vertices.next();
+        msgQueue = this.queue._loadVertex(this.vertices.getShardName(vertex.shard), vertex);
+        if (vertex._isActive() || msgQueue.count > 0) {
+          vertex._activate();
+          this.algorithm(vertex, msgQueue, global);
+        }
+      }
+    }
+    this.queue._storeInCollection();
+    this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(),
+      this.inbox, this.outbox);
+  } catch (err) {
+    this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(),
+      this.inbox, this.outbox, err);
+  }
+};
+
 var algorithmForQueue = function (algorithms, shardList, executionNumber, workerIndex, workerCount, inbox, outbox) {
   return "(function() {"
     + "var executionNumber = " + executionNumber + ";"
-+ "var p = require('org/arangodb/profiler');"
+    + "var p = require('org/arangodb/profiler');"
     + "var db = require('internal').db;"
     + "var pregel = require('org/arangodb/pregel');"
     + "var pregelMapping = new pregel.Mapping(executionNumber);"
@@ -147,58 +207,26 @@ var algorithmForQueue = function (algorithms, shardList, executionNumber, worker
     +   "vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),"
     +      "db[shard].NTH2(" + workerIndex + ", " + workerCount + ").documents);"
     + "}"
-    + "var queue = new pregel.MessageQueue(executionNumber, vertices, inbox, outbox, aggregator);"
-    + "return function(params) {"
-    + "vertices.reset();"
-    + "if (params.cleanUp) {"
-    +   "while(vertices.hasNext()) {"
-    +     "vertices.next()._save();"
-    +   "};"
-+ "p.aggregate();"
-    + "  worker.queueCleanupDone(executionNumber);"
-    + "  return;"
-    + "}"
-    + "var step = params.step;"
-    + "queue._fillQueues();"
-    + "var global = params.global;"
-    + "var msgQueue;"
-    + "global.step = step;"
-    + "if (step !== lastStep) {"
-    + "  data = [];"
-    + "}"
-    + "global.data = data;"
-    + "try {"
-    +   "var vertex;"
-    +   "if (global.final === true) {"
-    +     "while(vertices.hasNext()) {"
-    +       "vertex = vertices.next();"
-    +       "msgQueue = queue._loadVertex(vertices.getShardName(vertex.shard), vertex);"
-    +       "(" + algorithms.finalAlgorithm + ")(vertex, msgQueue, global);"
-    +     "}"
-    +   "} else {"
-    +     "while(vertices.hasNext()) {"
-    +       "vertex = vertices.next();"
-    +       "msgQueue = queue._loadVertex(vertices.getShardName(vertex.shard), vertex);"
-    +       "if (vertex._isActive() || msgQueue.count > 0) {"
-    +         "vertex._activate();"
-    +         "(" + algorithms.algorithm + ")(vertex, msgQueue, global);"
-    +       "}"
-    +     "}"
-    +   "};"
-    + "  queue._storeInCollection();"
-    + "  worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, inbox, outbox);"
-    + "  } catch (err) {"
-    + "    worker.queueDone(executionNumber, global, vertices.countActives(), pregelMapping, inbox, outbox, err);"
-    + "  }"
-    + "}"
-    + "}())";
+    + "var queue = new pregel.MessageQueue(executionNumber, vertices, aggregator);"
+    + "var scope = {};"
+    + "scope.vertices = vertices;"
+    + "scope.worker = worker;"
+    + "scope.executionNumber = executionNumber;"
+    + "scope.queue = queue;"
+    + "scope.algorithm = (" + algorithms.algorithm + ");"
+    + "scope.finalAlgorithm = (" + algorithms.finalAlgorithm + ");"
+    + "scope.data = data;"
+    + "scope.inbox = inbox;"
+    + "scope.outbox = outbox;"
+    + "return worker.workerCode.bind(scope);"
+   + "}())";
 };
 
 var createTaskQueue = function (executionNumber, shardList, algorithms, globals, workerIndex, workerCount, inbox, outbox) {
   // TODO hack for cluster setup. Foxx Queues not working...
   KEYSPACE_CREATE("P_" + executionNumber, 2, true);
   KEY_SET("P_" + executionNumber, "done", 0);
-  if (pregel.getServerName !== "localhost") {
+  if (pregel.getServerName() !== "localhost") {
     tasks.register({
       command: function(params) {
         var queueName = params.queueName;
@@ -273,6 +301,7 @@ var getError = function(executionNumber) {
 var setup = function(executionNumber, options, globals) {
   // create global collection
   pregel.createWorkerCollections(executionNumber);
+  createOutboxMatrix(executionNumber);
   p.setup();
   var global = pregel.getGlobalCollection(executionNumber);
   global.save({_key: COUNTER, count: 0, active: 0});
@@ -321,6 +350,7 @@ var setup = function(executionNumber, options, globals) {
     }
   });
   for (w = 0; w < WORKERS; w++) {
+    require("console").log("Creating a fuckng queue");
     createTaskQueue(executionNumber, shardList, options, globals, w, WORKERS, inbox, outbox);
   }
 };
@@ -460,6 +490,7 @@ var finishedStep = function (executionNumber, global, active, keyList, inbox, ou
     // messages = sendMessages(executionNumber, outbox);
     p.storeWatch("ShiftMessages", t2);
   }
+  require("console").log("buhman");
   KEY_SET(keyList, "actives", 0);
   _.each(inbox, function (space) {
     var stepSwitch = global.step % 2;
@@ -470,6 +501,7 @@ var finishedStep = function (executionNumber, global, active, keyList, inbox, ou
     KEYSPACE_CREATE(s1);
     KEYSPACE_CREATE(s2);
   });
+  require("console").log("baumn");
   if (ArangoServerState.role() === "PRIMARY") {
     var conductor = getConductor(executionNumber);
     var body = JSON.stringify({
@@ -527,7 +559,7 @@ var queueCleanupDone = function (executionNumber) {
   db._drop(pregel.genGlobalCollectionName(executionNumber));
 };
 
-var queueDone = function (executionNumber, global, actives, mapping, inbox, outbox, err) {
+var queueDone = function (executionNumber, global, actives, inbox, outbox, err) {
   var t = p.stopWatch();
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
@@ -567,6 +599,7 @@ var executeStep = function(executionNumber, step, options, globals) {
   id = ArangoServerState.id() || "localhost";
   globals = globals || {};
   globals.final = options.final;
+  require("console").log("aaqwieou");
   if (step === 0) {
     KEYSPACE_CREATE("RETRY", 1);
     setup(executionNumber, options, globals);
@@ -576,10 +609,12 @@ var executeStep = function(executionNumber, step, options, globals) {
   var i = 0;
   var queue;
   KEY_SET("P_" + executionNumber, "done", 0);
+  require("console").log("klasjd");
   for (i = 0; i < WORKERS; i++) {
     queue = getQueueName(executionNumber, i);
     addTask(queue, step, globals);
   }
+  require("console").log("aaarargh");
   p.storeWatch("AddingAllTasks", t);
 };
 
@@ -626,3 +661,6 @@ exports.finishedStep = finishedStep;
 exports.queueDone = queueDone;
 exports.queueCleanupDone = queueCleanupDone;
 exports.receiveMessages = receiveMessages;
+
+// Private. Do never use externally
+exports.workerCode = workerCode;
