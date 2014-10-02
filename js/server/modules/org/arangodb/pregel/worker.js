@@ -97,7 +97,7 @@ var algorithmForQueue = function (algorithms, localShards, globalShards, executi
     + "var p = require('org/arangodb/profiler');"
     + "var db = require('internal').db;"
     + "var pregel = require('org/arangodb/pregel');"
-    + "var pregelMapping = new pregel.Mapping(executionNumber);"
+    + "var pregelMapping = new pregel.Mapping(execNumber);"
     + "var worker = pregel.Worker;"
     + "var data = [];"
     + "var lastStep;"
@@ -110,8 +110,8 @@ var algorithmForQueue = function (algorithms, localShards, globalShards, executi
     + "var wId = " + wIndex + ";"
     + "var wCount = " + WORKERS + ";"
     + "var inbox = " + JSON.stringify(inbox) + ";"
-    + "for (i = 0; i < localShardList.length; i++) {"
-    +   "shard = localShardList[i];"
+    + "for (i = 0; i < localShards.length; i++) {"
+    +   "shard = localShards[i];"
     +   "vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),"
     +      "db[shard].NTH2(wId, wCount).documents);"
     + "}"
@@ -124,8 +124,8 @@ var algorithmForQueue = function (algorithms, localShards, globalShards, executi
     + "scope.algorithm = (" + algorithms.algorithm + ");"
     + "scope.finalAlgorithm = (" + algorithms.finalAlgorithm + ");"
     + "scope.data = data;"
-    + "scope.workerId = workerId;"
-    + "scope.shardList = globalShardList;"
+    + "scope.workerId = wId;"
+    + "scope.shardList = globalShards;"
     + "return worker.workerCode.bind(scope);"
    + "}())";
 };
@@ -452,7 +452,7 @@ var setup = function(executionNumber, options, globals) {
     ];
     KEYSPACE_CREATE(inbox[0]);
     KEYSPACE_CREATE(inbox[1]);
-    createTaskQueue(executionNumber, localShardList, globalShardList, options, globals, w, WORKERS, inbox);
+    createTaskQueue(executionNumber, localShardList, globalShardList, options, globals, w, inbox);
   }
 };
 
@@ -536,20 +536,6 @@ var countActiveVertices = function (mapping) {
     }
   });
   return count;
-};
-
-var packOutbox = function(space) {
-  var t = p.stopWatch();
-  var vertices = KEYSPACE_KEYS(space);
-  var msg = {};
-  _.each(vertices, function(v) {
-    msg[v] = KEY_GET(space, v);
-  });
-  KEYSPACE_DROP(space);
-  KEYPSACE_CREATE(space);
-  var res = JSON.stringify(msg);
-  p.storeWatch("packingMessage", t);
-  return res;
 };
 
 var finishedStep = function (executionNumber, global, active, keyList, inbox) {
