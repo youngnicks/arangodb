@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, ArangoClusterInfo, ArangoServerState*/
+/*global require, exports, ArangoClusterInfo, ArangoServerState, ArangoAgency*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel module. Offers all submodules of pregel.
@@ -35,6 +35,14 @@ var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
+exports.isClusterSetup = function () {
+  return ArangoAgency.prefix() === "";
+};
+
+exports.getServerName = function () {
+  return ArangoServerState.id() || "localhost";
+};
+
 exports.getCollection = function () {
   return db._pregel;
 };
@@ -49,10 +57,6 @@ exports.updateExecutionInfo = function(executionNumber, infoObject) {
 
 exports.removeExecutionInfo = function(executionNumber) {
   return exports.getCollection().remove(executionNumber);
-};
-
-exports.getServerName = function () {
-  return ArangoServerState.id() || "localhost";
 };
 
 exports.genWorkCollectionName = function (executionNumber) {

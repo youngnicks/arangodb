@@ -67,6 +67,10 @@ var getOutboxName = function (execNr, firstW, secondW) {
   return "Out_P_" + execNr + "_" + firstW + "_" + secondW;
 };
 
+var getQueueName = function (executionNumber, counter) {
+  return "P_QUEUE_" + executionNumber + "_" + counter;
+};
+
 var receiveMessages = function(executionNumber, shard, step, senderName, senderWorker, messageString) {
   var msg = JSON.parse(messageString);
   var i = 0;
@@ -87,12 +91,63 @@ var receiveMessages = function(executionNumber, shard, step, senderName, senderW
   }
 };
 
+var algorithmForQueue = function (algorithms, localShards, globalShards, executionNumber, wIndex, inbox) {
+  return "(function() {"
+    + "var execNumber = " + executionNumber + ";"
+    + "var p = require('org/arangodb/profiler');"
+    + "var db = require('internal').db;"
+    + "var pregel = require('org/arangodb/pregel');"
+    + "var pregelMapping = new pregel.Mapping(executionNumber);"
+    + "var worker = pregel.Worker;"
+    + "var data = [];"
+    + "var lastStep;"
+    + (algorithms.aggregator ? "  var aggregator = (" + algorithms.aggregator + ");" : "var aggregator = null;")
+    + "var vertices = new pregel.VertexList(pregelMapping);"
+    + "var localShards = " + JSON.stringify(localShards) + ";"
+    + "var globalShards = " + JSON.stringify(globalShards) + ";"
+    + "var i;"
+    + "var shard;"
+    + "var wId = " + wIndex + ";"
+    + "var wCount = " + WORKERS + ";"
+    + "var inbox = " + JSON.stringify(inbox) + ";"
+    + "for (i = 0; i < localShardList.length; i++) {"
+    +   "shard = localShardList[i];"
+    +   "vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),"
+    +      "db[shard].NTH2(wId, wCount).documents);"
+    + "}"
+    + "var queue = new pregel.MessageQueue(execNumber, vertices, inbox, localShards, globalShards, wCount, aggregator);"
+    + "var scope = {};"
+    + "scope.vertices = vertices;"
+    + "scope.worker = worker;"
+    + "scope.executionNumber = execNumber;"
+    + "scope.queue = queue;"
+    + "scope.algorithm = (" + algorithms.algorithm + ");"
+    + "scope.finalAlgorithm = (" + algorithms.finalAlgorithm + ");"
+    + "scope.data = data;"
+    + "scope.workerId = workerId;"
+    + "scope.shardList = globalShardList;"
+    + "return worker.workerCode.bind(scope);"
+   + "}())";
+};
+
+var addTask = function (queue, stepNumber, globals) {
+  tasks.addJob(
+    queue,
+    {
+      step: stepNumber,
+      global: globals
+    }
+  );
+};
 
 // Functions that behave differently on local and cluster setups
-var sendMessages;
+var sendMessages, createTaskQueue;
 
-if (pregel.getServerName() === "localhost") {
+
+
+if (pregel.isClusterSetup()) {
   // Define code which has to be executed in a local setup
+  require("internal").print("Spastenclaus");
   var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
 
   Foxx.queues.registerJobType("pregel-register-job", function(params) {
@@ -130,6 +185,18 @@ if (pregel.getServerName() === "localhost") {
     }
   };
 
+
+  createTaskQueue = function (executionNumber, localShards, globalShards, algorithms, globals, wIndex, inbox) {
+    KEYSPACE_CREATE("P_" + executionNumber, 2, true);
+    KEY_SET("P_" + executionNumber, "done", 0);
+    jobRegisterQueue.push("pregel-register-job", {
+      queueName: getQueueName(executionNumber, wIndex),
+      worker: algorithmForQueue(algorithms, localShards, globalShards,
+        executionNumber, wIndex, inbox),
+      globals: globals
+    });
+  };
+
 } else {
   // Define code which has to be executed in a cluster setup
   sendMessages = function (queue, shardList, workerId, step, execNr) {
@@ -153,14 +220,47 @@ if (pregel.getServerName() === "localhost") {
       };
       waitCounter++;
       ArangoClusterComm.asyncRequest("POST","shard:" + shard, dbName,
-        "/_api/pregel/message", body, {}, coordOptions);
+        "/_api/pregel/message", JSON.stringify(body), {}, coordOptions);
     }
     var debug;
     for (waitCounter; waitCounter > 0; waitCounter--) {
       debug = ArangoClusterComm.wait(coordOptions);
     }
-  };
 
+  };
+ 
+  createTaskQueue = function (executionNumber, localShards, globalShards, algorithms, globals, workerIndex, inbox) {
+    // TODO hack for cluster setup. Foxx Queues not working...
+    KEYSPACE_CREATE("P_" + executionNumber, 2, true);
+    KEY_SET("P_" + executionNumber, "done", 0);
+    tasks.register({
+      command: function(params) {
+        var queueName = params.queueName;
+        var worker = params.worker;
+        var glob = params.globals;
+        var tasks = require("org/arangodb/tasks");
+        tasks.createNamedQueue({
+          name: queueName,
+          threads: 1,
+          size: 1,
+          worker: worker
+        });
+        tasks.addJob(
+          queueName,
+          {
+            step: 0,
+            global: glob
+          }
+        );
+      },
+      params: {
+        queueName: getQueueName(executionNumber, workerIndex),
+        worker: algorithmForQueue(algorithms, localShards, globalShards,
+          executionNumber, workerIndex, inbox),
+        globals: globals,
+      }
+    });
+  };
 }
 
 var queryGetAllSourceEdges = "FOR e IN @@original RETURN "
@@ -196,10 +296,6 @@ var createOutboxMatrix = function (execNr) {
 var queryCountStillActiveVertices = "LET c = (FOR i in @@collection"
   + " FILTER i.active == true && i.deleted == false"
   + " RETURN 1) RETURN LENGTH(c)";
-
-var getQueueName = function (executionNumber, counter) {
-  return "P_QUEUE_" + executionNumber + "_" + counter;
-};
 
 var translateId = function (id, mapping) {
   var split = id.split("/");
@@ -295,97 +391,6 @@ var workerCode = function (params) {
     this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(),
       this.inbox, this.outbox, err);
   }
-};
-
-var algorithmForQueue = function (algorithms, localShardList, globalShardList, executionNumber, workerIndex, workerCount, inbox) {
-  return "(function() {"
-    + "var executionNumber = " + executionNumber + ";"
-    + "var p = require('org/arangodb/profiler');"
-    + "var db = require('internal').db;"
-    + "var pregel = require('org/arangodb/pregel');"
-    + "var pregelMapping = new pregel.Mapping(executionNumber);"
-    + "var worker = pregel.Worker;"
-    + "var data = [];"
-    + "var lastStep;"
-    + (algorithms.aggregator ? "  var aggregator = (" + algorithms.aggregator + ");" : "var aggregator = null;")
-    + "var vertices = new pregel.VertexList(pregelMapping);"
-    + "var localShardList = " + JSON.stringify(localShardList) + ";"
-    + "var globalShardList = " + JSON.stringify(globalShardList) + ";"
-    + "var i;"
-    + "var shard;"
-    + "var workerId = " + workerIndex + ";"
-    + "var workerCount = " + workerCount + ";"
-    + "var inbox = " + JSON.stringify(inbox) + ";"
-    + "for (i = 0; i < localShardList.length; i++) {"
-    +   "shard = localShardList[i];"
-    +   "vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),"
-    +      "db[shard].NTH2(workerId, workerCount).documents);"
-    + "}"
-    + "var queue = new pregel.MessageQueue(executionNumber, vertices, inbox, localShardList, globalShardList, workerCount, aggregator);"
-    + "var scope = {};"
-    + "scope.vertices = vertices;"
-    + "scope.worker = worker;"
-    + "scope.executionNumber = executionNumber;"
-    + "scope.queue = queue;"
-    + "scope.algorithm = (" + algorithms.algorithm + ");"
-    + "scope.finalAlgorithm = (" + algorithms.finalAlgorithm + ");"
-    + "scope.data = data;"
-    + "scope.workerId = workerId;"
-    + "scope.shardList = globalShardList;"
-    + "return worker.workerCode.bind(scope);"
-   + "}())";
-};
-
-var createTaskQueue = function (executionNumber, localShardList, globalShardList, algorithms, globals, workerIndex, workerCount, inbox) {
-  // TODO hack for cluster setup. Foxx Queues not working...
-  KEYSPACE_CREATE("P_" + executionNumber, 2, true);
-  KEY_SET("P_" + executionNumber, "done", 0);
-  if (pregel.getServerName() !== "localhost") {
-    tasks.register({
-      command: function(params) {
-        var queueName = params.queueName;
-        var worker = params.worker;
-        var glob = params.globals;
-        var tasks = require("org/arangodb/tasks");
-        tasks.createNamedQueue({
-          name: queueName,
-          threads: 1,
-          size: 1,
-          worker: worker
-        });
-        tasks.addJob(
-          queueName,
-          {
-            step: 0,
-            global: glob
-          }
-        );
-      },
-      params: {
-        queueName: getQueueName(executionNumber, workerIndex),
-        worker: algorithmForQueue(algorithms, localShardList, globalShardList,
-          executionNumber, workerIndex, workerCount, inbox),
-        globals: globals,
-      }
-    });
-  } else {
-    jobRegisterQueue.push("pregel-register-job", {
-      queueName: getQueueName(executionNumber, workerIndex),
-      worker: algorithmForQueue(algorithms, localShardList, globalShardList,
-        executionNumber, workerIndex, workerCount, inbox),
-      globals: globals
-    });
-  }
-};
-
-var addTask = function (queue, stepNumber, globals) {
-  tasks.addJob(
-    queue,
-    {
-      step: stepNumber,
-      global: globals
-    }
-  );
 };
 
 var addCleanUpTask = function (queue) {
@@ -547,7 +552,7 @@ var packOutbox = function(space) {
   return res;
 };
 
-var finishedStep = function (executionNumber, global, active, keyList, inbox, outbox) {
+var finishedStep = function (executionNumber, global, active, keyList, inbox) {
   var t = p.stopWatch();
   var messages = 0;
   var error = getError(executionNumber);
@@ -660,7 +665,6 @@ var executeStep = function(executionNumber, step, options, globals) {
   globals = globals || {};
   globals.final = options.final;
   if (step === 0) {
-    KEYSPACE_CREATE("RETRY", 1);
     setup(executionNumber, options, globals);
     return;
   }
@@ -679,7 +683,6 @@ var cleanUp = function(executionNumber) {
   // queues.delete("P_" + executionNumber); To be done for new queue
   var i, queue;
   KEY_SET("P_" + executionNumber, "done", 0);
-  KEYSPACE_DROP("RETRY");
   for (i = 0; i < WORKERS; i++) {
     queue = getQueueName(executionNumber, i);
     addCleanUpTask(queue);
