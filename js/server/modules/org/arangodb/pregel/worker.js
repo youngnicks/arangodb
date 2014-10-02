@@ -147,7 +147,6 @@ var sendMessages, createTaskQueue;
 
 if (pregel.isClusterSetup()) {
   // Define code which has to be executed in a local setup
-  require("internal").print("Spastenclaus");
   var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
 
   Foxx.queues.registerJobType("pregel-register-job", function(params) {
