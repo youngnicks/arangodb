@@ -284,8 +284,6 @@ var Queue = function (executionNumber, vertices, inboxSpaces, localShardList,
     globalShardList, workerCount, aggregate) {
   this.__vertices = vertices;
   this.__executionNumber = executionNumber;
-  this.__collection = pregel.getMsgCollection(executionNumber);
-  this.__workCollection = pregel.getWorkCollection(executionNumber);
   this.__spaces = inboxSpaces;
   this.__inbox = {};
   this.__outbox = {};
