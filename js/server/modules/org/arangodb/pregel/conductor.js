@@ -131,7 +131,14 @@ var storeTime = function (executionNumber, title) {
 };
 
 var clearTimer = function (executionNumber) {
+  var space = timerKeySpace(executionNumber);
+  var log = require("console").log;
   KEY_REMOVE(timerKeySpace(executionNumber), ONGOING);
+  var keys = KEYSPACE_KEYS(space);
+  var i = 0;
+  for (i = 0; i < keys.length; ++i) {
+    log(keys[i], KEY_GET(space, keys[i]));
+  }
 };
 
 var getWaitForAnswerMap = function(executionNumber) {
@@ -815,6 +822,7 @@ var finishedStep = function(executionNumber, serverName, info) {
     }
     var waiting = KEY_INCR(server, COUNTER, -1);
     if (waiting === 0) {
+      storeTime(executionNumber, "Step" + info.step);
       if (ArangoServerState.isCoordinator()) {
         tasks.unregister(genTaskId(executionNumber));
       }
