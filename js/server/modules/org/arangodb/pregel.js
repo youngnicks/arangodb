@@ -34,13 +34,17 @@ var _ = require("underscore");
 var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
+var SERVERNAME;
 
 exports.isClusterSetup = function () {
-  return ArangoAgency.prefix() === "";
+  return ArangoAgency.prefix() !== "";
 };
 
 exports.getServerName = function () {
-  return ArangoServerState.id() || "localhost";
+  if (SERVERNAME === undefined) {
+    SERVERNAME = ArangoServerState.id() || "localhost";
+  }
+  return SERVERNAME; 
 };
 
 exports.getCollection = function () {
@@ -59,35 +63,12 @@ exports.removeExecutionInfo = function(executionNumber) {
   return exports.getCollection().remove(executionNumber);
 };
 
-exports.genWorkCollectionName = function (executionNumber) {
-  return "P_work_" + executionNumber;
-};
-
-exports.genMsgCollectionName = function (executionNumber) {
-  return "P_messages_" + executionNumber;
-};
-
 exports.genGlobalCollectionName = function (executionNumber) {
   return "P_global_" + executionNumber;
 };
 
-exports.genCountCollectionName = function (executionNumber) {
-  return "P_count_" + executionNumber;
-};
 exports.createWorkerCollections = function (executionNumber) {
-  var t = p.stopWatch();
-  var work = db._create(
-    exports.genWorkCollectionName(executionNumber)
-  );
-  work.ensureSkiplist("toShard");
-  work.ensureSkiplist("step");
-  var message = db._create(
-    exports.genMsgCollectionName(executionNumber)
-  );
-  message.ensureSkiplist("toShard");
   db._create(exports.genGlobalCollectionName(executionNumber));
-  p.storeWatch("setupWorkerCollections", t);
-  db._create(exports.genCountCollectionName(executionNumber));
 };
 
 exports.getWorkCollection = function (executionNumber) {
@@ -98,16 +79,8 @@ exports.getTimeoutConst = function (executionNumber) {
   return 300000;
 };
 
-exports.getMsgCollection = function (executionNumber) {
-  return db._collection(exports.genMsgCollectionName(executionNumber));
-};
-
 exports.getGlobalCollection = function (executionNumber) {
   return db._collection(exports.genGlobalCollectionName(executionNumber));
-};
-
-exports.getCountCollection = function (executionNumber) {
-  return db._collection(exports.genCountCollectionName(executionNumber));
 };
 
 exports.getMap = function (executionNumber) {
@@ -142,13 +115,6 @@ exports.saveLocalShardMapping = function (executionNumber, map) {
 
 exports.saveLocalResultShardMapping = function (executionNumber, map) {
   saveMapping(executionNumber, "localResultShards", map[exports.getServerName()]);
-};
-
-var loadMapping = function (executionNumber, name) {
-  var t = p.stopWatch();
-  var res = exports.getGlobalCollection(executionNumber).document(name);
-  p.storeWatch("loadMapping", t);
-  return res;
 };
 
 exports.Conductor = require("org/arangodb/pregel/conductor");
