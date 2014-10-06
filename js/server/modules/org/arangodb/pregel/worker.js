@@ -56,7 +56,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 1;
+var WORKERS = 4;
 
 var getInboxName = function (execNr, step, workerId) {
   return "In_P_" + execNr + "_" + (step % 2) + "_" + workerId;
@@ -100,7 +100,7 @@ var createScope = function (execNr, wId, localShards, globalShards, inbox, algor
   for (i = 0; i < localShards.length; i++) {
     shard = localShards[i];
     vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),
-    db[shard].NTH2(wId, WORKERS).documents);
+      db[shard].NTH2(wId, WORKERS).documents);
   }
   var queue = new pregel.MessageQueue(execNr, vertices,
     inbox, localShards, globalShards, WORKERS, algorithms.aggregator);
