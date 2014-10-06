@@ -32,7 +32,6 @@
 var p = require("org/arangodb/profiler");
 
 var internal = require("internal");
-var _ = require("underscore");
 var db = internal.db;
 var arangodb = require("org/arangodb");
 var pregel = require("org/arangodb/pregel");
@@ -57,7 +56,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 4;
+var WORKERS = 1;
 
 var getInboxName = function (execNr, step, workerId) {
   return "In_P_" + execNr + "_" + (step % 2) + "_" + workerId;
@@ -79,10 +78,13 @@ var receiveMessages = function(executionNumber, shard, step, senderName, senderW
   for (i = 0; i < WORKERS; i++) {
     buckets.push({});
   }
-  _.each(msg, function(v, k) {
-    buckets[col.NTH3(k, WORKERS)][k] = v;
-    delete msg[k];
-  });
+  var k;
+  for (k in msg) {
+    if (msg.hasOwnProperty(k)) {
+      buckets[col.NTH3(k, WORKERS)][k] = msg[k];
+      delete msg[k];
+    }
+  }
   var inbox;
   for (i = 0; i < WORKERS; i++) {
     inbox = getInboxName(executionNumber, step, i);
@@ -91,41 +93,47 @@ var receiveMessages = function(executionNumber, shard, step, senderName, senderW
   }
 };
 
+var createScope = function (execNr, wId, localShards, globalShards, inbox, algorithms) {
+  var pregelMapping = new pregel.Mapping(execNr);
+  var vertices = new pregel.VertexList(pregelMapping);
+  var i, shard;
+  for (i = 0; i < localShards.length; i++) {
+    shard = localShards[i];
+    vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),
+    db[shard].NTH2(wId, WORKERS).documents);
+  }
+  var queue = new pregel.MessageQueue(execNr, vertices,
+    inbox, localShards, globalShards, WORKERS, algorithms.aggregator);
+  var scope = {
+    executionNumber: execNr,
+    vertices: vertices,
+    worker: this,
+    algorithm: algorithms.algorithm,
+    finalAlgorithm: algorithms.finalAlgorithm,
+    data: [],
+    workerId: wId,
+    shardList: globalShards,
+    queue: queue
+  };
+  return scope;
+};
+
 var algorithmForQueue = function (algorithms, localShards, globalShards, executionNumber, wIndex, inbox) {
   return "(function() {"
-    + "var execNumber = " + executionNumber + ";"
-    + "var p = require('org/arangodb/profiler');"
-    + "var db = require('internal').db;"
     + "var pregel = require('org/arangodb/pregel');"
-    + "var pregelMapping = new pregel.Mapping(execNumber);"
     + "var worker = pregel.Worker;"
-    + "var data = [];"
-    + "var lastStep;"
-    + (algorithms.aggregator ? "  var aggregator = (" + algorithms.aggregator + ");" : "var aggregator = null;")
-    + "var vertices = new pregel.VertexList(pregelMapping);"
-    + "var localShards = " + JSON.stringify(localShards) + ";"
-    + "var globalShards = " + JSON.stringify(globalShards) + ";"
-    + "var i;"
-    + "var shard;"
-    + "var wId = " + wIndex + ";"
-    + "var wCount = " + WORKERS + ";"
-    + "var inbox = " + JSON.stringify(inbox) + ";"
-    + "for (i = 0; i < localShards.length; i++) {"
-    +   "shard = localShards[i];"
-    +   "vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),"
-    +      "db[shard].NTH2(wId, wCount).documents);"
-    + "}"
-    + "var queue = new pregel.MessageQueue(execNumber, vertices, inbox, localShards, globalShards, wCount, aggregator);"
-    + "var scope = {};"
-    + "scope.vertices = vertices;"
-    + "scope.worker = worker;"
-    + "scope.executionNumber = execNumber;"
-    + "scope.queue = queue;"
-    + "scope.algorithm = (" + algorithms.algorithm + ");"
-    + "scope.finalAlgorithm = (" + algorithms.finalAlgorithm + ");"
-    + "scope.data = data;"
-    + "scope.workerId = wId;"
-    + "scope.shardList = globalShards;"
+    + "var paramAlgo = {"
+    +   "algorithm:(" + algorithms.algorithm + "),"
+    +   "finalAlgorithm:(" + algorithms.finalAlgorithm + "),"
+    +   "aggregator:" + (algorithms.aggregator ? "(" + algorithms.aggregator + ")" : "null")
+    + "};"
+    + "var scope = worker.createScope("
+    +   executionNumber + ","
+    +   wIndex + ","
+    +   JSON.stringify(localShards) + ","
+    +   JSON.stringify(globalShards) + ","
+    +   JSON.stringify(inbox) + ","
+    +   "paramAlgo);"
     + "return worker.workerCode.bind(scope);"
    + "}())";
 };
@@ -145,7 +153,7 @@ var sendMessages, createTaskQueue;
 
 
 
-if (pregel.isClusterSetup()) {
+if (!pregel.isClusterSetup()) {
   // Define code which has to be executed in a local setup
   var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
 
@@ -434,15 +442,25 @@ var setup = function(executionNumber, options, globals) {
   var pregelMapping = new pregel.Mapping(executionNumber);
   var w;
   var localShardList = [];
-  _.each(pregelMapping.getLocalCollectionShardMapping(), function (shards) {
-    localShardList = localShardList.concat(shards);
-  });
+  var k, k2, mapping;
+  mapping = pregelMapping.getLocalCollectionShardMapping();
+  for (k in mapping) {
+    if (mapping.hasOwnProperty(k)) {
+      localShardList = localShardList.concat(mapping[k]);
+    }
+  }
   var globalShardList = [];
-  _.each(pregelMapping.getGlobalCollectionShardMapping(), function (listing) {
-    _.each(listing, function (shards) {
-      globalShardList = globalShardList.concat(shards);
-    });
-  });
+  mapping = pregelMapping.getGlobalCollectionShardMapping();
+  for (k in mapping) {
+    if (mapping.hasOwnProperty(k)) {
+      for (k2 in mapping[k]) {
+        if (mapping[k].hasOwnProperty(k2)) {
+          globalShardList = globalShardList.concat(mapping[k][k2]);
+        }
+
+      }
+    }
+  }
   var inbox;
   for (w = 0; w < WORKERS; w++) {
     inbox = [
@@ -455,103 +473,27 @@ var setup = function(executionNumber, options, globals) {
   }
 };
 
-
-var activateVertices = function(executionNumber, step, mapping) {
-  var t = p.stopWatch();
-  var work = pregel.genWorkCollectionName(executionNumber);
-  var resultShardMapping = mapping.getLocalResultShardMapping();
-  _.each(resultShardMapping, function (resultShards, collection) {
-    var originalShards = mapping.getLocalCollectionShards(collection);
-    var i;
-    var bindVars;
-    for (i = 0; i < resultShards.length; i++) {
-      bindVars = {
-        '@work': work,
-        '@result': resultShards[i],
-        'shard': originalShards[i],
-        'step': step
-      };
-      db._query(queryActivateVertices, bindVars).execute();
-    }
-  });
-  p.storeWatch("ActivateVertices", t);
-};
-
-///////////////////////////////////////////////////////////
-/// @brief Creates a cursor containing all active vertices
-///////////////////////////////////////////////////////////
-var getActiveVerticesQuery = function (mapping) {
-  var count = 0;
-  var bindVars = {};
-  var query = "FOR u in UNION([], []";
-  var resultShardMapping = mapping.getLocalResultShardMapping();
-  _.each(resultShardMapping, function (resultShards) {
-    var i;
-    for (i = 0; i < resultShards.length; i++) {
-      query += ",(FOR i in @@collection" + count
-        + " FILTER i.active == true && i.deleted == false"
-        + " RETURN {_id: i._id, shard: @collection" + count 
-        + ", locationObject: i.locationObject, _doc: i})";
-      bindVars["@collection" + count] = resultShards[i];
-      bindVars["collection" + count] = resultShards[i];
-      count++;
-    }
-  });
-  query += ") RETURN u";
-  return db._query(query, bindVars);
-};
-
-var getVerticesQuery = function (mapping) {
-  var count = 0;
-  var bindVars = {};
-  var query = "FOR u in UNION([], []";
-  var resultShardMapping = mapping.getLocalResultShardMapping();
-  _.each(resultShardMapping, function (resultShards) {
-    var i;
-    for (i = 0; i < resultShards.length; i++) {
-      query += ",(FOR i in @@collection" + count
-        + " FILTER i.deleted == false"
-        + " RETURN {_id: i._id, shard: @collection" + count
-        + ", locationObject: i.locationObject, _doc: i})";
-      bindVars["@collection" + count] = resultShards[i];
-      bindVars["collection" + count] = resultShards[i];
-      count++;
-    }
-  });
-  query += ") RETURN u";
-  return db._query(query, bindVars);
-};
-
-
-var countActiveVertices = function (mapping) {
-  var count = 0;
-  var bindVars = {};
-  var resultShardMapping = mapping.getLocalResultShardMapping();
-  _.each(resultShardMapping, function (resultShards) {
-    var i;
-    for (i = 0; i < resultShards.length; i++) {
-      bindVars["@collection"] = resultShards[i];
-      count += db._query(queryCountStillActiveVertices, bindVars).next();
-    }
-  });
-  return count;
-};
-
 var finishedStep = function (executionNumber, global, active, keyList, inbox) {
+  require("console").log("Step Done");
   var t = p.stopWatch();
   var messages = 0;
   var error = getError(executionNumber);
   var final = global.final;
   KEY_SET(keyList, "actives", 0);
-  _.each(inbox, function (space) {
-    var stepSwitch = global.step % 2;
-    var s1 = space + stepSwitch + "0";
-    var s2 = space + stepSwitch + "1";
-    KEYSPACE_DROP(s1);
-    KEYSPACE_DROP(s2);
-    KEYSPACE_CREATE(s1);
-    KEYSPACE_CREATE(s2);
-  });
+  var k;
+  var stepSwitch = global.step % 2;
+  var space, s1, s2;
+  for (k in inbox) {
+    if (inbox.hasOwnProperty(k)) {
+      space = inbox[k];
+      s1 = space + stepSwitch + "0";
+      s2 = space + stepSwitch + "1";
+      KEYSPACE_DROP(s1);
+      KEYSPACE_DROP(s2);
+      KEYSPACE_CREATE(s1);
+      KEYSPACE_CREATE(s2);
+    }
+  }
   if (ArangoServerState.role() === "PRIMARY") {
     var conductor = getConductor(executionNumber);
     var body = JSON.stringify({
@@ -689,3 +631,4 @@ exports.receiveMessages = receiveMessages;
 
 // Private. Do never use externally
 exports.workerCode = workerCode;
+exports.createScope = createScope;

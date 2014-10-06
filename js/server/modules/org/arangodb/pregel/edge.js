@@ -32,7 +32,6 @@ var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
-var _ = require("underscore");
 
 var Edge = function (parent) {
   this.__parent = parent;
@@ -133,20 +132,21 @@ EdgeList.prototype.addShardContent = function (shard, edgeShard, vertex, edges) 
   var mapping = this.mapping;
   var self = this;
   var resultShard = db[mapping.getResultShard(edgeShard)];
-  _.each(edges, function(e) {
-    var toSplit = e._to.split("/");
-    var edgeInfo = {
+  var i, e, toSplit, edgeInfo;
+  for (i = 0; i < edges.length; ++i) {
+    e = edges[i];
+    toSplit = e._to.split("/");
+    edgeInfo = {
       key: e._key,
       s: edgeShard,
       t: mapping.getToLocationObject(e, toSplit[0]),
       rs: resultShard
     };
     self.sourceList[shard][vertex].push(edgeInfo);
-  });
+  }
 };
 
 EdgeList.prototype.save = function (shard, id) {
-  var self = this;
   var list = this.sourceList[shard][id];
   var mapping = this.mapping;
   var edge = this.iterator.edge;
@@ -156,16 +156,18 @@ EdgeList.prototype.save = function (shard, id) {
     var doc = db[edgeShard].document(key);
     var fromSplit = doc._from.split("/");
     var from = mapping.getResultCollection(fromSplit[0]) + "/" + fromSplit[1]; 
-    _.each(list, function(e, index) {
-      self.iterator.current = index;
+    var index, e, toSplit, to;
+    for (index = 0; index < list.length; index++) {
+      e = list[index];
+      this.iterator.current = index;
       edgeShard = e.s;
       key = e.key;
       doc = db[edgeShard].document(key);
-      var toSplit = doc._to.split("/");
-      var to = mapping.getResultCollection(toSplit[0]) + "/" + toSplit[1]; 
+      toSplit = doc._to.split("/");
+      to = mapping.getResultCollection(toSplit[0]) + "/" + toSplit[1]; 
       edge._loadEdge(e);
       edge._save(from, to);
-    });
+    }
   }
 };
 

@@ -31,7 +31,6 @@
 var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
-var _ = require("underscore");
 var pregel = require("org/arangodb/pregel");
 var query = "FOR m IN @@collection FILTER m.step == @step RETURN m";
 var arangodb = require("org/arangodb");
@@ -327,19 +326,23 @@ Queue.prototype._fillQueues = function () {
   var msg;
   var aggFunc = this.__aggregate;
   var inbox = this.__inbox;
-  _.each(keys, function(key) {
+  var i, key, shard, old, k;
+  for (i = 0; i < keys.length; ++i) {
+    key = keys[i];
     msg = KEY_GET(space, key);
     KEY_REMOVE(space, key);
-    var shard = key.substr(key.lastIndexOf("_") + 1);
+    shard = key.substr(key.lastIndexOf("_") + 1);
     msg = JSON.parse(msg);
-    var old = inbox[shard];
-    _.each(msg, function(v, k) {
-      if (!old.hasOwnProperty(k)) {
-        old[k] = [null, []];
+    old = inbox[shard];
+    for (k in msg) {
+      if (msg.hasOwnProperty(k)) {
+        if (!old.hasOwnProperty(k)) {
+          old[k] = [null, []];
+        }
+        joinMessageObject(msg[k], old[k], aggFunc);
       }
-      joinMessageObject(v, old[k], aggFunc);
-    });
-  });
+    }
+  }
   p.storeWatch("fillQueue", t);
 };
 
@@ -376,12 +379,15 @@ Queue.prototype._getShardList = function() {
 Queue.prototype._integrateMessage = function(shard, workerId, incMessage) {
   var old = this.__outbox[shard][workerId];
   var aggFunc = this.__aggregate;
-  _.each(incMessage, function(v, k) {
-    if (!old.hasOwnProperty(k)) {
-      old[k] = [null, []];
+  var k;
+  for (k in incMessage) {
+    if (incMessage.hasOwnProperty(k)) {
+      if (!old.hasOwnProperty(k)) {
+        old[k] = [null, []];
+      }
+      joinMessageObject(incMessage[k], old[k], aggFunc);
     }
-    joinMessageObject(v, old[k], aggFunc);
-  });
+  }
 };
 
 Queue.prototype._clear = function(shard, vertex) {

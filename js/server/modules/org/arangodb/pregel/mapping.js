@@ -30,7 +30,6 @@
 var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
-var _ = require("underscore");
 var pregel = require("org/arangodb/pregel");
 var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;

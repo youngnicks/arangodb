@@ -149,6 +149,7 @@ var getWaitForAnswerMap = function(executionNumber) {
 };
 
 var startNextStep = function(executionNumber, options) {
+  require("console").log("NextStep");
   var t = p.stopWatch();
   var dbServers;
   var space = globalKeySpace(executionNumber);

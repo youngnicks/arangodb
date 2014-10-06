@@ -33,7 +33,6 @@ var p = require("org/arangodb/profiler");
 var internal = require("internal");
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
-var _ = require("underscore");
 
 var Vertex = function (vertexList, resultList) {
   this.__vertexList = vertexList;
@@ -137,21 +136,21 @@ VertexList.prototype.addShardContent = function (shard, collection, sourceList) 
   this.sourceList.push(sourceList);
   var respEdges = this.mapping.getResponsibleEdgeShards(shard);
   var shardResult = [];
-  var self = this;
   this.edgeList.addShard();
-  _.each(sourceList, function(key, index) {
-    var doc = collection + "/" + key;
-    self.edgeList.addVertex(shardId);
+  var index, doc, i;
+  for (index = 0; index < sourceList.length; ++index) {
+    doc = collection + "/" + sourceList[index];
+    this.edgeList.addVertex(shardId);
     shardResult.push({
       locationInfo: {
         _id: doc,
         shard: shard
       }
     });
-    _.each(respEdges, function(edgeShard) {
-      self.edgeList.addShardContent(shardId, edgeShard, index, db[edgeShard].outEdges(doc));
-    });
-  });
+    for (i = 0; i < respEdges.length; ++i) {
+      this.edgeList.addShardContent(shardId, respEdges[i], index, db[respEdges[i]].outEdges(doc));
+    }
+  }
   this.resultList.push(shardResult);
   this.resultShards.push(db[this.mapping.getResultShard(shard)]);
   this.actives += l;
