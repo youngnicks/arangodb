@@ -103,9 +103,7 @@ Vertex.prototype._setResult = function (result) {
 };
 
 Vertex.prototype._save = function () {
-  var t = p.stopWatch();
   this.__vertexList.save(this.shard, this.id, this._getResult(), this._isDeleted());
-  p.storeWatch("SaveVertex", t);
 };
 
 exports.Vertex = Vertex;
@@ -116,8 +114,15 @@ var VertexList = function (mapping) {
   this.current = -1;
   this.actives = 0;
   this.shardMapping = [];
+  this.sublist = [];
+  this.sourceList = [this.sublist];
+
+  /*
   this.sourceList = [];
-  this.resultList = [];
+  */
+
+  this.resultSubList = [];
+  this.resultList = [this.resultSubList];
   this.resultShards = [];
   this.shard = 0;
   this.vertex = new Vertex(this, this.resultList);
@@ -133,27 +138,43 @@ VertexList.prototype.addShardContent = function (shard, collection, sourceList) 
     collection: collection,
     length: l
   });
-  this.sourceList.push(sourceList);
+  this.sublist.push(sourceList);
   var respEdges = this.mapping.getResponsibleEdgeShards(shard);
   var shardResult = [];
   this.edgeList.addShard();
-  var index, doc, i;
-  for (index = 0; index < sourceList.length; ++index) {
-    doc = collection + "/" + sourceList[index];
+  var index, i, out, doc;
+  for (index = 0; index < l; ++index) {
     this.edgeList.addVertex(shardId);
     shardResult.push({
       locationInfo: {
-        _id: doc,
+        _key: sourceList[index],
         shard: shard
       }
     });
+    doc = collection + "/" + sourceList[index];
     for (i = 0; i < respEdges.length; ++i) {
-      this.edgeList.addShardContent(shardId, respEdges[i], index, db[respEdges[i]].outEdges(doc));
+      out = db[respEdges[i]].outEdges(doc);
+      this.edgeList.addShardContent(shardId, respEdges[i], index, out);
     }
   }
-  this.resultList.push(shardResult);
+  this.resultSubList.push(shardResult);
   this.resultShards.push(db[this.mapping.getResultShard(shard)]);
   this.actives += l;
+  if (this.sublist.length === 1000) {
+    this.sublist = [];
+    this.sourceList.push(this.sublist);
+    this.edgeList.addSublist();
+    this.resultSubList = [];
+    this.resultList.push(this.resultSubList);
+  }
+};
+
+VertexList.prototype.flattenList = function () {
+  var empty = [];
+  this.sourceList = empty.concat.apply(empty, this.sourceList);
+  this.resultList = empty.concat.apply(empty, this.resultList);
+  require("console").log(this.resultList);
+  this.edgeList.flattenList();
 };
 
 VertexList.prototype.reset = function () {

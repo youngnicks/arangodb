@@ -59,13 +59,12 @@ Edge.prototype._setResult = function (result) {
 };
 
 Edge.prototype._save = function (from, to) {
-  var t = p.stopWatch();
-  this.__edgeInfo.rs.save(from, to, {
+  var obj = {
     _key: this.__edgeInfo.key,
     result: this._getResult(),
     _deleted: this._isDeleted()
-  });
-  p.storeWatch("SaveEdge", t);
+  };
+  this.__edgeInfo.rs.save(from, to, obj);
 };
 
 Edge.prototype._getTarget = function () {
@@ -115,22 +114,27 @@ EdgeIterator.prototype.getValue = function (attr) {
 var EdgeList = function (mapping) {
   this.mapping = mapping;
   this.iterator = new EdgeIterator(this);
-  this.sourceList = [];
+  this.sublist = [];
+  this.sourceList = [this.sublist];
   this.shard = -1;
   this.id = -1;
 };
 
+EdgeList.prototype.addSublist = function () {
+  this.sublist = [];
+  this.sourceList.push(this.sublist);
+};
+
 EdgeList.prototype.addShard = function () {
-  this.sourceList.push([]);
+  this.sublist.push([]);
 };
 
 EdgeList.prototype.addVertex = function (shard) {
-  this.sourceList[shard].push([]);
+  this.sublist[shard].push([]);
 };
 
 EdgeList.prototype.addShardContent = function (shard, edgeShard, vertex, edges) {
   var mapping = this.mapping;
-  var self = this;
   var resultShard = db[mapping.getResultShard(edgeShard)];
   var i, e, toSplit, edgeInfo;
   for (i = 0; i < edges.length; ++i) {
@@ -142,7 +146,7 @@ EdgeList.prototype.addShardContent = function (shard, edgeShard, vertex, edges) 
       t: mapping.getToLocationObject(e, toSplit[0]),
       rs: resultShard
     };
-    self.sourceList[shard][vertex].push(edgeInfo);
+    this.sublist[shard][vertex].push(edgeInfo);
   }
 };
 
@@ -183,6 +187,11 @@ EdgeList.prototype.loadEdges = function (shard, id) {
   this.id = id;
   this.iterator.loadEdges(this.sourceList[shard][id]);
   return this.iterator;
+};
+
+EdgeList.prototype.flattenList = function () {
+  var empty = [];
+  this.sourceList = empty.concat.apply(empty, this.sourceList);
 };
 
 exports.EdgeList = EdgeList;
