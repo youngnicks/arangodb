@@ -84,12 +84,14 @@ describe("boruvka", function () {
       };
 
       var i;
-      for (i = 1; i < 9; i++) {
+      for (i = 1; i < 11; i++) {
         saveVertex(i);
       }
       saveEdge(1, 3, 1);
       saveEdge(1, 2, 1);
       saveEdge(2, 4, 2);
+      saveEdge(3, 9, 2);
+      saveEdge(9, 10, 2);
 
       saveEdge(4, 5, 8);
       saveEdge(4, 7, 9);
