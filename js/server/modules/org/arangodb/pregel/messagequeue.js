@@ -345,9 +345,8 @@ Queue.prototype._fillQueues = function () {
 Queue.prototype._send = function (target, msg) {
   var t = p.stopWatch();
   // TODO Temporary. Has to be replaced!!
-  var split = target[0].split("/");
-  var shard = split[0];
-  var key = split[1];
+  var shard = target[1];
+  var key = target[0];
   var workerId = this.__hash(key);
   var outbox = this.__outbox[shard][workerId];
   if (!outbox.hasOwnProperty(key)) {
