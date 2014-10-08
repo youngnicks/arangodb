@@ -123,6 +123,6 @@ exports.Vertex = require("org/arangodb/pregel/vertex").Vertex;
 exports.VertexList = require("org/arangodb/pregel/vertex").VertexList;
 exports.GraphAccess = require("org/arangodb/pregel/graphAccess").GraphAccess;
 exports.Edge = require("org/arangodb/pregel/edge").Edge;
-exports.EdgeList = require("org/arangodb/pregel/edge").EdgeList;
+exports.EdgeIterator = require("org/arangodb/pregel/edge").EdgeIterator;
 exports.MessageQueue = require("org/arangodb/pregel/messagequeue").MessageQueue;
 exports.Mapping = require("org/arangodb/pregel/mapping").Mapping;
