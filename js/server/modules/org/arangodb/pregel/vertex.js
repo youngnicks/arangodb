@@ -155,7 +155,7 @@ VertexList.prototype.addShardContent = function (shard, collection, keys) {
           e._key,
           eShardId,
           toKey,
-          this.edgeShardMapping.getToShardKey(toKey, collection),
+          this.mapping.getToShardKey(toKey, collection),
           undefined,
           false
         ]);
