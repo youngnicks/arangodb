@@ -28,6 +28,16 @@
 /// @author Florian Bartels, Michael Hackstein, Heiko Kernbach
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
+
+
+var KEY = 0;
+var SHARD = 1;
+var TARGET = 2;
+var RESULT = 3;
+var DELETED = 4;
+var EDGESTART = 5;
+var EDGEOFFSET = 5;
+
 var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
@@ -35,7 +45,7 @@ var pregel = require("org/arangodb/pregel");
 
 var Edge = function (parent) {
   this.__parent = parent;
-  this.__edgeInfo = {};
+  this.__position = -1;
 };
 
 Edge.prototype._get = function (attr) {
@@ -43,46 +53,45 @@ Edge.prototype._get = function (attr) {
 };
 
 Edge.prototype._delete = function () {
-  this.__edgeInfo.d = true;
+  this.__parent.info[this.__position + DELETED] = true;
 };
 
 Edge.prototype._isDeleted = function () {
-  return this.__edgeInfo.d || false;
+  return this.__parent.info[this.__position + DELETED];
 };
 
 Edge.prototype._getResult = function () {
-  return this.__edgeInfo.r || {};
+  return this.__parent.info[this.__position + RESULT];
 };
 
 Edge.prototype._setResult = function (result) {
-  this.__edgeInfo.r = result;
+  this.__parent.info[this.__position + RESULT] = result;
 };
 
+/*
 Edge.prototype._save = function (from, to) {
-  var t = p.stopWatch();
-  this.__edgeInfo.rs.save(from, to, {
+  var obj = {
     _key: this.__edgeInfo.key,
     result: this._getResult(),
     _deleted: this._isDeleted()
-  });
-  p.storeWatch("SaveEdge", t);
+  };
+  this.__edgeInfo.rs.save(from, to, obj);
 };
+*/
 
 Edge.prototype._getTarget = function () {
-  return this.__edgeInfo.t;
+  return this.__parent.info[this.__position + TARGET];
 };
 
-Edge.prototype._loadEdge = function (edgeInfo) {
-  this.__edgeInfo = edgeInfo;
+Edge.prototype._loadEdge = function (startPos) {
+  this.__position = startPos;
 };
 
 exports.Edge = Edge;
 
 var EdgeIterator = function (parent) {
   this.parent = parent;
-  this.length = 0;
-  this.current = -1;
-  this.list = [];
+  this.current = 0;
   this.edge = new Edge(this);
 };
 
@@ -93,9 +102,10 @@ EdgeIterator.prototype.hasNext = function () {
 EdgeIterator.prototype.next = function () {
   if (this.hasNext()) {
     this.current++;
+    this.edge._loadEdge(this.current * EDGEOFFSET + EDGESTART);
+    return this.edge;
   }
-  this.edge._loadEdge(this.list[this.current]);
-  return this.edge;
+  return undefined;
 };
 
 EdgeIterator.prototype.count = function () {
@@ -103,54 +113,23 @@ EdgeIterator.prototype.count = function () {
 };
 
 EdgeIterator.prototype.resetCursor = function () {
-  return this.loadEdges(this.list);
+  this.current = -1;
 };
 
-EdgeIterator.prototype.loadEdges = function (edgeArray) {
-  this.list = edgeArray;
+EdgeIterator.prototype.loadEdges = function (vertex) {
+  this.info = vertex;
   this.current = -1;
-  this.length = edgeArray.length;
+  this.length = (this.info.length - EDGESTART) / EDGEOFFSET;
 };
 
 EdgeIterator.prototype.getValue = function (attr) {
+  throw "Sorry not yet";
   return this.parent.getValue(this.current, attr);
 };
 
-var EdgeList = function (mapping) {
-  this.mapping = mapping;
-  this.iterator = new EdgeIterator(this);
-  this.sourceList = [];
-  this.shard = -1;
-  this.id = -1;
-};
+exports.EdgeIterator = EdgeIterator;
 
-EdgeList.prototype.addShard = function () {
-  this.sourceList.push([]);
-};
-
-EdgeList.prototype.addVertex = function (shard) {
-  this.sourceList[shard].push([]);
-};
-
-EdgeList.prototype.addShardContent = function (shard, edgeShard, vertex, edges) {
-  var mapping = this.mapping;
-  var self = this;
-  var resultShard = db[mapping.getResultShard(edgeShard)];
-  var i, e, toSplit, edgeInfo;
-  for (i = 0; i < edges.length; ++i) {
-    e = edges[i];
-    toSplit = e._to.split("/");
-    edgeInfo = {
-      _id : e._id,
-      key: e._key,
-      s: edgeShard,
-      t: mapping.getToLocationObject(e, toSplit[0]),
-      rs: resultShard
-    };
-    self.sourceList[shard][vertex].push(edgeInfo);
-  }
-};
-
+/*
 EdgeList.prototype.save = function (shard, id) {
   var list = this.sourceList[shard][id];
   var mapping = this.mapping;
@@ -182,12 +161,4 @@ EdgeList.prototype.getValue = function (index, attr) {
   var key = list[index].key;
   return db[edgeShard].document(key)[attr];
 };
-
-EdgeList.prototype.loadEdges = function (shard, id) {
-  this.shard = shard;
-  this.id = id;
-  this.iterator.loadEdges(this.sourceList[shard][id]);
-  return this.iterator;
-};
-
-exports.EdgeList = EdgeList;
+*/

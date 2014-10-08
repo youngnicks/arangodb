@@ -245,20 +245,16 @@ VertexMessageQueue.prototype._clear = function () {
 ////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
   var t = p.stopWatch();
-  if (sendLocation !== false) {
-    sendLocation = true; 
-  }
-  if (target && typeof target === "string" && target.match(/\S+\/\S+/)) {
-    target = pregel.getLocationObject(this.__executionNumber, target);
-  } else if (!(
-    target && typeof target === "object" &&
-                                target._key && target.shard
-  )) {
+  if (!(target && typeof target === "string" && target.match(/\S+\/\S+/))) {
     var err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.code;
     err.errorMessage = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.message;
     throw err;
+  } 
+  if (sendLocation !== false) {
+    sendLocation = true; 
   }
+  // target = pregel.getLocationObject(this.__executionNumber, target);
   var toSend = {
     data: data
   };
@@ -347,8 +343,10 @@ Queue.prototype._fillQueues = function () {
 //msg has data and optionally sender
 Queue.prototype._send = function (target, msg) {
   var t = p.stopWatch();
-  var shard = target.shard;
-  var key = target._key;
+  // TODO Temporary. Has to be replaced!!
+  var split = target.split("/");
+  var shard = split[0];
+  var key = split[1];
   var workerId = this.__hash(key);
   var outbox = this.__outbox[shard][workerId];
   if (!outbox.hasOwnProperty(key)) {

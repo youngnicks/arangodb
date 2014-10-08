@@ -124,8 +124,8 @@ var algorithmForQueue = function (algorithms, localShards, globalShards, executi
     + "var worker = pregel.Worker;"
     + "var paramAlgo = {"
     +   "algorithm:(" + algorithms.algorithm + "),"
-    +   "finalAlgorithm:(" + algorithms.final + "),"
-    +   "aggregator:" + (algorithms.aggregator ? "(" + algorithms.aggregator + ")" : "null")
+    +   "finalAlgorithm:(" + algorithms.finalAlgorithm + "),"
+    +   "aggregator:" + (algorithms.hasOwnProperty("aggregator") ? "(" + algorithms.aggregator + ")" : "null")
     + "};"
     + "var scope = worker.createScope("
     +   executionNumber + ","
@@ -135,7 +135,7 @@ var algorithmForQueue = function (algorithms, localShards, globalShards, executi
     +   JSON.stringify(inbox) + ","
     +   "paramAlgo);"
     + "return worker.workerCode.bind(scope);"
-   + "}())";
+    + "}())";
 };
 
 var addTask = function (queue, stepNumber, globals) {
@@ -349,9 +349,7 @@ var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
 var workerCode = function (params) {
   this.vertices.reset();
   if (params.cleanUp) {
-    while(this.vertices.hasNext()) {
-      this.vertices.next()._save();
-    }
+    this.vertices.saveAll();
     p.aggregate();
     this.worker.queueCleanupDone(this.executionNumber);
     return;
@@ -364,11 +362,11 @@ var workerCode = function (params) {
   global.data = this.data;
   var vShard;
   try {
-    var vertex;
+    var vertex, isActive, msgCount;
     if (global.final === true) {
       while(this.vertices.hasNext()) {
         vertex = this.vertices.next();
-        vShard = this.vertices.getShardName(vertex.shard);
+        vShard = vertex.getShard();
         msgQueue = this.queue._loadVertex(vShard, vertex);
         this.finalAlgorithm(vertex, msgQueue, global);
         this.queue._clear(vShard, vertex);
@@ -376,10 +374,14 @@ var workerCode = function (params) {
     } else {
       while(this.vertices.hasNext()) {
         vertex = this.vertices.next();
-        vShard = this.vertices.getShardName(vertex.shard);
-        msgQueue = this.queue._loadVertex(this.vertices.getShardName(vertex.shard), vertex);
-        if (vertex._isActive() || msgQueue.count() > 0) {
-          vertex._activate();
+        vShard = vertex.getShard();
+        msgQueue = this.queue._loadVertex(vShard, vertex);
+        msgCount = msgQueue.count();
+        isActive = vertex._isActive();
+        if (isActive || msgCount > 0) {
+          if (!isActive) {
+            vertex._activate();
+          }
           this.algorithm(vertex, msgQueue, global);
           this.queue._clear(vShard, vertex);
         }
@@ -427,6 +429,7 @@ var getError = function(executionNumber) {
 };
 
 var setup = function(executionNumber, options, globals) {
+
   // create global collection
   pregel.createWorkerCollections(executionNumber);
   createOutboxMatrix(executionNumber);
@@ -567,6 +570,7 @@ var queueDone = function (executionNumber, global, actives, inbox, countMsg, err
   var countActive = KEY_INCR(keyList, "actives", actives);
   var countmessages = KEY_INCR(keyList, "messages", countMsg);
   p.storeWatch("VertexDone", t);
+
   if (countDone === WORKERS) {
    finishedStep(executionNumber, global, countActive, keyList, inbox, countmessages);
   }

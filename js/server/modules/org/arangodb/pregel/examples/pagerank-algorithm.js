@@ -35,13 +35,10 @@ var pageRank = function (vertex, message, global) {
   var edgeCount;
   var send;
   var edge;
+  edgeCount = vertex._outEdges.length;
   if (global.step === 0) {
-    edgeCount = vertex._outEdges.length;
     var initPR = 1 / total;
-    vertex._setResult({
-      rank: initPR,
-      edgeCount: edgeCount
-    });
+    vertex._setResult(initPR);
     send = initPR / edgeCount;
     while (vertex._outEdges.hasNext()) {
       edge = vertex._outEdges.next();
@@ -50,7 +47,6 @@ var pageRank = function (vertex, message, global) {
     return;
   }
   var result = vertex._getResult();
-  edgeCount = result.edgeCount;
   var alpha = global.alpha;
   var newPR = 0;
   var next;
@@ -60,7 +56,7 @@ var pageRank = function (vertex, message, global) {
   }
   newPR *= alpha;
   newPR += (1 - alpha) / total;
-  result.rank = newPR;
+  result[0] = newPR;
   vertex._setResult(result);
   if (global.step === 30) {
     vertex._deactivate();
