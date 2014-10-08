@@ -149,9 +149,15 @@ VertexList.prototype.addShardContent = function (shard, collection, keys) {
       out = db[this.edgeShardMapping[eShardId]].outEdges(doc);
       for (j = 0; j < out.length; ++j) {
         e = out[j];
-    // Edge Info: [.. _key, shard, to, result, deleted ..]
+        var toKey = e._to.split("/")[1];
+    // Edge Info: [.. _key, shard, to, shardKey, result, deleted ..]
         Array.prototype.push.apply(vertexInfo, [
-          e._key, eShardId, e._to, undefined, false
+          e._key,
+          eShardId,
+          toKey,
+          this.edgeShardMapping.getToShardKey(toKey, collection),
+          undefined,
+          false
         ]);
       }
     }

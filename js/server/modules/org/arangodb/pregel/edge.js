@@ -34,9 +34,10 @@ var KEY = 0;
 var SHARD = 1;
 var TARGET = 2;
 var RESULT = 3;
-var DELETED = 4;
+var SHARDKEY = 4;
+var DELETED = 5;
 var EDGESTART = 5;
-var EDGEOFFSET = 5;
+var EDGEOFFSET = 6;
 
 var p = require("org/arangodb/profiler");
 
@@ -73,6 +74,13 @@ Edge.prototype._setResult = function (result) {
   this.__parent.info[this.__position + RESULT] = result;
 };
 
+Edge.prototype._getShardKey = function () {
+  return this.__parent.info[this.__position + SHARDKEY];
+};
+
+Edge.prototype._setShardKey = function (shardKey) {
+  this.__parent.info[this.__position + SHARDKEY] = shardKey;
+};
 /*
 Edge.prototype._save = function (from, to) {
   var obj = {
@@ -85,7 +93,9 @@ Edge.prototype._save = function (from, to) {
 */
 
 Edge.prototype._getTarget = function () {
-  return this.__parent.info[this.__position + TARGET];
+  var target = this.__parent.info[this.__position + TARGET];
+  var shardKey = this.__parent.info[this.__position + SHARDKEY];
+  return [target, shardKey];
 };
 
 Edge.prototype._loadEdge = function (startPos) {
