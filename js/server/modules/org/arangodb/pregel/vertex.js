@@ -143,7 +143,7 @@ VertexList.prototype.addShardContent = function (shard, collection, sourceList) 
     this.edgeList.addVertex(shardId);
     shardResult.push({
       locationInfo: {
-        _id: doc,
+        _key: sourceList[index],
         shard: shard
       }
     });

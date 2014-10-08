@@ -156,7 +156,6 @@ var getWaitForAnswerMap = function(executionNumber) {
 };
 
 var startNextStep = function(executionNumber, options) {
-  require("console").log("NextStep");
   var t = p.stopWatch();
   var dbServers;
   var space = globalKeySpace(executionNumber);
@@ -213,13 +212,21 @@ var startNextStep = function(executionNumber, options) {
 var cleanUp = function (executionNumber, err) {
   var dbServers;
   var httpOptions = {};
+  var space = globalKeySpace(executionNumber);
+  var doc = {
+    stepInfo : KEY_GET(space, STEPCONTENT),
+    state : STATEFINISHED
+  };
   if (err) {
-    var space = globalKeySpace(executionNumber);
-    KEY_SET(space, STATE, STATEERROR);
-    KEY_SET(space, ERROR, err);
+    doc.state = STATEERROR;
+    doc.error = err;
+    getCollection().update(executionNumber, doc);
     return;
   }
+  getCollection().update(executionNumber, doc);
+
   getWaitForAnswerMap(executionNumber);
+
   if (ArangoServerState.isCoordinator()) {
     dbServers = ArangoClusterInfo.getDBServers();
     var coordOptions = {
@@ -581,7 +588,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
 /// |     someInteger : 10
 /// |   }
 ///   );
-///   require("internal").print(executionNumber);
+///   require("internal")log((executionNumber);
 /// ~  var finished = false;
 /// ~  while (!finished) {finished = pregel.Conductor.getInfo(executionNumber).state === "finished";}
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
@@ -592,7 +599,7 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
 ////////////////////////////////////////////////////////////////////////////////
 var startExecution = function(graphName, algorithms, options) {
   var t = p.stopWatch();
-  var graph = graphModule._graph(graphName), infoObject = {};
+  var graph = graphModule._graph(graphName), infoObject = {state : STATERUNNING};
   var pregelAlgorithm = algorithms.base;
   var aggregator = algorithms.aggregator;
   options = options  || {};
@@ -620,6 +627,7 @@ var startExecution = function(graphName, algorithms, options) {
     KEY_SET(space, SUPERSTEP, algorithms.superstep);
   }
   if (algorithms.hasOwnProperty("final")) {
+    options.final = algorithms.final;
     KEY_SET(space, FINALSTEP, algorithms.final);
   }
   try {

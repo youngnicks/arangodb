@@ -79,6 +79,10 @@
 * [Large-scale graph computing](PregelAlgorithm/README.md)
   * [Pregel Module](PregelAlgorithm/Module.md)
   * [Pregel Examples](PregelAlgorithm/Examples.md)
+  * [Borůvka's algorithm](PregelAlgorithm/Boruvka.md)
+  * [Pregel Examples](PregelAlgorithm/Examples.md)
+  * [Pregel Examples](PregelAlgorithm/Examples.md)
+  * [Pregel Examples](PregelAlgorithm/Examples.md)
 <!-- 14 -->
 * [Blueprint Graphs](Blueprint-Graphs/README.md)
   * [Graph Constructor](Blueprint-Graphs/GraphConstructor.md)

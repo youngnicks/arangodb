@@ -1,102 +1,34 @@
-!CHAPTER Fluent AQL Interface
+!CHAPTER Examples
 
-This chapter describes a fluent interface to query your graph.
-The philosophy of this interface is to select a group of starting elements (vertices or edges) at first and from there on explore the graph with your query by selecting connected elements.
+This chapter describes four examples for the usage of arango's pregel framework.
 
-As an example you can start with a set of vertices, select their direct neighbors and finally their outgoing edges.
 
-The result of this query will be the set of outgoing edges.
-For each part of the query it is possible to further refine the resulting set of elements by giving examples for them.
+!SECTION Borůvka's algorithm (minimum spanning tree)
 
-!SECTION Definition of examples
+[Borůvka's algorithm](http://en.wikipedia.org/wiki/Bor%C5%AFvka%27s_algorithm) solves the problem to determine a [minimum spanning tree](http://en.wikipedia.org/wiki/Minimum_spanning_tree) in a graph.
+A minimum spanning tree (MSP) is the mimimal amount of connected edges that cover all vertices in a graph. Hence an unconnected graph has more than one *MSP* that form a *minimum spanning forest*.
 
-@startDocuBlock JSF_general_graph_example_description
+A detailed description of our example implementation can be found [here](Boruvka.md).
 
-!SECTION Starting Points
+!SECTION Google's PageRank algorithm
 
-This section describes the entry points for the fluent interface.
-The philosophy of this module is to start with a specific subset of vertices or edges and from there on iterate over the graph.
+The [PageRank algorithm](http://en.wikipedia.org/wiki/PageRank) is an algorithm used by Google Search to rank websites in their search engine results.
+The algorithm ranks websites (vertices in a graph) by the amount and the quality of links (edges in a graph).
 
-Therefore you get exactly this two entry points:
+A detailed description of our example implementation can be found [here](PageRank.md).
 
-* Select a set of edges
-* Select a set of vertices
+!SECTION Graph coloring algorithm
 
-!SUBSECTION  Edges
+Our *Graph coloring algorithm* solves the [graph-coloring-problem](http://en.wikipedia.org/wiki/Graph_coloring) which is to assign a color to each vertex in a graph so that 2 connected vertices always have different colors.
+Furthermore a minimum amount of colours shall be used. Our implementation is based on a greedy algorithm introcuded by *Assefaw Gebremedhin* and *Fredrik Manne*. 
 
-@startDocuBlock JSF_general_graph_edges
+A detailed description of our example implementation can be found [here](GraphColoring.md).
 
-!SUBSECTION Vertices
+!SECTION Shortes-path algorithm
 
-@startDocuBlock JSF_general_graph_vertices
+A classic problem in graph theory is the [shortest-path-problem](http://en.wikipedia.org/wiki/Shortest_path_problem). Our example implementation can either calculate the shortest distance between each pair of vertices in a graph 
+and delivers all graph figures based on that ([diameter](http://en.wikipedia.org/wiki/Distance_%28graph_theory%29), [radius](http://en.wikipedia.org/wiki/Distance_%28graph_theory%29), [eccentrivity](http://en.wikipedia.org/wiki/Distance_%28graph_theory%29) 
+and [centrality](http://en.wikipedia.org/wiki/Centrality)) or calculate the acutal shortest paths.
 
-!SECTION Working with the query cursor
+A detailed description of our example implementation can be found [here](ShortestPath.md).
 
-The fluent query object handles cursor creation and maintenance for you.
-A cursor will be created as soon as you request the first result.
-If you are unhappy with the current result and want to refine it further you can execute a further step in the query which cleans up the cursor for you.
-In this interface you get the complete functionality available for general AQL cursors directly on your query.
-The cursor functionality is described in this section.
-
-!SUBSECTION ToArray
-
-@startDocuBlock JSF_general_graph_fluent_aql_toArray
-
-!SUBSECTION HasNext
-
-@startDocuBlock JSF_general_graph_fluent_aql_hasNext
-
-!SUBSECTION Next
-
-@startDocuBlock JSF_general_graph_fluent_aql_next
-
-!SUBSECTION Count
-
-@startDocuBlock JSF_general_graph_fluent_aql_count
-
-!SECTION Fluent queries
-
-After the selection of the entry point you can now query your graph in
-a fluent way, meaning each of the functions on your query returns the query again.
-Hence it is possible to chain arbitrary many executions one after the other.
-In this section all available query statements are described.
-
-!SUBSECTION Edges
-
-@startDocuBlock JSF_general_graph_fluent_aql_edges
-
-!SUBSECTION OutEdges
-
-@startDocuBlock JSF_general_graph_fluent_aql_outEdges
-
-!SUBSECTION InEdges
-
-@startDocuBlock JSF_general_graph_fluent_aql_inEdges
-
-!SUBSECTION Vertices
-
-@startDocuBlock JSF_general_graph_fluent_aql_vertices
-
-!SUBSECTION FromVertices
-
-@startDocuBlock JSF_general_graph_fluent_aql_fromVertices
-
-!SUBSECTION ToVertices
-
-@startDocuBlock JSF_general_graph_fluent_aql_toVertices
-
-!SUBSECTION Neighbors
-
-@startDocuBlock JSF_general_graph_fluent_aql_neighbors
-
-!SUBSECTION Restrict
-
-@startDocuBlock JSF_general_graph_fluent_aql_restrict
-
-!SUBSECTION Filter
-
-@startDocuBlock JSF_general_graph_fluent_aql_filter
-
-!SUBSECTION Path
-
-@startDocuBlock JSF_general_graph_fluent_aql_path
