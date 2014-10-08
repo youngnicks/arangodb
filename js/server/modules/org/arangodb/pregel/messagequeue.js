@@ -246,7 +246,7 @@ VertexMessageQueue.prototype._clear = function () {
 VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
   var t = p.stopWatch();
   var key = target[0];
-  if (!(key && typeof key === "string" && key.match(/\S+\/\S+/))) {
+  if (!(key && typeof key === "string")) {
     var err = new ArangoError();
     err.errorNum = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.code;
     err.errorMessage = ERRORS.ERROR_PREGEL_NO_TARGET_PROVIDED.message;
