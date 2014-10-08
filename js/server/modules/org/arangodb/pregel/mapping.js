@@ -143,4 +143,13 @@ Mapping.prototype.findOriginalCollection = function (shard) {
   }
 };
 
+Mapping.prototype.getToShardKey = function(toKey, colName) {
+  if (this._isPrimary) {
+    var colId = this.clusterCollections[colName];
+    var shardName = ArangoClusterInfo.getResponsibleShard(colId, {"_key" : toKey}).shardId;
+    return this.vertexShards.indexOf(shardName);
+  }
+  return this.vertexShards.indexOf(colName);
+}
+
 exports.Mapping = Mapping;
