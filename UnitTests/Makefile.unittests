@@ -24,10 +24,9 @@ PROTO = http
 
 .PHONY: unittests unittests-brief unittests-verbose
 
-unittests: all unittests-verbose unittests-brief
+unittests: all unittests-verbose jslint unittests-brief
 
 unittests-brief: \
-	jslint \
 	unittests-config \
 	unittests-recovery \
 	unittests-boost \

@@ -70,6 +70,9 @@
     require('org/arangodb/foxx/queues/manager').run();
   }
 
+  // load the actions from the actions directory
+  require("org/arangodb/actions").startup();
+
   return true;
 }());
 
