@@ -30,11 +30,18 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var boruvka = function (vertex, message, global) {
-  require("internal").print(global)
+  //require("internal").print(global)
 
   _ = require("underscore");
   var distanceAttrib = global.distance;
-  var next;
+  var TYPE_UNKNOWN = "1";
+  var TYPE_SUPERVERTEX = "2";
+  var TYPE_POINTS_AT_SUPERVERTEX = "3";
+  var TYPE_POINTS_AT_SUPVERTEX = "4";
+  var PHASE_QUESTION = "1";
+  var PHASE_ANSWER = "2";
+  var PHASE_FIND_SUPERVERTEX = "3";
+  var PHASE_CONNECT_TREES = "4";
 
   var getDistance = function (edge) {
     if (distanceAttrib && edge[distanceAttrib]) {
@@ -98,13 +105,12 @@ var boruvka = function (vertex, message, global) {
       var edgeResult = e._getResult();
       edgeResult.distance = getDistance(e);
       e._setResult(edgeResult);
-      //require("internal").print("KKKKKKKKKKKKKKKKKKKKKKK", vertex._get("_key"));
       var data = {edgeId: e.__edgeInfo._id, distance: edgeResult.distance};
-      //require("internal").print(vertex._key, e._getTarget(), data)
       message.sendTo(e._getTarget(), data);
     }
   }
 
+  var next;
   if (global.step === 1) {
     result.inEdges = [];
     while (message.hasNext()) {
@@ -124,19 +130,17 @@ var boruvka = function (vertex, message, global) {
       vertex._deactivate();
       return;
     }
-    result.type = "unknown";
+    result.type = TYPE_UNKNOWN;
     result.pointsTo = result.closestEdge._target;
     while (vertex._outEdges.hasNext()) {
       e = vertex._outEdges.next();
       if (e.__edgeInfo._id === result.closestEdge._id) {
         var edgeResult = e._getResult();
-        require("internal").print("STEP1", vertex._key,"---" , e._getTarget())
         edgeResult.inSpanTree = true;
         e._setResult(edgeResult);
       }
     }
-    require("internal").print("CLOSESTEDGESTEP1", vertex._key,"---" , result.closestEdge._target, {type: "Question", edgeId: result.closestEdge._id})
-    message.sendTo(result.closestEdge._target, {type: "Question", edgeId: result.closestEdge._id});
+    message.sendTo(result.closestEdge._target, {type: PHASE_QUESTION, edgeId: result.closestEdge._id});
 
     vertex._setResult(result);
     vertex._deactivate();
@@ -147,75 +151,65 @@ var boruvka = function (vertex, message, global) {
     while (message.hasNext()) {
       next = message.next();
       switch (next.data.type) {
-        case "Question":
+        case PHASE_QUESTION:
           if (next.data.edgeId) {
             while (vertex._outEdges.hasNext()) {
               e = vertex._outEdges.next();
               if (e.__edgeInfo._id === next.data.edgeId) {
                 var edgeResult = e._getResult();
-                require("internal").print("QUESTION", global.step, "---" , vertex._get("_key"), e._getTarget())
                 edgeResult.inSpanTree = true;
                 e._setResult(edgeResult);
               }
             }
+            vertex._outEdges.resetCursor();
           }
           if (next.sender._key === result.closestEdge._target._key) {
             if ([vertex._key, next.sender._key].sort()[0] === vertex._key) {
-              require("internal").print("IS SUPRER : " , vertex._key)
-              result.type = "superVertex";
+              result.type = TYPE_SUPERVERTEX;
               result.connectedSuperVertices = {};
               result.pointsTo = vertex._getLocationInfo();
-              response = {type: "Answer", pointsTo: vertex._getLocationInfo(), isSuperVertex: true};
-            } else if (result.type !== "superVertex") {
-              require("internal").print("POINTS TO  SUPRER : " , vertex._key)
-              result.type = "pointsAtSuperVertex";
+              response = {type: PHASE_ANSWER, pointsTo: vertex._getLocationInfo(), isSuperVertex: true};
+            } else if (result.type !== TYPE_SUPERVERTEX) {
+              result.type = TYPE_POINTS_AT_SUPERVERTEX;
               result.pointsTo = next.sender;
-              response = {type: "Answer", pointsTo: next.sender, isSuperVertex: true};
+              response = {type: PHASE_ANSWER, pointsTo: next.sender, isSuperVertex: true};
             }
           } else {
             askers.push(next.sender);
           }
 
           break;
-        case "Answer":
+        case PHASE_ANSWER:
           result.pointsTo = next.data.pointsTo;
           if (next.data.isSuperVertex) {
-            result.type = "pointsAtSuperVertex"
+            result.type = TYPE_POINTS_AT_SUPERVERTEX;
           } else {
-            message.sendTo(result.pointsTo, {type: "Question"});
+            message.sendTo(result.pointsTo, {type: PHASE_QUESTION});
           }
 
           break;
-        case "SuperStep":
-          //require("internal").print("SUPERSTEP")
+        case PHASE_FIND_SUPERVERTEX:
           if (result.pointsTo._key !== next.data.pointsTo._key &&
             [result.pointsTo._key , next.data.pointsTo._key].sort()[0] === result.pointsTo._key
             ) {
-            if (result.type !== "superVertex") {
-              //require("internal").print("SS, passing it along from ", vertex._get("_key"), " to ",  result.pointsTo, " containing", next.data)
+            if (result.type !== TYPE_SUPERVERTEX) {
               message.sendTo(result.pointsTo, next.data);
             } else {
-              //require("internal").print("connectedSuperVertices");
-              //require("internal").print(result.connectedSuperVertices);
               if (!result.connectedSuperVertices[next.data.pointsTo._key] ||
                 result.connectedSuperVertices[next.data.pointsTo._key].distance > next.data.distance
                 ) {
                 result.connectedSuperVertices[next.data.pointsTo._key] = next.data;
-                //require("internal").print(vertex._get("_key"), result.connectedSuperVertices);
               }
             }
           }
 
           break;
 
-        case "finalConnect":
-          //require("internal").print("finalConnect")
-          //require("internal").print("finalConnect", vertex._get("_key"))
+        case PHASE_CONNECT_TREES:
           while (vertex._outEdges.hasNext()) {
             e = vertex._outEdges.next();
             if (e.__edgeInfo._id === next.data.edgeId) {
               var edgeResult = e._getResult();
-              require("internal").print("QUESTIONFINALCONNECT", global.step, "---" , vertex._get("_key"), e._getTarget())
               edgeResult.inSpanTree = true;
               e._setResult(edgeResult);
             }
@@ -227,19 +221,14 @@ var boruvka = function (vertex, message, global) {
 
       }
     }
-    if (result.type === "unknown") {
-      result.type = "pointsAtSubVertex";
+    if (result.type === TYPE_UNKNOWN) {
+      result.type = TYPE_POINTS_AT_SUPVERTEX;
     }
     askers.forEach(function (asker) {
-      require("internal").print("Step", global.step, " send to asker", vertex._get("_id"), " to ", asker, response ? response : {
-        type: "Answer",
-        pointsTo: result.pointsTo,
-        isSuperVertex: result.type === "pointsAtSuperVertex" || result.type === "superVertex" ? true : false
-      });
       message.sendTo(asker, response ? response : {
-        type: "Answer",
+        type: PHASE_ANSWER,
         pointsTo: result.pointsTo,
-        isSuperVertex: result.type === "pointsAtSuperVertex" || result.type === "superVertex" ? true : false
+        isSuperVertex: result.type === TYPE_POINTS_AT_SUPERVERTEX || result.type === TYPE_SUPERVERTEX ? true : false
       });
     });
     vertex._deactivate();
@@ -250,22 +239,23 @@ var boruvka = function (vertex, message, global) {
 
 
 var finalAlgorithm = function (vertex, message, global) {
-   var distanceAttrib = global.distanceAttribute;
+  var TYPE_SUPERVERTEX = "2";
+  var PHASE_FIND_SUPERVERTEX = "3";
+  var PHASE_CONNECT_TREES = "4";
 
-  var finalPhase1 = "vertexReachOut";
-  var finalPhase2 = "finalConnect";
+  var finalPhase1 = "1";
+  var finalPhase2 = "2";
   var result = vertex._getResult();
 
-  if (!result.finalPhase) {
-    result.finalPhase = finalPhase1;
+  if (!result.f) {
+    result.f = finalPhase1;
     while (vertex._outEdges.hasNext()) {
       var e = vertex._outEdges.next();
-      //require("internal").print("inf final ", vertex._get("_key"), " sends to ", result.pointsTo);
       var edgeResult = e._getResult();
       message.sendTo(
         e._getTarget(),
         {
-          type: "SuperStep",
+          type: PHASE_FIND_SUPERVERTEX,
           pointsTo: result.pointsTo,
           edgeId: e.__edgeInfo._id,
           root: vertex._getLocationInfo(),
@@ -274,11 +264,10 @@ var finalAlgorithm = function (vertex, message, global) {
       );
     }
     result.inEdges.forEach(function (e) {
-      //require("internal").print("in final ", vertex._get("_key"), " sends to ", result.pointsTo);
       message.sendTo(
         e._target,
         {
-          type: "SuperStep",
+          type: PHASE_FIND_SUPERVERTEX,
           pointsTo: result.pointsTo,
           edgeId: e._id,
           root: e.root,
@@ -286,14 +275,14 @@ var finalAlgorithm = function (vertex, message, global) {
         }
       );
     });
-  } else if (result.finalPhase === finalPhase1) {
-    result.finalPhase = finalPhase2;
-    if (result.type === "superVertex") {
+  } else if (result.f === finalPhase1) {
+    result.f = finalPhase2;
+    if (result.type === TYPE_SUPERVERTEX) {
       Object.keys(result.connectedSuperVertices).forEach(function (c) {
         message.sendTo(
           result.connectedSuperVertices[c].root,
           {
-            type: "finalConnect",
+            type: PHASE_CONNECT_TREES,
             edgeId: result.connectedSuperVertices[c].edgeId
           }
         );
