@@ -102,7 +102,6 @@ var createScope = function (execNr, wId, localShards, globalShards, inbox, algor
     vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),
       db[shard].NTH2(wId, WORKERS).documents);
   }
-  vertices.flattenList();
   var queue = new pregel.MessageQueue(execNr, vertices,
     inbox, localShards, globalShards, WORKERS, algorithms.aggregator);
   var scope = {
@@ -136,7 +135,7 @@ var algorithmForQueue = function (algorithms, localShards, globalShards, executi
     +   JSON.stringify(inbox) + ","
     +   "paramAlgo);"
     + "return worker.workerCode.bind(scope);"
-   + "}())";
+    + "}())";
 };
 
 var addTask = function (queue, stepNumber, globals) {
@@ -350,9 +349,7 @@ var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
 var workerCode = function (params) {
   this.vertices.reset();
   if (params.cleanUp) {
-    while(this.vertices.hasNext()) {
-      this.vertices.next()._save();
-    }
+    this.vertices.saveAll();
     p.aggregate();
     this.worker.queueCleanupDone(this.executionNumber);
     return;
@@ -369,7 +366,7 @@ var workerCode = function (params) {
     if (global.final === true) {
       while(this.vertices.hasNext()) {
         vertex = this.vertices.next();
-        vShard = this.vertices.getShardName(vertex.shard);
+        vShard = vertex.getShard();
         msgQueue = this.queue._loadVertex(vShard, vertex);
         this.finalAlgorithm(vertex, msgQueue, global);
         this.queue._clear(vShard, vertex);
@@ -377,8 +374,8 @@ var workerCode = function (params) {
     } else {
       while(this.vertices.hasNext()) {
         vertex = this.vertices.next();
-        vShard = this.vertices.getShardName(vertex.shard);
-        msgQueue = this.queue._loadVertex(this.vertices.getShardName(vertex.shard), vertex);
+        vShard = vertex.getShard();
+        msgQueue = this.queue._loadVertex(vShard, vertex);
         msgCount = msgQueue.count();
         isActive = vertex._isActive();
         if (isActive || msgCount > 0) {
