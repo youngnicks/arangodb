@@ -371,7 +371,7 @@ Queue.prototype._dump = function(shard, workerId) {
 };
 
 Queue.prototype._count = function(shardList, workers) {
-  var res = 0, self = this;
+  var res = 0, self = this, i;
   shardList.forEach(function(s) {
     for (i = 0; i < workers; i++) {
       res = res + self.__outbox[s][i].count;

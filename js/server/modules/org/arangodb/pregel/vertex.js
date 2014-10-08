@@ -59,7 +59,7 @@ Vertex.prototype._loadVertex = function (id) {
 };
 
 Vertex.prototype._get = function (attr) {
-  return this.__parent.readValue(this.id, attr);
+  return this.__parent.readValue(this.__current[SHARD], this.__current[KEY], attr);
 };
 
 Vertex.prototype._getLocationInfo = function () {
@@ -176,10 +176,12 @@ VertexList.prototype.next = function () {
   return null;
 };
 
-VertexList.prototype.readValue = function (shard, id, attr) {
-  throw "Sorry not yet";
-  var x = this.sourceList[shard][id];
-  return this.shardMapping[shard].shard.document(x)[attr];
+VertexList.prototype.readValue = function (shard, key, attr) {
+  return db[this.shardMapping[shard]].document(key)[attr];
+};
+
+VertexList.prototype.readEdgeValue = function (shard, key, attr) {
+  return db[this.edgeShardMapping[shard]].document(key)[attr];
 };
 
 VertexList.prototype.decrActives = function () {
@@ -192,12 +194,6 @@ VertexList.prototype.incrActives = function () {
 
 VertexList.prototype.countActives = function () {
   return this.actives;
-};
-
-VertexList.prototype.save = function (shard, id, result, deleted) {
-  throw "Sorry will be removed";
-  
-  this.edgeList.save(shard, id);
 };
 
 VertexList.prototype.saveAll = function () {

@@ -49,7 +49,11 @@ var Edge = function (parent) {
 };
 
 Edge.prototype._get = function (attr) {
-  return this.__parent.getValue(attr);
+  return this.__parent.getValue(
+    this.__parent.info[this.__position + SHARD],
+    this.__parent.info[this.__position + KEY],
+    attr
+  );
 };
 
 Edge.prototype._delete = function () {
@@ -122,9 +126,8 @@ EdgeIterator.prototype.loadEdges = function (vertex) {
   this.length = (this.info.length - EDGESTART) / EDGEOFFSET;
 };
 
-EdgeIterator.prototype.getValue = function (attr) {
-  throw "Sorry not yet";
-  return this.parent.getValue(this.current, attr);
+EdgeIterator.prototype.getValue = function (shard, key, attr) {
+  return this.parent.readEdgeValue(shard, key, attr);
 };
 
 exports.EdgeIterator = EdgeIterator;

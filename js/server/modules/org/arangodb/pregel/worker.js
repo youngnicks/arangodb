@@ -562,12 +562,16 @@ var queueDone = function (executionNumber, global, actives, inbox, countMsg, err
     err = error;
   }
   var globalCol = pregel.getGlobalCollection(executionNumber);
-  if (err && !getError(executionNumber)) {
-    globalCol.update(ERR, {error: err});
+  if (err) {
+    if (!getError(executionNumber)) {
+      globalCol.update(ERR, {error: err});
+    }
+    return;
   }
   var keyList = "P_" + executionNumber;
   var countDone = KEY_INCR(keyList, "done");
   var countActive = KEY_INCR(keyList, "actives", actives);
+  require("console").log(keyList, countMsg);
   var countmessages = KEY_INCR(keyList, "messages", countMsg);
   p.storeWatch("VertexDone", t);
 
