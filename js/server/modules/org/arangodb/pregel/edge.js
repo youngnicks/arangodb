@@ -101,6 +101,10 @@ EdgeIterator.prototype.count = function () {
   return this.length;
 };
 
+EdgeIterator.prototype.resetCursor = function () {
+  return this.loadEdges(this.list);
+};
+
 EdgeIterator.prototype.loadEdges = function (edgeArray) {
   this.list = edgeArray;
   this.current = -1;
@@ -141,6 +145,7 @@ EdgeList.prototype.addShardContent = function (shard, edgeShard, vertex, edges) 
     e = edges[i];
     toSplit = e._to.split("/");
     edgeInfo = {
+      _id : e._id,
       key: e._key,
       s: edgeShard,
       t: mapping.getToLocationObject(e, toSplit[0]),

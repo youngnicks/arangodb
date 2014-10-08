@@ -30,14 +30,19 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var boruvka = function (vertex, message, global) {
+  require("internal").print(global)
 
   _ = require("underscore");
-  var distanceAttrib;//
+  var distanceAttrib = global.distance;
   var next;
 
   var getDistance = function (edge) {
-    if (distanceAttrib) {
+    if (distanceAttrib && edge[distanceAttrib]) {
       return edge[distanceAttrib];
+    } else if (distanceAttrib && edge._get(distanceAttrib)) {
+      return edge._get(distanceAttrib);
+    } else if (distanceAttrib) {
+      return Infinity;
     } else {
       return 1;
     }
@@ -46,47 +51,58 @@ var boruvka = function (vertex, message, global) {
 
     var result;
     var min = Infinity;
-    vertex._outEdges.forEach(function (e) {
+    while (vertex._outEdges.hasNext()) {
+      e = vertex._outEdges.next();
+      var edgeResult = e._getResult();
       var obj = {
-        _id: e._id,
-        _to: e._targetVertex._id,
-        _target: e._targetVertex,
-        from: vertex._locationInfo,
-        distance: getDistance(e)
+        _id: e.__edgeInfo._id,
+        _to: e._getTarget()._key,
+        _target: e._getTarget(),
+        from: vertex._getLocationInfo(),
+        distance: edgeResult.distance
       };
-      if (getDistance(e) < min) {
+      if (edgeResult.distance < min) {
         result = obj;
-        min = getDistance(e);
-      } else if (getDistance(e) === min && [obj._to, result._to].sort()[0] === obj._to) {
+        min = edgeResult.distance;
+      } else if (edgeResult.distance === min && [obj._to, result._to].sort()[0] === obj._to) {
         result = obj;
       }
-    });
+    }
 
     inEdges.forEach(function (e) {
       var obj = {
         _id: e._id,
-        _to: e._targetVertex._id,
-        _target: e._targetVertex,
-        from: vertex._locationInfo,
-        distance: getDistance(e)
+        _to: e._to,
+        _target: e._target,
+        from: vertex._getLocationInfo(),
+        distance: e.distance
       };
-      if (getDistance(e) < min) {
+      if (e.distance < min) {
         result = obj;
-        min = getDistance(e);
-      } else if (getDistance(e) === min && [obj._to, result._to].sort()[0] === obj._to) {
+        min = e.distance;
+      } else if (e.distance === min && [obj._to, result._to].sort()[0] === obj._to) {
         result = obj;
       }
     });
+
     return result;
   };
 
 
   var result = vertex._getResult();
+
   if (global.step === 0) {
-    vertex._outEdges.forEach(function (e) {
-      var data = {edgeId: e._id, distance: getDistance(e)};
-      message.sendTo(e._targetVertex, data);
-    });
+
+    while (vertex._outEdges.hasNext()) {
+      var e = vertex._outEdges.next();
+      var edgeResult = e._getResult();
+      edgeResult.distance = getDistance(e);
+      e._setResult(edgeResult);
+      //require("internal").print("KKKKKKKKKKKKKKKKKKKKKKK", vertex._get("_key"));
+      var data = {edgeId: e.__edgeInfo._id, distance: edgeResult.distance};
+      //require("internal").print(vertex._key, e._getTarget(), data)
+      message.sendTo(e._getTarget(), data);
+    }
   }
 
   if (global.step === 1) {
@@ -95,28 +111,31 @@ var boruvka = function (vertex, message, global) {
       next = message.next();
       var inEdge = {
         _id: next.data.edgeId,
-        _targetVertex: next.sender,
-        _to: next.sender._id,
-        root: next.sender
+        _target : next.sender,
+        _to: next.sender._key,
+        root: next.sender,
+        distance : next.data.distance
       };
-      distanceAttrib ? inEdge[distanceAttrib] = next.data.distance : null;
       result.inEdges.push(inEdge);
     }
     result.closestEdge = getMinActiveEdges(vertex, result.inEdges);
+    vertex._outEdges.resetCursor();
     if (!result.closestEdge) {
-      vertex._deactivate()
+      vertex._deactivate();
       return;
     }
     result.type = "unknown";
     result.pointsTo = result.closestEdge._target;
-    vertex._outEdges.forEach(function (e) {
-      if (e._id === result.closestEdge._id) {
+    while (vertex._outEdges.hasNext()) {
+      e = vertex._outEdges.next();
+      if (e.__edgeInfo._id === result.closestEdge._id) {
         var edgeResult = e._getResult();
+        require("internal").print("STEP1", vertex._key,"---" , e._getTarget())
         edgeResult.inSpanTree = true;
         e._setResult(edgeResult);
       }
-    });
-
+    }
+    require("internal").print("CLOSESTEDGESTEP1", vertex._key,"---" , result.closestEdge._target, {type: "Question", edgeId: result.closestEdge._id})
     message.sendTo(result.closestEdge._target, {type: "Question", edgeId: result.closestEdge._id});
 
     vertex._setResult(result);
@@ -130,21 +149,25 @@ var boruvka = function (vertex, message, global) {
       switch (next.data.type) {
         case "Question":
           if (next.data.edgeId) {
-            vertex._outEdges.forEach(function (e) {
-              if (e._id === next.data.edgeId) {
+            while (vertex._outEdges.hasNext()) {
+              e = vertex._outEdges.next();
+              if (e.__edgeInfo._id === next.data.edgeId) {
                 var edgeResult = e._getResult();
+                require("internal").print("QUESTION", global.step, "---" , vertex._get("_key"), e._getTarget())
                 edgeResult.inSpanTree = true;
                 e._setResult(edgeResult);
               }
-            });
+            }
           }
-          if (next.sender._id === result.closestEdge._target._id) {
-            if ([vertex._id, next.sender._id].sort()[0] === vertex._id) {
+          if (next.sender._key === result.closestEdge._target._key) {
+            if ([vertex._key, next.sender._key].sort()[0] === vertex._key) {
+              require("internal").print("IS SUPRER : " , vertex._key)
               result.type = "superVertex";
               result.connectedSuperVertices = {};
-              result.pointsTo = vertex._locationInfo;
-              response = {type: "Answer", pointsTo: vertex._locationInfo, isSuperVertex: true};
+              result.pointsTo = vertex._getLocationInfo();
+              response = {type: "Answer", pointsTo: vertex._getLocationInfo(), isSuperVertex: true};
             } else if (result.type !== "superVertex") {
+              require("internal").print("POINTS TO  SUPRER : " , vertex._key)
               result.type = "pointsAtSuperVertex";
               result.pointsTo = next.sender;
               response = {type: "Answer", pointsTo: next.sender, isSuperVertex: true};
@@ -164,16 +187,21 @@ var boruvka = function (vertex, message, global) {
 
           break;
         case "SuperStep":
-          if (result.pointsTo._id !== next.data.pointsTo._id &&
-            [result.pointsTo._id , next.data.pointsTo._id].sort()[0] === result.pointsTo._id
+          //require("internal").print("SUPERSTEP")
+          if (result.pointsTo._key !== next.data.pointsTo._key &&
+            [result.pointsTo._key , next.data.pointsTo._key].sort()[0] === result.pointsTo._key
             ) {
             if (result.type !== "superVertex") {
+              //require("internal").print("SS, passing it along from ", vertex._get("_key"), " to ",  result.pointsTo, " containing", next.data)
               message.sendTo(result.pointsTo, next.data);
             } else {
-              if (!result.connectedSuperVertices[next.data.pointsTo._id] ||
-                result.connectedSuperVertices[next.data.pointsTo._id].distance > next.data.distance
+              //require("internal").print("connectedSuperVertices");
+              //require("internal").print(result.connectedSuperVertices);
+              if (!result.connectedSuperVertices[next.data.pointsTo._key] ||
+                result.connectedSuperVertices[next.data.pointsTo._key].distance > next.data.distance
                 ) {
-                result.connectedSuperVertices[next.data.pointsTo._id] = next.data;
+                result.connectedSuperVertices[next.data.pointsTo._key] = next.data;
+                //require("internal").print(vertex._get("_key"), result.connectedSuperVertices);
               }
             }
           }
@@ -181,13 +209,17 @@ var boruvka = function (vertex, message, global) {
           break;
 
         case "finalConnect":
-          vertex._outEdges.forEach(function (e) {
-            if (e._id === next.data.edgeId) {
+          //require("internal").print("finalConnect")
+          //require("internal").print("finalConnect", vertex._get("_key"))
+          while (vertex._outEdges.hasNext()) {
+            e = vertex._outEdges.next();
+            if (e.__edgeInfo._id === next.data.edgeId) {
               var edgeResult = e._getResult();
+              require("internal").print("QUESTIONFINALCONNECT", global.step, "---" , vertex._get("_key"), e._getTarget())
               edgeResult.inSpanTree = true;
               e._setResult(edgeResult);
             }
-          });
+          }
 
           break;
 
@@ -199,6 +231,11 @@ var boruvka = function (vertex, message, global) {
       result.type = "pointsAtSubVertex";
     }
     askers.forEach(function (asker) {
+      require("internal").print("Step", global.step, " send to asker", vertex._get("_id"), " to ", asker, response ? response : {
+        type: "Answer",
+        pointsTo: result.pointsTo,
+        isSuperVertex: result.type === "pointsAtSuperVertex" || result.type === "superVertex" ? true : false
+      });
       message.sendTo(asker, response ? response : {
         type: "Answer",
         pointsTo: result.pointsTo,
@@ -208,47 +245,44 @@ var boruvka = function (vertex, message, global) {
     vertex._deactivate();
 
   }
-
   vertex._setResult(result);
 };
 
 
 var finalAlgorithm = function (vertex, message, global) {
-  var distanceAttrib;// = "distance";
-  var getDistance = function (edge) {
-    if (distanceAttrib) {
-      return edge[distanceAttrib];
-    } else {
-      return 1;
-    }
-  };
+   var distanceAttrib = global.distanceAttribute;
+
   var finalPhase1 = "vertexReachOut";
   var finalPhase2 = "finalConnect";
   var result = vertex._getResult();
 
   if (!result.finalPhase) {
     result.finalPhase = finalPhase1;
-    vertex._outEdges.forEach(function (e) {
+    while (vertex._outEdges.hasNext()) {
+      var e = vertex._outEdges.next();
+      //require("internal").print("inf final ", vertex._get("_key"), " sends to ", result.pointsTo);
+      var edgeResult = e._getResult();
       message.sendTo(
-        e._targetVertex,
+        e._getTarget(),
         {
           type: "SuperStep",
           pointsTo: result.pointsTo,
-          edgeId: e._id,
-          root: vertex._locationInfo,
-          distance: getDistance(e)
+          edgeId: e.__edgeInfo._id,
+          root: vertex._getLocationInfo(),
+          distance: edgeResult.distance
         }
       );
-    });
+    }
     result.inEdges.forEach(function (e) {
+      //require("internal").print("in final ", vertex._get("_key"), " sends to ", result.pointsTo);
       message.sendTo(
-        e._targetVertex,
+        e._target,
         {
           type: "SuperStep",
           pointsTo: result.pointsTo,
           edgeId: e._id,
           root: e.root,
-          distance: getDistance(e)
+          distance: e.distance
         }
       );
     });
@@ -275,7 +309,7 @@ var getAlgorithm = function () {
     base  : boruvka.toString(),
     final : finalAlgorithm.toString()
   }
-}
+};
 
 
 exports.getAlgorithm = getAlgorithm;

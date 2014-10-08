@@ -390,18 +390,18 @@ var workerCode = function (params) {
         }
       }
     }
+    var c = this.queue._count(this.shardList, WORKERS);
     // Dump Messages into Key-Value store
     dumpMessages(this.queue, this.shardList, this.workerId, this.executionNumber);
 
     // Collect Data from Key-Value store and aggregate
     aggregateOtherWorkerData(this.queue, this.shardList, this.workerId, this.executionNumber);
-
     sendMessages(this.queue, this.shardList, this.workerId, step + 1, this.executionNumber);
     this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(),
-      this.inbox, this.outbox);
+      this.inbox, c);
   } catch (err) {
     this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(),
-      this.inbox, this.outbox, err);
+      this.inbox, c, err);
   }
 };
 
@@ -479,13 +479,13 @@ var setup = function(executionNumber, options, globals) {
   }
 };
 
-var finishedStep = function (executionNumber, global, active, keyList, inbox) {
-  require("console").log("Step Done");
+var finishedStep = function (executionNumber, global, active, keyList, inbox, countMsg) {
   var t = p.stopWatch();
-  var messages = 0;
+  var messages = countMsg || 0;
   var error = getError(executionNumber);
   var final = global.final;
   KEY_SET(keyList, "actives", 0);
+  KEY_SET(keyList, "messages", 0);
   var k;
   var stepSwitch = global.step % 2;
   var space, s1, s2;
@@ -536,6 +536,7 @@ var queueCleanupDone = function (executionNumber) {
   var countDone = KEY_INCR(keyList, "done");
   if (countDone === WORKERS) {
     KEY_SET(keyList, "actives", 0);
+    KEY_SET(keyList, "messages", 0);
     if (ArangoServerState.role() === "PRIMARY") {
       var conductor = getConductor(executionNumber);
       var body = JSON.stringify({
@@ -555,7 +556,7 @@ var queueCleanupDone = function (executionNumber) {
   }
 };
 
-var queueDone = function (executionNumber, global, actives, inbox, outbox, err) {
+var queueDone = function (executionNumber, global, actives, inbox, countMsg, err) {
   var t = p.stopWatch();
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
@@ -570,10 +571,11 @@ var queueDone = function (executionNumber, global, actives, inbox, outbox, err) 
   var keyList = "P_" + executionNumber;
   var countDone = KEY_INCR(keyList, "done");
   var countActive = KEY_INCR(keyList, "actives", actives);
+  var countmessages = KEY_INCR(keyList, "messages", countMsg);
   p.storeWatch("VertexDone", t);
 
   if (countDone === WORKERS) {
-   finishedStep(executionNumber, global, countActive, keyList, inbox, outbox);
+   finishedStep(executionNumber, global, countActive, keyList, inbox, countmessages);
   }
   /*
    WTF? Nochmal nachdenken was das machen soll

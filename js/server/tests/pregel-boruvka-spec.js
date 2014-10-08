@@ -88,15 +88,15 @@ describe("boruvka", function () {
         saveVertex(i);
       }
       saveEdge(1, 3, 1);
-      saveEdge(3, 2, 1);
-      saveEdge(2, 1, 1);
+      saveEdge(1, 2, 1);
+      saveEdge(2, 4, 2);
 
-      saveEdge(4, 6, 1);
-      saveEdge(6, 35, 1);
-      saveEdge(35, 7, 1);
-      saveEdge(7, 5, 1);
-      saveEdge(5, 8, 1);
-      saveEdge(8, 4, 1);
+      saveEdge(4, 5, 8);
+      saveEdge(4, 7, 9);
+      saveEdge(5, 7, 1);
+      saveEdge(5, 6, 2);
+      saveEdge(6, 8, 4);
+      saveEdge(7, 8, 3);
 
     });
 
@@ -107,7 +107,7 @@ describe("boruvka", function () {
     it("should identify all distinct graphs", function () {
       var graph = gN;
       //var graph = "ff";
-      var id = conductor.startExecution(graph,boruvka.getAlgorithm());
+      var id = conductor.startExecution(graph,boruvka.getAlgorithm(), {distance: "distance"});
       var count = 0;
       var resGraph = "LostInBattle";
       var res;

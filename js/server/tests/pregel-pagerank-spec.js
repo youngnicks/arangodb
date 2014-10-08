@@ -175,7 +175,7 @@ describe("Pregel PageRank", function () {
           }
           expect(v.result[0]).toBeCloseTo(exp, 3, "for vertex " + v._key);
         });
-        conductor.dropResult(id);
+        //conductor.dropResult(id);
       }
     });
   });

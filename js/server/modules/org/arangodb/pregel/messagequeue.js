@@ -292,7 +292,7 @@ var Queue = function (executionNumber, vertices, inboxSpaces, localShardList,
     shard = globalShardList[i];
     this.__outbox[shard] = [];
     for (j = 0; j < workerCount; ++j) {
-      this.__outbox[shard].push({});
+      this.__outbox[shard].push({count :0});
     }
   }
   var hashFunc = db[localShardList[0]].NTH3;
@@ -359,14 +359,26 @@ Queue.prototype._send = function (target, msg) {
   } else {
     outbox[key][0] = this.__aggregate(msg.data, outbox[key][0]);
   }
+  outbox.count++;
   p.storeWatch("_send", t);
 };
 
 Queue.prototype._dump = function(shard, workerId) {
   var t = p.stopWatch();
+  delete this.__outbox[shard][workerId].count;
   var res = JSON.stringify(this.__outbox[shard][workerId]);
-  this.__outbox[shard][workerId] = {};
+  this.__outbox[shard][workerId] = {count : 0};
   p.storeWatch("dump queue", t);
+  return res;
+};
+
+Queue.prototype._count = function(shardList, workers) {
+  var res = 0, self = this;
+  shardList.forEach(function(s) {
+    for (i = 0; i < workers; i++) {
+      res = res + self.__outbox[s][i].count;
+    }
+  });
   return res;
 };
 
