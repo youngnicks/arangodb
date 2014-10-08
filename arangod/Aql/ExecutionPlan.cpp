@@ -131,7 +131,7 @@ ExecutionPlan* ExecutionPlan::instanciateFromJson (Ast* ast,
 
   try {
     plan->_root = plan->fromJson(json);
-    plan->findVarUsage();
+    plan->_varUsageComputed = true;
     return plan;
   }
   catch (...) {
@@ -140,8 +140,8 @@ ExecutionPlan* ExecutionPlan::instanciateFromJson (Ast* ast,
   }
 }
 
-ExecutionPlan* ExecutionPlan::clone (Query &onThatQuery) {
-  ExecutionPlan *OtherPlan = new ExecutionPlan(onThatQuery.ast());
+ExecutionPlan* ExecutionPlan::clone (Query& onThatQuery) {
+  ExecutionPlan* OtherPlan = new ExecutionPlan(onThatQuery.ast());
 
   for (auto it: _ids) {
     OtherPlan->registerNode(it.second->clone(OtherPlan, false, true));
@@ -149,8 +149,6 @@ ExecutionPlan* ExecutionPlan::clone (Query &onThatQuery) {
 
   return OtherPlan;
 }
-
-
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief export to JSON, returns an AUTOFREE Json object
@@ -177,9 +175,10 @@ triagens::basics::Json ExecutionPlan::toJson (Ast* ast,
 
     jsonCollectionList(json("name", Json(c.first))
                            ("type", Json(TRI_TransactionTypeGetStr(c.second->accessType))));
-
   }
+
   result.set("collections", jsonCollectionList);
+  result.set("variables", ast->variables()->toJson(TRI_UNKNOWN_MEM_ZONE));
   result.set("estimatedCost", triagens::basics::Json(_root->getCost()));
 
   return result;
@@ -986,7 +985,6 @@ void ExecutionPlan::checkLinkage () {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct VarUsageFinder : public WalkerWorker<ExecutionNode> {
-
     std::unordered_set<Variable const*> _usedLater;
     std::unordered_set<Variable const*> _valid;
     std::unordered_map<VariableId, ExecutionNode*> _varSetBy;

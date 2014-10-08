@@ -93,6 +93,7 @@ var wait = require("internal").wait;
 var executeExternal = require("internal").executeExternal;
 var killExternal = require("internal").killExternal;
 var statusExternal = require("internal").statusExternal;
+var executeExternalAndWait = require("internal").executeExternalAndWait;
 var base64Encode = require("internal").base64Encode;
 
 var PortFinder = require("org/arangodb/cluster").PortFinder;
@@ -398,9 +399,8 @@ function runThere (options, instanceInfo, file) {
 }
 
 function executeAndWait (cmd, args) {
-  var pid = executeExternal(cmd, args);
   var startTime = time();
-  var res = statusExternal(pid, true);
+  var res = executeExternalAndWait(cmd, args);
   var deltaTime = time() - startTime;
 
   if (res.status === "TERMINATED") {
@@ -413,12 +413,24 @@ function executeAndWait (cmd, args) {
     }
   }
   else if (res.status === "ABORTED") {
+    var toppid = executeExternal("/usr/bin/top", ["-b", "-n1"]);
+    statusExternal(toppid, true);
     print("Finished: " + res.status + " Signal: " + res.signal + " Time Elapsed: " + deltaTime);
-    return {
-      status: false,
-      message: "irregular termination: " + res.status + " Exit-Signal: " + res.signal,
-      duration: deltaTime
-    };
+    if (res.signal === 10) {
+      return {
+        status: true,
+        message: "irregular termination: " + res.status + " Exit-Signal: " + res.signal +
+          " Handling Signal 10 as non-error.",
+        duration: deltaTime
+      };
+    }
+    else {
+      return {
+        status: false,
+        message: "irregular termination: " + res.status + " Exit-Signal: " + res.signal,
+        duration: deltaTime
+      };
+    }
   }
   else {
     print("Finished: " + res.status + " Exitcode: " + res.exit + " Time Elapsed: " + deltaTime);
@@ -604,6 +616,23 @@ testFuncs.boost = function (options) {
   return results;
 };
 
+
+function single_usage(testsuite) {
+  print("single_" + testsuite + ": No test specified!\n Available tests:");
+  var filelist = "";
+  var list = fs.list(makePath("js/server/tests"));
+  for (var fileNo in list) {
+    if (/\.js$/.test(list[fileNo])) {
+      filelist += " js/server/tests/"+list[fileNo];
+    }
+  }
+  print(filelist);
+  print("usage: single_" + testsuite + " '{\"test\":\"<testfilename>\"}'");
+  print(" where <testfilename> is one from the list above.");
+  return { status: false, message: "No test specified!"};
+}
+
+
 testFuncs.single_server = function (options) {
   var instanceInfo = startInstance("tcp", options, [], "single");
   var result = { };
@@ -618,7 +647,7 @@ testFuncs.single_server = function (options) {
     return result;
   }
   else {
-    return { status: false, message: "No test specified!"};
+    return single_usage("server");
   }
 };
 
@@ -643,7 +672,7 @@ testFuncs.single_client = function (options) {
     return result;
   }
   else {
-    return { status: false, message: "No test specified!"};
+    return single_usage("client");
   }
 };
 
@@ -688,37 +717,9 @@ function rubyTests (options, ssl) {
         args = ["--color", "-I", fs.join("UnitTests","HttpInterface"),
                 "--format", "d", "--require", tmpname,
                 fs.join("UnitTests","HttpInterface",n)];
-        var pid = executeExternal("rspec", args);
-        var startTime = time();
-        var r = statusExternal(pid, true);
-        var deltaTime = time() - startTime;
-        if (r.status === "TERMINATED") {
-          print("Finished: " + r.status + " Signal: " + r.exit + " Time Elapsed: " + deltaTime);
-          if (r.exit === 0) {
-            result[n] =  { status: true, message: "", duration: deltaTime };
-          }
-          else {
-            result[n] = { status: false, message: " exit code was " + r.exit, duration: deltaTime};
-          }
-        }
-        else if (r.status === "ABORTED") {
-          print("Finished: " + r.status + " Signal: " + r.exit + " Time Elapsed: " + deltaTime);
-          result[n] = {
-            status: false,
-            message: "irregular termination: " + r.status + " Exit-Signal: " + r.signal,
-            duration: deltaTime
-          };
-        }
-        else {
-          print("Finished: " + r.status + " Exit Status: " + r.exit + " Time Elapsed: " + deltaTime);
-          result[n] = {
-            status: false,
-            message: "irregular termination: " + r.status + " Exit-code: " + r.exit,
-            duration: deltaTime
-          };
-        }
 
-        if (r.status === false && !options.force) {
+        result[n] = executeAndWait("rspec", args);
+        if (result[n].status === false && !options.force) {
           break;
         }
       }
@@ -1114,6 +1115,8 @@ function unitTestPrettyPrintResults(r) {
   var testrun;
   var test;
   var oneTest;
+  var testFail = 0;
+  var testSuiteFail = 0;
 
   try {
     for (testrun in r) {    
@@ -1125,6 +1128,7 @@ function unitTestPrettyPrintResults(r) {
               print("     " + test + ": Success");
             }
             else {
+              testSuiteFail++;
               if (r[testrun][test].hasOwnProperty('message')) {
                 print("     " + test + ": Fail - Whole testsuite failed!");
                 if (typeof r[testrun][test].message === "object" &&
@@ -1141,6 +1145,7 @@ function unitTestPrettyPrintResults(r) {
                   if ((r[testrun][test].hasOwnProperty(oneTest)) && 
                       (internalMembers.indexOf(oneTest) === -1) &&
                       (!r[testrun][test][oneTest].status)) {
+                    testFail++;
                     print("          -> " + oneTest + " Failed; Verbose message:");
                     print(r[testrun][test][oneTest].message);
                   }
@@ -1152,6 +1157,9 @@ function unitTestPrettyPrintResults(r) {
       }
     }
     print("Overall state: " + ((r.all_ok === true) ? "Success" : "Fail"));
+    if (r.all_ok !== true) {
+      print("   Suites failed: " + testSuiteFail + " Tests Failed: " + testFail);
+    }
   }
   catch (x) {
     print("exception caught while pretty printing result: ");

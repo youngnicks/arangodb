@@ -119,6 +119,8 @@ AqlItemBlock::AqlItemBlock (Json const& json) {
             // empty run:
             Json runLength(data.at(static_cast<int>(posInData++)));
             emptyRun = JsonHelper::getNumericValue<int64_t>(runLength.json(), 0);
+            TRI_ASSERT(emptyRun > 0);
+            emptyRun--;
           }
           else if (n == -2) {
             Json lowBound(data.at(static_cast<int>(posInData++)));
@@ -547,7 +549,7 @@ Json AqlItemBlock::toJson (AQL_TRANSACTION_V8* trx) const {
           if (it == table.end()) {
             raw(a.toJson(trx, _docColls[column]));
             data(Json(1.0));
-            table.insert(make_pair(a, pos++));
+            table.emplace(make_pair(a, pos++));
           }
           else {
             data(Json(static_cast<double>(it->second)));

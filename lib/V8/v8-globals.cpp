@@ -115,6 +115,7 @@ TRI_v8_global_s::TRI_v8_global_s (v8::Isolate* isolate)
     UrlKey(),
     UserKey(),
     ValueKey(),
+    VersionKey(),
     WaitForSyncKey(),
 
     _FromKey(),
@@ -198,6 +199,7 @@ TRI_v8_global_s::TRI_v8_global_s (v8::Isolate* isolate)
   UrlKey = v8::Persistent<v8::String>::New(isolate, TRI_V8_SYMBOL("url"));
   UserKey = v8::Persistent<v8::String>::New(isolate, TRI_V8_SYMBOL("user"));
   ValueKey = v8::Persistent<v8::String>::New(isolate, TRI_V8_SYMBOL("value"));
+  VersionKey = v8::Persistent<v8::String>::New(isolate, TRI_V8_SYMBOL("version"));
   WaitForSyncKey = v8::Persistent<v8::String>::New(isolate, TRI_V8_SYMBOL("waitForSync"));
 
   _FromKey = v8::Persistent<v8::String>::New(isolate, TRI_V8_SYMBOL("_from"));
@@ -224,8 +226,8 @@ TRI_v8_global_s::~TRI_v8_global_s () {
 /// @brief creates a global context
 ////////////////////////////////////////////////////////////////////////////////
 
-TRI_v8_global_t* TRI_CreateV8Globals(v8::Isolate* isolate) {
-  TRI_v8_global_t* v8g = (TRI_v8_global_t*) isolate->GetData();
+TRI_v8_global_t* TRI_CreateV8Globals (v8::Isolate* isolate) {
+  TRI_v8_global_t* v8g = static_cast<TRI_v8_global_t*>(isolate->GetData());
 
   if (v8g == nullptr) {
     v8g = new TRI_v8_global_t(isolate);

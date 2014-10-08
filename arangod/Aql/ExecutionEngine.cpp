@@ -37,6 +37,7 @@
 #include "Utils/Exception.h"
 
 using namespace triagens::aql;
+using Json = triagens::basics::Json;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief helper function to create a block
@@ -116,6 +117,14 @@ static ExecutionBlock* createBlock (ExecutionEngine* engine,
                               static_cast<ScatterNode const*>(en),
                               shardIds);
     }
+    case ExecutionNode::DISTRIBUTE: {
+      auto&& shardIds = static_cast<DistributeNode const*>(en)->collection()->shardIds();
+      return new DistributeBlock(engine,
+                                 static_cast<DistributeNode const*>(en),
+                                 shardIds,
+                                 static_cast<DistributeNode const*>
+                                 (en)->collection());
+    }
     case ExecutionNode::GATHER: {
       return new GatherBlock(engine,
                              static_cast<GatherNode const*>(en));
@@ -148,12 +157,10 @@ static ExecutionBlock* createBlock (ExecutionEngine* engine,
 /// @brief create the engine
 ////////////////////////////////////////////////////////////////////////////////
 
-ExecutionEngine::ExecutionEngine (AQL_TRANSACTION_V8* trx, 
-                                  Query* query)
+ExecutionEngine::ExecutionEngine (Query* query)
   : _stats(),
     _blocks(),
     _root(nullptr),
-    _trx(trx),
     _query(query) {
 
   _blocks.reserve(8);
@@ -270,7 +277,7 @@ struct CoordinatorInstanciator : public WalkerWorker<ExecutionNode> {
     std::vector<ExecutionNode*>  nodes;
   };
 
-  AQL_TRANSACTION_V8*      trx;
+  std::shared_ptr<AQL_TRANSACTION_V8> trx;
   Query*                   query;
   QueryRegistry*           queryRegistry;
   ExecutionBlock*          root;
@@ -280,10 +287,9 @@ struct CoordinatorInstanciator : public WalkerWorker<ExecutionNode> {
   std::vector<size_t>      engineIds; // stack of engine ids, used for subqueries
 
   
-  CoordinatorInstanciator (AQL_TRANSACTION_V8* trx,
-                           Query* query,
+  CoordinatorInstanciator (Query* query,
                            QueryRegistry* queryRegistry)
-    : trx(trx),
+    : trx(query->getTrxPtr()),
       query(query),
       queryRegistry(queryRegistry),
       root(nullptr),
@@ -315,12 +321,18 @@ struct CoordinatorInstanciator : public WalkerWorker<ExecutionNode> {
         TRI_ASSERT(engine != nullptr);
 
         if ((*it).id > 0) {
-          Query *otherQuery = query->clone(PART_DEPENDENT);
-          otherQuery->trx(trx);
+          Query* otherQuery = query->clone(PART_DEPENDENT);
           otherQuery->engine(engine);
 
-          auto *newPlan = new ExecutionPlan(otherQuery->ast());
+          auto* newPlan = new ExecutionPlan(otherQuery->ast());
           otherQuery->setPlan(newPlan);
+    
+          // clone all variables 
+          for (auto it2 : query->ast()->variables()->variables(true)) {
+            auto var = query->ast()->variables()->getVariable(it2.first);
+            TRI_ASSERT(var != nullptr);
+            otherQuery->ast()->variables()->createVariable(var);
+          }
 
           ExecutionNode const* current = (*it).nodes.front();
           ExecutionNode* previous = nullptr;
@@ -353,16 +365,15 @@ struct CoordinatorInstanciator : public WalkerWorker<ExecutionNode> {
             current = deps[0];
           }
 
+          // TODO: test if this is necessary or does harm
+          // newPlan->setVarUsageComputed();
+      
           // we need to instanciate this engine in the registry
 
           // create a remote id for the engine that we can pass to
           // the plans to be created for the DBServers
           id = TRI_NewTickServer();
-         
-          // TODO: check if we can register the same query object multiple times
-          // or if we need to clone it
 
-std::cout << "REGISTERING QUERY ON COORDINATOR WITH ID: " << id << "\n";          
           queryRegistry->insert(otherQuery->vocbase(), id, otherQuery, 3600.0);
         }
       }
@@ -426,7 +437,7 @@ std::cout << "REGISTERING QUERY ON COORDINATOR WITH ID: " << id << "\n";
       while (current != nullptr) {
         bool stop = false;
 
-        auto clone = current->clone(&plan, false, false);
+        auto clone = current->clone(&plan, false, true);
         plan.registerNode(clone);
         
         if (current->getType() == ExecutionNode::REMOTE) {
@@ -460,28 +471,38 @@ std::cout << "REGISTERING QUERY ON COORDINATOR WITH ID: " << id << "\n";
         previous = clone;
         current = deps[0];
       }
-
+      
       // inject the current shard id into the collection
       collection->setCurrentShard(shardId);
+      plan.setVarUsageComputed();
 
       // create a JSON representation of the plan
-      triagens::basics::Json result(triagens::basics::Json::Array);
-      triagens::basics::Json jsonNodesList(plan.root()->toJson(TRI_UNKNOWN_MEM_ZONE, true));
+      Json result(Json::Array);
+      Json jsonNodesList(plan.root()->toJson(TRI_UNKNOWN_MEM_ZONE, true));
     
       // add the collection
-      triagens::basics::Json jsonCollectionsList(triagens::basics::Json::List);
-      triagens::basics::Json json(triagens::basics::Json::Array);
-      jsonCollectionsList(json("name", triagens::basics::Json(collection->getName()))
-                              ("type", triagens::basics::Json(TRI_TransactionTypeGetStr(collection->accessType))));
+      Json jsonCollectionsList(Json::List);
+      Json json(Json::Array);
+      jsonCollectionsList(json("name", Json(collection->getName()))
+                              ("type", Json(TRI_TransactionTypeGetStr(collection->accessType))));
 
       jsonNodesList.set("collections", jsonCollectionsList);
+      jsonNodesList.set("variables", query->ast()->variables()->toJson(TRI_UNKNOWN_MEM_ZONE));
 
       result.set("plan", jsonNodesList);
-      result.set("part", triagens::basics::Json("main")); // TODO: set correct query type
+      result.set("part", Json("main")); // TODO: set correct query type
 
+      Json optimizerOptionsRules(Json::List);
+      Json optimizerOptions(Json::Array);
+
+      Json options(Json::Array);
+      optimizerOptionsRules.add(Json("-all"));
+      optimizerOptions.set("rules", optimizerOptionsRules);
+      options.set("optimizer", optimizerOptions);
+      result.set("options", options);
       std::unique_ptr<std::string> body(new std::string(triagens::basics::JsonHelper::toString(result.json())));
     
-      std::cout << "GENERATED A PLAN FOR THE REMOTE SERVERS: " << *(body.get()) << "\n";
+      // std::cout << "GENERATED A PLAN FOR THE REMOTE SERVERS: " << *(body.get()) << "\n";
     
       // TODO: pass connectedId to the shard so it can fetch data using the correct query id
       auto headers = new std::map<std::string, std::string>;
@@ -500,7 +521,7 @@ std::cout << "REGISTERING QUERY ON COORDINATOR WITH ID: " << id << "\n";
         delete res;
       }
     }
-
+      
     // fix collection  
     collection->resetCurrentShard();
 
@@ -523,18 +544,18 @@ std::cout << "REGISTERING QUERY ON COORDINATOR WITH ID: " << id << "\n";
           triagens::basics::Json response(TRI_UNKNOWN_MEM_ZONE, triagens::basics::JsonHelper::fromString(res->answer->body()));
           std::string queryId = triagens::basics::JsonHelper::getStringValue(response.json(), "queryId", "");
 
-          std::cout << "DB SERVER ANSWERED WITHOUT ERROR: " << res->answer->body() << ", SHARDID:"  << res->shardID << ", QUERYID: " << queryId << "\n";
+          // std::cout << "DB SERVER ANSWERED WITHOUT ERROR: " << res->answer->body() << ", SHARDID:"  << res->shardID << ", QUERYID: " << queryId << "\n";
           queryIds.emplace(std::make_pair(res->shardID, queryId));
           
         }
         else {
-          std::cout << "DB SERVER ANSWERED WITH ERROR: " << res->answer->body() << "\n";
+          // std::cout << "DB SERVER ANSWERED WITH ERROR: " << res->answer->body() << "\n";
         }
       }
       delete res;
     }
 
-    std::cout << "GOT ALL RESPONSES FROM DB SERVERS: " << nrok << "\n";
+    // std::cout << "GOT ALL RESPONSES FROM DB SERVERS: " << nrok << "\n";
 
     if (nrok != (int) shardIds.size()) {
       // TODO: provide sensible error message with more details
@@ -547,7 +568,7 @@ std::cout << "REGISTERING QUERY ON COORDINATOR WITH ID: " << id << "\n";
 
   ExecutionEngine* buildEngineCoordinator (EngineInfo& info,
                                            std::unordered_map<std::string, std::string> const& queryIds) {
-    std::unique_ptr<ExecutionEngine> engine(new ExecutionEngine(trx, query));
+    std::unique_ptr<ExecutionEngine> engine(new ExecutionEngine(query));
 
     std::unordered_map<ExecutionNode*, ExecutionBlock*> cache;
     RemoteNode* remoteNode = nullptr;
@@ -600,7 +621,11 @@ std::cout << "REGISTERING QUERY ON COORDINATOR WITH ID: " << id << "\n";
             THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "could not find query id in list");
           }
 
-          ExecutionBlock* r = new RemoteBlock(engine.get(), remoteNode, "shard:" + shardId, "", (*it).second);
+          ExecutionBlock* r = new RemoteBlock(engine.get(), 
+                                              remoteNode, 
+                                              "shard:" + shardId, // server
+                                              "",                 // ownName
+                                              (*it).second);      // queryId
       
           try {
             engine.get()->addBlock(r);
@@ -613,16 +638,7 @@ std::cout << "REGISTERING QUERY ON COORDINATOR WITH ID: " << id << "\n";
           eb->addDependency(r);
         }
       }
-   /* 
-      if (nodeType == ExecutionNode::RETURN ||
-          nodeType == ExecutionNode::REMOVE ||
-          nodeType == ExecutionNode::INSERT ||
-          nodeType == ExecutionNode::UPDATE ||
-          nodeType == ExecutionNode::REPLACE) {
-        // set the new root node
-        engine->root(eb);
-      }
-*/
+      
       // the last block is always the root 
       engine->root(eb);
       // TODO: handle subqueries
@@ -686,31 +702,33 @@ void ExecutionEngine::addBlock (ExecutionBlock* block) {
 ////////////////////////////////////////////////////////////////////////////////
 
 ExecutionEngine* ExecutionEngine::instanciateFromPlan (QueryRegistry* queryRegistry,
-                                                       AQL_TRANSACTION_V8* trx,
                                                        Query* query,
-                                                       ExecutionPlan* plan) {
+                                                       ExecutionPlan* plan,
+                                                       bool planRegisters) {
   ExecutionEngine* engine = nullptr;
 
   try {
     if (! plan->varUsageComputed()) {
       plan->findVarUsage();
     }
-    plan->staticAnalysis();
+    if (planRegisters) {
+      plan->planRegisters();
+    }
 
     ExecutionBlock* root = nullptr;
 
     if (isCoordinator()) {
       // instanciate the engine on the coordinator
-      query->trx(trx);
-      std::unique_ptr<CoordinatorInstanciator> inst(new CoordinatorInstanciator(trx, query, queryRegistry));
+      std::unique_ptr<CoordinatorInstanciator> inst(new CoordinatorInstanciator(query, queryRegistry));
       plan->root()->walk(inst.get());
 
+      // std::cout << "ORIGINAL PLAN:\n" << plan->toJson(query->ast(), TRI_UNKNOWN_MEM_ZONE, true).toString() << "\n\n";
       engine = inst.get()->buildEngines(); 
       root = engine->root();
     }
     else {
       // instanciate the engine on a local server
-      engine = new ExecutionEngine(trx, query);
+      engine = new ExecutionEngine(query);
       std::unique_ptr<Instanciator> inst(new Instanciator(engine));
       plan->root()->walk(inst.get());
       root = inst.get()->root;

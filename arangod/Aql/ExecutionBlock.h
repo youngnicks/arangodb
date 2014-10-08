@@ -87,7 +87,8 @@ namespace triagens {
         rowsAreValid = true;
       }
 
-      void addValues (AqlItemBlock const* src, RegisterId groupRegister);
+      void addValues (AqlItemBlock const* src, 
+                      RegisterId groupRegister);
     };
 
 // -----------------------------------------------------------------------------
@@ -352,6 +353,7 @@ namespace triagens {
 ////////////////////////////////////////////////////////////////////////////////
 
         static size_t const DefaultBatchSize;
+
     };
 
 // -----------------------------------------------------------------------------
@@ -643,14 +645,10 @@ namespace triagens {
 
       public:
 
-        EnumerateListBlock (ExecutionEngine* engine,
-                            EnumerateListNode const* ep)
-          : ExecutionBlock(engine, ep) {
+        EnumerateListBlock (ExecutionEngine*,
+                            EnumerateListNode const*);
 
-        }
-
-        ~EnumerateListBlock () {
-        }
+        ~EnumerateListBlock ();
 
         int initialize ();
 
@@ -724,17 +722,10 @@ namespace triagens {
 
       public:
 
-        CalculationBlock (ExecutionEngine* engine,
-                          CalculationNode const* en)
-          : ExecutionBlock(engine, en),
-            _expression(en->expression()),
-            _outReg(0) {
+        CalculationBlock (ExecutionEngine*,
+                          CalculationNode const*);
 
-        }
-
-        ~CalculationBlock () {
-        };
-        
+        ~CalculationBlock ();
 
         int initialize ();
 
@@ -797,16 +788,11 @@ namespace triagens {
 
       public:
 
-        SubqueryBlock (ExecutionEngine* engine,
-                       SubqueryNode const* en,
-                       ExecutionBlock* subquery)
-          : ExecutionBlock(engine, en), 
-            _outReg(0),
-           _subquery(subquery) {
-        }
+        SubqueryBlock (ExecutionEngine*,
+                       SubqueryNode const*,
+                       ExecutionBlock*);
 
-        ~SubqueryBlock () {
-        }
+        ~SubqueryBlock ();
 
         int initialize ();
 
@@ -844,13 +830,10 @@ namespace triagens {
 
       public:
 
-        FilterBlock (ExecutionEngine* engine,
-                     FilterNode const* ep)
-          : ExecutionBlock(engine, ep) {
-        }
+        FilterBlock (ExecutionEngine*,
+                     FilterNode const*);
 
-        ~FilterBlock () {
-        }
+        ~FilterBlock ();
 
         int initialize ();
 
@@ -860,7 +843,7 @@ namespace triagens {
 
       private:
 
-        bool takeItem (AqlItemBlock* items, size_t index) {
+        bool takeItem (AqlItemBlock* items, size_t index) const {
           AqlValue v = items->getValue(index, _inReg);
           return v.isTrue();
         }
@@ -912,14 +895,10 @@ namespace triagens {
 
       public:
 
-        AggregateBlock (ExecutionEngine* engine,
-                        ExecutionNode const* ep)
-          : ExecutionBlock(engine, ep),
-            _groupRegister(0),
-            _variableNames() {
-        }
+        AggregateBlock (ExecutionEngine*,
+                        AggregateNode const*);
 
-        virtual ~AggregateBlock () {};
+        ~AggregateBlock ();
 
         int initialize ();
 
@@ -976,13 +955,10 @@ namespace triagens {
 
       public:
 
-        SortBlock (ExecutionEngine* engine,
-                   ExecutionNode const* ep)
-          : ExecutionBlock(engine, ep),
-            _stable(static_cast<SortNode const*>(ep)->_stable) {
-        }
+        SortBlock (ExecutionEngine*,
+                   SortNode const*);
 
-        virtual ~SortBlock () {};
+        ~SortBlock ();
 
         int initialize ();
 
@@ -1394,10 +1370,8 @@ namespace triagens {
 /// @brief constructor
 ////////////////////////////////////////////////////////////////////////////////
 
-        GatherBlock (ExecutionEngine* engine,
-                     GatherNode const* ep)
-          : ExecutionBlock(engine, ep) {
-        }
+        GatherBlock (ExecutionEngine*,
+                     GatherNode const*);
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief destructor
@@ -1482,15 +1456,6 @@ namespace triagens {
       private:
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief isSimple: the block is simple if we do not do merge sort . . .
-////////////////////////////////////////////////////////////////////////////////
-        
-        bool isSimple () {
-          auto en = static_cast<GatherNode const*>(getPlanNode());
-          return en->getElements().empty();
-        }
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief _atDep: currently pulling blocks from _dependencies.at(_atDep),
 /// simple case only
 ////////////////////////////////////////////////////////////////////////////////
@@ -1503,6 +1468,12 @@ namespace triagens {
 ////////////////////////////////////////////////////////////////////////////////
         
         std::vector<std::pair<RegisterId, bool>> _sortRegisters;
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief isSimple: the block is simple if we do not do merge sort . . .
+////////////////////////////////////////////////////////////////////////////////
+
+        bool const _isSimple;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief OurLessThan: comparison method for elements of _gatherBlockPos
@@ -1570,11 +1541,17 @@ namespace triagens {
         int initializeCursor (AqlItemBlock* items, size_t pos);
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief initializeCursor
+////////////////////////////////////////////////////////////////////////////////
+
+        int shutdown ();
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief remaining
 ////////////////////////////////////////////////////////////////////////////////
 
         int64_t remaining () {
-          return _dependencies[0]->remaining();
+          TRI_ASSERT(false);
         }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1588,7 +1565,7 @@ namespace triagens {
 ////////////////////////////////////////////////////////////////////////////////
 
         virtual AqlItemBlock* getSome (size_t atLeast, size_t atMost) {
-          TRI_ASSERT(false);
+          // TODO: implement this method
           THROW_ARANGO_EXCEPTION(TRI_ERROR_NOT_IMPLEMENTED);
         }
 
@@ -1597,7 +1574,7 @@ namespace triagens {
 ////////////////////////////////////////////////////////////////////////////////
 
         virtual size_t skipSome (size_t atLeast, size_t atMost) {
-          TRI_ASSERT(false);
+          // TODO: implement this method
           THROW_ARANGO_EXCEPTION(TRI_ERROR_NOT_IMPLEMENTED);
         }
        
@@ -1606,6 +1583,12 @@ namespace triagens {
 ////////////////////////////////////////////////////////////////////////////////
         
         bool hasMoreForShard (std::string const& shardId);
+       
+////////////////////////////////////////////////////////////////////////////////
+/// @brief remainingForShard: remaining for shard <shardId>?
+////////////////////////////////////////////////////////////////////////////////
+        
+        int64_t remainingForShard (std::string const& shardId);
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief getOrSkipSomeForShard
@@ -1628,6 +1611,12 @@ namespace triagens {
 
         size_t skipSomeForShard (size_t atLeast, size_t atMost, std::string
             const& shardId);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief skipForShard
+////////////////////////////////////////////////////////////////////////////////
+
+        bool skipForShard (size_t number, std::string const& shardId);
 
       private: 
        
@@ -1666,8 +1655,177 @@ namespace triagens {
 
         size_t _nrClients;
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief _reinit: should we really initialiseCursor or shutdown? 
+////////////////////////////////////////////////////////////////////////////////
+
+        bool _initOrShutdown;
+
     };
 
+// -----------------------------------------------------------------------------
+// --SECTION--                                                   DistributeBlock
+// -----------------------------------------------------------------------------
+
+    class DistributeBlock : public ExecutionBlock {
+
+      public:
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief constructor
+////////////////////////////////////////////////////////////////////////////////
+
+        DistributeBlock (ExecutionEngine* engine,
+                         DistributeNode const* ep, 
+                         std::vector<std::string> const& shardIds, 
+                         Collection const* collection);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief destructor
+////////////////////////////////////////////////////////////////////////////////
+
+        ~DistributeBlock () {
+        }
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief initialize
+////////////////////////////////////////////////////////////////////////////////
+
+        int initialize () {
+          return ExecutionBlock::initialize();
+        }
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief getSome: shouldn't be used!!!
+////////////////////////////////////////////////////////////////////////////////
+
+        virtual AqlItemBlock* getSome (size_t atLeast, size_t atMost) {
+          TRI_ASSERT(false);
+        }
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief skipSome: shouldn't be used!!!
+////////////////////////////////////////////////////////////////////////////////
+
+        virtual size_t skipSome (size_t atLeast, size_t atMost) {
+          TRI_ASSERT(false);
+        }
+       
+////////////////////////////////////////////////////////////////////////////////
+/// @brief hasMoreForShard: any more for shard <shardId>?
+////////////////////////////////////////////////////////////////////////////////
+        
+        bool hasMoreForShard (std::string const& shardId);
+       
+////////////////////////////////////////////////////////////////////////////////
+/// @brief remainingForShard: remaining for shard <shardId>?
+////////////////////////////////////////////////////////////////////////////////
+        
+        int64_t remainingForShard (std::string const& shardId);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief getOrSkipSomeForShard
+////////////////////////////////////////////////////////////////////////////////
+        
+        int getOrSkipSomeForShard (size_t atLeast, size_t atMost, 
+            bool skipping, AqlItemBlock*& result, size_t& skipped, 
+            std::string const& shardId);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief getSomeForShard
+////////////////////////////////////////////////////////////////////////////////
+        
+        AqlItemBlock* getSomeForShard (size_t atLeast, size_t atMost,
+            std::string const& shardId);
+        
+////////////////////////////////////////////////////////////////////////////////
+/// @brief skipSomeForShard
+////////////////////////////////////////////////////////////////////////////////
+
+        size_t skipSomeForShard (size_t atLeast, size_t atMost, std::string
+            const& shardId);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief skipForShard
+////////////////////////////////////////////////////////////////////////////////
+
+        bool skipForShard (size_t number, std::string const& shardId);
+
+      private: 
+       
+////////////////////////////////////////////////////////////////////////////////
+/// @brief getClientId: get the number <clientId> (used internally)
+/// corresponding to <shardId>
+////////////////////////////////////////////////////////////////////////////////
+
+        size_t getClientId (std::string const& shardId);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief getBlockForClient: try to get at atLeast/atMost pairs into
+/// _distBuffer.at(clientId).
+////////////////////////////////////////////////////////////////////////////////
+
+        bool getBlockForClient (size_t atLeast, 
+                                size_t atMost,
+                                size_t clientId);
+
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief sendToClient: for each row of the incoming AqlItemBlock use the 
+/// attributes <shardKeys> of the register <id> to determine to which shard the
+/// row should be sent. 
+////////////////////////////////////////////////////////////////////////////////
+
+        size_t sendToClient (AqlValue val);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief _shardIdMap: map from shardIds to clientNrs
+////////////////////////////////////////////////////////////////////////////////
+
+        std::unordered_map<std::string, size_t> _shardIdMap;
+        
+////////////////////////////////////////////////////////////////////////////////
+/// @brief _distBuffer.at(i) is a deque containing pairs (j,k) such that
+//  _buffer.at(j) row k should be sent to the client with id = i.
+////////////////////////////////////////////////////////////////////////////////
+
+        std::vector<std::deque<std::pair<size_t, size_t>>> _distBuffer;
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief _nrClients: total number of clients
+////////////////////////////////////////////////////////////////////////////////
+
+        size_t _nrClients;
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief _doneForClient: the analogue of _done: _doneForClient.at(i) = true
+/// if we are done for the shard with clientId = i
+////////////////////////////////////////////////////////////////////////////////
+
+        std::vector<bool> _doneForClient;
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief _colectionName: the name of the sharded collection 
+////////////////////////////////////////////////////////////////////////////////
+
+        Collection const* _collection;
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief : the keys used by the <sendToClient> to determine to which
+/// shard a row is sent
+////////////////////////////////////////////////////////////////////////////////
+
+        //std::vector<std::string> _shardKeys;
+        const char * _shardKeys;
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief : the keys used by the <sendToClient> to determine to which
+/// shard a row is sent
+////////////////////////////////////////////////////////////////////////////////
+
+        size_t _index;
+
+    };
 // -----------------------------------------------------------------------------
 // --SECTION--                                                       RemoteBlock
 // -----------------------------------------------------------------------------
@@ -1684,17 +1842,9 @@ namespace triagens {
                      RemoteNode const* en,
                      std::string const& server,
                      std::string const& ownName,
-                     std::string const& queryId)
-          : ExecutionBlock(engine, en),
-            _server(server),
-            _ownName(ownName),
-            _queryId(queryId) {
+                     std::string const& queryId);
 
-          TRI_ASSERT(! queryId.empty());
-        }
-
-        ~RemoteBlock () {
-        }
+        ~RemoteBlock ();
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief timeout

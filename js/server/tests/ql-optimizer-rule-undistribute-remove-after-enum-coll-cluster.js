@@ -29,21 +29,22 @@
 var db = require("org/arangodb").db;
 var jsunity = require("jsunity");
 var helper = require("org/arangodb/aql-helper");
+var getQueryResults = helper.getQueryResults2;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief test suite
 ////////////////////////////////////////////////////////////////////////////////
 
 function optimizerRuleTestSuite () {
-  var ruleName = "remove-unnecessary-remote-scatter";
+  var ruleName = "undistribute-remove-after-enum-coll";
   // various choices to control the optimizer: 
   var rulesNone        = { optimizer: { rules: [ "-all" ] } };
   var rulesAll         = { optimizer: { rules: [ "+all" ] } };
   var thisRuleEnabled  = { optimizer: { rules: [ "-all", "+" + ruleName ] } };
   var thisRuleDisabled = { optimizer: { rules: [ "+all", "-" + ruleName ] } };
 
-  var cn1 = "UnitTestsAqlOptimizerRuleRemoveUnnecessaryRemoteScatter1";
-  var cn2 = "UnitTestsAqlOptimizerRuleRemoveUnnecessaryRemoteScatter2";
+  var cn1 = "UnitTestsAqlOptimizerRuleUndist1";
+  var cn2 = "UnitTestsAqlOptimizerRuleUndist2";
   var c1, c2;
   
   var explain = function (result) {
@@ -79,65 +80,91 @@ function optimizerRuleTestSuite () {
     },
 
     ////////////////////////////////////////////////////////////////////////////////
-    /// @brief test that rule does not fire when all rules are disabled 
+    /// @brief test that rule does not fire when it is not enabled 
     ////////////////////////////////////////////////////////////////////////////////
-
-    testRulesNone : function () {
-      var queries = [ 
-        "FOR d IN " + cn1 + " RETURN d",
-        "LET A=1 LET B=2 FOR d IN " + cn1 + " RETURN d",
-        "LET A=1 LET B=2 FOR d IN " + cn1 + " LIMIT 10 RETURN d",
-        "FOR e in " + cn1 + " FOR d IN " + cn1 + " LIMIT 10 RETURN d"
-      ];
-
-      queries.forEach(function(query) {
-        var result = AQL_EXPLAIN(query, { }, rulesNone);
-        assertEqual([ "distribute-in-cluster" ], result.plan.rules, query);
-      });
-    },
-
-    ////////////////////////////////////////////////////////////////////////////////
-    /// @brief test that rule does not fire when it is disabled but no other rule is
-    ////////////////////////////////////////////////////////////////////////////////
-    
-    testThisRuleDisabled : function () {
-      var queries = [ 
-        "FOR d IN " + cn1 + " RETURN d",
-        "LET A=1 LET B=2 FOR d IN " + cn1 + " RETURN d",
-        "LET A=1 LET B=2 FOR d IN " + cn1 + " LIMIT 10 RETURN d",
-        "FOR e in " + cn1 + " FOR d IN " + cn1 + " LIMIT 10 RETURN d"
-      ];
-
-      queries.forEach(function(query) {
-        var result = AQL_EXPLAIN(query, { }, thisRuleDisabled);
-        assertTrue(result.plan.rules.indexOf(ruleName) === -1, query);
-      });
-    },
 
     testThisRuleEnabled : function () {
       var queries = [ 
-        [ "FOR d IN " + cn1 + " RETURN d", 0],
-        [ "LET A=1 LET B=2 FOR d IN " + cn1 + " RETURN d" , 1],
-        [ "LET A=1 LET B=2 FOR d IN " + cn1 + " LIMIT 10 RETURN d", 2],
-        [ "FOR e in " + cn1 + " FOR d IN " + cn1 + " LIMIT 10 RETURN d", 3]
+        [ "FOR d IN " + cn1 + " FILTER d.Hallo < 5 REMOVE d in " + cn1, 0],
+        [ "FOR d IN " + cn1 + " FILTER d.Hallo < 5 REMOVE d._key in " + cn1, 1]
       ];
 
-      var expectedRules = [ "distribute-in-cluster", "remove-unnecessary-remote-scatter"];
-      var expectedNodes = [ 
-          ["SingletonNode", "EnumerateCollectionNode",
-           "RemoteNode", "GatherNode", "ReturnNode"],
-          ["SingletonNode", "EnumerateCollectionNode",
-           "RemoteNode", "GatherNode", "ReturnNode"],
-          ["SingletonNode", "EnumerateCollectionNode", "RemoteNode",
-           "GatherNode", "LimitNode", "ReturnNode" ],
-          ["SingletonNode", "EnumerateCollectionNode", "RemoteNode",
-           "GatherNode", "ScatterNode", "RemoteNode", "EnumerateCollectionNode",
-           "RemoteNode", "GatherNode", "LimitNode", "ReturnNode"] ];
+      var expectedRules = [ "distribute-in-cluster", 
+                            "distribute-filtercalc-to-cluster", 
+                            "undistribute-remove-after-enum-coll"];
+
+      var expectedNodes = [ ["SingletonNode", 
+                             "ScatterNode", 
+                             "RemoteNode", 
+                             "EnumerateCollectionNode", 
+                             "CalculationNode", 
+                             "FilterNode", 
+                             "RemoveNode", 
+                             "RemoteNode", 
+                             "GatherNode"],
+                            ["SingletonNode", 
+                             "ScatterNode", 
+                             "RemoteNode", 
+                             "EnumerateCollectionNode", 
+                             "CalculationNode", 
+                             "FilterNode", 
+                             "CalculationNode", 
+                             "RemoveNode", 
+                             "RemoteNode", 
+                             "GatherNode"]];
 
       queries.forEach(function(query) {
         var result = AQL_EXPLAIN(query[0], { }, thisRuleEnabled);
         assertEqual(expectedRules, result.plan.rules, query);
         assertEqual(expectedNodes[query[1]], explain(result), query);
+      });
+    },
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// @brief test that rule does not fire when it is not enabled 
+    ////////////////////////////////////////////////////////////////////////////////
+    
+    testNoRules : function () {
+      var queries = [ 
+         ["FOR d IN " + cn1 + " FILTER d.Hallo < 5 REMOVE d in " + cn1, 0], 
+         ["FOR d IN " + cn1 + " FILTER d.Hallo < 5 REMOVE d._key in " + cn1, 1]
+      ];
+
+      var expectedRules = [ "distribute-in-cluster", 
+                            "distribute-filtercalc-to-cluster" ];
+
+      var expectedNodes = [ ["SingletonNode", 
+                             "ScatterNode", 
+                             "RemoteNode", 
+                             "EnumerateCollectionNode", 
+                             "CalculationNode", 
+                             "FilterNode",
+                             "RemoteNode", 
+                             "GatherNode",
+                             "ScatterNode", 
+                             "RemoteNode", 
+                             "RemoveNode", 
+                             "RemoteNode", 
+                             "GatherNode"],
+                            [ "SingletonNode", 
+                              "ScatterNode", 
+                              "RemoteNode", 
+                              "EnumerateCollectionNode", 
+                              "CalculationNode", 
+                              "FilterNode", 
+                              "CalculationNode", 
+                              "RemoteNode", 
+                              "GatherNode", 
+                              "ScatterNode", 
+                              "RemoteNode", 
+                              "RemoveNode", 
+                              "RemoteNode", 
+                              "GatherNode"] ];
+
+      queries.forEach(function(query) {
+        var result = AQL_EXPLAIN(query[0], { }, rulesNone);
+        assertEqual(expectedRules, result.plan.rules, query[0]);
+        assertEqual(expectedNodes[query[1]], explain(result), query[0]);
       });
     },
 
@@ -164,20 +191,18 @@ function optimizerRuleTestSuite () {
 
     testRuleHasEffect : function () {
       var queries = [ 
-        "FOR d IN " + cn1 + " RETURN d",
-        "FOR d IN " + cn2 + " RETURN d"
-      ];
+        "FOR d IN " + cn1 + " FILTER d.Hallo < 5 FILTER d.Hallo > 1 REMOVE d in " + cn1,
+        "FOR d IN " + cn1 + " FILTER d.Hallo < 5 FILTER d.Hallo > 1 REMOVE d._key in " + cn1,
+        "FOR d IN " + cn1 + " FILTER d.Hallo < 5 FILTER d.Hallo > 1 REMOVE d.blah in " + cn1,
+        "FOR d IN " + cn2 + " FILTER d.Hallo < 5 FILTER d.Hallo > 1 REMOVE d in " + cn2,
+        "FOR d IN " + cn2 + " FILTER d.Hallo < 5 FILTER d.Hallo > 1 REMOVE d._key in " + cn2,
+        "FOR d IN " + cn2 + " FILTER d.Hallo < 5 FILTER d.Hallo > 1 REMOVE d.blah in " + cn2];
 
       queries.forEach(function(query) {
-        var resultEnabled  = AQL_EXPLAIN(query, { }, thisRuleEnabled);
-        var resultDisabled = AQL_EXPLAIN(query, { }, thisRuleDisabled);
-        assertTrue(resultEnabled.plan.rules.indexOf(ruleName)  !== -1, query);
-        assertTrue(resultDisabled.plan.rules.indexOf(ruleName) === -1, query);
-        
-        // the test doesn't run with the below . . .
-        //resultDisabled = AQL_EXECUTE(query, { }, thisRuleDisabled).json;
-        //resultEnabled  = AQL_EXECUTE(query, { }, thisRuleEnabled).json;
-        //assertEqual(resultDisabled, resultEnabled, query);
+        var result1 = AQL_EXPLAIN(query, { }, thisRuleEnabled);
+        var result2 = AQL_EXPLAIN(query, { }, rulesAll);
+        assertTrue(result1.plan.rules.indexOf(ruleName) !== -1, query);
+        assertTrue(result2.plan.rules.indexOf(ruleName) !== -1, query);
       });
     },
   };

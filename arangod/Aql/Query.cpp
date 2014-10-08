@@ -233,18 +233,42 @@ Query::~Query () {
 ////////////////////////////////////////////////////////////////////////////////
 
 Query* Query::clone (QueryPart part) {
-  Query* theClone = new Query(_vocbase,
-                              _queryString,
-                              _queryLength,
-                              nullptr,
-                              _options,
-                              part);
+  TRI_json_t* options = nullptr;
 
-  if (_plan != nullptr) {
-    theClone->_plan = _plan->clone(*theClone);
+  if (_options != nullptr) {
+    options = TRI_CopyJson(TRI_UNKNOWN_MEM_ZONE, _options);
   }
 
-  return theClone;
+  std::unique_ptr<Query> clone;
+
+  try {
+    clone.reset(new Query(_vocbase,
+                          _queryString,
+                          _queryLength,
+                          nullptr,
+                          options,
+                          part));
+  }
+  catch (...) {
+    if (options != nullptr) {
+      TRI_FreeJson(TRI_UNKNOWN_MEM_ZONE, options);
+    }
+    throw;
+  }
+
+  if (_plan != nullptr) {
+    clone->_plan = _plan->clone(*clone);
+   
+    // clone all variables 
+    for (auto it : _ast->variables()->variables(true)) {
+      auto var = _ast->variables()->getVariable(it.first);
+      TRI_ASSERT(var != nullptr);
+      clone->ast()->variables()->createVariable(var);
+    }
+  }
+
+  clone->_trx = _trx;
+  return clone.release();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -361,15 +385,17 @@ QueryResult Query::prepare (QueryRegistry* registry) {
       // std::cout << "AST: " << triagens::basics::JsonHelper::toString(parser->ast()->toJson(TRI_UNKNOWN_MEM_ZONE, false)) << "\n";
     }
 
-    // create the transaction object, but do not start it yet
-    std::unique_ptr<AQL_TRANSACTION_V8> trx(new AQL_TRANSACTION_V8(_vocbase, _collections.collections()));
+    std::shared_ptr<AQL_TRANSACTION_V8> trx(new AQL_TRANSACTION_V8(_vocbase, _collections.collections()));
+    _trx = trx;
+
+    bool planRegisters;
 
     if (_queryString != nullptr) {
       // we have an AST
-      int res = trx->begin();
+      int res = _trx->begin();
 
       if (res != TRI_ERROR_NO_ERROR) {
-        return transactionError(res, *trx);
+        return transactionError(res);
       }
 
       enterState(PLAN_INSTANCIATION);
@@ -378,21 +404,31 @@ QueryResult Query::prepare (QueryRegistry* registry) {
         // oops
         return QueryResult(TRI_ERROR_INTERNAL, "failed to create query execution engine");
       }
+
+      // Run the query optimiser:
+      enterState(PLAN_OPTIMIZATION);
+      triagens::aql::Optimizer opt(maxNumberOfPlans());
+      // getenabled/disabled rules
+      opt.createPlans(plan.release(), getRulesFromOptions());
+      // Now plan and all derived plans belong to the optimizer
+      plan.reset(opt.stealBest()); // Now we own the best one again
+      planRegisters = true;
     }
     else {
       enterState(PLAN_INSTANCIATION);
       ExecutionPlan::getCollectionsFromJson(parser->ast(), _queryJson);
 
+      parser->ast()->variables()->fromJson(_queryJson);
       // creating the plan may have produced some collections
       // we need to add them to the transaction now (otherwise the query will fail)
-      int res = trx->addCollectionList(_collections.collections());
+      int res = _trx->addCollectionList(_collections.collections());
       
       if (res == TRI_ERROR_NO_ERROR) {
-        res = trx->begin();
+        res = _trx->begin();
       }
 
       if (res != TRI_ERROR_NO_ERROR) {
-        return transactionError(res, *trx);
+        return transactionError(res);
       }
 
       // we have an execution plan in JSON format
@@ -401,16 +437,11 @@ QueryResult Query::prepare (QueryRegistry* registry) {
         // oops
         return QueryResult(TRI_ERROR_INTERNAL);
       }
+
+      // std::cout << "GOT PLAN:\n" << plan.get()->toJson(parser->ast(), TRI_UNKNOWN_MEM_ZONE, true).toString() << "\n\n";
+      planRegisters = false;
     }
 
-    // Run the query optimiser:
-    enterState(PLAN_OPTIMIZATION);
-    triagens::aql::Optimizer opt(maxNumberOfPlans());
-    // get enabled/disabled rules
-    opt.createPlans(plan.release(), getRulesFromOptions());  
-
-    // Now plan and all derived plans belong to the optimizer
-    plan.reset(opt.stealBest()); // Now we own the best one again
     TRI_ASSERT(plan.get() != nullptr);
     /* // for debugging of serialisation/deserialisation . . . * /
     auto JsonPlan = plan->toJson(parser->ast(),TRI_UNKNOWN_MEM_ZONE, true);
@@ -426,13 +457,12 @@ QueryResult Query::prepare (QueryRegistry* registry) {
     TRI_ASSERT(otherJsonString == JsonString); */
 
     enterState(EXECUTION);
-    ExecutionEngine* engine(ExecutionEngine::instanciateFromPlan(registry, trx.get(), this, plan.get()));
+    ExecutionEngine* engine(ExecutionEngine::instanciateFromPlan(registry, this, plan.get(), planRegisters));
 
     // If all went well so far, then we keep _plan, _parser and _trx and
     // return:
     _plan = plan.release();
     _parser = parser.release();
-    _trx = trx.release();
     _engine = engine;
     return QueryResult();
   }
@@ -459,13 +489,13 @@ QueryResult Query::prepare (QueryRegistry* registry) {
 ////////////////////////////////////////////////////////////////////////////////
 
 QueryResult Query::execute (QueryRegistry* registry) {
-  QueryResult res = prepare(registry);
-  if (res.code != TRI_ERROR_NO_ERROR) {
-    return res;
-  }
-
   // Now start the execution:
   try {
+    QueryResult res = prepare(registry);
+    if (res.code != TRI_ERROR_NO_ERROR) {
+      return res;
+    }
+
     triagens::basics::Json json(triagens::basics::Json::List, 16);
     triagens::basics::Json stats;
 
@@ -481,7 +511,7 @@ QueryResult Query::execute (QueryRegistry* registry) {
         AqlValue val = value->getValue(i, 0);
 
         if (! val.isEmpty()) {
-          json.add(val.toJson(_trx, doc)); 
+          json.add(val.toJson(trx(), doc)); 
         }
       }
       delete value;
@@ -524,35 +554,6 @@ QueryResult Query::execute (QueryRegistry* registry) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief close transaction to suspend query
-////////////////////////////////////////////////////////////////////////////////
-
-#if 0
-int Query::closeTransaction () {
-  TRI_ASSERT(_trx != nullptr);
-  _trx->commit();
-  delete _trx;
-  _trx = nullptr;
-  return TRI_ERROR_NO_ERROR;
-}
-#endif
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief reopen transaction after suspend of query
-////////////////////////////////////////////////////////////////////////////////
-
-#if 0
-int Query::reOpenTransaction () {
-  TRI_ASSERT(_trx == nullptr);
-  _trx = new AQL_TRANSACTION_V8(_vocbase, _collections.collections());
-  if (_trx == nullptr) {
-    return TRI_ERROR_INTERNAL;
-  }
-  return _trx->begin();
-}
-#endif 
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief parse an AQL query
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -590,13 +591,14 @@ QueryResult Query::explain () {
     // std::cout << "AST: " << triagens::basics::JsonHelper::toString(parser.ast()->toJson(TRI_UNKNOWN_MEM_ZONE)) << "\n";
 
     // create the transaction object, but do not start it yet
-    AQL_TRANSACTION_V8 trx(_vocbase, _collections.collections());
+    std::shared_ptr<AQL_TRANSACTION_V8> trx(new AQL_TRANSACTION_V8(_vocbase, _collections.collections()));
+    _trx = trx;
 
     // we have an AST
-    int res = trx.begin();
+    int res = _trx->begin();
 
     if (res != TRI_ERROR_NO_ERROR) {
-      return transactionError(res, trx);
+      return transactionError(res);
     }
 
     enterState(PLAN_INSTANCIATION);
@@ -612,7 +614,7 @@ QueryResult Query::explain () {
     // get enabled/disabled rules
     opt.createPlans(plan, getRulesFromOptions());
       
-    trx.commit();
+    _trx->commit();
 
     enterState(FINALIZATION);
       
@@ -625,6 +627,8 @@ QueryResult Query::explain () {
       for (auto it : plans) {
         TRI_ASSERT(it != nullptr);
 
+        it->findVarUsage();
+        it->planRegisters();
         out.add(it->toJson(parser.ast(), TRI_UNKNOWN_MEM_ZONE, verbosePlans()));
       }
       
@@ -634,7 +638,8 @@ QueryResult Query::explain () {
       // Now plan and all derived plans belong to the optimizer
       plan = opt.stealBest(); // Now we own the best one again
       TRI_ASSERT(plan != nullptr);
-
+      plan->findVarUsage();
+      plan->planRegisters();
       result.json = plan->toJson(parser.ast(), TRI_UNKNOWN_MEM_ZONE, verbosePlans()).steal(); 
 
       delete plan;
@@ -765,11 +770,10 @@ double Query::getNumericOption (char const* option, double defaultValue) const {
 /// @brief neatly format transaction error to the user.
 ////////////////////////////////////////////////////////////////////////////////
 
-QueryResult Query::transactionError (int errorCode, 
-                                     AQL_TRANSACTION_V8 const& trx) const {
+QueryResult Query::transactionError (int errorCode) const {
   std::string err(TRI_errno_string(errorCode));
 
-  auto detail = trx.getErrorData();
+  auto detail = _trx->getErrorData();
   if (detail.size() > 0) {
     err += std::string(" (") + detail + std::string(")");
   }
@@ -848,12 +852,11 @@ void Query::cleanupPlanAndEngine () {
     _engine = nullptr;
   }
 
-  if (_trx != nullptr) {
-    if (_part == PART_MAIN) {
-      delete _trx;
-      _trx = nullptr;
-    }
+  if (_trx.get() != nullptr) {
+    // TODO: this doesn't unblock the collection on the coordinator. Y?
+    _trx->abort();
   }
+  _trx.reset();
 
   if (_parser != nullptr) {
     delete _parser;

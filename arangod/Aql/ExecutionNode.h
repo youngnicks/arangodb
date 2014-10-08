@@ -63,6 +63,7 @@ namespace triagens {
 /// @brief pairs, consisting of variable and sort direction
 /// (true = ascending | false = descending)
 ////////////////////////////////////////////////////////////////////////////////
+
     typedef std::vector<std::pair<Variable const*, bool>> SortElementVector;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -99,7 +100,8 @@ namespace triagens {
           REPLACE                 = 16,
           UPDATE                  = 17,
           RETURN                  = 18,
-          NORESULTS               = 19
+          NORESULTS               = 19,
+          DISTRIBUTE              = 20
         };
 
 // -----------------------------------------------------------------------------
@@ -218,7 +220,7 @@ namespace triagens {
               reverse(false) {
           }
 
-          TRI_index_t const* index;        // The index concerned; if null, this is a nonmatch.
+          Index const* index;              // The index concerned; if null, this is a nonmatch.
           std::vector<MatchType> matches;  // qualification of the attrs match quality
           bool doesMatch;                  // do all criteria match?
           bool reverse;                    // reverse index scan required
@@ -226,7 +228,7 @@ namespace triagens {
 
         typedef std::vector<std::pair<std::string, bool>> IndexMatchVec;
 
-        static IndexMatch CompareIndex (TRI_index_t const* idx,
+        static IndexMatch CompareIndex (Index const* idx,
                                         IndexMatchVec const& attrs);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -338,8 +340,17 @@ namespace triagens {
 
         virtual ExecutionNode* clone (ExecutionPlan* plan,
                                       bool withDependencies,
-                                      bool withProperties) const = 0;   
+                                      bool withProperties) const = 0;
+        
           // make class abstract
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief execution Node clone utility to be called by derives
+////////////////////////////////////////////////////////////////////////////////
+        void CloneHelper (ExecutionNode *Other,
+                          ExecutionPlan* plan,
+                          bool withDependencies,
+                          bool withProperties) const;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief helper for cloning, use virtual clone methods for dependencies
@@ -347,21 +358,7 @@ namespace triagens {
 
         void cloneDependencies (ExecutionPlan* plan,
                                 ExecutionNode* theClone,
-                                bool withProperties) const {
-          auto it = _dependencies.begin();
-          while (it != _dependencies.end()) {
-            auto c = (*it)->clone(plan, true, withProperties);
-            try {
-              c->_parents.push_back(theClone);
-              theClone->_dependencies.push_back(c);
-            }
-            catch (...) {
-              delete c;
-              throw;
-            }
-            ++it;
-          }
-        }
+                                bool withProperties) const;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief convert to a string, basically for debugging purposes
@@ -504,12 +501,14 @@ namespace triagens {
 ////////////////////////////////////////////////////////////////////////////////
 
         struct VarInfo {
-          unsigned int const depth;
-          RegisterId const registerId;
+          unsigned int depth;
+          RegisterId registerId;
 
           VarInfo () = delete;
-          VarInfo (int depth, int registerId)
+          VarInfo (int depth, RegisterId registerId)
             : depth(depth), registerId(registerId) {
+    
+            TRI_ASSERT(registerId < MaxRegisterId);
           }
         };
 
@@ -544,6 +543,8 @@ namespace triagens {
             nrRegsHere.push_back(0);
             nrRegs.push_back(0);
           };
+          
+          void clear ();
 
           void setSharedPtr (shared_ptr<VarOverview>* shared) {
             me = shared;
@@ -560,19 +561,22 @@ namespace triagens {
 
           virtual void after (ExecutionNode *eb);
 
+          VarOverview* clone(ExecutionPlan* plan);
+
         };
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief static analysis
 ////////////////////////////////////////////////////////////////////////////////
 
-        void staticAnalysis (ExecutionNode* super = nullptr);
+        void planRegisters (ExecutionNode* super = nullptr);
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief get varOverview
 ////////////////////////////////////////////////////////////////////////////////
 
         VarOverview const* getVarOverview () const {
+          TRI_ASSERT(_varOverview.get() != nullptr);
           return _varOverview.get();
         }
 
@@ -628,7 +632,7 @@ namespace triagens {
 /// @brief set regs to be deleted
 ////////////////////////////////////////////////////////////////////////////////
 
-        void setRegsToClear (std::unordered_set<RegisterId>& toClear) {
+        void setRegsToClear (std::unordered_set<RegisterId> const& toClear) {
           _regsToClear = toClear;
         }
 
@@ -694,13 +698,13 @@ namespace triagens {
         ExecutionPlan* _plan;
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief info about variables, filled in by staticAnalysis
+/// @brief info about variables, filled in by planRegisters
 ////////////////////////////////////////////////////////////////////////////////
 
         std::shared_ptr<VarOverview> _varOverview;
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief depth of the current frame, will be filled in by staticAnalysis
+/// @brief depth of the current frame, will be filled in by planRegisters
 ////////////////////////////////////////////////////////////////////////////////
 
         int _depth;
@@ -712,7 +716,15 @@ namespace triagens {
 ////////////////////////////////////////////////////////////////////////////////
 
         std::unordered_set<RegisterId> _regsToClear;
-
+   
+      public:
+       
+////////////////////////////////////////////////////////////////////////////////
+/// @brief maximum register id that can be assigned.
+/// this is used for assertions
+////////////////////////////////////////////////////////////////////////////////
+    
+        static RegisterId const MaxRegisterId;
     };
 
 // -----------------------------------------------------------------------------
@@ -764,9 +776,9 @@ namespace triagens {
                                       bool withDependencies,
                                       bool withProperties) const {
           auto c = new SingletonNode(plan, _id);
-          if (withDependencies) {
-            cloneDependencies(plan, c, withProperties);
-          }
+
+          CloneHelper (c, plan, withDependencies, withProperties);
+
           return static_cast<ExecutionNode*>(c);
         }
 
@@ -865,7 +877,7 @@ namespace triagens {
 /// attributes passed)
 ////////////////////////////////////////////////////////////////////////////////
 
-        size_t getUsableFieldsOfIndex (TRI_index_t const* idx,
+        size_t getUsableFieldsOfIndex (Index const* idx,
                                        std::unordered_set<std::string> const&) const;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -873,7 +885,8 @@ namespace triagens {
 ////////////////////////////////////////////////////////////////////////////////
 
         void getIndexesForIndexRangeNode (std::unordered_set<std::string> const& attrs, 
-           std::vector<TRI_index_t*>& idxs, std::vector<size_t>& prefixes) const;
+                                          std::vector<Index*>& idxs, 
+                                          std::vector<size_t>& prefixes) const;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief get vector of skiplist indices which match attrs in sequence.
@@ -1064,7 +1077,7 @@ namespace triagens {
                         TRI_vocbase_t* vocbase, 
                         Collection const* collection,
                         Variable const* outVariable,
-                        TRI_index_t const* index, 
+                        Index const* index, 
                         std::vector<std::vector<RangeInfo>> const& ranges,
                         bool reverse)
           : ExecutionNode(plan, id), 
@@ -1189,7 +1202,7 @@ namespace triagens {
 /// @brief the index
 ////////////////////////////////////////////////////////////////////////////////
 
-        TRI_index_t const* _index;
+        Index const* _index;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief the range info
@@ -1266,9 +1279,9 @@ namespace triagens {
                                       bool withDependencies,
                                       bool withProperties) const {
           auto c = new LimitNode(plan, _id, _offset, _limit);
-          if (withDependencies) {
-            cloneDependencies(plan, c, withProperties);
-          }
+
+          CloneHelper (c, plan, withDependencies, withProperties);
+
           return static_cast<ExecutionNode*>(c);
         }
 
@@ -1780,9 +1793,9 @@ namespace triagens {
                                       bool withDependencies,
                                       bool withProperties) const {
           auto c = new SortNode(plan, _id, _elements, _stable);
-          if (withDependencies) {
-            cloneDependencies(plan, c, withProperties);
-          }
+
+          CloneHelper (c, plan, withDependencies, withProperties);
+
           return static_cast<ExecutionNode*>(c);
         }
 
@@ -2685,9 +2698,9 @@ namespace triagens {
                                       bool withDependencies,
                                       bool withProperties) const {
           auto c = new NoResultsNode(plan, _id);
-          if (withDependencies) {
-            cloneDependencies(plan, c, withProperties);
-          }
+
+          CloneHelper (c, plan, withDependencies, withProperties);
+
           return static_cast<ExecutionNode*>(c);
         }
 
@@ -2762,9 +2775,9 @@ namespace triagens {
                                       bool withDependencies,
                                       bool withProperties) const {
           auto c = new RemoteNode(plan, _id, _vocbase, _collection, _server, _ownName, _queryId);
-          if (withDependencies) {
-            cloneDependencies(plan, c, withProperties);
-          }
+
+          CloneHelper (c, plan, withDependencies, withProperties);
+
           return static_cast<ExecutionNode*>(c);
         }
 
@@ -2943,9 +2956,9 @@ namespace triagens {
                                       bool withDependencies,
                                       bool withProperties) const {
           auto c = new ScatterNode(plan, _id, _vocbase, _collection);
-          if (withDependencies) {
-            cloneDependencies(plan, c, withProperties);
-          }
+
+          CloneHelper(c, plan, withDependencies, withProperties);
+
           return static_cast<ExecutionNode*>(c);
         }
 
@@ -2957,6 +2970,107 @@ namespace triagens {
           return 1;
         }
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief return the database
+////////////////////////////////////////////////////////////////////////////////
+
+        TRI_vocbase_t* vocbase () const {
+          return _vocbase;
+        }
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief return the collection
+////////////////////////////////////////////////////////////////////////////////
+
+        Collection const* collection () const {
+          return _collection;
+        }
+
+      private:
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief the underlying database
+////////////////////////////////////////////////////////////////////////////////
+                                 
+        TRI_vocbase_t* _vocbase;
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief the underlying collection
+////////////////////////////////////////////////////////////////////////////////
+
+        Collection const* _collection;
+
+    };
+
+// -----------------------------------------------------------------------------
+// --SECTION--                                              class DistributeNode
+// -----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief class DistributeNode
+////////////////////////////////////////////////////////////////////////////////
+
+    class DistributeNode : public ExecutionNode {
+      
+      friend class ExecutionBlock;
+      friend class DistributeBlock;
+      
+////////////////////////////////////////////////////////////////////////////////
+/// @brief constructor with an id
+////////////////////////////////////////////////////////////////////////////////
+
+      public:
+ 
+        DistributeNode (ExecutionPlan* plan, 
+                        size_t id,
+                        TRI_vocbase_t* vocbase,
+                        Collection const* collection)
+          : ExecutionNode(plan, id),
+            _vocbase(vocbase),
+            _collection(collection) {
+        }
+
+        DistributeNode (ExecutionPlan*, 
+                        triagens::basics::Json const& base);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief return the type of the node
+////////////////////////////////////////////////////////////////////////////////
+
+        NodeType getType () const override {
+          return DISTRIBUTE;
+        }
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief export to JSON
+////////////////////////////////////////////////////////////////////////////////
+
+        virtual void toJsonHelper (triagens::basics::Json&,
+                                   TRI_memory_zone_t*,
+                                   bool) const override;
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief clone ExecutionNode recursively
+////////////////////////////////////////////////////////////////////////////////
+
+        virtual ExecutionNode* clone (ExecutionPlan* plan,
+                                      bool withDependencies,
+                                      bool withProperties) const {
+          auto c = new DistributeNode(plan, _id, _vocbase, _collection);
+
+          CloneHelper (c, plan, withDependencies, withProperties);
+
+          return static_cast<ExecutionNode*>(c);
+        }
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief the cost of a Distribute node is 1
+////////////////////////////////////////////////////////////////////////////////
+        
+        double estimateCost () {
+          return 1;
+        }
+      
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief return the database
 ////////////////////////////////////////////////////////////////////////////////
@@ -3045,9 +3159,9 @@ namespace triagens {
                                       bool withDependencies,
                                       bool withProperties) const {
           auto c = new GatherNode(plan, _id, _vocbase, _collection);
-          if (withDependencies) {
-            cloneDependencies(plan, c, withProperties);
-          }
+
+          CloneHelper (c, plan, withDependencies, withProperties);
+
           return static_cast<ExecutionNode*>(c);
         }
 

@@ -28,7 +28,6 @@
 #include "Aql/OptimizerRules.h"
 #include "Aql/ExecutionEngine.h"
 #include "Aql/ExecutionNode.h"
-#include "Aql/Indexes.h"
 #include "Aql/Variable.h"
 
 using namespace triagens::aql;
@@ -732,6 +731,7 @@ class FilterToEnumCollFinder : public WalkerWorker<ExecutionNode> {
         }
         case EN::AGGREGATE:
         case EN::SCATTER:
+        case EN::DISTRIBUTE:
         case EN::GATHER:
         case EN::REMOTE:
           // in these cases we simply ignore the intermediate nodes, note
@@ -843,7 +843,7 @@ class FilterToEnumCollFinder : public WalkerWorker<ExecutionNode> {
                 }
               }
               else {
-                std::vector<TRI_index_t*> idxs;
+                std::vector<Index*> idxs;
                 std::vector<size_t> prefixes;
                 // {idxs.at(i)->_fields[0]..idxs.at(i)->_fields[prefixes.at(i)]}
                 // is a subset of <attrs>
@@ -866,7 +866,7 @@ class FilterToEnumCollFinder : public WalkerWorker<ExecutionNode> {
                   auto idx = idxs.at(i);
                   TRI_ASSERT(idx != nullptr);
                
-                  if (idx->_type == TRI_IDX_TYPE_PRIMARY_INDEX) {
+                  if (idx->type == TRI_IDX_TYPE_PRIMARY_INDEX) {
                     bool handled = false;
                     auto range = map->find(std::string(TRI_VOC_ATTRIBUTE_ID));
                 
@@ -893,9 +893,9 @@ class FilterToEnumCollFinder : public WalkerWorker<ExecutionNode> {
                       }
                     }
                   }
-                  else if (idx->_type == TRI_IDX_TYPE_HASH_INDEX) {
-                    for (size_t j = 0; j < idx->_fields._length; j++) {
-                      auto range = map->find(std::string(idx->_fields._buffer[j]));
+                  else if (idx->type == TRI_IDX_TYPE_HASH_INDEX) {
+                    for (size_t j = 0; j < idx->fields.size(); j++) {
+                      auto range = map->find(idx->fields[j]);
                    
                       if (! range->second.is1ValueRangeInfo()) {
                         rangeInfo.at(0).clear();   // not usable
@@ -904,7 +904,7 @@ class FilterToEnumCollFinder : public WalkerWorker<ExecutionNode> {
                       rangeInfo.at(0).push_back(range->second);
                     }
                   }
-                  else if (idx->_type == TRI_IDX_TYPE_EDGE_INDEX) {
+                  else if (idx->type == TRI_IDX_TYPE_EDGE_INDEX) {
                     bool handled = false;
                     auto range = map->find(std::string(TRI_VOC_ATTRIBUTE_FROM));
                 
@@ -931,14 +931,14 @@ class FilterToEnumCollFinder : public WalkerWorker<ExecutionNode> {
                       }
                     }
                   }
-                  else if (idx->_type == TRI_IDX_TYPE_SKIPLIST_INDEX) {
+                  else if (idx->type == TRI_IDX_TYPE_SKIPLIST_INDEX) {
                     size_t j = 0;
-                    auto range = map->find(std::string(idx->_fields._buffer[0]));
+                    auto range = map->find(idx->fields[0]);
                     TRI_ASSERT(range != map->end());
                     rangeInfo.at(0).push_back(range->second);
                     bool equality = range->second.is1ValueRangeInfo();
                     while (++j < prefixes.at(i) && equality) {
-                      range = map->find(std::string(idx->_fields._buffer[j]));
+                      range = map->find(idx->fields[j]);
                       rangeInfo.at(0).push_back(range->second);
                       equality = equality && range->second.is1ValueRangeInfo();
                     }
@@ -1409,6 +1409,7 @@ class SortToIndexNode : public WalkerWorker<ExecutionNode> {
     case EN::RETURN:
     case EN::NORESULTS:
     case EN::SCATTER:
+    case EN::DISTRIBUTE:
     case EN::GATHER:
     case EN::REMOTE:
     case EN::ILLEGAL:
@@ -1667,12 +1668,14 @@ int triagens::aql::distributeInCluster (Optimizer* opt,
       }
 
       // insert a scatter node
-      ExecutionNode* scatterNode = new ScatterNode(plan, plan->nextId(), vocbase, collection);
+      ExecutionNode* scatterNode = new ScatterNode(plan, plan->nextId(),
+          vocbase, collection);
       plan->registerNode(scatterNode);
       scatterNode->addDependency(deps[0]);
 
       // insert a remote node
-      ExecutionNode* remoteNode = new RemoteNode(plan, plan->nextId(), vocbase, collection, "", "", "");
+      ExecutionNode* remoteNode = new RemoteNode(plan, plan->nextId(), vocbase,
+          collection, "", "", "");
       plan->registerNode(remoteNode);
       remoteNode->addDependency(scatterNode);
         
@@ -1686,7 +1689,8 @@ int triagens::aql::distributeInCluster (Optimizer* opt,
       remoteNode->addDependency(node);
       
       // insert a gather node 
-      ExecutionNode* gatherNode = new GatherNode(plan, plan->nextId(), vocbase, collection);
+      ExecutionNode* gatherNode = new GatherNode(plan, plan->nextId(), vocbase,
+          collection);
       plan->registerNode(gatherNode);
       gatherNode->addDependency(remoteNode);
 
@@ -1751,6 +1755,7 @@ int triagens::aql::distributeFilternCalcToCluster (Optimizer* opt,
         case EN::RETURN:
         case EN::NORESULTS:
         case EN::SCATTER:
+        case EN::DISTRIBUTE:
         case EN::GATHER:
         case EN::ILLEGAL:
           //do break
@@ -1837,6 +1842,7 @@ int triagens::aql::distributeSortToCluster (Optimizer* opt,
         case EN::RETURN:
         case EN::NORESULTS:
         case EN::SCATTER:
+        case EN::DISTRIBUTE:
         case EN::GATHER:
         case EN::ILLEGAL:
           //do break
@@ -1875,52 +1881,230 @@ int triagens::aql::distributeSortToCluster (Optimizer* opt,
   return TRI_ERROR_NO_ERROR;
 }
 
-class RemoveToSingletonViaCalcOnlyFinder: public WalkerWorker<ExecutionNode> {
-  ExecutionNode* _scatter;
+////////////////////////////////////////////////////////////////////////////////
+/// @brief try to get rid of a RemoteNode->ScatterNode combination which has
+/// only a SingletonNode and possibly some CalculationNodes as dependencies
+////////////////////////////////////////////////////////////////////////////////
+
+int triagens::aql::removeUnnecessaryRemoteScatter (Optimizer* opt, 
+                                                   ExecutionPlan* plan, 
+                                                   Optimizer::Rule const* rule) {
+  std::vector<ExecutionNode*> nodes
+    = plan->findNodesOfType(triagens::aql::ExecutionNode::REMOTE, true);
+  std::unordered_set<ExecutionNode*> toUnlink;
+
+  for (auto n : nodes) {
+    // check if the remote node is preceeded by a scatter node and any number of
+    // calculation and singleton nodes. if yes, remove remote and scatter
+
+    auto const& deps = n->getDependencies();
+    if (deps.size() != 1) {
+      continue;
+    }
+
+    if (deps[0]->getType() != EN::SCATTER) {
+      continue;
+    }
+
+    bool canOptimize = true;
+    auto node = deps[0];
+    while (node != nullptr) {
+      auto const& d = node->getDependencies();
+
+      if (d.size() != 1) {
+        break;
+      }
+
+      node = d[0];
+      if (node->getType() != EN::SINGLETON && 
+          node->getType() != EN::CALCULATION) {
+        // found some other node type...
+        // this disqualifies the optimization
+        canOptimize = false;
+        break;
+      }
+    }
+
+    if (canOptimize) {
+      toUnlink.insert(n);
+      toUnlink.insert(deps[0]);
+    }
+  }
+
+  if (! toUnlink.empty()) {
+    plan->unlinkNodes(toUnlink);
+    plan->findVarUsage();
+  }
+  
+  opt->addPlan(plan, rule->level, ! toUnlink.empty());
+
+  return TRI_ERROR_NO_ERROR;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// WalkerWorker for undistributeRemoveAfterEnumColl
+////////////////////////////////////////////////////////////////////////////////
+
+class RemoveToEnumCollFinder: public WalkerWorker<ExecutionNode> {
+  ExecutionPlan* _plan;
   std::unordered_set<ExecutionNode*>& _toUnlink;
+  bool _remove;
+  bool _scatter;
+  bool _gather;
+  EnumerateCollectionNode* _enumColl;
+  ExecutionNode* _setter;
+  const Variable* _variable;
+  ExecutionNode* _lastNode;
   
   public: 
-    RemoveToSingletonViaCalcOnlyFinder (std::unordered_set<ExecutionNode*>& toUnlink)
-      : _scatter(nullptr), 
-        _toUnlink(toUnlink){
+    RemoveToEnumCollFinder (ExecutionPlan* plan,
+                            std::unordered_set<ExecutionNode*>& toUnlink)
+      : _plan(plan),
+        _toUnlink(toUnlink),
+        _remove(false),
+        _scatter(false),
+        _gather(false),
+        _enumColl(nullptr),
+        _setter(nullptr),
+        _variable(nullptr), 
+        _lastNode(nullptr){
     };
 
-    ~RemoveToSingletonViaCalcOnlyFinder () {
+    ~RemoveToEnumCollFinder () {
     }
 
     bool before (ExecutionNode* en) {
       switch (en->getType()) {
-        case EN::SCATTER:{
-          if (_scatter != nullptr) {
-            _toUnlink.clear();
-            return true; // somehow found 2 scatter nodes . . .
-                         // FIXME is this even possible? 
+        case EN::REMOVE: {
+          TRI_ASSERT(_remove == false);
+            
+          // find the variable we are removing . . .
+          auto rn = static_cast<RemoveNode*>(en);
+          auto varsToRemove = rn->getVariablesUsedHere();
+
+          // remove nodes always have one input variable
+          TRI_ASSERT(varsToRemove.size() == 1);
+          _setter = _plan->getVarSetBy(varsToRemove[0]->id);
+          TRI_ASSERT(_setter != nullptr);
+          auto enumColl = _setter;
+
+          if (_setter->getType() == EN::CALCULATION) {
+            // this should be an attribute access for _key
+            auto cn = static_cast<CalculationNode*>(_setter);
+            if (!(cn->expression()->isAttributeAccess())) {
+              break; // abort . . .
+            }
+            // check the variable is the same as the remove variable
+            auto vars = cn->getVariablesSetHere();
+            if (vars.size() != 1 || vars[0]->id != varsToRemove[0]->id) {
+              break; // abort . . . 
+            }
+            // TODO check if we are accessing the _key attribute, maybe this is
+            // not required:
+            // AQL_EXPLAIN("FOR d IN docs FILTER d.Hallo < 5 REMOVE d.blah in docs")
+            // returns a plan but:
+            // AQL_EXECUTE("FOR d IN docs FILTER d.Hallo < 5 REMOVE d.blah in docs")
+            // doesn't work (in the non-cluster, neither work in the cluster)
+            
+            // set the _variable to the variable in the expression of this
+            // node and also define _enumColl
+            varsToRemove = cn->getVariablesUsedHere();
+            TRI_ASSERT(varsToRemove.size() == 1);
+            enumColl = _plan->getVarSetBy(varsToRemove[0]->id);
+            TRI_ASSERT(_setter != nullptr);
+          } 
+          
+          if (enumColl->getType() != EN::ENUMERATE_COLLECTION) {
+            break; // abort . . .
           }
-          _scatter = en;
-          _toUnlink.insert(en);
+
+          _enumColl = static_cast<EnumerateCollectionNode*>(enumColl);
+
+          if (_enumColl->collection() != rn->collection()) {
+            break; // abort . . . 
+          }
+           
+          _variable = varsToRemove[0];    // the variable we'll remove
+          _remove = true;
+          _lastNode = en;
           return false; // continue . . .
         }
-        case EN::REMOTE:
+        case EN::REMOTE: {
           _toUnlink.insert(en);
+          _lastNode = en;
           return false; // continue . . .
+        }
+        case EN::SCATTER: {
+          if (_scatter) { // met more than one scatter node
+            break;        // abort . . . 
+          }
+          _scatter = true;
+          _toUnlink.insert(en);
+          _lastNode = en;
+          return false; // continue . . .
+        }
+        case EN::GATHER: {
+          if (_gather) { // met more than one gather node
+            break;       // abort . . . 
+          }
+          _gather = true;
+          _toUnlink.insert(en);
+          _lastNode = en;
+          return false; // continue . . .
+        }
+        case EN::FILTER: { 
+          _lastNode = en;
+          return false; // continue . . .
+        }
         case EN::CALCULATION: {
-          _toUnlink.insert(en);
+          TRI_ASSERT(_setter != nullptr);
+          if (_setter->getType() == EN::CALCULATION && _setter->id() == en->id()) {
+            _lastNode = en;
+            return false; // continue . . .
+          }
+          if (_lastNode == nullptr || _lastNode->getType() != EN::FILTER) { 
+            // doesn't match the last filter node
+            break; // abort . . .
+          }
+          auto cn = static_cast<CalculationNode*>(en);
+          auto fn = static_cast<FilterNode*>(_lastNode);
+          // FIXME should the following be an assertion? I.e. can it
+          // ever happen?
+          
+          // check these as a Calc-Filter pair
+          if (cn->getVariablesSetHere()[0]->id
+              != fn->getVariablesUsedHere()[0]->id) {
+            break; // abort . . .
+          }
+
+          // check that we are filtering/calculating something with the variable
+          // we are to remove
+          auto varsUsedHere = cn->getVariablesUsedHere();
+         
+          if (varsUsedHere.size() != 1) {
+            break; //abort . . .
+          }
+          if (varsUsedHere[0]->id != _variable->id) {
+            break; // abort . . . FIXME is this the desired behaviour??
+          }
+          _lastNode = en;
           return false; // continue . . .
         }
-        case EN::SINGLETON: {
-          if (_scatter == nullptr) {
-            _toUnlink.clear();
-            return true; // found no scatter nodes, abort
+        case EN::ENUMERATE_COLLECTION: {
+          // check that we are enumerating the variable we are to remove
+          // and that we have already seen a remove node
+          TRI_ASSERT(_enumColl != nullptr);
+          if (en->id() != _enumColl->id()) {
+            break; // abort . . . FIXME is this the desired behaviour??
           }
-          return false;
+          return true; // reached the end!
         }
+        case EN::SINGLETON:
         case EN::ENUMERATE_LIST:
         case EN::SUBQUERY:        
-        case EN::FILTER: 
+        case EN::DISTRIBUTE:
         case EN::AGGREGATE:
-        case EN::GATHER:
         case EN::INSERT:
-        case EN::REMOVE:
         case EN::REPLACE:
         case EN::UPDATE:
         case EN::RETURN:
@@ -1928,35 +2112,33 @@ class RemoveToSingletonViaCalcOnlyFinder: public WalkerWorker<ExecutionNode> {
         case EN::ILLEGAL:
         case EN::LIMIT:           
         case EN::SORT:
-        case EN::INDEX_RANGE:
-        case EN::ENUMERATE_COLLECTION: {
-        // if we meet any of the above, then we abort . . .
+        case EN::INDEX_RANGE: {
+          // if we meet any of the above, then we abort . . .
         }
-      }
-      _toUnlink.clear();
-      return true;
     }
+    _toUnlink.clear();
+    return true;
+  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief try to get rid of a RemoteNode->ScatterNode combination which has
-/// only a SingletonNode and possibly some CalculationNodes as dependencies
+/// @brief recognises that a RemoveNode can be moved to the shards.
 ////////////////////////////////////////////////////////////////////////////////
 
-int triagens::aql::removeUnnecessaryRemoteScatter (Optimizer* opt, 
-                                  ExecutionPlan* plan, 
-                                  Optimizer::Rule const* rule) {
+int triagens::aql::undistributeRemoveAfterEnumColl (Optimizer* opt, 
+                                                    ExecutionPlan* plan, 
+                                                    Optimizer::Rule const* rule) {
   std::vector<ExecutionNode*> nodes
-    = plan->findNodesOfType(triagens::aql::ExecutionNode::REMOTE, true);
+    = plan->findNodesOfType(triagens::aql::ExecutionNode::REMOVE, true);
   std::unordered_set<ExecutionNode*> toUnlink;
 
   for (auto n : nodes) {
-    RemoveToSingletonViaCalcOnlyFinder finder(toUnlink);
+    RemoveToEnumCollFinder finder(plan, toUnlink);
     n->walk(&finder);
   }
 
   bool modified = false;
-  if (! toUnlink.empty()) {
+  if (!toUnlink.empty()) {
     plan->unlinkNodes(toUnlink);
     plan->findVarUsage();
     modified = true;
