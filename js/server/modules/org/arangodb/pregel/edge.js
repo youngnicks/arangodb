@@ -49,6 +49,7 @@ var Edge = function (parent) {
 };
 
 Edge.prototype._get = function (attr) {
+  // Optimize _id, _key, _from, _to
   return this.__parent.getValue(
     this.__parent.info[this.__position + SHARD],
     this.__parent.info[this.__position + KEY],

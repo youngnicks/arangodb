@@ -59,6 +59,7 @@ Vertex.prototype._loadVertex = function (id) {
 };
 
 Vertex.prototype._get = function (attr) {
+  // Optimize _id, _key
   return this.__parent.readValue(this.__current[SHARD], this.__current[KEY], attr);
 };
 
