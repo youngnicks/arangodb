@@ -99,6 +99,19 @@ function post_pregel (req, res) {
       actions.resultOk(req, res, actions.HTTP_OK, {executionNumber : result});
       break;
 
+      case ("message") :
+        body = JSON.parse(req.requestBody);
+        worker.receiveMessages(
+          body.execNr,
+          body.shard,
+          body.step,
+          body.sender,
+          body.worker,
+          body.msg
+        );
+        actions.resultOk(req, res, actions.HTTP_OK);
+      break;
+
     default:
       actions.resultUnsupported(req, res);
   }
