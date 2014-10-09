@@ -30,16 +30,16 @@
 
 var actions = require("org/arangodb/actions");
 var executionNumber = "executionNumber";
-var pregel = require("org/arangodb/pregel");
-var worker = pregel.Worker;
-var conductor = pregel.Conductor;
-
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief handle post requests
 ////////////////////////////////////////////////////////////////////////////////
 
 function post_pregel (req, res) {
+  var pregel = require("org/arangodb/pregel");
+  var worker = pregel.Worker;
+  var conductor = pregel.Conductor;
+
   var body;
   switch (req.suffix[0]) {
     case ("cleanup") :

@@ -57,6 +57,9 @@ var Buffer = require("buffer").Buffer;
 // extend prototypes for internally defined classes
 require("org/arangodb");
 
+// load the actions from the actions directory
+require("org/arangodb/actions").startup();
+
 // -----------------------------------------------------------------------------
 // --SECTION--                                                       END-OF-FILE
 // -----------------------------------------------------------------------------
