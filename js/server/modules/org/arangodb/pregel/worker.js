@@ -93,17 +93,20 @@ var receiveMessages = function(executionNumber, shard, step, senderName, senderW
   }
 };
 
-var createScope = function (execNr, wId, localShards, globalShards, inbox, algorithms) {
+var createScope = function (execNr, wId, inbox, algorithms) {
   var pregelMapping = new pregel.Mapping(execNr);
   var vertices = new pregel.VertexList(pregelMapping);
-  var i, shard;
+  var localShards = pregelMapping.getLocalShards();
+  var globalShards = pregelMapping.getGlobalShards();
+  var i, shard, index;
   for (i = 0; i < localShards.length; i++) {
-    shard = localShards[i];
-    vertices.addShardContent(shard, pregelMapping.findOriginalCollection(shard),
+    index = localShards[i];
+    shard = globalShards[index];
+    vertices.addShardContent(index, pregelMapping.findOriginalCollection(index),
       db[shard].NTH2(wId, WORKERS).documents);
   }
   var queue = new pregel.MessageQueue(execNr, vertices,
-    inbox, localShards, globalShards, WORKERS, algorithms.aggregator);
+    inbox, localShards, globalShards, WORKERS, pregelMapping, algorithms.aggregator);
   var scope = {
     executionNumber: execNr,
     vertices: vertices,
@@ -118,7 +121,7 @@ var createScope = function (execNr, wId, localShards, globalShards, inbox, algor
   return scope;
 };
 
-var algorithmForQueue = function (algorithms, localShards, globalShards, executionNumber, wIndex, inbox) {
+var algorithmForQueue = function (algorithms, executionNumber, wIndex, inbox) {
   return "(function() {"
     + "var pregel = require('org/arangodb/pregel');"
     + "var worker = pregel.Worker;"
@@ -130,8 +133,6 @@ var algorithmForQueue = function (algorithms, localShards, globalShards, executi
     + "var scope = worker.createScope("
     +   executionNumber + ","
     +   wIndex + ","
-    +   JSON.stringify(localShards) + ","
-    +   JSON.stringify(globalShards) + ","
     +   JSON.stringify(inbox) + ","
     +   "paramAlgo);"
     + "return worker.workerCode.bind(scope);"
@@ -150,8 +151,6 @@ var addTask = function (queue, stepNumber, globals) {
 
 // Functions that behave differently on local and cluster setups
 var sendMessages, createTaskQueue;
-
-
 
 if (!pregel.isClusterSetup()) {
   // Define code which has to be executed in a local setup
@@ -187,19 +186,18 @@ if (!pregel.isClusterSetup()) {
         step,
         "localhost",
         workerId,
-        queue._dump(shard, workerId)
+        queue._dump(i, workerId)
       );
     }
   };
 
 
-  createTaskQueue = function (executionNumber, localShards, globalShards, algorithms, globals, wIndex, inbox) {
+  createTaskQueue = function (executionNumber, algorithms, globals, wIndex, inbox) {
     KEYSPACE_CREATE("P_" + executionNumber, 2, true);
     KEY_SET("P_" + executionNumber, "done", 0);
     jobRegisterQueue.push("pregel-register-job", {
       queueName: getQueueName(executionNumber, wIndex),
-      worker: algorithmForQueue(algorithms, localShards, globalShards,
-        executionNumber, wIndex, inbox),
+      worker: algorithmForQueue(algorithms, executionNumber, wIndex, inbox),
       globals: globals
     });
   };
@@ -223,7 +221,7 @@ if (!pregel.isClusterSetup()) {
         step: step,
         sender: sender,
         worker: workerId,
-        msg: queue._dump(shard, workerId)
+        msg: queue._dump(i, workerId)
       };
       waitCounter++;
       ArangoClusterComm.asyncRequest("POST","shard:" + shard, dbName,
@@ -236,7 +234,7 @@ if (!pregel.isClusterSetup()) {
 
   };
  
-  createTaskQueue = function (executionNumber, localShards, globalShards, algorithms, globals, workerIndex, inbox) {
+  createTaskQueue = function (executionNumber, algorithms, globals, workerIndex, inbox) {
     // TODO hack for cluster setup. Foxx Queues not working...
     KEYSPACE_CREATE("P_" + executionNumber, 2, true);
     KEY_SET("P_" + executionNumber, "done", 0);
@@ -262,8 +260,7 @@ if (!pregel.isClusterSetup()) {
       },
       params: {
         queueName: getQueueName(executionNumber, workerIndex),
-        worker: algorithmForQueue(algorithms, localShards, globalShards,
-          executionNumber, workerIndex, inbox),
+        worker: algorithmForQueue(algorithms, executionNumber, workerIndex, inbox),
         globals: globals,
       }
     });
@@ -312,32 +309,34 @@ var translateId = function (id, mapping) {
 };
 
 var dumpMessages = function(queue, shardList, workerId, execNr) {
-  var i, j, space, shard;
+  var i, j, space;
   for (i = 0; i < WORKERS; i++) {
     if (i !== workerId) {
       for (j = 0; j < shardList.length; j++) {
-        shard = shardList[j];
         space = getOutboxName(execNr, workerId, i);
-        KEY_SET(space, shard, queue._dump(shard, i));
+        KEY_SET(space, String(j), queue._dump(j, i));
       }
     }
   }
 };
 
 var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
-  var i, j, space, shard, incMessage;
+  var i, j, space, incMessage;
+  var t;
+  var time = require("internal").time;
   for (i = 0; i < WORKERS; i++) {
     if (i !== workerId) {
       for (j = 0; j < shardList.length; j++) {
-        shard = shardList[j];
         space = getOutboxName(execNr, i, workerId);
-        incMessage = KEY_GET(space, shard);
+        incMessage = KEY_GET(space, String(j));
+        t = time();
         while (incMessage === undefined) {
           // Wait for other threads to dump data
           require("internal").wait(0);
-          incMessage = KEY_GET(space, shard);
+          incMessage = KEY_GET(space, String(j));
         }
-        queue._integrateMessage(shard, workerId, JSON.parse(incMessage));
+        KEY_INCR("blubber", "waiting", time() - t);
+        queue._integrateMessage(j, workerId, JSON.parse(incMessage));
       }
     }
   }
@@ -393,7 +392,9 @@ var workerCode = function (params) {
 
     // Collect Data from Key-Value store and aggregate
     aggregateOtherWorkerData(this.queue, this.shardList, this.workerId, this.executionNumber);
+
     sendMessages(this.queue, this.shardList, this.workerId, step + 1, this.executionNumber);
+
     this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(),
       this.inbox, c);
   } catch (err) {
@@ -412,8 +413,16 @@ var addCleanUpTask = function (queue) {
 };
 
 var saveMapping = function(executionNumber, map) {
-  map._key = "map";
-  pregel.getGlobalCollection(executionNumber).save(map);
+  var space = "P_" + executionNumber + "_MAPPING";
+  KEYSPACE_CREATE(space, 8);
+  KEY_SET(space, "vertexShards" , map[0]);
+  KEY_SET(space, "resultVertexShards" , map[1]);
+  KEY_SET(space, "serverVertexShards" , map[2][pregel.getServerName()]);
+  KEY_SET(space, "edgeShards" , map[3]);
+  KEY_SET(space, "resultEdgeShards" , map[4]);
+  KEY_SET(space, "serverEdgeShards" , map[5][pregel.getServerName()]);
+  KEY_SET(space, "resultCollectionNames" , map[6]);
+  KEY_SET(space, "collectionNames" , map[7]);
 };
 
 var loadMapping = function(executionNumber) {
@@ -430,6 +439,7 @@ var getError = function(executionNumber) {
 
 var setup = function(executionNumber, options, globals) {
 
+  KEYSPACE_CREATE("blubber", 2)
   // create global collection
   pregel.createWorkerCollections(executionNumber);
   createOutboxMatrix(executionNumber);
@@ -442,28 +452,7 @@ var setup = function(executionNumber, options, globals) {
 
   saveMapping(executionNumber, options.map);
 
-  var pregelMapping = new pregel.Mapping(executionNumber);
   var w;
-  var localShardList = [];
-  var k, k2, mapping;
-  mapping = pregelMapping.getLocalCollectionShardMapping();
-  for (k in mapping) {
-    if (mapping.hasOwnProperty(k)) {
-      localShardList = localShardList.concat(mapping[k]);
-    }
-  }
-  var globalShardList = [];
-  mapping = pregelMapping.getGlobalCollectionShardMapping();
-  for (k in mapping) {
-    if (mapping.hasOwnProperty(k)) {
-      for (k2 in mapping[k]) {
-        if (mapping[k].hasOwnProperty(k2)) {
-          globalShardList = globalShardList.concat(mapping[k][k2]);
-        }
-
-      }
-    }
-  }
   var inbox;
   for (w = 0; w < WORKERS; w++) {
     inbox = [
@@ -472,7 +461,7 @@ var setup = function(executionNumber, options, globals) {
     ];
     KEYSPACE_CREATE(inbox[0]);
     KEYSPACE_CREATE(inbox[1]);
-    createTaskQueue(executionNumber, localShardList, globalShardList, options, globals, w, inbox);
+    createTaskQueue(executionNumber, options, globals, w, inbox);
   }
 };
 
@@ -547,6 +536,8 @@ var queueCleanupDone = function (executionNumber) {
         "/_api/pregel/finishedCleanup", body, {}, coordOptions);
       var debug = ArangoClusterComm.wait(coordOptions);
     } else {
+      require("console").log("Time for out edges", KEY_GET("blubber", "outedges"));
+      require("console").log("Time for waiting", KEY_GET("blubber", "waiting"));
       pregel.Conductor.finishedCleanUp(executionNumber, pregel.getServerName());
     }
     db._drop(pregel.genGlobalCollectionName(executionNumber));
@@ -571,7 +562,6 @@ var queueDone = function (executionNumber, global, actives, inbox, countMsg, err
   var keyList = "P_" + executionNumber;
   var countDone = KEY_INCR(keyList, "done");
   var countActive = KEY_INCR(keyList, "actives", actives);
-  require("console").log(keyList, countMsg);
   var countmessages = KEY_INCR(keyList, "messages", countMsg);
   p.storeWatch("VertexDone", t);
 

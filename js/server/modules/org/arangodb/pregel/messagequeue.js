@@ -253,16 +253,9 @@ VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
     throw err;
   } 
   if (sendLocation !== false) {
-    sendLocation = true; 
+    this._parent._send(target, data, this._vertexInfo);
   }
-  // target = pregel.getLocationObject(this.__executionNumber, target);
-  var toSend = {
-    data: data
-  };
-  if (sendLocation) {
-    toSend.sender = this._vertexInfo;
-  }
-  this._parent._send(target, toSend);
+  this._parent._send(target, {data: data});
   p.storeWatch("sendTo", t);
 };
 
@@ -278,21 +271,21 @@ VertexMessageQueue.prototype._loadVertex = function (msgObj, vertexInfo) {
 // End of Vertex Message queue
 
 var Queue = function (executionNumber, vertices, inboxSpaces, localShardList,
-    globalShardList, workerCount, aggregate) {
+    globalShardList, workerCount, mapping, aggregate) {
   this.__vertices = vertices;
   this.__executionNumber = executionNumber;
   this.__spaces = inboxSpaces;
   this.__inbox = {};
   this.__outbox = {};
+  this.__mapping = mapping;
   var i,j,shard;
   for (i = 0; i < globalShardList.length; ++i) {
-    shard = globalShardList[i];
-    this.__outbox[shard] = [];
+    this.__outbox[i] = [];
     for (j = 0; j < workerCount; ++j) {
-      this.__outbox[shard].push({count :0});
+      this.__outbox[i].push({count :0});
     }
   }
-  var hashFunc = db[localShardList[0]].NTH3;
+  var hashFunc = db[globalShardList[localShardList[0]]].NTH3;
   this.__hash = function(key) {
     return hashFunc(key, workerCount);
   };
@@ -321,14 +314,15 @@ Queue.prototype._fillQueues = function () {
   var msg;
   var aggFunc = this.__aggregate;
   var inbox = this.__inbox;
-  var i, key, shard, old, k;
+  var i, key, shard, old, k, shardId;
   for (i = 0; i < keys.length; ++i) {
     key = keys[i];
     msg = KEY_GET(space, key);
     KEY_REMOVE(space, key);
     shard = key.substr(key.lastIndexOf("_") + 1);
     msg = JSON.parse(msg);
-    old = inbox[shard];
+    shardId = this.__mapping.getShardId(shard);
+    old = inbox[shardId];
     for (k in msg) {
       if (msg.hasOwnProperty(k)) {
         if (!old.hasOwnProperty(k)) {
@@ -342,17 +336,17 @@ Queue.prototype._fillQueues = function () {
 };
 
 //msg has data and optionally sender
-Queue.prototype._send = function (target, msg) {
+Queue.prototype._send = function (target, msg, sender) {
   var t = p.stopWatch();
   // TODO Temporary. Has to be replaced!!
-  var shard = target[1];
   var key = target[0];
+  var shard = target[1];
   var workerId = this.__hash(key);
   var outbox = this.__outbox[shard][workerId];
   if (!outbox.hasOwnProperty(key)) {
     outbox[key] = [null, []];
   }
-  if (msg.hasOwnProperty("sender") || !this.__aggregate) {
+  if (sender || !this.__aggregate) {
     outbox[key][1].push(msg);
   } else {
     outbox[key][0] = this.__aggregate(msg.data, outbox[key][0]);
@@ -371,12 +365,12 @@ Queue.prototype._dump = function(shard, workerId) {
 };
 
 Queue.prototype._count = function(shardList, workers) {
-  var res = 0, self = this, i;
-  shardList.forEach(function(s) {
+  var res = 0, i, j;
+  for (j = 0; j < shardList.length; ++j) {
     for (i = 0; i < workers; i++) {
-      res = res + self.__outbox[s][i].count;
+      res = res + this.__outbox[j][i].count;
     }
-  });
+  }
   return res;
 };
 

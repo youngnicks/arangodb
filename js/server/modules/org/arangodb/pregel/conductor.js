@@ -299,10 +299,149 @@ var initNextStep = function (executionNumber) {
 };
 
 
-var createResultGraph = function (graph, executionNumber, noCreation) {
+var createResultGraph = function (graph, executionNumber) {
   var t = p.stopWatch();
-  var properties = graph._getCollectionsProperties();
   var space = globalKeySpace(executionNumber);
+  var i, j;
+  var collections;
+  var col, resCol, shards, colInfo, resColInfo, resShards;
+  var props;
+  var isCoordinator = ArangoServerState.isCoordinator();
+
+  var vertexShards = [];
+  var resultVertexShards = [];
+  var serverVertexShards = {};
+  var resultCollectionNames = [];
+  var collectionNames = [];
+
+  var edgeShards = [];
+  var resultEdgeShards = [];
+  var serverEdgeShards = {};
+
+  var dbName = db._name();
+  
+  if (isCoordinator) {
+    var serverList = ArangoClusterInfo.getDBServers();
+    for (i = 0; i < serverList.length; ++i) {
+      serverVertexShards[serverList[i]] = [];
+      serverEdgeShards[serverList[i]] = [];
+    }
+  } else {
+    serverVertexShards.localhost = [];
+    serverEdgeShards.localhost = [];
+  }
+
+  // Create All Vertex Collections
+  
+  collections = graph._vertexCollections();
+  for (i = 0; i < collections.length; ++i) {
+    col = collections[i].name();
+    props = collections[i].properties();
+    resCol = generateResultCollectionName(col, executionNumber);
+    if (isCoordinator) {
+      db._create(resCol, {
+        numberOfShards : props.numberOfShards,
+        shardKeys : props.shardKeys,
+        distributeShardsLike : col
+      });
+      colInfo = ArangoClusterInfo.getCollectionInfo(dbName, col);
+      shards = Object.keys(colInfo.shards);
+      resColInfo = ArangoClusterInfo.getCollectionInfo(dbName, resCol);
+      resShards = Object.keys(resColInfo.shards);
+      for(j = 0; j < shards.length; ++j) {
+        vertexShards.push(shards[j]);
+        resultVertexShards.push(resShards[j]);
+        serverVertexShards[resColInfo.shards[shards[j]]].push(j);
+        collectionNames.push(col);
+        resultCollectionNames.push(resCol);
+      }
+    } else {
+      db._create(resCol);
+      vertexShards.push(col);
+      resultVertexShards.push(resCol);
+      serverVertexShards.localhost.push(serverVertexShards.localhost.length);
+      collectionNames.push(col);
+      resultCollectionNames.push(resCol);
+    }
+  }
+  
+  // Create All Edge Collections
+  
+  collections = graph._edgeCollections();
+  for (i = 0; i < collections.length; ++i) {
+    col = collections[i].name();
+    props = collections[i].properties();
+    resCol = generateResultCollectionName(col, executionNumber);
+    if (isCoordinator) {
+      db._createEdgeCollection(resCol, {
+        numberOfShards : props.numberOfShards,
+        shardKeys : props.shardKeys,
+        distributeShardsLike : col
+      });
+      colInfo = ArangoClusterInfo.getCollectionInfo(dbName, col);
+      shards = Object.keys(colInfo.shards);
+      resColInfo = ArangoClusterInfo.getCollectionInfo(dbName, resCol);
+      resShards = Object.keys(resColInfo.shards);
+      for(j = 0; j < shards.length; ++j) {
+        edgeShards.push(shards[j]);
+        resultEdgeShards.push(resShards[j]);
+        serverEdgeShards[resColInfo.shards[shards[j]]].push(j);
+      }
+    } else {
+      db._createEdgeCollection(resCol);
+      edgeShards.push(col);
+      resultEdgeShards.push(resCol);
+      serverEdgeShards.localhost.push(serverEdgeShards.localhost.length);
+    }
+  }
+ 
+  var resMap = [
+    vertexShards,
+    resultVertexShards,
+    serverVertexShards,
+    edgeShards,
+    resultEdgeShards,
+    serverEdgeShards,
+    resultCollectionNames,
+    collectionNames
+  ];
+  // Create the Graph
+  var resultEdgeDefinitions = [], resultEdgeDefinition;
+  var edgeDefinitions = graph.__edgeDefinitions;
+  edgeDefinitions.forEach(
+    function(edgeDefinition) {
+      resultEdgeDefinition = {
+        from : [],
+        to : [],
+        collection : generateResultCollectionName(edgeDefinition.collection, executionNumber)
+      };
+      edgeDefinition.from.forEach(
+        function(col) {
+          resultEdgeDefinition.from.push(generateResultCollectionName(col, executionNumber));
+        }
+      );
+      edgeDefinition.to.forEach(
+        function(col) {
+          resultEdgeDefinition.to.push(generateResultCollectionName(col, executionNumber));
+        }
+      );
+      resultEdgeDefinitions.push(resultEdgeDefinition);
+    }
+  );
+  var orphanCollections = [];
+  graph.__orphanCollections.forEach(function (o) {
+    orphanCollections.push(generateResultCollectionName(o, executionNumber));
+  });
+  graphModule._create(generateResultCollectionName(graph.__name, executionNumber),
+    resultEdgeDefinitions, orphanCollections);
+  KEY_SET(space, GRAPH, generateResultCollectionName(graph.__name, executionNumber));
+  p.storeWatch("SetupResultGraph", t);
+  return resMap;
+
+
+
+
+  var properties = graph._getCollectionsProperties();
   var map = {};
   var tmpMap = {
     edge: {},
@@ -316,6 +455,14 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   var collectionMap = {};
   var numShards = 1;
   var i;
+
+
+
+
+
+
+  var resultCollectionNames = [];
+
   Object.keys(properties).forEach(function (collection) {
     var mc = {};
     map[collection] = mc;
@@ -333,6 +480,12 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
       mc.shardKeys = [];
     }
     shardKeyMap[collection] = _.clone(mc.shardKeys);
+    var props = {
+      numberOfShards : mprops.numberOfShards,
+      shardKeys : mprops.shardKeys,
+      distributeShardsLike : collection
+    };
+    var newCol;
     if (mc.type === 2) {
       tmpMap.vertex[collection] = Object.keys(mc.originalShards);
       shardMap = shardMap.concat(tmpMap.vertex[collection]);
@@ -342,26 +495,13 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
         serverShardMap[server][collection] = serverShardMap[server][collection] || [];
         serverShardMap[server][collection].push(shard);
       });
+      newCol = db._create(generateResultCollectionName(collection, executionNumber) , props);
     } else {
       tmpMap.edge[collection] = Object.keys(mc.originalShards);
       shardMap = shardMap.concat(tmpMap.edge[collection]);
-    }
-    var props = {
-      numberOfShards : mprops.numberOfShards,
-      shardKeys : mprops.shardKeys,
-      distributeShardsLike : collection
-    };
-    if (!noCreation) {
-      var newCol;
-      if (mc.type === 2) {
-        newCol = db._create(generateResultCollectionName(collection, executionNumber) , props);
-        newCol.ensureSkiplist("deleted");
-      } else {
-        newCol = db._createEdgeCollection(
-          generateResultCollectionName(collection, executionNumber) , props
-        );
-      }
-      newCol.ensureSkiplist("active");
+      newCol = db._createEdgeCollection(
+        generateResultCollectionName(collection, executionNumber) , props
+      );
     }
     if (ArangoServerState.isCoordinator()) {
       mc.resultShards =
@@ -409,6 +549,10 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
   // edgeShards: vertexShard => [edgeShards]
   // resultShards: shard => resultShard
   // collectionMap: collection => resultCollection
+  //
+  // vertexShards = ["s01","s02"]
+  // edgeShards = ["s03", "s04"]
+  //
   var resMap = {
     shardKeyMap: shardKeyMap,
     shardMap: shardMap,
@@ -419,11 +563,17 @@ var createResultGraph = function (graph, executionNumber, noCreation) {
     collectionMap: collectionMap,
     map: map
   };
+
+  var resMap = [
+    vertexShards,
+    resultVertexShards,
+    serverVertexShards,
+    edgeShards,
+    resultEdgeShards,
+    serverEdgeShards,
+    resultCollectionNames
+  ];
   // Create Vertex -> EdgeShards Mapping
-  if (noCreation) {
-    p.storeWatch("SetupResultGraph", t);
-    return resMap;
-  }
   var resultEdgeDefinitions = [], resultEdgeDefinition;
   var edgeDefinitions = graph.__edgeDefinitions;
   edgeDefinitions.forEach(
