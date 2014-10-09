@@ -1,6 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports, Graph, arguments, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
-/*global KEY_SET, KEY_GET, KEY_AT, KEY_PUSH, KEY_INCR, KEY_DECR, KEY_EXISTS, KEY_SET_CAS, KEY_REMOVE, KEYSPACE_CREATE*/
+/*global KEY_SET, KEY_GET, KEY_PUSH, KEY_INCR, KEY_DECR, KEY_EXISTS, KEY_SET_CAS, KEY_REMOVE, KEYSPACE_CREATE*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Graph functionality
@@ -751,12 +751,12 @@ var createResultGraph = function (graph, executionNumber) {
 /// @endDocuBlock
 ///
 ////////////////////////////////////////////////////////////////////////////////
-var startExecution = function(graphName, algorithms, options) {
+var startExecution = function(graphName, algorithms, globals) {
   var t = p.stopWatch();
   var graph = graphModule._graph(graphName), infoObject = {state : STATERUNNING};
   var pregelAlgorithm = algorithms.base;
   var aggregator = algorithms.aggregator;
-  options = options  || {};
+  var options = {};
   options.graphName = graphName;
   var stepInfo = {
     active: graph._countVertices(),
@@ -774,6 +774,7 @@ var startExecution = function(graphName, algorithms, options) {
   KEY_SET(space, STEPCONTENT, []);
   KEY_PUSH(space, STEPCONTENT, stepInfo);
   KEY_SET(space, STATE, STATERUNNING);
+  KEY_SET(space, GLOBALS, globals);
   KEY_SET(space, TIMEOUT, options.timeout || pregel.getTimeoutConst());
   delete options.timeout;
   prepareNextStep(space);

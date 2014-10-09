@@ -1,6 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports, ArangoClusterInfo, ArangoServerState*/
-/*global KEYSPACE_CREATE, KEY_SET, KEY_GET, KEY_AT*/
+/*global KEYSPACE_CREATE, KEY_SET, KEY_GET, KEY_GET_AT*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel module. Offers all submodules of pregel.
@@ -100,11 +100,11 @@ Mapping.prototype.getLocalResultShardMapping = function () {
 };
 
 Mapping.prototype.getResultShard = function (shard) {
-  return KEY_AT(this.space, "resultVertexShards", shard);
+  return KEY_GET_AT(this.space, "resultVertexShards", shard);
 };
 
 Mapping.prototype.getResultEdgeShard = function (shard) {
-  return KEY_AT(this.space, "resultEdgeShards", shard);
+  return KEY_GET_AT(this.space, "resultEdgeShards", shard);
 };
 
 Mapping.prototype.getShardKeysForCollection = function (collection) {
@@ -129,7 +129,7 @@ Mapping.prototype.getShardId = function (shard) {
 };
 
 Mapping.prototype.getEdgeShard = function (shardIndex) {
-  return KEY_AT(this.space, "edgeShards", shardIndex);
+  return KEY_GET_AT(this.space, "edgeShards", shardIndex);
 };
 
 Mapping.prototype.getResponsibleEdgeShards = function (shard) {
@@ -154,7 +154,7 @@ Mapping.prototype.getToLocationObject = function (edge, toCol) {
 };
 
 Mapping.prototype.findOriginalCollection = function (index) {
-  return KEY_AT(this.space, "collectionNames", index);
+  return KEY_GET_AT(this.space, "collectionNames", index);
 };
 
 Mapping.prototype.getToShardKey = function(toKey, colName) {
