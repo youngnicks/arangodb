@@ -102,6 +102,10 @@ Mapping.prototype.getResultShard = function (shard) {
   return KEY_AT(this.space, "resultVertexShards", shard);
 };
 
+Mapping.prototype.getResultEdgeShard = function (shard) {
+  return KEY_AT(this.space, "resultEdgeShards", shard);
+};
+
 Mapping.prototype.getShardKeysForCollection = function (collection) {
   var t = p.stopWatch();
   var keys = this.getShardKeys(collection);
