@@ -159,7 +159,7 @@ var startNextStep = function(executionNumber, options) {
   var t = p.stopWatch();
   var dbServers;
   var space = globalKeySpace(executionNumber);
-  var globals = getGlobals(executionNumber);
+  var globals = KEY_GET(space, GLOBALS);
   var stepNo = KEY_GET(space, STEP);
   options = options || {};
   options.conductor = pregel.getServerName();

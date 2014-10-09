@@ -87,23 +87,19 @@ describe("Graph coloring Pregel execution", function () {
       };
 
       var i;
-      for (i = 1; i < 12; i++) {
+      for (i = 1; i < 8; i++) {
         saveVertex(i);
       }
       saveEdge(1, 2, 2);
-      saveEdge(1, 7, 2);
-      saveEdge(2, 7, 9);
-      saveEdge(7, 6, 8);
-      saveEdge(2, 6, 6);
-      saveEdge(7, 5, 4);
-      saveEdge(5, 2, 3);
-      saveEdge(5, 4, 5);
-      saveEdge(6, 4, 7);
-      saveEdge(4, 2, 19);
-      saveEdge(4, 3, 10);
-      saveEdge(3, 2, 1);
-      saveEdge(8, 9, 1);
-      saveEdge(6, 10, 1);
+      saveEdge(1, 7, 1);
+      saveEdge(2, 3, 2);
+      saveEdge(2, 6, 4);
+      saveEdge(7, 6, 3);
+      saveEdge(7, 3, 3);
+      saveEdge(6, 5, 2);
+      saveEdge(3, 5, 1);
+      saveEdge(3, 4, 3);
+
     });
 
     afterEach(function () {
@@ -131,13 +127,13 @@ describe("Graph coloring Pregel execution", function () {
           var errors = [];
           graph._graph(resGraph)._vertices({}).toArray().forEach(function (r) {
               if (r.result.type === 3) {
-                Object.keys(r.result.neighbors).forEach(function (m) {
-                  var n = graph._graph(resGraph)._vertices({_key : m.split("/")[1]}, {
-                    vertexCollectionRestriction : m.split("/")[0]}).toArray()[0]
+                graph._graph(resGraph)._neighbors(r._id, {direction : "any"}).forEach(function (n) {
                   if (n.result.type === 3 && n.result.color === r.result.color) {
-                    errors.push([n._key, r._key]);
+                    errors.push("Neighbor with identical color : " +  n._key + " and " +  r._key);
                   }
                 });
+              } else {
+                errors.push("Wrong type " + r._id);
               }
           });
           if (errors) {

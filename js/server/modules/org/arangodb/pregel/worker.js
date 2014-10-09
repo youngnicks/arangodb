@@ -56,7 +56,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 4;
+var WORKERS = 1;
 
 var getInboxName = function (execNr, step, workerId) {
   return "In_P_" + execNr + "_" + (step % 2) + "_" + workerId;
@@ -350,24 +350,28 @@ var workerCode = function (params) {
       while(this.vertices.hasNext()) {
         vertex = this.vertices.next();
         vShard = vertex.getShard();
-        msgQueue = this.queue._loadVertex(vShard, vertex);
-        this.finalAlgorithm(vertex, msgQueue, global);
+        if (!vertex._isDeleted()) {
+          msgQueue = this.queue._loadVertex(vShard, vertex);
+          this.finalAlgorithm(vertex, msgQueue, global);
+        }
         this.queue._clear(vShard, vertex);
       }
     } else {
       while(this.vertices.hasNext()) {
         vertex = this.vertices.next();
         vShard = vertex.getShard();
-        msgQueue = this.queue._loadVertex(vShard, vertex);
-        msgCount = msgQueue.count();
-        isActive = vertex._isActive();
-        if (isActive || msgCount > 0) {
-          if (!isActive) {
-            vertex._activate();
+        if (!vertex._isDeleted()) {
+          msgQueue = this.queue._loadVertex(vShard, vertex);
+          msgCount = msgQueue.count();
+          isActive = vertex._isActive();
+          if (isActive || msgCount > 0) {
+            if (!isActive) {
+              vertex._activate();
+            }
+            this.algorithm(vertex, msgQueue, global);
           }
-          this.algorithm(vertex, msgQueue, global);
-          this.queue._clear(vShard, vertex);
         }
+        this.queue._clear(vShard, vertex);
       }
     }
     var c = this.queue._count(this.shardList, WORKERS);
@@ -529,6 +533,7 @@ var queueCleanupDone = function (executionNumber) {
 
 var queueDone = function (executionNumber, global, actives, inbox, countMsg, err) {
   var t = p.stopWatch();
+  //require("internal").print(err)
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
     error.errorNum = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.code;

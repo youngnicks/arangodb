@@ -30,10 +30,13 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var graphColoring = function (vertex, message, global) {
-
   var next, color = "#25262a";
   if (global.color) {
     color = global.color;
+  }
+  if (global.step > 152) {
+    vertex._delete();
+    return;
   }
 
   var PHASE_PRE_INITIALIZATION = "1";
@@ -51,8 +54,7 @@ var graphColoring = function (vertex, message, global) {
   var MSG_CONTACT = 3;
   var MSG_TIS = 4
 
-  var result = vertex._getResult();
-
+  var result = vertex._getResult() || {};
   if (global.retype === true) {
     result.type = STATE_UNKNOWN;
   }
@@ -77,7 +79,7 @@ var graphColoring = function (vertex, message, global) {
       if (1.0 / (2 * result.degree) <= random || result.degree === 0) {
         result.type = STATE_TENTATIVELY_IN;
         Object.keys(result.neighbors).forEach(function (e) {
-          message.sendTo(result.neighbors[e], {id: vertex._id, msg: MSG_TIS, degree: result.degree});
+          message.sendTo(result.neighbors[e], {id: vertex._get("_id"), msg: MSG_TIS, degree: result.degree});
         });
       }
       break;
@@ -91,7 +93,7 @@ var graphColoring = function (vertex, message, global) {
           next = message.next();
           if (next.data.degree < result.degree ||
             (next.data.degree === result.degree &&
-              [vertex._id, next.data.id].sort()[0] !== vertex._id
+              [vertex._get("_id"), next.data.id].sort()[0] !== vertex._get("_id")
               )
             ) {
             isInS = false;
@@ -104,7 +106,7 @@ var graphColoring = function (vertex, message, global) {
           Object.keys(result.neighbors).forEach(function (e) {
             message.sendTo(
               result.neighbors[e],
-              {msg: MSG_NEIGHBOR, lI: vertex._getLocationInfo().shard + "/" + vertex._getLocationInfo()._key}
+              {msg: MSG_NEIGHBOR, lI: JSON.stringify(vertex._getLocationInfo())}
             );
           });
           vertex._delete();
@@ -128,7 +130,7 @@ var graphColoring = function (vertex, message, global) {
       if (result.type === NOT_IN) {
         Object.keys(result.neighbors).forEach(function (e) {
           message.sendTo(
-            {_key: e, shard: result.neighbors[e]},
+            result.neighbors[e],
             {msg: MSG_DECREMENT}
           );
         });

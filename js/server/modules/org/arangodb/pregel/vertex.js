@@ -100,7 +100,7 @@ Vertex.prototype._isDeleted = function () {
 };
 
 Vertex.prototype._delete = function () {
-  if (this.__current[ACTIVE]) {
+  if (this.__current[ACTIVE] && !this.__current[DELETED]) {
     this.__parent.decrActives();
   }
   this.__current[DELETED] = true;
