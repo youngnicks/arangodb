@@ -69,12 +69,14 @@ const std::string RestAqlHandler::QUEUE_NAME = "STANDARD";
 ////////////////////////////////////////////////////////////////////////////////
 
 RestAqlHandler::RestAqlHandler (triagens::rest::HttpRequest* request,
-                   std::pair<ApplicationV8*, QueryRegistry*>* pair)
+                                std::pair<ApplicationV8*, 
+                                QueryRegistry*>* pair)
   : RestBaseHandler(request),
     _applicationV8(pair->first),
     _context(static_cast<VocbaseContext*>(request->getRequestContext())),
     _vocbase(_context->getVocbase()),
-    _queryRegistry(pair->second) {
+    _queryRegistry(pair->second),
+    _qId(0) {
 
   TRI_ASSERT(_vocbase != nullptr);
   TRI_ASSERT(_queryRegistry != nullptr);
@@ -142,20 +144,11 @@ void RestAqlHandler::createQueryFromJson () {
     ttl = StringUtils::doubleDecimal(ttlstring);
   }
 
-  QueryId qId;
-  // query id set from the outside?
-  char const* queryIdString = _request->value("queryId", found);
-  if (found) {
-    // query id set via URL parameter
-    qId = StringUtils::uint64(queryIdString);
-  }
-  else {
-    // query id not set, now generate a new one
-    qId = TRI_NewTickServer();
-  }
+  // query id not set, now generate a new one
+  _qId = TRI_NewTickServer();
   
   try {
-    _queryRegistry->insert(_vocbase, qId, query, ttl);
+    _queryRegistry->insert(_vocbase, _qId, query, ttl);
   }
   catch (...) {
     generateError(HttpResponse::BAD, TRI_ERROR_INTERNAL,
@@ -167,8 +160,10 @@ void RestAqlHandler::createQueryFromJson () {
   _response = createResponse(triagens::rest::HttpResponse::ACCEPTED);
   _response->setContentType("application/json; charset=utf-8");
   Json answerBody(Json::Array, 2);
-  answerBody("queryId", Json(StringUtils::itoa(qId)))
+  answerBody("queryId", Json(StringUtils::itoa(_qId)))
             ("ttl",     Json(ttl));
+
+ //std::cout << "RESPONSE BODY IS: " << answerBody.toString() << "\n";            
   _response->body().appendText(answerBody.toString());
 }
 
@@ -326,9 +321,10 @@ void RestAqlHandler::createQueryFromString () {
   if (found) {
     ttl = StringUtils::doubleDecimal(ttlstring);
   }
-  QueryId qId = TRI_NewTickServer();
+
+  _qId = TRI_NewTickServer();
   try {
-    _queryRegistry->insert(_vocbase, qId, query, ttl);
+    _queryRegistry->insert(_vocbase, _qId, query, ttl);
   }
   catch (...) {
     generateError(HttpResponse::BAD, TRI_ERROR_INTERNAL,
@@ -340,7 +336,7 @@ void RestAqlHandler::createQueryFromString () {
   _response = createResponse(triagens::rest::HttpResponse::ACCEPTED);
   _response->setContentType("application/json; charset=utf-8");
   Json answerBody(Json::Array, 2);
-  answerBody("queryId", Json(StringUtils::itoa(qId)))
+  answerBody("queryId", Json(StringUtils::itoa(_qId)))
             ("ttl",     Json(ttl));
   _response->body().appendText(answerBody.toString());
 }
@@ -352,14 +348,13 @@ void RestAqlHandler::createQueryFromString () {
 
 void RestAqlHandler::deleteQuery (std::string const& idString) {
   // the DELETE verb
-
-  QueryId qId;
   Query* query = nullptr;
-  if (findQuery(idString, qId, query)) {
+  if (findQuery(idString, query)) {
     return;
   }
 
-  _queryRegistry->destroy(_vocbase, qId);
+  TRI_ASSERT(_qId > 0);
+  _queryRegistry->destroy(_vocbase, _qId);
 
   _response = createResponse(triagens::rest::HttpResponse::OK);
   _response->setContentType("application/json; charset=utf-8");
@@ -414,133 +409,64 @@ void RestAqlHandler::deleteQuery (std::string const& idString) {
 ///   "pos":   The number of the row in "items" to take, usually 0.
 /// For the "shutdown" operation no additional arguments are required and
 /// an empty JSON object in the body is OK.
+/// All operations allow to set the HTTP header "Shard-ID:". If this is
+/// set, then the root block of the stored query must be a ScatterBlock
+/// and the shard ID is given as an additional argument to the ScatterBlock's
+/// special API.
 ////////////////////////////////////////////////////////////////////////////////
 
 void RestAqlHandler::useQuery (std::string const& operation,
                                std::string const& idString) {
   // the PUT verb
-
-  QueryId qId;
   Query* query = nullptr;
-  if (findQuery(idString, qId, query)) {
+  if (findQuery(idString, query)) {
     return;
   }
 
+  TRI_ASSERT(_qId > 0);
   TRI_ASSERT(query->engine() != nullptr);
 
-  Json queryJson(TRI_UNKNOWN_MEM_ZONE, parseJsonBody());
-  if (queryJson.isEmpty()) {
-    _queryRegistry->close(_vocbase, qId);
-    return;
-  }
-
-  Json answerBody(Json::Array, 2);
-
-  if (operation == "getSome") {
-    auto atLeast = JsonHelper::getNumericValue<uint64_t>(queryJson.json(),
-                                                         "atLeast", 1);
-    auto atMost = JsonHelper::getNumericValue<uint64_t>(queryJson.json(),
-                               "atMost", ExecutionBlock::DefaultBatchSize);
-    std::unique_ptr<AqlItemBlock> items(query->engine()->getSome(atLeast, atMost));
-    if (items.get() == nullptr) {
-      answerBody("exhausted", Json(true))
-                ("error", Json(false));
-    }
-    else {
-      try {
-        answerBody = items->toJson(query->trx());
-      }
-      catch (...) {
-        _queryRegistry->close(_vocbase, qId);
-        generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_HTTP_SERVER_ERROR,
-                      "cannot transform AqlItemBlock to Json");
-        return;
-      }
-    }
-  }
-  else if (operation == "skipSome") {
-    auto atLeast = JsonHelper::getNumericValue<uint64_t>(queryJson.json(),
-                                                         "atLeast", 1);
-    auto atMost = JsonHelper::getNumericValue<uint64_t>(queryJson.json(),
-                               "atMost", ExecutionBlock::DefaultBatchSize);
-    size_t skipped;
-    try {
-      skipped = query->engine()->skipSome(atLeast, atMost);
-    }
-    catch (...) {
-      _queryRegistry->close(_vocbase, qId);
-      generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_HTTP_SERVER_ERROR,
-                    "skipSome lead to an exception");
-      return;
-    }
-    answerBody("skipped", Json(static_cast<double>(skipped)))
-              ("error", Json(false));
-  }
-  else if (operation == "skip") {
-    auto number = JsonHelper::getNumericValue<uint64_t>(queryJson.json(),
-                                                        "number", 1);
-    try {
-      bool exhausted = query->engine()->skip(number);
-      answerBody("exhausted", Json(exhausted))
-                ("error", Json(false));
-    }
-    catch (...) {
-      _queryRegistry->close(_vocbase, qId);
-      generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_HTTP_SERVER_ERROR,
-                    "skip lead to an exception");
+  Json queryJson;
+  if (operation != "shutdown") {
+    // /shutdown does not require a body
+    queryJson = Json(TRI_UNKNOWN_MEM_ZONE, parseJsonBody());
+    if (queryJson.isEmpty()) {
+      _queryRegistry->close(_vocbase, _qId);
       return;
     }
   }
-  else if (operation == "initializeCursor") {
-    auto pos = JsonHelper::getNumericValue<size_t>(queryJson.json(),
-                                                   "pos", 0);
-    std::unique_ptr<AqlItemBlock> items;
-    int res;
+
+  try {
+    handleUseQuery(operation, query, queryJson);
     try {
-      if (JsonHelper::getBooleanValue(queryJson.json(), "exhausted", true)) {
-std::cout << "GOT EXHAUSTED FLAG\n";        
-        res = query->engine()->initializeCursor(nullptr, 0);
-      }
-      else {
-        items.reset(new AqlItemBlock(queryJson.get("items")));
-        res = query->engine()->initializeCursor(items.get(), pos);
-      }
+      _queryRegistry->close(_vocbase, _qId);
     }
     catch (...) {
-      _queryRegistry->close(_vocbase, qId);
-      generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_HTTP_SERVER_ERROR,
-                    "initializeCursor lead to an exception");
-      return;
+      // ignore errors on unregistering
+      // an error might occur if "shutdown" is called
     }
-std::cout << "ABOUT TO ANSWER: " << res << "\n";
-    answerBody("error", Json(res == TRI_ERROR_NO_ERROR))
-              ("code", Json(static_cast<double>(res)));
   }
-  else if (operation == "shutdown") {
-    int res;
-    try {
-      res = query->engine()->shutdown();
-    }
-    catch (...) {
-      _queryRegistry->close(_vocbase, qId);
-      generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_HTTP_SERVER_ERROR,
-                    "shutdown lead to an exception");
-      return;
-    }
-    answerBody("error", res == TRI_ERROR_NO_ERROR ? Json(false) : Json(true))
-              ("code", Json(static_cast<double>(res)));
+  catch (triagens::arango::Exception const& ex) {
+    _queryRegistry->close(_vocbase, _qId);
+    
+    generateError(HttpResponse::SERVER_ERROR, 
+                  ex.code(),
+                  ex.message());
   }
-  else {
-    _queryRegistry->close(_vocbase, qId);
-    generateError(HttpResponse::NOT_FOUND, TRI_ERROR_HTTP_NOT_FOUND);
-    return;
+  catch (std::exception const& ex) {
+    _queryRegistry->close(_vocbase, _qId);
+    
+    generateError(HttpResponse::SERVER_ERROR, 
+                  TRI_ERROR_HTTP_SERVER_ERROR,
+                  ex.what());
   }
-
-  _queryRegistry->close(_vocbase, qId);
-
-  _response = createResponse(triagens::rest::HttpResponse::OK);
-  _response->setContentType("application/json; charset=utf-8");
-  _response->body().appendText(answerBody.toString());
+  catch (...) {
+    _queryRegistry->close(_vocbase, _qId);
+      
+    generateError(HttpResponse::SERVER_ERROR, 
+                  TRI_ERROR_HTTP_SERVER_ERROR,
+                  "an unknown exception occurred");
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -562,46 +488,90 @@ void RestAqlHandler::getInfoQuery (std::string const& operation,
                                    std::string const& idString) {
   // the GET verb
 
-  QueryId qId;
+  bool found;
+  std::string shardId;
+  char const* shardIdCharP = _request->header("shard-id", found);
+  if (found && shardIdCharP != nullptr) {
+    shardId = shardIdCharP;
+  }
+
   Query* query = nullptr;
-  if (findQuery(idString, qId, query)) {
+  if (findQuery(idString, query)) {
     return;
   }
+
+  TRI_ASSERT(_qId > 0);
 
   Json answerBody(Json::Array, 2);
 
   TRI_ASSERT(query->engine() != nullptr);
 
-  int64_t number;
-  if (operation == "count") {
-    number = query->engine()->count();
-    if (number == -1) {
-      answerBody("count", Json("unknown"));
+  try {
+    int64_t number;
+    if (operation == "count") {
+      number = query->engine()->count();
+      if (number == -1) {
+        answerBody("count", Json("unknown"));
+      }
+      else {
+        answerBody("count", Json(static_cast<double>(number)));
+      }
+    }
+    else if (operation == "remaining") {
+      // FIXME:
+      // Do the !shardId.empty() case once the ScatterBlock has remainingForShard
+      number = query->engine()->remaining();
+      if (number == -1) {
+        answerBody("remaining", Json("unknown"));
+      }
+      else {
+        answerBody("remaining", Json(static_cast<double>(number)));
+      }
+    }
+    else if (operation == "hasMore") {
+      bool hasMore;
+      if (shardId.empty()) {
+        hasMore = query->engine()->hasMore();
+      }
+      else {
+        auto scatter = static_cast<ScatterBlock*>(query->engine()->root());
+        if (scatter->getPlanNode()->getType() != ExecutionNode::SCATTER) {
+          THROW_ARANGO_EXCEPTION(TRI_ERROR_INTERNAL);
+        }
+        hasMore = scatter->hasMoreForShard(shardId);
+      }
+
+      answerBody("hasMore", Json(hasMore));
     }
     else {
-      answerBody("count", Json(static_cast<double>(number)));
+      _queryRegistry->close(_vocbase, _qId);
+      generateError(HttpResponse::NOT_FOUND, TRI_ERROR_HTTP_NOT_FOUND);
+      return;
     }
   }
-  else if (operation == "remaining") {
-    number = query->engine()->remaining();
-    if (number == -1) {
-      answerBody("remaining", Json("unknown"));
-    }
-    else {
-      answerBody("remaining", Json(static_cast<double>(number)));
-    }
+  catch (triagens::arango::Exception const& ex) {
+    _queryRegistry->close(_vocbase, _qId);
+    
+    generateError(HttpResponse::SERVER_ERROR, 
+                  ex.code(),
+                  ex.message());
   }
-  else if (operation == "hasMore") {
-    bool hasMore = query->engine()->hasMore();
-    answerBody("hasMore", Json(hasMore));
+  catch (std::exception const& ex) {
+    _queryRegistry->close(_vocbase, _qId);
+    
+    generateError(HttpResponse::SERVER_ERROR, 
+                  TRI_ERROR_HTTP_SERVER_ERROR,
+                  ex.what());
   }
-  else {
-    _queryRegistry->close(_vocbase, qId);
-    generateError(HttpResponse::NOT_FOUND, TRI_ERROR_HTTP_NOT_FOUND);
-    return;
+  catch (...) {
+    _queryRegistry->close(_vocbase, _qId);
+      
+    generateError(HttpResponse::SERVER_ERROR, 
+                  TRI_ERROR_HTTP_SERVER_ERROR,
+                  "an unknown exception occurred");
   }
 
-  _queryRegistry->close(_vocbase, qId);
+  _queryRegistry->close(_vocbase, _qId);
 
   _response = createResponse(triagens::rest::HttpResponse::OK);
   _response->setContentType("application/json; charset=utf-8");
@@ -614,8 +584,16 @@ void RestAqlHandler::getInfoQuery (std::string const& operation,
 ////////////////////////////////////////////////////////////////////////////////
 
 triagens::rest::HttpHandler::status_t RestAqlHandler::execute () {
+//std::cout << "GOT INCOMING REQUEST: " << triagens::rest::HttpRequest::translateMethod(_request->requestType()) << ", " << triagens::arango::ServerState::instance()->getId() << ": " << _request->fullUrl() << ": " << _request->body() << "\n";
+
   auto context = _applicationV8->enterContext("STANDARD", _vocbase,
                                               false, false);
+  
+  // assert that everything is cleaned up when we enter the context
+  TRI_v8_global_t* v8g = static_cast<TRI_v8_global_t*>(context->_isolate->GetData());
+  TRI_ASSERT(v8g->_currentTransaction == nullptr);
+  TRI_ASSERT(v8g->_resolver == nullptr);
+
   if (nullptr == context) {
     generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_INTERNAL,
                   "cannot enter V8 context");
@@ -625,6 +603,7 @@ triagens::rest::HttpHandler::status_t RestAqlHandler::execute () {
 
     // extract the sub-request type
     HttpRequest::HttpRequestType type = _request->requestType();
+
 
     // execute one of the CRUD methods
     switch (type) {
@@ -688,8 +667,13 @@ triagens::rest::HttpHandler::status_t RestAqlHandler::execute () {
     }
 
   }
+  
+  // must have cleaned everything up
+  TRI_ASSERT(v8g->_currentTransaction == nullptr);
+  TRI_ASSERT(v8g->_resolver == nullptr);
 
   _applicationV8->exitContext(context);
+//std::cout << "REQUEST HANDLING DONE: " << triagens::arango::ServerState::instance()->getId() << ": " << _request->fullUrl() << ": " << _response->responseCode() << ", CONTENT-LENGTH: " << _response->contentLength() << "\n";
 
   return status_t(HANDLER_DONE);
 }
@@ -699,32 +683,182 @@ triagens::rest::HttpHandler::status_t RestAqlHandler::execute () {
 ////////////////////////////////////////////////////////////////////////////////
 
 bool RestAqlHandler::findQuery (std::string const& idString,
-                                QueryId& qId,
                                 Query*& query) {
-  qId = StringUtils::uint64(idString);
-std::cout << "LOOKING FOR QUERY: " << idString << ", VOCBASE: " << _vocbase->_name << "\n";
-std::cout << "IDSTRING: " << idString << ", QID: " << qId << "\n";
+  _qId = StringUtils::uint64(idString);
 
   query = nullptr;
 
   try {
-    query = _queryRegistry->open(_vocbase, qId);
+    query = _queryRegistry->open(_vocbase, _qId);
   }
   catch (...) {
+    _qId = 0;
     generateError(HttpResponse::FORBIDDEN, TRI_ERROR_QUERY_IN_USE);
     return true;
   }
 
   if (query == nullptr) {
+    _qId = 0;
     generateError(HttpResponse::NOT_FOUND, TRI_ERROR_QUERY_NOT_FOUND);
     return true;
   }
 
+  TRI_ASSERT(_qId > 0);
+
   return false;
 }
 
+// -----------------------------------------------------------------------------
+// --SECTION--                                                   private methods
+// -----------------------------------------------------------------------------
+
 ////////////////////////////////////////////////////////////////////////////////
-/// parseJsonBody
+/// @brief handle for useQuery
+////////////////////////////////////////////////////////////////////////////////
+
+void RestAqlHandler::handleUseQuery (std::string const& operation,
+                                     Query* query,
+                                     Json const& queryJson) {
+  bool found;
+  std::string shardId;
+  char const* shardIdCharP = _request->header("shard-id", found);
+  if (found && shardIdCharP != nullptr) {
+    shardId = shardIdCharP;
+  }
+
+  Json answerBody(Json::Array, 2);
+
+  if (operation == "getSome") {
+    auto atLeast = JsonHelper::getNumericValue<uint64_t>(queryJson.json(),
+                                                         "atLeast", 1);
+    auto atMost = JsonHelper::getNumericValue<uint64_t>(queryJson.json(),
+                               "atMost", ExecutionBlock::DefaultBatchSize);
+    std::unique_ptr<AqlItemBlock> items;
+    if (shardId.empty()) {
+      items.reset(query->engine()->getSome(atLeast, atMost));
+    }
+    else {
+      auto scatter = static_cast<ScatterBlock*>(query->engine()->root());
+      if (scatter->getPlanNode()->getType() != ExecutionNode::SCATTER) {
+        THROW_ARANGO_EXCEPTION(TRI_ERROR_INTERNAL);
+      }
+      items.reset(scatter->getSomeForShard(atLeast, atMost, shardId));
+    }
+    if (items.get() == nullptr) {
+      answerBody("exhausted", Json(true))
+                ("error", Json(false));
+    }
+    else {
+      try {
+        answerBody = items->toJson(query->trx());
+//std::cout << "ANSWERBODY: " << JsonHelper::toString(answerBody.json()) << "\n\n";        
+      }
+      catch (...) {
+        generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_HTTP_SERVER_ERROR,
+                      "cannot transform AqlItemBlock to Json");
+        return;
+      }
+    }
+  }
+  else if (operation == "skipSome") {
+    auto atLeast = JsonHelper::getNumericValue<uint64_t>(queryJson.json(),
+                                                         "atLeast", 1);
+    auto atMost = JsonHelper::getNumericValue<uint64_t>(queryJson.json(),
+                               "atMost", ExecutionBlock::DefaultBatchSize);
+    size_t skipped;
+    try {
+      if (shardId.empty()) {
+        skipped = query->engine()->skipSome(atLeast, atMost);
+      }
+      else {
+        auto scatter = static_cast<ScatterBlock*>(query->engine()->root());
+        if (scatter->getPlanNode()->getType() != ExecutionNode::SCATTER) {
+          THROW_ARANGO_EXCEPTION(TRI_ERROR_INTERNAL);
+        }
+        skipped = scatter->skipSomeForShard(atLeast, atMost, shardId);
+      }
+    }
+    catch (...) {
+      generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_HTTP_SERVER_ERROR,
+                    "skipSome lead to an exception");
+      return;
+    }
+    answerBody("skipped", Json(static_cast<double>(skipped)))
+              ("error", Json(false));
+  }
+  else if (operation == "skip") {
+    auto number = JsonHelper::getNumericValue<uint64_t>(queryJson.json(),
+                                                        "number", 1);
+    try {
+      bool exhausted;
+      if (shardId.empty()) {
+        exhausted = query->engine()->skip(number);
+      }
+      else {
+        auto scatter = static_cast<ScatterBlock*>(query->engine()->root());
+        if (scatter->getPlanNode()->getType() != ExecutionNode::SCATTER) {
+          THROW_ARANGO_EXCEPTION(TRI_ERROR_INTERNAL);
+        }
+        exhausted = scatter->skipForShard(number, shardId);
+      }
+
+      answerBody("exhausted", Json(exhausted))
+                ("error", Json(false));
+    }
+    catch (...) {
+      generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_HTTP_SERVER_ERROR,
+                    "skip lead to an exception");
+      return;
+    }
+  }
+  else if (operation == "initializeCursor") {
+    auto pos = JsonHelper::getNumericValue<size_t>(queryJson.json(),
+                                                   "pos", 0);
+    std::unique_ptr<AqlItemBlock> items;
+    int res;
+    try {
+      if (JsonHelper::getBooleanValue(queryJson.json(), "exhausted", true)) {
+        res = query->engine()->initializeCursor(nullptr, 0);
+      }
+      else {
+        items.reset(new AqlItemBlock(queryJson.get("items")));
+        res = query->engine()->initializeCursor(items.get(), pos);
+      }
+    }
+    catch (...) {
+      generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_HTTP_SERVER_ERROR,
+                    "initializeCursor lead to an exception");
+      return;
+    }
+    answerBody("error", Json(res == TRI_ERROR_NO_ERROR))
+              ("code", Json(static_cast<double>(res)));
+  }
+  else if (operation == "shutdown") {
+    int res = TRI_ERROR_INTERNAL;
+    try {
+      res = query->engine()->shutdown();
+      _queryRegistry->destroy(_vocbase, _qId);
+    }
+    catch (...) {
+      generateError(HttpResponse::SERVER_ERROR, TRI_ERROR_HTTP_SERVER_ERROR,
+                    "shutdown lead to an exception");
+      return;
+    }
+    answerBody("error", res == TRI_ERROR_NO_ERROR ? Json(false) : Json(true))
+              ("code", Json(static_cast<double>(res)));
+  }
+  else {
+    generateError(HttpResponse::NOT_FOUND, TRI_ERROR_HTTP_NOT_FOUND);
+    return;
+  }
+
+  _response = createResponse(triagens::rest::HttpResponse::OK);
+  _response->setContentType("application/json; charset=utf-8");
+  _response->body().appendText(answerBody.toString());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief extract the JSON from the request
 ////////////////////////////////////////////////////////////////////////////////
 
 TRI_json_t* RestAqlHandler::parseJsonBody () {
