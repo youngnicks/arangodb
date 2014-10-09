@@ -1,5 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports, ArangoClusterInfo, ArangoServerState*/
+/*global KEYSPACE_CREATE, KEY_SET, KEY_GET, KEY_AT*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel module. Offers all submodules of pregel.
@@ -37,7 +38,9 @@ var ArangoError = arangodb.ArangoError;
 
 var Mapping = function(executionNumber) {
   this._isPrimary = ArangoServerState.role() === "PRIMARY";
-  this._map = pregel.getGlobalCollection(executionNumber).document("map");
+  this.space = "P_" + executionNumber + "_MAPPING";
+  this.vertexShards = KEY_GET(this.space, "vertexShards");
+  // this._map = pregel.getGlobalCollection(executionNumber).document("map");
 };
 
 Mapping.prototype.getResultCollection = function (id) {
@@ -67,6 +70,14 @@ Mapping.prototype.getGlobalCollectionShards = function () {
   return this._map.shardMap; 
 };
 
+Mapping.prototype.getLocalShards = function () {
+  return KEY_GET(this.space, "serverVertexShards");
+};
+
+Mapping.prototype.getGlobalShards = function () {
+  return this.vertexShards;
+};
+
 Mapping.prototype.getLocalCollectionShards = function (col) {
   return this._map.serverShardMap[pregel.getServerName()][col]; 
 };
@@ -88,7 +99,7 @@ Mapping.prototype.getLocalResultShardMapping = function () {
 };
 
 Mapping.prototype.getResultShard = function (shard) {
-  return this._map.resultShards[shard];
+  return KEY_AT(this.space, "resultVertexShards", shard);
 };
 
 Mapping.prototype.getShardKeysForCollection = function (collection) {
@@ -104,11 +115,20 @@ Mapping.prototype.getShardKeysForCollection = function (collection) {
   return keys;
 };
 
+Mapping.prototype.getVertexShard = function (shardIndex) {
+  return this.vertexShards[shardIndex];
+};
+
+Mapping.prototype.getShardId = function (shard) {
+  return this.vertexShards.indexOf(shard);
+};
+
+Mapping.prototype.getEdgeShard = function (shardIndex) {
+  return KEY_AT(this.space, "edgeShards", shardIndex);
+};
+
 Mapping.prototype.getResponsibleEdgeShards = function (shard) {
-  var t = p.stopWatch();
-  var res = this._map.edgeShards[shard];
-  p.storeWatch("RespEdgeShards", t);
-  return res;
+  return KEY_GET(this.space, "serverEdgeShards");
 };
 
 Mapping.prototype.getToLocationObject = function (edge, toCol) {
@@ -128,19 +148,8 @@ Mapping.prototype.getToLocationObject = function (edge, toCol) {
   return obj;
 };
 
-Mapping.prototype.findOriginalCollection = function (shard) {
-  var list = this._map.serverShardMap[pregel.getServerName()];
-  var i, col, shardList;
-  for (col in list) {
-    if (list.hasOwnProperty(col)) {
-      shardList = list[col];
-      for (i = 0; i < shardList.length; ++i) {
-        if (shard === shardList[i]) {
-          return col;
-        }
-      }
-    }
-  }
+Mapping.prototype.findOriginalCollection = function (index) {
+  return KEY_AT(this.space, "collectionNames", index);
 };
 
 Mapping.prototype.getToShardKey = function(toKey, colName) {

@@ -46,7 +46,6 @@ var pageRank = function (vertex, message, global) {
     }
     return;
   }
-  var result = vertex._getResult();
   var alpha = global.alpha;
   var newPR = 0;
   var next;
@@ -56,8 +55,7 @@ var pageRank = function (vertex, message, global) {
   }
   newPR *= alpha;
   newPR += (1 - alpha) / total;
-  result[0] = newPR;
-  vertex._setResult(result);
+  vertex._setResult(newPR);
   if (global.step === 30) {
     vertex._deactivate();
     return;

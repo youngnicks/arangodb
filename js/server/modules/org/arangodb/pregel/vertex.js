@@ -106,7 +106,7 @@ Vertex.prototype._setResult = function (result) {
 };
 
 Vertex.prototype.getShard = function () {
-  return this.__parent.shardMapping[this.__current[SHARD]];
+  return this.__current[SHARD];
 };
 
 
@@ -116,8 +116,6 @@ var VertexList = function (mapping) {
   this.current = -1;
   this.length = 0;
   this.actives = 0;
-  this.shardMapping = [];
-  this.edgeShardMapping = [];
   this.list = [];
   this.vertex = new Vertex(this, this.list, this.edgeCursor);
 };
@@ -125,32 +123,26 @@ var VertexList = function (mapping) {
 // Shard == Name of the collection
 // sourceList == shard.NTH() content of documents
 VertexList.prototype.addShardContent = function (shard, collection, keys) {
-  var index, i, j, e, out, doc, vertexInfo, eShardId;
+  var index, i, j, e, out, doc, vertexInfo, eShardId, toKey;
   var l = keys.length;
-  var shardId = this.shardMapping.length;
-  Array.prototype.push.apply(this.shardMapping, [shard, collection]);
-  var respEdgeShards = this.mapping.getResponsibleEdgeShards(shard);
-  for (i = 0; i < respEdgeShards.length; ++i) {
-    eShardId = this.edgeShardMapping.indexOf(respEdgeShards[i]);
-    if (eShardId === -1) {
-      eShardId = this.edgeShardMapping.length;
-      this.edgeShardMapping.push(respEdgeShards[i]);
-    }
-    respEdgeShards[i] = eShardId;
-  }
+  var t;
+  var time = require("internal").time;
+  var respEdgeShardIds = this.mapping.getResponsibleEdgeShards(shard);
   for (index = 0; index < l; ++index) {
     // Vertex Info: [_key, shard, result, active, deleted, ..edges..]
-    vertexInfo = [keys[index], shardId, undefined, true, false];
+    vertexInfo = [keys[index], shard, undefined, true, false];
     this.list.push(vertexInfo);
     doc = collection + "/" + keys[index];
-    for (i = 0; i < respEdgeShards.length; ++i) {
-      eShardId = respEdgeShards[i];
+    for (i = 0; i < respEdgeShardIds.length; ++i) {
+      eShardId = respEdgeShardIds[i];
       // TODO Ask Frank for direct Index Access
-      out = db[this.edgeShardMapping[eShardId]].outEdges(doc);
+      t = time();
+      out = db[this.mapping.getEdgeShard(eShardId)].outEdges(doc);
+      KEY_INCR("blubber", "outedges", time() - t);
       for (j = 0; j < out.length; ++j) {
         e = out[j];
-        var toKey = e._to.split("/")[1];
-    // Edge Info: [.. _key, shard, to, shardKey, result, deleted ..]
+        toKey = e._to.split("/")[1];
+        // Edge Info: [.. _key, shard, to, shardKey, result, deleted ..]
         Array.prototype.push.apply(vertexInfo, [
           e._key,
           eShardId,
@@ -184,11 +176,11 @@ VertexList.prototype.next = function () {
 };
 
 VertexList.prototype.readValue = function (shard, key, attr) {
-  return db[this.shardMapping[shard]].document(key)[attr];
+  return db[this.mapping.getVertexShard(shard)].document(key)[attr];
 };
 
 VertexList.prototype.readEdgeValue = function (shard, key, attr) {
-  return db[this.edgeShardMapping[shard]].document(key)[attr];
+  return db[this.mapping.getEdgeShard(shard)].document(key)[attr];
 };
 
 VertexList.prototype.decrActives = function () {
@@ -205,10 +197,10 @@ VertexList.prototype.countActives = function () {
 
 VertexList.prototype.saveAll = function () {
   var resultShards =  [];
+  var respShards = this.mapping.getLocalShards();
   var i, v;
-  for (i = 0; i < this.shardMapping.length; i += 2) {
-    resultShards.push(db[this.mapping.getResultShard(this.shardMapping[i])]);
-    resultShards.push(this.mapping.getResultCollection(this.shardMapping[i+1]));
+  for (i = 0; i < respShards.length; ++i) {
+    resultShards.push(db[this.mapping.getResultShard(respShards[i])]);
   }
   for (i = 0; i < this.length; ++i) {
     v = this.list[i];
@@ -220,10 +212,6 @@ VertexList.prototype.saveAll = function () {
     //TODO Save Edges
   }
   return;
-};
-
-VertexList.prototype.getShardName = function (shardId) {
-  return this.shardMapping[shardId];
 };
 
 exports.Vertex = Vertex;
