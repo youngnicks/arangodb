@@ -40,6 +40,7 @@ var Mapping = function(executionNumber) {
   this._isPrimary = ArangoServerState.role() === "PRIMARY";
   this.space = "P_" + executionNumber + "_MAPPING";
   this.vertexShards = KEY_GET(this.space, "vertexShards");
+  this.clusterCollections = KEY_GET(this.space, "clusterCollections");
   // this._map = pregel.getGlobalCollection(executionNumber).document("map");
 };
 

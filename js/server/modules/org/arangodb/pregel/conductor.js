@@ -313,6 +313,7 @@ var createResultGraph = function (graph, executionNumber) {
   var serverVertexShards = {};
   var resultCollectionNames = [];
   var collectionNames = [];
+  var clusterCollections = {};
 
   var edgeShards = [];
   var resultEdgeShards = [];
@@ -345,13 +346,14 @@ var createResultGraph = function (graph, executionNumber) {
         distributeShardsLike : col
       });
       colInfo = ArangoClusterInfo.getCollectionInfo(dbName, col);
+      clusterCollections[col] = colInfo.id;
       shards = Object.keys(colInfo.shards);
       resColInfo = ArangoClusterInfo.getCollectionInfo(dbName, resCol);
       resShards = Object.keys(resColInfo.shards);
       for(j = 0; j < shards.length; ++j) {
         vertexShards.push(shards[j]);
         resultVertexShards.push(resShards[j]);
-        serverVertexShards[resColInfo.shards[shards[j]]].push(j);
+        serverVertexShards[colInfo.shards[shards[j]]].push(j);
         collectionNames.push(col);
         resultCollectionNames.push(resCol);
       }
@@ -364,6 +366,7 @@ var createResultGraph = function (graph, executionNumber) {
       resultCollectionNames.push(resCol);
     }
   }
+  
   
   // Create All Edge Collections
   
@@ -385,7 +388,7 @@ var createResultGraph = function (graph, executionNumber) {
       for(j = 0; j < shards.length; ++j) {
         edgeShards.push(shards[j]);
         resultEdgeShards.push(resShards[j]);
-        serverEdgeShards[resColInfo.shards[shards[j]]].push(j);
+        serverEdgeShards[colInfo.shards[shards[j]]].push(j);
       }
     } else {
       db._createEdgeCollection(resCol);
@@ -403,7 +406,8 @@ var createResultGraph = function (graph, executionNumber) {
     resultEdgeShards,
     serverEdgeShards,
     resultCollectionNames,
-    collectionNames
+    collectionNames,
+    clusterCollections
   ];
   // Create the Graph
   var resultEdgeDefinitions = [], resultEdgeDefinition;
