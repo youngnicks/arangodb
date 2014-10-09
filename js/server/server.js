@@ -73,6 +73,30 @@
   // load the actions from the actions directory
   require("org/arangodb/actions").startup();
 
+  var Foxx = require("org/arangodb/foxx");
+  var WORKERS = 4;
+  require("console").log("Kram");
+  var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
+  Foxx.queues.registerJobType("pregel-register-job", function(params) {
+    var queueName = params.queueName;
+    var worker = params.worker;
+    var glob = params.globals;
+    var tasks = require("org/arangodb/tasks");
+    tasks.createNamedQueue({
+      name: queueName,
+      threads: 1,
+      size: 1,
+      worker: worker
+    });
+    tasks.addJob(
+      queueName,
+      {
+        step: 0,
+        global: glob
+      }
+    );
+  });
+
   return true;
 }());
 

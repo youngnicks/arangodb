@@ -154,27 +154,10 @@ var sendMessages, createTaskQueue;
 
 if (!pregel.isClusterSetup()) {
   // Define code which has to be executed in a local setup
+  /*
   var jobRegisterQueue = Foxx.queues.create("pregel-register-jobs-queue", WORKERS);
+  */
 
-  Foxx.queues.registerJobType("pregel-register-job", function(params) {
-    var queueName = params.queueName;
-    var worker = params.worker;
-    var glob = params.globals;
-    var tasks = require("org/arangodb/tasks");
-    tasks.createNamedQueue({
-      name: queueName,
-      threads: 1,
-      size: 1,
-      worker: worker
-    });
-    tasks.addJob(
-      queueName,
-      {
-        step: 0,
-        global: glob
-      }
-    );
-  });
 
   sendMessages = function (queue, shardList, workerId, step, execNr) {
     var i, shard;
@@ -195,6 +178,8 @@ if (!pregel.isClusterSetup()) {
   createTaskQueue = function (executionNumber, algorithms, globals, wIndex, inbox) {
     KEYSPACE_CREATE("P_" + executionNumber, 2, true);
     KEY_SET("P_" + executionNumber, "done", 0);
+    require("console").log("Pushing");
+    var jobRegisterQueue = Foxx.queues.get("pregel-register-jobs-queue");
     jobRegisterQueue.push("pregel-register-job", {
       queueName: getQueueName(executionNumber, wIndex),
       worker: algorithmForQueue(algorithms, executionNumber, wIndex, inbox),
@@ -414,7 +399,7 @@ var addCleanUpTask = function (queue) {
 
 var saveMapping = function(executionNumber, map) {
   var space = "P_" + executionNumber + "_MAPPING";
-  KEYSPACE_CREATE(space, 8);
+  KEYSPACE_CREATE(space, 9);
   KEY_SET(space, "vertexShards" , map[0]);
   KEY_SET(space, "resultVertexShards" , map[1]);
   KEY_SET(space, "serverVertexShards" , map[2][pregel.getServerName()]);
@@ -423,6 +408,7 @@ var saveMapping = function(executionNumber, map) {
   KEY_SET(space, "serverEdgeShards" , map[5][pregel.getServerName()]);
   KEY_SET(space, "resultCollectionNames" , map[6]);
   KEY_SET(space, "collectionNames" , map[7]);
+  KEY_SET(space, "clusterCollections" , map[8]);
 };
 
 var loadMapping = function(executionNumber) {
