@@ -39,6 +39,15 @@ var RESULT = 2;
 var ACTIVE = 3;
 var DELETED = 4;
 
+var EDGE_KEY = 0;
+var EDGE_SHARD = 1;
+var EDGE_TARGET = 2;
+var EDGE_SHARDKEY = 3;
+var EDGE_RESULT = 4;
+var EDGE_DELETED = 5;
+var EDGESTART = 5;
+var EDGEOFFSET = 6;
+
 var p = require("org/arangodb/profiler");
 
 var internal = require("internal");
@@ -198,7 +207,7 @@ VertexList.prototype.countActives = function () {
 VertexList.prototype.saveAll = function () {
   var resultShards =  [];
   var respShards = this.mapping.getLocalShards();
-  var i, v;
+  var i, v, j, current;
   for (i = 0; i < respShards.length; ++i) {
     resultShards.push(db[this.mapping.getResultShard(respShards[i])]);
   }
@@ -209,7 +218,18 @@ VertexList.prototype.saveAll = function () {
       _deleted: v[DELETED],
       result: v[RESULT]
     });
-    //TODO Save Edges
+
+    for (j = EDGESTART; j < v.length; j = j + EDGEOFFSET) {
+      db[this.mapping.getResultEdgeShard(v[EDGE_SHARD + j])].save(
+        this.mapping.getResultShard(v[SHARD]) + "/" + v[KEY],
+        this.mapping.getResultShard(v[EDGE_SHARDKEY + j]) + "/" + v[EDGE_TARGET + j],
+        {
+          _key: v[EDGE_KEY + j],
+          _deleted: v[EDGE_DELETED + j],
+          result: v[EDGE_RESULT + j]
+        }
+      );
+    }
   }
   return;
 };

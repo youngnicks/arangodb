@@ -31,15 +31,19 @@
 
 var shortestPath = function (vertex, message, global) {
   _ = require("underscore");
-  var distanceAttrib;
+  var distanceAttrib = global.distance;
   var next;
 
   var CALC_PATHS = "paths";
   var CALC_CENTRALITY = "centralityMeasures";
 
   var getDistance = function (edge) {
-    if (distanceAttrib) {
+    if (distanceAttrib && edge[distanceAttrib]) {
       return edge[distanceAttrib];
+    } else if (distanceAttrib && edge._get(distanceAttrib)) {
+      return edge._get(distanceAttrib);
+    } else if (distanceAttrib) {
+      return Infinity;
     } else {
       return 1;
     }
@@ -55,7 +59,7 @@ var shortestPath = function (vertex, message, global) {
     return r
   };
 
-  var result = vertex._getResult(), saveResult = false;
+  var result = vertex._getResult() || {}, saveResult = false;
 
   switch (result.finalStep) {
     case CALC_CENTRALITY:
@@ -84,14 +88,15 @@ var shortestPath = function (vertex, message, global) {
               }
             );
           } else {
-            vertex._outEdges.forEach(function (e) {
-              message.sendTo(e._targetVertex, {
+            while (vertex._outEdges.hasNext()) {
+              e = vertex._outEdges.next();
+              message.sendTo(e._getTarget(), {
                 r: next.data.r,
                 t: next.data.t,
                 d: result.sP[next.data.t].distance - result.sP[e._to].distance,
                 p: mergePaths(next.data.p, result.sP[e._to].paths)
               });
-            });
+            }
           }
         } else {
           if (!result.sP[next.data.t].paths) {
@@ -115,21 +120,24 @@ var shortestPath = function (vertex, message, global) {
 
           }
         };
-        result.sP[vertex._doc._id] = {
+        result.sP[vertex._id] = {
           distance: 0,
-          shard: vertex._locationInfo.shard
+          shard: vertex._getLocationInfo()[1]
         };
-        vertex._outEdges.forEach(function (e) {
+        while (vertex._outEdges.hasNext()) {
+          e = vertex._outEdges.next();
           var data = {};
           data[e._from] = {};
           data[e._from][e._to] = {
             distance: getDistance(e),
-            shard: e._targetVertex.shard
+            shard: e._getTarget()[1]
           };
-
+          var edgeResult = e._getResult() || {};
+          edgeResult.distance = getDistance(e);
+          e._setResult(edgeResult);
           result.sP[e._to] = data[e._from][e._to];
-          message.sendTo(e._targetVertex, data);
-        });
+          message.sendTo(e._getTarget(), data);
+        }
         saveResult = true;
 
       } else if (global.step === 1) {
@@ -140,7 +148,7 @@ var shortestPath = function (vertex, message, global) {
             data[v] = {};
             Object.keys(result.sP).forEach(function (s) {
               data[v][s] = {
-                distance: next.data[v][vertex._doc._id].distance + result.sP[s].distance,
+                distance: next.data[v][vertex._id].distance + result.sP[s].distance,
                 shard: result.sP[s].shard
               };
             });
@@ -152,21 +160,21 @@ var shortestPath = function (vertex, message, global) {
       } else if (global.step === 2) {
         while (message.hasNext()) {
           next = message.next();
-          Object.keys(next.data[vertex._doc._id]).forEach(function (t) {
-            if (vertex._doc._id === t) {
+          Object.keys(next.data[vertex._id]).forEach(function (t) {
+            if (vertex._id === t) {
               return;
             }
             if (!result.sP[t]) {
               result.sP[t] = {
                 distance: Infinity,
-                shard: next.data[vertex._doc._id][t].shard
+                shard: next.data[vertex._id][t].shard
               };
               saveResult = true;
             }
 
-            if (result.sP[t].distance > next.data[vertex._doc._id][t].distance) {
+            if (result.sP[t].distance > next.data[vertex._id][t].distance) {
               saveResult = true;
-              result.sP[t] = next.data[vertex._doc._id][t]
+              result.sP[t] = next.data[vertex._id][t]
             }
           });
         }
@@ -179,7 +187,7 @@ var shortestPath = function (vertex, message, global) {
           next = message.next();
           Object.keys(next.data).forEach(function (t) {
             next.data[t].distance = next.data[t].distance + result.sP[next.sender._id].distance;
-            if (vertex._doc._id === t) {
+            if (vertex._id === t) {
               return;
             }
             if (!result.sP[t]) {
@@ -220,13 +228,6 @@ var finalAlgorithm = function (vertex, message, global) {
     return;
   }
   if (global.calculate === "paths") {
-    var getDistance = function (edge) {
-      if (distanceAttrib) {
-        return edge[distanceAttrib];
-      } else {
-        return 1;
-      }
-    };
     var done = true;
     Object.keys(sP).forEach(function (target) {
       if (!sP[target].done) {
@@ -238,14 +239,16 @@ var finalAlgorithm = function (vertex, message, global) {
     }
     result.finalStep = global.calculate;
 
-    vertex._outEdges.forEach(function (e) {
-      if (getDistance(e) === result.sP[e._to].distance) {
+    while (vertex._outEdges.hasNext()) {
+      var e = vertex._outEdges.next();
+      if (e._getResult().distance === result.sP[e._to].distance) {
         result.sP[e._to].paths = [
           [e._from + "_" + e._to]
         ];
         result.sP[e._to].done = true;
       }
-    });
+    }
+    vertex._outEdges.resetCursor();
     Object.keys(sP).forEach(function (target) {
       if (result.sP[target].done) {
         return;
@@ -255,16 +258,18 @@ var finalAlgorithm = function (vertex, message, global) {
         result.sP[target].done = true;
         return;
       }
-      vertex._outEdges.forEach(function (e) {
-        message.sendTo(e._targetVertex, {
-          r: vertex._locationInfo,
+      while (vertex._outEdges.hasNext()) {
+        var e = vertex._outEdges.next();
+        message.sendTo(e._getTarget(), {
+          r: vertex._getLocationInfo(),
           t: target,
           d: result.sP[target].distance - result.sP[e._to].distance,
           p: [
             [e._from + "_" + e._to]
           ]
         });
-      });
+      }
+      vertex._outEdges.resetCursor();
     })
   }
   if (global.calculate === "centralityMeasures" && !global.maxRevEccentricity) {
@@ -282,7 +287,7 @@ var finalAlgorithm = function (vertex, message, global) {
     });
     global.data.push({e: result.absEccentricity, c: result.absCloseness});
     result.finalStep = global.calculate;
-    message.sendTo(vertex._locationInfo, {});
+    message.sendTo(vertex._getLocationInfo(), {});
   }
   vertex._deactivate();
 };

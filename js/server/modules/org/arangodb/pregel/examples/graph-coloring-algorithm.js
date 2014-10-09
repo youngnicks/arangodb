@@ -67,8 +67,8 @@ var graphColoring = function (vertex, message, global) {
       if (result.degree === undefined) {
         while (message.hasNext()) {
           next = message.next();
-          if (Object.keys(result.neighbors).indexOf(next.sender._id) === -1) {
-            result.neighbors[next.sender._id] = next.sender.shard;
+          if (Object.keys(result.neighbors).indexOf(JSON.stringify(next.sender)) === -1) {
+            result.neighbors[JSON.stringify(next.sender)] = next.sender;
           }
         }
         result.degree = Object.keys(result.neighbors).length;
@@ -77,7 +77,7 @@ var graphColoring = function (vertex, message, global) {
       if (1.0 / (2 * result.degree) <= random || result.degree === 0) {
         result.type = STATE_TENTATIVELY_IN;
         Object.keys(result.neighbors).forEach(function (e) {
-          message.sendTo({_id: e, shard: result.neighbors[e]}, {id: vertex._id, msg: MSG_TIS, degree: result.degree});
+          message.sendTo(result.neighbors[e], {id: vertex._id, msg: MSG_TIS, degree: result.degree});
         });
       }
       break;
@@ -103,8 +103,8 @@ var graphColoring = function (vertex, message, global) {
           result.color = color;
           Object.keys(result.neighbors).forEach(function (e) {
             message.sendTo(
-              {_id: e, shard: result.neighbors[e]},
-              {msg: MSG_NEIGHBOR, id: vertex._id}
+              result.neighbors[e],
+              {msg: MSG_NEIGHBOR, lI: vertex._getLocationInfo().shard + "/" + vertex._getLocationInfo()._key}
             );
           });
           vertex._delete();
@@ -122,13 +122,13 @@ var graphColoring = function (vertex, message, global) {
         next = message.next();
         if (next.data.msg === MSG_NEIGHBOR) {
           result.type = NOT_IN;
-          delete result.neighbors[next.data.id];
+          delete result.neighbors[next.data.lI];
         }
       }
       if (result.type === NOT_IN) {
         Object.keys(result.neighbors).forEach(function (e) {
           message.sendTo(
-            {_id: e, shard: result.neighbors[e]},
+            {_key: e, shard: result.neighbors[e]},
             {msg: MSG_DECREMENT}
           );
         });
@@ -158,10 +158,11 @@ var graphColoring = function (vertex, message, global) {
         neighbors: {},
         phase: PHASE_PRE_INITIALIZATION
       };
-      vertex._outEdges.forEach(function (e) {
-        result.neighbors[e._targetVertex._id] = e._targetVertex.shard;
-        message.sendTo(e._targetVertex, {msg: MSG_CONTACT});
-      });
+      while (vertex._outEdges.hasNext()) {
+        e = vertex._outEdges.next();
+        result.neighbors[JSON.stringify(e._getTarget())] = e._getTarget();
+        message.sendTo(e._getTarget(), {msg: MSG_CONTACT});
+      }
   }
   vertex._setResult(result);
   if (global.retype === true) {

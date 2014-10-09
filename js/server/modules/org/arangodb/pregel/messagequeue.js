@@ -214,10 +214,10 @@ VertexMessageQueue.prototype._clear = function () {
 /// Sends a message to a vertex defined by target.
 ///
 /// @PARAMS
-/// @PARAM{target, object, required} : The recipient of the message, can either be a vertex _id or a
-/// location object containing the attributes *_id* and *shard*.
+/// @PARAM{target, object, required} : The recipient of the message, has to be a location array containing
+/// a *_key* as first element and *shard* as second.
 /// @PARAM{data, object, required} : The message's content, can be a string or an object.
-/// @PARAM{sendLocation, boolean, optional} : If false the location object of the sender is not added.
+/// @PARAM{sendLocation, boolean, optional} : If false the location array of the sender is not added.
 /// as *sender* to the message.
 ///
 /// @EXAMPLES
@@ -253,7 +253,8 @@ VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
     throw err;
   } 
   if (sendLocation !== false) {
-    this._parent._send(target, data, this._vertexInfo);
+    this._parent._send(target, {data: data}, this._vertexInfo);
+    return;
   }
   this._parent._send(target, {data: data});
   p.storeWatch("sendTo", t);
@@ -345,6 +346,9 @@ Queue.prototype._send = function (target, msg, sender) {
   var outbox = this.__outbox[shard][workerId];
   if (!outbox.hasOwnProperty(key)) {
     outbox[key] = [null, []];
+  }
+  if (sender) {
+    msg.sender = sender;
   }
   if (sender || !this.__aggregate) {
     outbox[key][1].push(msg);

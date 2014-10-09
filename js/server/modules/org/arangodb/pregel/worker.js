@@ -127,7 +127,7 @@ var algorithmForQueue = function (algorithms, executionNumber, wIndex, inbox) {
     + "var worker = pregel.Worker;"
     + "var paramAlgo = {"
     +   "algorithm:(" + algorithms.algorithm + "),"
-    +   "finalAlgorithm:(" + algorithms.finalAlgorithm + "),"
+    +   "finalAlgorithm:(" + algorithms.final + "),"
     +   "aggregator:" + (algorithms.hasOwnProperty("aggregator") ? "(" + algorithms.aggregator + ")" : "null")
     + "};"
     + "var scope = worker.createScope("
@@ -178,7 +178,6 @@ if (!pregel.isClusterSetup()) {
   createTaskQueue = function (executionNumber, algorithms, globals, wIndex, inbox) {
     KEYSPACE_CREATE("P_" + executionNumber, 2, true);
     KEY_SET("P_" + executionNumber, "done", 0);
-    require("console").log("Pushing");
     var jobRegisterQueue = Foxx.queues.get("pregel-register-jobs-queue");
     jobRegisterQueue.push("pregel-register-job", {
       queueName: getQueueName(executionNumber, wIndex),
@@ -522,8 +521,6 @@ var queueCleanupDone = function (executionNumber) {
         "/_api/pregel/finishedCleanup", body, {}, coordOptions);
       var debug = ArangoClusterComm.wait(coordOptions);
     } else {
-      require("console").log("Time for out edges", KEY_GET("blubber", "outedges"));
-      require("console").log("Time for waiting", KEY_GET("blubber", "waiting"));
       pregel.Conductor.finishedCleanUp(executionNumber, pregel.getServerName());
     }
     db._drop(pregel.genGlobalCollectionName(executionNumber));

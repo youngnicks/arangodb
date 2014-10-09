@@ -30,7 +30,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var boruvka = function (vertex, message, global) {
-  //require("internal").print(global)
 
   _ = require("underscore");
   var distanceAttrib = global.distance;
@@ -62,10 +61,9 @@ var boruvka = function (vertex, message, global) {
       e = vertex._outEdges.next();
       var edgeResult = e._getResult();
       var obj = {
-        _id: e.__edgeInfo._id,
-        _to: e._getTarget()._key,
+        _id: e._get("_id"),
+        _to: e._getTarget()[0],
         _target: e._getTarget(),
-        from: vertex._getLocationInfo(),
         distance: edgeResult.distance
       };
       if (edgeResult.distance < min) {
@@ -81,7 +79,6 @@ var boruvka = function (vertex, message, global) {
         _id: e._id,
         _to: e._to,
         _target: e._target,
-        from: vertex._getLocationInfo(),
         distance: e.distance
       };
       if (e.distance < min) {
@@ -96,16 +93,16 @@ var boruvka = function (vertex, message, global) {
   };
 
 
-  var result = vertex._getResult();
+  var result = vertex._getResult() || {};
 
   if (global.step === 0) {
 
     while (vertex._outEdges.hasNext()) {
       var e = vertex._outEdges.next();
-      var edgeResult = e._getResult();
+      var edgeResult = e._getResult() || {};
       edgeResult.distance = getDistance(e);
       e._setResult(edgeResult);
-      var data = {edgeId: e.__edgeInfo._id, distance: edgeResult.distance};
+      var data = {edgeId: e._get("_id"), distance: edgeResult.distance};
       message.sendTo(e._getTarget(), data);
     }
   }
@@ -118,7 +115,7 @@ var boruvka = function (vertex, message, global) {
       var inEdge = {
         _id: next.data.edgeId,
         _target : next.sender,
-        _to: next.sender._key,
+        _to: next.sender[0],
         root: next.sender,
         distance : next.data.distance
       };
@@ -134,7 +131,7 @@ var boruvka = function (vertex, message, global) {
     result.pointsTo = result.closestEdge._target;
     while (vertex._outEdges.hasNext()) {
       e = vertex._outEdges.next();
-      if (e.__edgeInfo._id === result.closestEdge._id) {
+      if (e._get("_id") === result.closestEdge._id) {
         var edgeResult = e._getResult();
         edgeResult.inSpanTree = true;
         e._setResult(edgeResult);
@@ -155,7 +152,7 @@ var boruvka = function (vertex, message, global) {
           if (next.data.edgeId) {
             while (vertex._outEdges.hasNext()) {
               e = vertex._outEdges.next();
-              if (e.__edgeInfo._id === next.data.edgeId) {
+              if (e._get("_id") === next.data.edgeId) {
                 var edgeResult = e._getResult();
                 edgeResult.inSpanTree = true;
                 e._setResult(edgeResult);
@@ -189,16 +186,16 @@ var boruvka = function (vertex, message, global) {
 
           break;
         case PHASE_FIND_SUPERVERTEX:
-          if (result.pointsTo._key !== next.data.pointsTo._key &&
-            [result.pointsTo._key , next.data.pointsTo._key].sort()[0] === result.pointsTo._key
+          if (JSON.stringify(result.pointsTo) !== JSON.stringify(next.data.pointsTo) &&
+            [result.pointsTo[0] , next.data.pointsTo[0]].sort()[0] === result.pointsTo[0]
             ) {
             if (result.type !== TYPE_SUPERVERTEX) {
               message.sendTo(result.pointsTo, next.data);
             } else {
-              if (!result.connectedSuperVertices[next.data.pointsTo._key] ||
-                result.connectedSuperVertices[next.data.pointsTo._key].distance > next.data.distance
+              if (!result.connectedSuperVertices[JSON.stringify(next.data.pointsTo)] ||
+                result.connectedSuperVertices[JSON.stringify(next.data.pointsTo)].distance > next.data.distance
                 ) {
-                result.connectedSuperVertices[next.data.pointsTo._key] = next.data;
+                result.connectedSuperVertices[JSON.stringify(next.data.pointsTo)] = next.data;
               }
             }
           }
@@ -208,7 +205,7 @@ var boruvka = function (vertex, message, global) {
         case PHASE_CONNECT_TREES:
           while (vertex._outEdges.hasNext()) {
             e = vertex._outEdges.next();
-            if (e.__edgeInfo._id === next.data.edgeId) {
+            if (e._get("_id") === next.data.edgeId) {
               var edgeResult = e._getResult();
               edgeResult.inSpanTree = true;
               e._setResult(edgeResult);
@@ -257,7 +254,7 @@ var finalAlgorithm = function (vertex, message, global) {
         {
           type: PHASE_FIND_SUPERVERTEX,
           pointsTo: result.pointsTo,
-          edgeId: e.__edgeInfo._id,
+          edgeId: e._get("_id"),
           root: vertex._getLocationInfo(),
           distance: edgeResult.distance
         }
