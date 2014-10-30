@@ -56,7 +56,7 @@ var CONDUCTOR = "conductor";
 var ALGORITHM = "algorithm";
 var MAP = "map";
 var id;
-var WORKERS = 1;
+var WORKERS = 4;
 
 var getInboxName = function (execNr, step, workerId) {
   return "In_P_" + execNr + "_" + (step % 2) + "_" + workerId;
@@ -70,8 +70,7 @@ var getQueueName = function (executionNumber, counter) {
   return "P_QUEUE_" + executionNumber + "_" + counter;
 };
 
-var receiveMessages = function(executionNumber, shard, step, senderName, senderWorker, messageString) {
-  var msg = JSON.parse(messageString);
+var receiveMessages = function(executionNumber, shard, step, senderName, senderWorker, msg) {
   var i = 0;
   var buckets = [];
   var col = db[shard];
@@ -88,7 +87,7 @@ var receiveMessages = function(executionNumber, shard, step, senderName, senderW
   var inbox;
   for (i = 0; i < WORKERS; i++) {
     inbox = getInboxName(executionNumber, step, i);
-    KEY_SET(inbox,  senderName + "_" + senderWorker + "_" + shard, JSON.stringify(buckets[i]));
+    KEY_SET(inbox,  senderName + "_" + senderWorker + "_" + shard, buckets[i]);
     buckets[i] = null;
   }
 };
@@ -205,7 +204,7 @@ if (!pregel.isClusterSetup()) {
         step: step,
         sender: sender,
         worker: workerId,
-        msg: queue._dump(i, workerId)
+        msg: JSON.stringify(queue._dump(i, workerId))
       };
       waitCounter++;
       ArangoClusterComm.asyncRequest("POST","shard:" + shard, dbName,
@@ -320,7 +319,7 @@ var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
           incMessage = KEY_GET(space, String(j));
         }
         KEY_INCR("blubber", "waiting", time() - t);
-        queue._integrateMessage(j, workerId, JSON.parse(incMessage));
+        queue._integrateMessage(j, workerId, incMessage);
       }
     }
   }

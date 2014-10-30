@@ -321,7 +321,6 @@ Queue.prototype._fillQueues = function () {
     msg = KEY_GET(space, key);
     KEY_REMOVE(space, key);
     shard = key.substr(key.lastIndexOf("_") + 1);
-    msg = JSON.parse(msg);
     shardId = this.__mapping.getShardId(shard);
     old = inbox[shardId];
     for (k in msg) {
@@ -362,7 +361,7 @@ Queue.prototype._send = function (target, msg, sender) {
 Queue.prototype._dump = function(shard, workerId) {
   var t = p.stopWatch();
   delete this.__outbox[shard][workerId].count;
-  var res = JSON.stringify(this.__outbox[shard][workerId]);
+  var res = this.__outbox[shard][workerId];
   this.__outbox[shard][workerId] = {count : 0};
   p.storeWatch("dump queue", t);
   return res;
