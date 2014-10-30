@@ -532,7 +532,6 @@ var queueCleanupDone = function (executionNumber) {
 
 var queueDone = function (executionNumber, global, actives, inbox, countMsg, err) {
   var t = p.stopWatch();
-  //require("internal").print(err)
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
     error.errorNum = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.code;

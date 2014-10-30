@@ -1,0 +1,95 @@
+!CHAPTER Borůvka's algorithm (minimum spanning tree)
+
+This is a step by step guide through our paralell implentation of Borůvka's algorithm.
+
+!SECTION Step 0
+
+In step 0 every vertex sends a message to all it's neighbors containing the distance to them.
+
+      if (global.step === 0) {
+        vertex._outEdges.forEach(function (e) {
+          var data = {edgeId: e._id, distance: getDistance(e)};
+          message.sendTo(e._targetVertex, data);
+        });
+      }
+
+
+!SECTION Step 1  
+
+In step 1 every vertex collects it's incoming messages and determines the closest vertex considering it's incoming and outgoing edges:
+
+      if (global.step === 1) {
+          result.inEdges = [];
+
+Loop over incoming messages and transform them into "edge-like" objects:
+
+          while (message.hasNext()) {
+            next = message.next();
+            var inEdge = {
+              _id: next.data.edgeId,
+              _targetVertex: next.sender,
+              _to: next.sender._id,
+              root: next.sender
+            };
+            distanceAttrib ? inEdge[distanceAttrib] = next.data.distance : null;
+            result.inEdges.push(inEdge);
+          }
+Get the shortest active edge from the incoming and outgoing edges:
+
+          result.closestEdge = getMinActiveEdges(vertex, result.inEdges);
+          
+No closest edge ? This vertex is isolated and hence is deactivated directly:
+
+          if (!result.closestEdge) {
+            vertex._deactivate()
+            return;
+          }
+          
+Initial type is set to "unknown":
+
+          result.type = "unknown";
+          
+Each vertex now points to his closest neighbor:
+
+          result.pointsTo = result.closestEdge._target;
+          
+Now we loop over the outgoing edges of the vertex, if any of these points to the closest neighbor it is marked as *inSpanTree*:
+
+          vertex._outEdges.forEach(function (e) {
+            if (e._id === result.closestEdge._id) {
+              var edgeResult = e._getResult();
+              edgeResult.inSpanTree = true;
+              e._setResult(edgeResult);
+            }
+          });
+Send a message of type *Question* to the closest neighbor containing the edgeId of the connecting edge.
+
+          message.sendTo(result.closestEdge._target, {type: "Question", edgeId: result.closestEdge._id});
+          
+Finaly store the resul and deactivate the vertex, if a vertex does not receive any more messages it stays inactive and is not needed anymore:     
+
+          vertex._setResult(result);
+          vertex._deactivate();
+        }
+
+
+The [PageRank algorithm](http://en.wikipedia.org/wiki/PageRank) is an algorithm used by Google Search to rank websites in their search engine results.
+The algorithm ranks websites (vertices in a graph) by the amount and the quality of links (edges in a graph).
+
+A detailed description of our example implementation can be found [here](PageRank.md).
+
+!SECTION Graph coloring algorithm
+
+Our *Graph coloring algorithm* solves the [graph-coloring-problem](http://en.wikipedia.org/wiki/Graph_coloring) which is to assign a color to each vertex in a graph so that 2 connected vertices always have different colors.
+Furthermore a minimum amount of colours shall be used. Our implementation is based on a greedy algorithm introcuded by *Assefaw Gebremedhin* and *Fredrik Manne*. 
+
+A detailed description of our example implementation can be found [here](GraphColoring.md).
+
+!SECTION Shortes-path algorithm
+
+A classic problem in graph theory is the [shortest-path-problem](http://en.wikipedia.org/wiki/Shortest_path_problem). Our example implementation can either calculate the shortest distance between each pair of vertices in a graph 
+and delivers all graph figures based on that ([diameter](http://en.wikipedia.org/wiki/Distance_%28graph_theory%29), [radius](http://en.wikipedia.org/wiki/Distance_%28graph_theory%29), [eccentrivity](http://en.wikipedia.org/wiki/Distance_%28graph_theory%29) 
+and [centrality](http://en.wikipedia.org/wiki/Centrality)) or calculate the acutal shortest paths.
+
+A detailed description of our example implementation can be found [here](ShortestPath.md).
+

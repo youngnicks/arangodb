@@ -112,8 +112,10 @@ describe("ShortestPath Pregel execution", function () {
       require("internal").print(shortestPath.getAlgorithm());
       var id = conductor.startExecution(graph, shortestPath.getAlgorithm(),
         {
-          //distanceAttrib: "",
-          calculate: "centralityMeasures" // centralityMeasures, paths
+          //distance: "distance",
+          direction : "any",
+          //calculate: "centralityMeasures"
+          calculate: "paths"
         }
       );
       var count = 0;

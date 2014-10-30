@@ -1,0 +1,34 @@
+!CHAPTER Examples
+
+This chapter describes four examples for the usage of arango's pregel framework.
+
+
+!SECTION Borůvka's algorithm (minimum spanning tree)
+
+[Borůvka's algorithm](http://en.wikipedia.org/wiki/Bor%C5%AFvka%27s_algorithm) solves the problem to determine a [minimum spanning tree](http://en.wikipedia.org/wiki/Minimum_spanning_tree) in a graph.
+A minimum spanning tree (MSP) is the mimimal amount of connected edges that cover all vertices in a graph. Hence an unconnected graph has more than one *MSP* that form a *minimum spanning forest*.
+
+A detailed description of our example implementation can be found [here](Boruvka.md).
+
+!SECTION Google's PageRank algorithm
+
+The [PageRank algorithm](http://en.wikipedia.org/wiki/PageRank) is an algorithm used by Google Search to rank websites in their search engine results.
+The algorithm ranks websites (vertices in a graph) by the amount and the quality of links (edges in a graph).
+
+A detailed description of our example implementation can be found [here](PageRank.md).
+
+!SECTION Graph coloring algorithm
+
+Our *Graph coloring algorithm* solves the [graph-coloring-problem](http://en.wikipedia.org/wiki/Graph_coloring) which is to assign a color to each vertex in a graph so that 2 connected vertices always have different colors.
+Furthermore a minimum amount of colours shall be used. Our implementation is based on a greedy algorithm introcuded by *Assefaw Gebremedhin* and *Fredrik Manne*. 
+
+A detailed description of our example implementation can be found [here](GraphColoring.md).
+
+!SECTION Shortes-path algorithm
+
+A classic problem in graph theory is the [shortest-path-problem](http://en.wikipedia.org/wiki/Shortest_path_problem). Our example implementation can either calculate the shortest distance between each pair of vertices in a graph 
+and delivers all graph figures based on that ([diameter](http://en.wikipedia.org/wiki/Distance_%28graph_theory%29), [radius](http://en.wikipedia.org/wiki/Distance_%28graph_theory%29), [eccentrivity](http://en.wikipedia.org/wiki/Distance_%28graph_theory%29) 
+and [centrality](http://en.wikipedia.org/wiki/Centrality)) or calculate the acutal shortest paths.
+
+A detailed description of our example implementation can be found [here](ShortestPath.md).
+
