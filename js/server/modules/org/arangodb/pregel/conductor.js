@@ -742,7 +742,7 @@ var createResultGraph = function (graph, executionNumber) {
 /// |     someInteger : 10
 /// |   }
 ///   );
-///   require("internal")log((executionNumber);
+///   require("internal").print(executionNumber);
 /// ~  var finished = false;
 /// ~  while (!finished) {finished = pregel.Conductor.getInfo(executionNumber).state === "finished";}
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
