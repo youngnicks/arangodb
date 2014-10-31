@@ -117,7 +117,7 @@ describe("Pregel PageRank", function () {
     it("should compute the pageRank", function () {
       // gN = "lager";
       // gN = "max";
-      gN = "caesar";
+      //gN = "caesar";
       var gr = require("org/arangodb/general-graph")._graph(gN);
       require("internal").print("Start", String(require("internal").time() % 1000).replace(".", ","));
       var vC = gr._vertices().count();
@@ -173,7 +173,7 @@ describe("Pregel PageRank", function () {
           default:
             exp = 0.014;
           }
-          expect(v.result[0]).toBeCloseTo(exp, 3, "for vertex " + v._key);
+          expect(v.result).toBeCloseTo(exp, 3, "for vertex " + v._key);
         });
         //conductor.dropResult(id);
       }
