@@ -1,6 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports*/
-/*global KEY_EXISTS, KEY_PUSH, KEY_SET, KEY_GET, KEY_SET_CAS, KEYSPACE_KEYS, KEY_REMOVE*/
+/*global KEY_GET, KEYSPACE_KEYS, KEY_REMOVE*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel module. Offers all submodules of pregel.
@@ -28,16 +28,13 @@
 /// @author Michael Hackstein
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
-var p = require("org/arangodb/profiler");
-
 var db = require("internal").db;
-var pregel = require("org/arangodb/pregel");
-var query = "FOR m IN @@collection FILTER m.step == @step RETURN m";
 var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
 var joinMessageObject = function(v, oldV, aggFunc) {
+  'use strict';
   var aggregate = v[0];
   var plain = v[1];
   var oldAggr = oldV[0];
@@ -54,6 +51,7 @@ var joinMessageObject = function(v, oldV, aggFunc) {
 
 
 var VertexMessageQueue = function(parent) {
+  'use strict';
   this._parent = parent;
 };
 
@@ -81,6 +79,7 @@ var VertexMessageQueue = function(parent) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype.count = function () {
+  'use strict';
   return this._inc.length;
 };
 
@@ -107,6 +106,7 @@ VertexMessageQueue.prototype.count = function () {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype.hasNext = function () {
+  'use strict';
   return this._pos < this.count();
 };
 
@@ -133,6 +133,7 @@ VertexMessageQueue.prototype.hasNext = function () {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype.next = function () {
+  'use strict';
   if (!this.hasNext()) {
     return null;
   }
@@ -167,6 +168,7 @@ VertexMessageQueue.prototype.next = function () {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype._fill = function (msg) {
+  'use strict';
   if (msg.a) {
     this._inc.push({data: msg.a});
   }
@@ -200,6 +202,7 @@ VertexMessageQueue.prototype._fill = function (msg) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype._clear = function () {
+  'use strict';
   this._inc = [];
   this._pos = 0;
 };
@@ -244,7 +247,7 @@ VertexMessageQueue.prototype._clear = function () {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
-  var t = p.stopWatch();
+  'use strict';
   var key = target[0];
   if (!(key && typeof key === "string")) {
     var err = new ArangoError();
@@ -257,10 +260,10 @@ VertexMessageQueue.prototype.sendTo = function (target, data, sendLocation) {
     return;
   }
   this._parent._send(target, {data: data});
-  p.storeWatch("sendTo", t);
 };
 
 VertexMessageQueue.prototype._loadVertex = function (msgObj, vertexInfo) {
+  'use strict';
   this._vertexInfo = vertexInfo;
   this._pos = 0;
   this._inc = msgObj[1];
@@ -273,6 +276,7 @@ VertexMessageQueue.prototype._loadVertex = function (msgObj, vertexInfo) {
 
 var Queue = function (executionNumber, vertices, inboxSpaces, localShardList,
     globalShardList, workerCount, mapping, aggregate) {
+  'use strict';
   this.__vertices = vertices;
   this.__executionNumber = executionNumber;
   this.__spaces = inboxSpaces;
@@ -302,13 +306,14 @@ var Queue = function (executionNumber, vertices, inboxSpaces, localShardList,
 };
 
 Queue.prototype._loadVertex = function(shard, vertex) {
+  'use strict';
   var msgObj = this.__inbox[shard][vertex._key] || [null, []];
   this.__queue._loadVertex(msgObj, vertex._getLocationInfo());
   return this.__queue;
 };
 
 Queue.prototype._fillQueues = function () {
-  var t = p.stopWatch();
+  'use strict';
   this.__step++;
   var space = this.__spaces[this.__step % 2];
   var keys = KEYSPACE_KEYS(space);
@@ -332,13 +337,11 @@ Queue.prototype._fillQueues = function () {
       }
     }
   }
-  p.storeWatch("fillQueue", t);
 };
 
 //msg has data and optionally sender
 Queue.prototype._send = function (target, msg, sender) {
-  var t = p.stopWatch();
-  // TODO Temporary. Has to be replaced!!
+  'use strict';
   var key = target[0];
   var shard = target[1];
   var workerId = this.__hash(key);
@@ -355,19 +358,18 @@ Queue.prototype._send = function (target, msg, sender) {
     outbox[key][0] = this.__aggregate(msg.data, outbox[key][0]);
   }
   outbox.count++;
-  p.storeWatch("_send", t);
 };
 
 Queue.prototype._dump = function(shard, workerId) {
-  var t = p.stopWatch();
+  'use strict';
   delete this.__outbox[shard][workerId].count;
   var res = this.__outbox[shard][workerId];
   this.__outbox[shard][workerId] = {count : 0};
-  p.storeWatch("dump queue", t);
   return res;
 };
 
 Queue.prototype._count = function(shardList, workers) {
+  'use strict';
   var res = 0, i, j;
   for (j = 0; j < shardList.length; ++j) {
     for (i = 0; i < workers; i++) {
@@ -378,10 +380,12 @@ Queue.prototype._count = function(shardList, workers) {
 };
 
 Queue.prototype._getShardList = function() {
+  'use strict';
   return Object.keys(this.__outbox);
 };
 
 Queue.prototype._integrateMessage = function(shard, workerId, incMessage) {
+  'use strict';
   var old = this.__outbox[shard][workerId];
   var aggFunc = this.__aggregate;
   var k;
@@ -396,6 +400,7 @@ Queue.prototype._integrateMessage = function(shard, workerId, incMessage) {
 };
 
 Queue.prototype._clear = function(shard, vertex) {
+  'use strict';
   this.__inbox[shard][vertex._key] = [null, []];
 };
 

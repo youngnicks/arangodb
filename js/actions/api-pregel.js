@@ -1,6 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, Graph, arguments, ArangoClusterComm */
-
+/*global require*/
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Graph functionality
 ///
@@ -36,6 +35,7 @@ var executionNumber = "executionNumber";
 ////////////////////////////////////////////////////////////////////////////////
 
 function post_pregel (req, res) {
+  'use strict';
   var pregel = require("org/arangodb/pregel");
   var worker = pregel.Worker;
   var conductor = pregel.Conductor;
@@ -133,19 +133,18 @@ function post_pregel (req, res) {
 ////////////////////////////////////////////////////////////////////////////////
 
 function get_pregel (req, res) {
+  'use strict';
   var pregel = require("org/arangodb/pregel");
-  var worker = pregel.Worker;
   var conductor = pregel.Conductor;
+  var result;
 
-  var body;
   switch (req.suffix[0]) {
     case "result" :
-      var result = conductor.getResult(req.suffix[1]);
+      result = conductor.getResult(req.suffix[1]);
       actions.resultOk(req, res, actions.HTTP_OK, result);
       break;
-
     case "status" :
-      var result = conductor.getInfo(req.suffix[1]);
+      result = conductor.getInfo(req.suffix[1]);
       actions.resultOk(req, res, actions.HTTP_OK, result);
       break;
 
@@ -160,6 +159,7 @@ actions.defineHttp({
   context : "api",
   prefix : true,
   callback : function (req, res) {
+    'use strict';
     try {
        if (req.requestType === actions.POST) {
         post_pregel(req, res);
