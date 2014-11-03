@@ -147,7 +147,6 @@ VertexList.prototype.addShardContent = function (shard, collection, keys) {
       // TODO Ask Frank for direct Index Access
       t = time();
       out = db[this.mapping.getEdgeShard(eShardId)].outEdges(doc);
-      KEY_INCR("blubber", "outedges", time() - t);
       for (j = 0; j < out.length; ++j) {
         e = out[j];
         toKey = e._to.split("/")[1];
