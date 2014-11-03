@@ -92,7 +92,7 @@ function post_pregel (req, res) {
       }
       if (body.aggregator) {
         algorithms.aggregator = body.aggregator;
-      } 
+      }
       var result = conductor.startExecution(
         body.graphName, algorithms, body.options
       );
@@ -112,11 +112,47 @@ function post_pregel (req, res) {
         actions.resultOk(req, res, actions.HTTP_OK);
       break;
 
+      case "dropResult" :
+        if (!req.suffix[1]) {
+          actions.badParameter (req, res, executionNumber);
+          return;
+        }
+        conductor.dropResult(req.suffix[1]);
+        actions.resultOk(req, res, actions.HTTP_OK);
+      break;
+
     default:
       actions.resultUnsupported(req, res);
   }
 }
 
+
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief handle get requests
+////////////////////////////////////////////////////////////////////////////////
+
+function get_pregel (req, res) {
+  var pregel = require("org/arangodb/pregel");
+  var worker = pregel.Worker;
+  var conductor = pregel.Conductor;
+
+  var body;
+  switch (req.suffix[0]) {
+    case "result" :
+      var result = conductor.getResult(req.suffix[1]);
+      actions.resultOk(req, res, actions.HTTP_OK, result);
+      break;
+
+    case "status" :
+      var result = conductor.getInfo(req.suffix[1]);
+      actions.resultOk(req, res, actions.HTTP_OK, result);
+      break;
+
+    default:
+      actions.resultUnsupported(req, res);
+  }
+}
 
 
 actions.defineHttp({
@@ -128,12 +164,7 @@ actions.defineHttp({
        if (req.requestType === actions.POST) {
         post_pregel(req, res);
        } else if (req.requestType === actions.GET) {
-         if (!req.suffix[0]) {
-           actions.badParameter (req, res, executionNumber);
-           return;
-         }
-         var result = conductor.getResult(req.suffix[0]);
-         actions.resultOk(req, res, actions.HTTP_OK, result);
+         get_pregel(req, res);
        } else {
         actions.resultUnsupported(req, res);
       }

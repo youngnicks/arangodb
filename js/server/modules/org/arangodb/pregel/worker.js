@@ -318,8 +318,7 @@ var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
           require("internal").wait(0);
           incMessage = KEY_GET(space, String(j));
         }
-        KEY_INCR("blubber", "waiting", time() - t);
-        queue._integrateMessage(j, workerId, incMessage);
+        queue._integrateMessage(j, workerId, JSON.parse(incMessage));
       }
     }
   }
@@ -427,7 +426,6 @@ var getError = function(executionNumber) {
 
 var setup = function(executionNumber, options, globals) {
 
-  KEYSPACE_CREATE("blubber", 2)
   // create global collection
   pregel.createWorkerCollections(executionNumber);
   createOutboxMatrix(executionNumber);

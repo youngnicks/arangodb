@@ -25,30 +25,27 @@
 ///
 /// Copyright holder is triAGENS GmbH, Cologne, Germany
 ///
-/// @author Michael Hackstein
+/// @author Florian Bartels, Michael Hackstein
 /// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
+var connectedSets = require("org/arangodb/pregel/examples/connected-sets-algorithm");
 var conductor = pregel.Conductor;
 var graph = require("org/arangodb/general-graph");
-var pagerank = require("org/arangodb/pregel/examples/pagerank-algorithm");
 var _ = require("underscore");
 var ERRORS = require("org/arangodb").errors;
 var coordinator = ArangoServerState.isCoordinator();
-var p = require("org/arangodb/profiler");
 
-describe("Pregel PageRank", function () {
+describe("connectedSets", function () {
   "use strict";
 
-  describe("on a small graph", function () {
+  describe("a small graph", function () {
 
     var gN, v, e, g;
 
     beforeEach(function () {
-      //db.fE.load();
-      //db.fV.load();
       gN = "UnitTestPregelGraph";
       v = "UnitTestVertices";
       e = "UnitTestEdges";
@@ -64,7 +61,8 @@ describe("Pregel PageRank", function () {
         db._createEdgeCollection(e, {
           numberOfShards: numShards,
           distributeShardsLike: v,
-          shardKeys: ["shard_0"]
+          shardKeys: ["shard_0"],
+          allowUserKeys : true
         });
       }
       g = graph._create(
@@ -75,112 +73,58 @@ describe("Pregel PageRank", function () {
       var saveVertex = function (key) {
         g[v].save({_key: String(key)});
       };
-      var saveEdge = function (from, to) {
+      var saveEdge = function (from, to, distance) {
         g[e].save(v + "/" + from, v + "/" + to, {
+          //_key : "" +from+to,
           shard_0: String(from),
-          to_shard_0: String(to)
+          to_shard_0: String(to),
+          distance: distance
+
         });
       };
 
       var i;
-      for (i = 1; i < 12; i++) {
+      for (i = 1; i < 11; i++) {
         saveVertex(i);
       }
-      saveEdge(2, 3);
-      saveEdge(3, 2);
-      saveEdge(4, 1);
-      saveEdge(4, 2);
-      saveEdge(5, 2);
-      saveEdge(5, 4);
-      saveEdge(5, 6);
-      saveEdge(6, 2);
-      saveEdge(6, 5);
-      saveEdge(7, 2);
-      saveEdge(7, 5);
-      saveEdge(8, 2);
-      saveEdge(8, 5);
-      saveEdge(9, 2);
-      saveEdge(9, 5);
-      saveEdge(10, 5);
-      saveEdge(11, 5);
-      if (!graph._exists("max")) {
-        graph._create("max", [graph._undirectedRelation("E", ["V"])]);
-      }
-      p.setup();
+      saveEdge(1, 3, 1);
+      saveEdge(1, 2, 1);
+      saveEdge(2, 4, 2);
+      saveEdge(3, 9, 2);
+      saveEdge(9, 10, 2);
+
+      saveEdge(4, 5, 8);
+      saveEdge(4, 7, 9);
+      saveEdge(5, 7, 1);
+      saveEdge(5, 6, 2);
+      saveEdge(6, 8, 4);
+      saveEdge(7, 8, 3);
+
     });
 
     afterEach(function () {
-      p.aggregate();
-      // graph._drop(gN, true);
+      graph._drop(gN, true);
     });
 
-    it("should compute the pageRank", function () {
-      // gN = "lager";
-      // gN = "max";
-      //gN = "caesar";
-      var gr = require("org/arangodb/general-graph")._graph(gN);
-      require("internal").print("Start", String(require("internal").time() % 1000).replace(".", ","));
-      var vC = gr._vertices().count();
-      var id = conductor.startExecution(gN, pagerank.getAlgorithm(), {
-        alpha: 0.85,
-        vertexCount: vC
-      });
-      require("internal").print("Execution", id);
+    it("should identify all connected sets of a graph", function () {
+      //var graph = gN;
+      var graph = "CountryGraph";
+      var id = conductor.startExecution(graph,connectedSets.getAlgorithm());
       var count = 0;
       var resGraph = "LostInBattle";
       var res;
-      require("internal").wait(1);
-      while (count < 1000) {
+      while (count < 1000000000000000000) {
         require("internal").wait(1);
         if (conductor.getInfo(id).state === "finished") {
           res = conductor.getResult(id);
           resGraph = res.result.graphName;
           break;
         }
-        if (conductor.getInfo(id).state === "error") {
-          require("internal").print(conductor.getResult(id).errorMessage);
-          throw "There was an error";
-        }
         count++;
       }
-      expect(resGraph).not.toEqual("LostInBattle");
-      expect(res.error).toBeFalsy();
-      expect(conductor.getInfo(id).step).toEqual(31);
-      if (gN === "UnitTestPregelGraph") {
-        var resG = graph._graph(resGraph);
-        var vc = resG._vertexCollections()[0];
-        var resultVertices = vc.toArray();
-        expect(resultVertices.length).toEqual(11);
-        _.each(resultVertices, function (v) {
-          var exp;
-          switch (v._key) {
-          case "1":
-            exp = 0.028;
-            break;
-          case "2":
-            exp = 0.323;
-            break;
-          case "3":
-            exp = 0.29;
-            break;
-          case "4":
-          case "6":
-            exp = 0.033;
-            break;
-          case "5":
-            exp = 0.068;
-            break;
-          default:
-            exp = 0.014;
-          }
-          expect(v.result).toBeCloseTo(exp, 3, "for vertex " + v._key);
-        });
-        //conductor.dropResult(id);
-      }
+
     });
   });
-
 });
-
 
 
