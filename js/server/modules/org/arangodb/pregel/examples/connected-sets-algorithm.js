@@ -1,6 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, todo: true, white: false, sloppy: false */
-/*global require, describe, beforeEach, it, expect, spyOn, createSpy, createSpyObj, afterEach, runs, waitsFor */
-/*global ArangoServerState */
+/*global exports*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief pregel implementation of the graph connected sets algorithm
@@ -29,36 +28,37 @@
 /// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
-var connectedSets = function(vertex, message, global) {
-  var next, changed = false, result, sendSender = false, edge;
+var connectedSets = function (vertex, message, global) {
+  'use strict';
+  var next, changed = false, result, sendSender = false, edge, i;
 
-  switch(global.step) {
-    case 0:
-      result = {
-        value: vertex._get("_key"),
-        backwards: []
+  switch (global.step) {
+  case 0:
+    result = {
+      value: vertex._get("_key"),
+      backwards: []
+    };
+    sendSender = true;
+    break;
+  case 1:
+    result = vertex._getResult();
+    while (message.hasNext()) {
+      next = message.next();
+      if (result.value < next.data) {
+        result.value = next.data;
       }
-      sendSender = true;
-      break;
-    case 1:
-      result = vertex._getResult();
-      while (message.hasNext()) {
-        next = message.next();
-        if (result.value < next.data) {
-          result.value = next.data;
-        }
-        result.backwards.push(next.sender);
+      result.backwards.push(next.sender);
+    }
+    break;
+  default:
+    result = vertex._getResult();
+    while (message.hasNext()) {
+      next = message.next();
+      if (result.value < next.data) {
+        result.value = next.data;
+        changed = true;
       }
-      break;
-    default:
-      result = vertex._getResult();
-      while (message.hasNext()) {
-        next = message.next();
-        if (result.value < next.data) {
-          result.value = next.data;
-          changed = true;
-        }
-      }
+    }
   }
   if (global.step > 1 && !changed) {
     vertex._deactivate();
@@ -69,26 +69,27 @@ var connectedSets = function(vertex, message, global) {
     edge = vertex._outEdges.next();
     message.sendTo(edge._getTarget(), result.value, sendSender);
   }
-  for (var i = 0; i < result.backwards.length; ++i) {
+  for (i = 0; i < result.backwards.length; ++i) {
     message.sendTo(result.backwards[i], result.value, sendSender);
   }
   vertex._deactivate();
 };
 
 
-var aggregator = function(next, old) {
-  if ( old == null || next < old) {
+var aggregator = function (next, old) {
+  'use strict';
+  if (old === null || next < old) {
     return next;
   }
   return old;
 };
 
 var getAlgorithm = function () {
+  'use strict';
   return {
     base  : connectedSets.toString(),
     aggregator : aggregator.toString()
-  }
-}
-
+  };
+};
 
 exports.getAlgorithm = getAlgorithm;

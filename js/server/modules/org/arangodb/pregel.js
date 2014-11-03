@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, ArangoClusterInfo, ArangoServerState, ArangoAgency*/
+/*global require, exports, ArangoServerState, ArangoAgency*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel module. Offers all submodules of pregel.
@@ -30,7 +30,6 @@
 
 var db = require("internal").db;
 var _ = require("underscore");
-var arangodb = require("org/arangodb");
 var SERVERNAME;
 
 exports.isClusterSetup = function () {
