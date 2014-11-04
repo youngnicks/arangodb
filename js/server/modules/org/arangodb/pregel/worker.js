@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, Graph, arguments, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
+/*global require, exports, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
 /*global KEYSPACE_CREATE, KEYSPACE_DROP, KEY_SET, KEY_INCR, KEY_GET */
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -29,8 +29,6 @@
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
-var p = require("org/arangodb/profiler");
-
 var internal = require("internal");
 var db = internal.db;
 var arangodb = require("org/arangodb");
@@ -40,38 +38,30 @@ var ArangoError = arangodb.ArangoError;
 var tasks = require("org/arangodb/tasks");
 var Foxx = require("org/arangodb/foxx");
 
-var step = "step";
-var stepContent = "stepContent";
-var waitForAnswer = "waitForAnswer";
-var active = "active";
-var state = "state";
-var error = "error";
-var stateFinished = "finished";
-var stateRunning = "running";
-var stateError = "error";
 var COUNTER = "counter";
 var DATA = "data";
 var ERR = "error";
 var CONDUCTOR = "conductor";
-var ALGORITHM = "algorithm";
-var MAP = "map";
 var id;
-var WORKERS = 1;
+var WORKERS = 4;
 
 var getInboxName = function (execNr, step, workerId) {
+  'use strict';
   return "In_P_" + execNr + "_" + (step % 2) + "_" + workerId;
 };
 
 var getOutboxName = function (execNr, firstW, secondW) {
+  'use strict';
   return "Out_P_" + execNr + "_" + firstW + "_" + secondW;
 };
 
 var getQueueName = function (executionNumber, counter) {
+  'use strict';
   return "P_QUEUE_" + executionNumber + "_" + counter;
 };
 
-var receiveMessages = function(executionNumber, shard, step, senderName, senderWorker, messageString) {
-  var msg = JSON.parse(messageString);
+var receiveMessages = function(executionNumber, shard, step, senderName, senderWorker, msg) {
+  'use strict';
   var i = 0;
   var buckets = [];
   var col = db[shard];
@@ -88,12 +78,13 @@ var receiveMessages = function(executionNumber, shard, step, senderName, senderW
   var inbox;
   for (i = 0; i < WORKERS; i++) {
     inbox = getInboxName(executionNumber, step, i);
-    KEY_SET(inbox,  senderName + "_" + senderWorker + "_" + shard, JSON.stringify(buckets[i]));
+    KEY_SET(inbox,  senderName + "_" + senderWorker + "_" + shard, buckets[i]);
     buckets[i] = null;
   }
 };
 
 var createScope = function (execNr, wId, inbox, algorithms) {
+  'use strict';
   var pregelMapping = new pregel.Mapping(execNr);
   var vertices = new pregel.VertexList(pregelMapping);
   var localShards = pregelMapping.getLocalShards();
@@ -122,6 +113,7 @@ var createScope = function (execNr, wId, inbox, algorithms) {
 };
 
 var algorithmForQueue = function (algorithms, executionNumber, wIndex, inbox) {
+  'use strict';
   return "(function() {"
     + "var pregel = require('org/arangodb/pregel');"
     + "var worker = pregel.Worker;"
@@ -140,6 +132,7 @@ var algorithmForQueue = function (algorithms, executionNumber, wIndex, inbox) {
 };
 
 var addTask = function (queue, stepNumber, globals) {
+  'use strict';
   tasks.addJob(
     queue,
     {
@@ -160,6 +153,7 @@ if (!pregel.isClusterSetup()) {
 
 
   sendMessages = function (queue, shardList, workerId, step, execNr) {
+    'use strict';
     var i, shard;
     for (i = 0; i < shardList.length; i++) {
       shard = shardList[i];
@@ -176,6 +170,7 @@ if (!pregel.isClusterSetup()) {
 
 
   createTaskQueue = function (executionNumber, algorithms, globals, wIndex, inbox) {
+    'use strict';
     KEYSPACE_CREATE("P_" + executionNumber, 2, true);
     KEY_SET("P_" + executionNumber, "done", 0);
     var jobRegisterQueue = Foxx.queues.get("pregel-register-jobs-queue");
@@ -189,7 +184,7 @@ if (!pregel.isClusterSetup()) {
 } else {
   // Define code which has to be executed in a cluster setup
   sendMessages = function (queue, shardList, workerId, step, execNr) {
-    // TODO: Improve for local shards
+    'use strict';
     var waitCounter = 0;
     var coordOptions = {
       coordTransactionID: ArangoClusterInfo.uniqid()
@@ -205,21 +200,20 @@ if (!pregel.isClusterSetup()) {
         step: step,
         sender: sender,
         worker: workerId,
-        msg: queue._dump(i, workerId)
+        msg: JSON.stringify(queue._dump(i, workerId))
       };
       waitCounter++;
       ArangoClusterComm.asyncRequest("POST","shard:" + shard, dbName,
         "/_api/pregel/message", JSON.stringify(body), {}, coordOptions);
     }
-    var debug;
     for (waitCounter; waitCounter > 0; waitCounter--) {
-      debug = ArangoClusterComm.wait(coordOptions);
+      ArangoClusterComm.wait(coordOptions);
     }
 
   };
  
   createTaskQueue = function (executionNumber, algorithms, globals, workerIndex, inbox) {
-    // TODO hack for cluster setup. Foxx Queues not working...
+    'use strict';
     KEYSPACE_CREATE("P_" + executionNumber, 2, true);
     KEY_SET("P_" + executionNumber, "done", 0);
     tasks.register({
@@ -251,26 +245,8 @@ if (!pregel.isClusterSetup()) {
   };
 }
 
-var queryGetAllSourceEdges = "FOR e IN @@original RETURN "
-  + "{ _key: e._key, _from: e._from, _to: e._to";
-
-var queryInsertDefaultVertex = "FOR v IN @@original INSERT {"
-  + " '_key' : v._key, 'active' : true, 'deleted' : false, 'result' : {},"
-  + " 'locationObject': { '_id': v._id, 'shard': @origShard }";
-
-var queryInsertDefaultVertexIntoPart = "} INTO  @@result";
-
-
-var queryActivateVertices = "FOR v IN @@work "
-  + "FILTER v.toShard == @shard && v.step == @step "
-  + "UPDATE PARSE_IDENTIFIER(v._toVertex).key WITH "
-  + "{'active' : true} IN @@result";
-
-var queryMessageByShard = "FOR v IN @@message "
-  + "FILTER v.toShard == @shardId "
-  + "RETURN v";
-
 var createOutboxMatrix = function (execNr) {
+  'use strict';
   var i, j;
   for (i = 0; i < WORKERS; i++) {
     for (j = 0; j < WORKERS; j++) {
@@ -281,18 +257,9 @@ var createOutboxMatrix = function (execNr) {
   }
 };
 
-var queryCountStillActiveVertices = "LET c = (FOR i in @@collection"
-  + " FILTER i.active == true && i.deleted == false"
-  + " RETURN 1) RETURN LENGTH(c)";
-
-var translateId = function (id, mapping) {
-  var split = id.split("/");
-  var col = split[0];
-  var key = split[1];
-  return mapping.getResultCollection(col) + "/" + key;
-};
 
 var dumpMessages = function(queue, shardList, workerId, execNr) {
+  'use strict';
   var i, j, space;
   for (i = 0; i < WORKERS; i++) {
     if (i !== workerId) {
@@ -305,15 +272,13 @@ var dumpMessages = function(queue, shardList, workerId, execNr) {
 };
 
 var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
+  'use strict';
   var i, j, space, incMessage;
-  var t;
-  var time = require("internal").time;
   for (i = 0; i < WORKERS; i++) {
     if (i !== workerId) {
       for (j = 0; j < shardList.length; j++) {
         space = getOutboxName(execNr, i, workerId);
         incMessage = KEY_GET(space, String(j));
-        t = time();
         while (incMessage === undefined) {
           // Wait for other threads to dump data
           require("internal").wait(0);
@@ -329,10 +294,10 @@ var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
 // This funktion is intended to be used in the worker threads.
 // It has to get a scope injected, do not use it otherwise.
 var workerCode = function (params) {
+  'use strict';
   this.vertices.reset();
   if (params.cleanUp) {
     this.vertices.saveAll();
-    p.aggregate();
     this.worker.queueCleanupDone(this.executionNumber);
     return;
   }
@@ -386,11 +351,12 @@ var workerCode = function (params) {
       this.inbox, c);
   } catch (err) {
     this.worker.queueDone(this.executionNumber, global, this.vertices.countActives(),
-      this.inbox, c, err);
+      this.inbox, 0, err);
   }
 };
 
 var addCleanUpTask = function (queue) {
+  'use strict';
   tasks.addJob(
     queue,
     {
@@ -400,6 +366,7 @@ var addCleanUpTask = function (queue) {
 };
 
 var saveMapping = function(executionNumber, map) {
+  'use strict';
   var space = "P_" + executionNumber + "_MAPPING";
   KEYSPACE_CREATE(space, 9);
   KEY_SET(space, "vertexShards" , map[0]);
@@ -413,24 +380,22 @@ var saveMapping = function(executionNumber, map) {
   KEY_SET(space, "clusterCollections" , map[8]);
 };
 
-var loadMapping = function(executionNumber) {
-  return pregel.getMap(executionNumber);
-};
-
 var getConductor = function(executionNumber) {
+  'use strict';
   return pregel.getGlobalCollection(executionNumber).document(CONDUCTOR).name;
 };
 
 var getError = function(executionNumber) {
+  'use strict';
   return pregel.getGlobalCollection(executionNumber).document(ERR).error;
 };
 
 var setup = function(executionNumber, options, globals) {
+  'use strict';
 
   // create global collection
   pregel.createWorkerCollections(executionNumber);
   createOutboxMatrix(executionNumber);
-  p.setup();
   var global = pregel.getGlobalCollection(executionNumber);
   global.save({_key: COUNTER, count: 0, active: 0});
   global.save({_key: DATA, data: []});
@@ -453,7 +418,7 @@ var setup = function(executionNumber, options, globals) {
 };
 
 var finishedStep = function (executionNumber, global, active, keyList, inbox, countMsg) {
-  var t = p.stopWatch();
+  'use strict';
   var messages = countMsg || 0;
   var error = getError(executionNumber);
   var final = global.final;
@@ -490,9 +455,8 @@ var finishedStep = function (executionNumber, global, active, keyList, inbox, co
     };
     ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
       "/_api/pregel/finishedStep", body, {}, coordOptions);
-    var debug = ArangoClusterComm.wait(coordOptions);
+    ArangoClusterComm.wait(coordOptions);
   } else {
-    p.storeWatch("FinishStep", t);
     pregel.Conductor.finishedStep(executionNumber, pregel.getServerName(), {
       step: global.step,
       messages: messages,
@@ -505,6 +469,7 @@ var finishedStep = function (executionNumber, global, active, keyList, inbox, co
 };
 
 var queueCleanupDone = function (executionNumber) {
+  'use strict';
   var keyList = "P_" + executionNumber;
   var countDone = KEY_INCR(keyList, "done");
   if (countDone === WORKERS) {
@@ -521,7 +486,7 @@ var queueCleanupDone = function (executionNumber) {
       };
       ArangoClusterComm.asyncRequest("POST","server:" + conductor, db._name(),
         "/_api/pregel/finishedCleanup", body, {}, coordOptions);
-      var debug = ArangoClusterComm.wait(coordOptions);
+      ArangoClusterComm.wait(coordOptions);
     } else {
       pregel.Conductor.finishedCleanUp(executionNumber, pregel.getServerName());
     }
@@ -530,7 +495,7 @@ var queueCleanupDone = function (executionNumber) {
 };
 
 var queueDone = function (executionNumber, global, actives, inbox, countMsg, err) {
-  var t = p.stopWatch();
+  'use strict';
   if (err && err instanceof ArangoError === false) {
     var error = new ArangoError();
     error.errorNum = ERRORS.ERROR_PREGEL_ALGORITHM_SYNTAX_ERROR.code;
@@ -548,13 +513,11 @@ var queueDone = function (executionNumber, global, actives, inbox, countMsg, err
   var countDone = KEY_INCR(keyList, "done");
   var countActive = KEY_INCR(keyList, "actives", actives);
   var countmessages = KEY_INCR(keyList, "messages", countMsg);
-  p.storeWatch("VertexDone", t);
 
   if (countDone === WORKERS) {
    finishedStep(executionNumber, global, countActive, keyList, inbox, countmessages);
   }
   /*
-   WTF? Nochmal nachdenken was das machen soll
       var d = globalCol.document(DATA).data;
         globalCol.update(DATA, {
           data : []
@@ -571,6 +534,7 @@ var queueDone = function (executionNumber, global, actives, inbox, countMsg, err
 };
 
 var executeStep = function(executionNumber, step, options, globals) {
+  'use strict';
   id = ArangoServerState.id() || "localhost";
   globals = globals || {};
   globals.final = options.final;
@@ -578,7 +542,6 @@ var executeStep = function(executionNumber, step, options, globals) {
     setup(executionNumber, options, globals);
     return;
   }
-  var t = p.stopWatch();
   var i = 0;
   var queue;
   KEY_SET("P_" + executionNumber, "done", 0);
@@ -586,10 +549,10 @@ var executeStep = function(executionNumber, step, options, globals) {
     queue = getQueueName(executionNumber, i);
     addTask(queue, step, globals);
   }
-  p.storeWatch("AddingAllTasks", t);
 };
 
 var cleanUp = function(executionNumber) {
+  'use strict';
   // queues.delete("P_" + executionNumber); To be done for new queue
   var i, queue;
   KEY_SET("P_" + executionNumber, "done", 0);

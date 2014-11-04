@@ -48,19 +48,18 @@ var EDGE_DELETED = 5;
 var EDGESTART = 5;
 var EDGEOFFSET = 6;
 
-var p = require("org/arangodb/profiler");
-
-var internal = require("internal");
 var db = require("internal").db;
 var pregel = require("org/arangodb/pregel");
 
 var Vertex = function (parent, list, edgeCursor) {
+  'use strict';
   this.__parent = parent;
   this.__list = list;
   this._outEdges = edgeCursor;
 };
 
 Vertex.prototype._loadVertex = function (id) {
+  'use strict';
   this.__id = id;
   this.__current = this.__list[id];
   this._key = this.__current[KEY];
@@ -68,15 +67,18 @@ Vertex.prototype._loadVertex = function (id) {
 };
 
 Vertex.prototype._get = function (attr) {
+  'use strict';
   // Optimize _id, _key
   return this.__parent.readValue(this.__current[SHARD], this.__current[KEY], attr);
 };
 
 Vertex.prototype._getLocationInfo = function () {
+  'use strict';
   return [this.__current[KEY], this.__current[SHARD]];
 };
 
 Vertex.prototype._deactivate = function () {
+  'use strict';
   if (this.__current[ACTIVE]) {
     this.__current[ACTIVE] = false;
     this.__parent.decrActives();
@@ -84,6 +86,7 @@ Vertex.prototype._deactivate = function () {
 };
 
 Vertex.prototype._activate = function () {
+  'use strict';
   if (this.__current[DELETED] || this.__current[ACTIVE]) {
     return;
   }
@@ -92,14 +95,17 @@ Vertex.prototype._activate = function () {
 };
 
 Vertex.prototype._isActive = function () {
+  'use strict';
   return !this.__current[DELETED] && this.__current[ACTIVE];
 };
 
 Vertex.prototype._isDeleted = function () {
+  'use strict';
   return this.__current[DELETED];
 };
 
 Vertex.prototype._delete = function () {
+  'use strict';
   if (this.__current[ACTIVE] && !this.__current[DELETED]) {
     this.__parent.decrActives();
   }
@@ -107,19 +113,23 @@ Vertex.prototype._delete = function () {
 };
 
 Vertex.prototype._getResult = function () {
+  'use strict';
   return this.__current[RESULT];
 };
 
 Vertex.prototype._setResult = function (result) {
+  'use strict';
   this.__current[RESULT] = result;
 };
 
 Vertex.prototype.getShard = function () {
+  'use strict';
   return this.__current[SHARD];
 };
 
 
 var VertexList = function (mapping) {
+  'use strict';
   this.edgeCursor = new pregel.EdgeIterator(this);
   this.mapping = mapping;
   this.current = -1;
@@ -132,10 +142,9 @@ var VertexList = function (mapping) {
 // Shard == Name of the collection
 // sourceList == shard.NTH() content of documents
 VertexList.prototype.addShardContent = function (shard, collection, keys) {
+  'use strict';
   var index, i, j, e, out, doc, vertexInfo, eShardId, toKey;
   var l = keys.length;
-  var t;
-  var time = require("internal").time;
   var respEdgeShardIds = this.mapping.getResponsibleEdgeShards(shard);
   for (index = 0; index < l; ++index) {
     // Vertex Info: [_key, shard, result, active, deleted, ..edges..]
@@ -144,8 +153,6 @@ VertexList.prototype.addShardContent = function (shard, collection, keys) {
     doc = collection + "/" + keys[index];
     for (i = 0; i < respEdgeShardIds.length; ++i) {
       eShardId = respEdgeShardIds[i];
-      // TODO Ask Frank for direct Index Access
-      t = time();
       out = db[this.mapping.getEdgeShard(eShardId)].outEdges(doc);
       for (j = 0; j < out.length; ++j) {
         e = out[j];
@@ -167,14 +174,17 @@ VertexList.prototype.addShardContent = function (shard, collection, keys) {
 };
 
 VertexList.prototype.reset = function () {
+  'use strict';
   this.current = -1;
 };
 
 VertexList.prototype.hasNext = function () {
+  'use strict';
   return this.current < this.length - 1;
 };
 
 VertexList.prototype.next = function () {
+  'use strict';
   if(this.hasNext()) {
     this.current++;
     this.vertex._loadVertex(this.current);
@@ -184,29 +194,35 @@ VertexList.prototype.next = function () {
 };
 
 VertexList.prototype.readValue = function (shard, key, attr) {
+  'use strict';
   return db[this.mapping.getVertexShard(shard)].document(key)[attr];
 };
 
 VertexList.prototype.readEdgeValue = function (shard, key, attr) {
+  'use strict';
   return db[this.mapping.getEdgeShard(shard)].document(key)[attr];
 };
 
 VertexList.prototype.decrActives = function () {
+  'use strict';
   this.actives--;
 };
 
 VertexList.prototype.incrActives = function () {
+  'use strict';
   this.actives++;
 };
 
 VertexList.prototype.countActives = function () {
+  'use strict';
   return this.actives;
 };
 
 VertexList.prototype.saveAll = function () {
+  'use strict';
   var resultShards =  [];
   var respShards = this.mapping.getLocalShards();
-  var i, v, j, current;
+  var i, v, j;
   for (i = 0; i < respShards.length; ++i) {
     resultShards.push(db[this.mapping.getResultShard(respShards[i])]);
   }

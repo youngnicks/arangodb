@@ -1,6 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, todo: true, white: false, sloppy: false */
-/*global require, describe, beforeEach, it, expect, spyOn, createSpy, createSpyObj, afterEach, runs, waitsFor */
-/*global ArangoServerState */
+/*global exports */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief pregel implementation of the burovka algorithm
@@ -30,8 +29,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var boruvka = function (vertex, message, global) {
+  'use strict';
 
-  _ = require("underscore");
   var distanceAttrib = global.distance;
   var TYPE_UNKNOWN = "1";
   var TYPE_SUPERVERTEX = "2";
@@ -45,22 +44,23 @@ var boruvka = function (vertex, message, global) {
   var getDistance = function (edge) {
     if (distanceAttrib && edge[distanceAttrib]) {
       return edge[distanceAttrib];
-    } else if (distanceAttrib && edge._get(distanceAttrib)) {
-      return edge._get(distanceAttrib);
-    } else if (distanceAttrib) {
-      return Infinity;
-    } else {
-      return 1;
     }
+    if (distanceAttrib && edge._get(distanceAttrib)) {
+      return edge._get(distanceAttrib);
+    }
+    if (distanceAttrib) {
+      return Infinity;
+    }
+    return 1;
   };
   var getMinActiveEdges = function (vertex, inEdges) {
 
-    var result;
+    var result, e, edgeResult, obj;
     var min = Infinity;
     while (vertex._outEdges.hasNext()) {
       e = vertex._outEdges.next();
-      var edgeResult = e._getResult();
-      var obj = {
+      edgeResult = e._getResult();
+      obj = {
         _id: e._get("_id"),
         _to: e._getTarget()[0],
         _target: e._getTarget(),
@@ -75,17 +75,17 @@ var boruvka = function (vertex, message, global) {
     }
 
     inEdges.forEach(function (e) {
-      var obj = {
+      var innerObj = {
         _id: e._id,
         _to: e._to,
         _target: e._target,
         distance: e.distance
       };
       if (e.distance < min) {
-        result = obj;
+        result = innerObj;
         min = e.distance;
-      } else if (e.distance === min && [obj._to, result._to].sort()[0] === obj._to) {
-        result = obj;
+      } else if (e.distance === min && [innerObj._to, result._to].sort()[0] === innerObj._to) {
+        result = innerObj;
       }
     });
 
@@ -94,15 +94,16 @@ var boruvka = function (vertex, message, global) {
 
 
   var result = vertex._getResult() || {};
+  var e, edgeResult, data, inEdge;
 
   if (global.step === 0) {
 
     while (vertex._outEdges.hasNext()) {
-      var e = vertex._outEdges.next();
-      var edgeResult = e._getResult() || {};
+      e = vertex._outEdges.next();
+      edgeResult = e._getResult() || {};
       edgeResult.distance = getDistance(e);
       e._setResult(edgeResult);
-      var data = {edgeId: e._get("_id"), distance: edgeResult.distance};
+      data = {edgeId: e._get("_id"), distance: edgeResult.distance};
       message.sendTo(e._getTarget(), data);
     }
   }
@@ -112,7 +113,7 @@ var boruvka = function (vertex, message, global) {
     result.inEdges = [];
     while (message.hasNext()) {
       next = message.next();
-      var inEdge = {
+      inEdge = {
         _id: next.data.edgeId,
         _target : next.sender,
         _to: next.sender[0],
@@ -132,7 +133,7 @@ var boruvka = function (vertex, message, global) {
     while (vertex._outEdges.hasNext()) {
       e = vertex._outEdges.next();
       if (e._get("_id") === result.closestEdge._id) {
-        var edgeResult = e._getResult();
+        edgeResult = e._getResult();
         edgeResult.inSpanTree = true;
         e._setResult(edgeResult);
       }
@@ -148,73 +149,73 @@ var boruvka = function (vertex, message, global) {
     while (message.hasNext()) {
       next = message.next();
       switch (next.data.type) {
-        case PHASE_QUESTION:
-          if (next.data.edgeId) {
-            while (vertex._outEdges.hasNext()) {
-              e = vertex._outEdges.next();
-              if (e._get("_id") === next.data.edgeId) {
-                var edgeResult = e._getResult();
-                edgeResult.inSpanTree = true;
-                e._setResult(edgeResult);
-              }
-            }
-            vertex._outEdges.resetCursor();
-          }
-          if (next.sender._key === result.closestEdge._target._key) {
-            if ([vertex._key, next.sender._key].sort()[0] === vertex._key) {
-              result.type = TYPE_SUPERVERTEX;
-              result.connectedSuperVertices = {};
-              result.pointsTo = vertex._getLocationInfo();
-              response = {type: PHASE_ANSWER, pointsTo: vertex._getLocationInfo(), isSuperVertex: true};
-            } else if (result.type !== TYPE_SUPERVERTEX) {
-              result.type = TYPE_POINTS_AT_SUPERVERTEX;
-              result.pointsTo = next.sender;
-              response = {type: PHASE_ANSWER, pointsTo: next.sender, isSuperVertex: true};
-            }
-          } else {
-            askers.push(next.sender);
-          }
-
-          break;
-        case PHASE_ANSWER:
-          result.pointsTo = next.data.pointsTo;
-          if (next.data.isSuperVertex) {
-            result.type = TYPE_POINTS_AT_SUPERVERTEX;
-          } else {
-            message.sendTo(result.pointsTo, {type: PHASE_QUESTION});
-          }
-
-          break;
-        case PHASE_FIND_SUPERVERTEX:
-          if (JSON.stringify(result.pointsTo) !== JSON.stringify(next.data.pointsTo) &&
-            [result.pointsTo[0] , next.data.pointsTo[0]].sort()[0] === result.pointsTo[0]
-            ) {
-            if (result.type !== TYPE_SUPERVERTEX) {
-              message.sendTo(result.pointsTo, next.data);
-            } else {
-              if (!result.connectedSuperVertices[JSON.stringify(next.data.pointsTo)] ||
-                result.connectedSuperVertices[JSON.stringify(next.data.pointsTo)].distance > next.data.distance
-                ) {
-                result.connectedSuperVertices[JSON.stringify(next.data.pointsTo)] = next.data;
-              }
-            }
-          }
-
-          break;
-
-        case PHASE_CONNECT_TREES:
+      case PHASE_QUESTION:
+        if (next.data.edgeId) {
           while (vertex._outEdges.hasNext()) {
             e = vertex._outEdges.next();
             if (e._get("_id") === next.data.edgeId) {
-              var edgeResult = e._getResult();
+              edgeResult = e._getResult();
               edgeResult.inSpanTree = true;
               e._setResult(edgeResult);
             }
           }
+          vertex._outEdges.resetCursor();
+        }
+        if (next.sender._key === result.closestEdge._target._key) {
+          if ([vertex._key, next.sender._key].sort()[0] === vertex._key) {
+            result.type = TYPE_SUPERVERTEX;
+            result.connectedSuperVertices = {};
+            result.pointsTo = vertex._getLocationInfo();
+            response = {type: PHASE_ANSWER, pointsTo: vertex._getLocationInfo(), isSuperVertex: true};
+          } else if (result.type !== TYPE_SUPERVERTEX) {
+            result.type = TYPE_POINTS_AT_SUPERVERTEX;
+            result.pointsTo = next.sender;
+            response = {type: PHASE_ANSWER, pointsTo: next.sender, isSuperVertex: true};
+          }
+        } else {
+          askers.push(next.sender);
+        }
 
-          break;
+        break;
+      case PHASE_ANSWER:
+        result.pointsTo = next.data.pointsTo;
+        if (next.data.isSuperVertex) {
+          result.type = TYPE_POINTS_AT_SUPERVERTEX;
+        } else {
+          message.sendTo(result.pointsTo, {type: PHASE_QUESTION});
+        }
 
-        default :
+        break;
+      case PHASE_FIND_SUPERVERTEX:
+        if (JSON.stringify(result.pointsTo) !== JSON.stringify(next.data.pointsTo) &&
+            [result.pointsTo[0], next.data.pointsTo[0]].sort()[0] === result.pointsTo[0]
+            ) {
+          if (result.type !== TYPE_SUPERVERTEX) {
+            message.sendTo(result.pointsTo, next.data);
+          } else {
+            if (!result.connectedSuperVertices[JSON.stringify(next.data.pointsTo)] ||
+                result.connectedSuperVertices[JSON.stringify(next.data.pointsTo)].distance > next.data.distance
+                ) {
+              result.connectedSuperVertices[JSON.stringify(next.data.pointsTo)] = next.data;
+            }
+          }
+        }
+
+        break;
+
+      case PHASE_CONNECT_TREES:
+        while (vertex._outEdges.hasNext()) {
+          e = vertex._outEdges.next();
+          if (e._get("_id") === next.data.edgeId) {
+            edgeResult = e._getResult();
+            edgeResult.inSpanTree = true;
+            e._setResult(edgeResult);
+          }
+        }
+
+        break;
+
+      default:
 
       }
     }
@@ -222,7 +223,7 @@ var boruvka = function (vertex, message, global) {
       result.type = TYPE_POINTS_AT_SUPVERTEX;
     }
     askers.forEach(function (asker) {
-      message.sendTo(asker, response ? response : {
+      message.sendTo(asker, response || {
         type: PHASE_ANSWER,
         pointsTo: result.pointsTo,
         isSuperVertex: result.type === TYPE_POINTS_AT_SUPERVERTEX || result.type === TYPE_SUPERVERTEX ? true : false
@@ -235,7 +236,8 @@ var boruvka = function (vertex, message, global) {
 };
 
 
-var finalAlgorithm = function (vertex, message, global) {
+var finalAlgorithm = function (vertex, message) {
+  'use strict';
   var TYPE_SUPERVERTEX = "2";
   var PHASE_FIND_SUPERVERTEX = "3";
   var PHASE_CONNECT_TREES = "4";
@@ -243,12 +245,13 @@ var finalAlgorithm = function (vertex, message, global) {
   var finalPhase1 = "1";
   var finalPhase2 = "2";
   var result = vertex._getResult();
+  var e, edgeResult;
 
   if (!result.f) {
     result.f = finalPhase1;
     while (vertex._outEdges.hasNext()) {
-      var e = vertex._outEdges.next();
-      var edgeResult = e._getResult();
+      e = vertex._outEdges.next();
+      edgeResult = e._getResult();
       message.sendTo(
         e._getTarget(),
         {
@@ -291,14 +294,12 @@ var finalAlgorithm = function (vertex, message, global) {
 };
 
 var getAlgorithm = function () {
+  'use strict';
   return {
     base  : boruvka.toString(),
     final : finalAlgorithm.toString()
-  }
+  };
 };
 
 
 exports.getAlgorithm = getAlgorithm;
-
-
-

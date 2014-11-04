@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports*/
+/*global exports*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel wrapper for vertices. Will add content of the vertex and all 
@@ -39,17 +39,14 @@ var DELETED = 5;
 var EDGESTART = 5;
 var EDGEOFFSET = 6;
 
-var p = require("org/arangodb/profiler");
-
-var db = require("internal").db;
-var pregel = require("org/arangodb/pregel");
-
 var Edge = function (parent) {
+  'use strict';
   this.__parent = parent;
   this.__position = -1;
 };
 
 Edge.prototype._get = function (attr) {
+  'use strict';
   // Optimize _id, _key, _from, _to
   return this.__parent.getValue(
     this.__parent.info[this.__position + SHARD],
@@ -59,62 +56,63 @@ Edge.prototype._get = function (attr) {
 };
 
 Edge.prototype._delete = function () {
+  'use strict';
   this.__parent.info[this.__position + DELETED] = true;
 };
 
 Edge.prototype._isDeleted = function () {
+  'use strict';
   return this.__parent.info[this.__position + DELETED];
 };
 
 Edge.prototype._getResult = function () {
+  'use strict';
   return this.__parent.info[this.__position + RESULT];
 };
 
 Edge.prototype._setResult = function (result) {
+  'use strict';
   this.__parent.info[this.__position + RESULT] = result;
 };
 
 Edge.prototype._getShardKey = function () {
+  'use strict';
   return this.__parent.info[this.__position + SHARDKEY];
 };
 
 Edge.prototype._setShardKey = function (shardKey) {
+  'use strict';
   this.__parent.info[this.__position + SHARDKEY] = shardKey;
 };
-/*
-Edge.prototype._save = function (from, to) {
-  var obj = {
-    _key: this.__edgeInfo.key,
-    result: this._getResult(),
-    _deleted: this._isDeleted()
-  };
-  this.__edgeInfo.rs.save(from, to, obj);
-};
-*/
 
 Edge.prototype._getTarget = function () {
+  'use strict';
   var target = this.__parent.info[this.__position + TARGET];
   var shardKey = this.__parent.info[this.__position + SHARDKEY];
   return [target, shardKey];
 };
 
 Edge.prototype._loadEdge = function (startPos) {
+  'use strict';
   this.__position = startPos;
 };
 
 exports.Edge = Edge;
 
 var EdgeIterator = function (parent) {
+  'use strict';
   this.parent = parent;
   this.current = 0;
   this.edge = new Edge(this);
 };
 
 EdgeIterator.prototype.hasNext = function () {
+  'use strict';
   return this.current < this.length - 1;
 };
 
 EdgeIterator.prototype.next = function () {
+  'use strict';
   if (this.hasNext()) {
     this.current++;
     this.edge._loadEdge(this.current * EDGEOFFSET + EDGESTART);
@@ -124,55 +122,25 @@ EdgeIterator.prototype.next = function () {
 };
 
 EdgeIterator.prototype.count = function () {
+  'use strict';
   return this.length;
 };
 
 EdgeIterator.prototype.resetCursor = function () {
+  'use strict';
   this.current = -1;
 };
 
 EdgeIterator.prototype.loadEdges = function (vertex) {
+  'use strict';
   this.info = vertex;
   this.current = -1;
   this.length = (this.info.length - EDGESTART) / EDGEOFFSET;
 };
 
 EdgeIterator.prototype.getValue = function (shard, key, attr) {
+  'use strict';
   return this.parent.readEdgeValue(shard, key, attr);
 };
 
 exports.EdgeIterator = EdgeIterator;
-
-/*
-EdgeList.prototype.save = function (shard, id) {
-  var list = this.sourceList[shard][id];
-  var mapping = this.mapping;
-  var edge = this.iterator.edge;
-  if (list.length > 0) {
-    var edgeShard = list[0].s;
-    var key = list[0].key;
-    var doc = db[edgeShard].document(key);
-    var fromSplit = doc._from.split("/");
-    var from = mapping.getResultCollection(fromSplit[0]) + "/" + fromSplit[1]; 
-    var index, e, toSplit, to;
-    for (index = 0; index < list.length; index++) {
-      e = list[index];
-      this.iterator.current = index;
-      edgeShard = e.s;
-      key = e.key;
-      doc = db[edgeShard].document(key);
-      toSplit = doc._to.split("/");
-      to = mapping.getResultCollection(toSplit[0]) + "/" + toSplit[1]; 
-      edge._loadEdge(e);
-      edge._save(from, to);
-    }
-  }
-};
-
-EdgeList.prototype.getValue = function (index, attr) {
-  var list = this.sourceList[this.shard][this.id];
-  var edgeShard = list[index].s;
-  var key = list[index].key;
-  return db[edgeShard].document(key)[attr];
-};
-*/

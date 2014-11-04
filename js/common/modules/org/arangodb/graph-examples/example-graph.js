@@ -126,8 +126,9 @@
             message.sendTo(e._targetVertex, vertex._outEdges.length, false);
           });
           vertex._setResult(result);
-          return
-        } else if (global.step === 1) {
+          return;
+        }
+        if (global.step === 1) {
           result.sum = 0;
           var next;
           while (message.hasNext()) {
@@ -152,7 +153,7 @@
         result.colorList.push(global.color);
         vertex._setResult(result);
       },
-      superstep : function (globals, stepInfo) {
+      superstep : function (globals) {
         if (!globals.usedColors) {
           globals.usedColors = [];
         }
@@ -163,7 +164,7 @@
         globals.usedColors.push(newColor);
         globals.color = newColor;
       }
-    }
+    };
   };
   
   

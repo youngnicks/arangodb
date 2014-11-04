@@ -1,6 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, todo: true, white: false, sloppy: false */
-/*global require, describe, beforeEach, it, expect, spyOn, createSpy, createSpyObj, afterEach, runs, waitsFor */
-/*global ArangoServerState */
+/*global exports */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief pregel implementation of the graph coloring algorithm
@@ -30,6 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var graphColoring = function (vertex, message, global) {
+  'use strict';
   var next, color = "#25262a";
   if (global.color) {
     color = global.color;
@@ -52,119 +52,120 @@ var graphColoring = function (vertex, message, global) {
   var MSG_NEIGHBOR = 1;
   var MSG_DECREMENT = 2;
   var MSG_CONTACT = 3;
-  var MSG_TIS = 4
+  var MSG_TIS = 4;
 
   var result = vertex._getResult() || {};
+  var e;
   if (global.retype === true) {
     result.type = STATE_UNKNOWN;
   }
 
   switch (result.phase) {
-    case PHASE_PRE_INITIALIZATION:
-      if (result.type !== STATE_UNKNOWN) {
-        vertex._deactivate();
-        return;
-      }
-      result.phase = PHASE_INITIALIZATION;
-      if (result.degree === undefined) {
-        while (message.hasNext()) {
-          next = message.next();
-          if (Object.keys(result.neighbors).indexOf(JSON.stringify(next.sender)) === -1) {
-            result.neighbors[JSON.stringify(next.sender)] = next.sender;
-          }
-        }
-        result.degree = Object.keys(result.neighbors).length;
-      }
-      var random = Math.random();
-      if (1.0 / (2 * result.degree) <= random || result.degree === 0) {
-        result.type = STATE_TENTATIVELY_IN;
-        Object.keys(result.neighbors).forEach(function (e) {
-          message.sendTo(result.neighbors[e], {id: vertex._get("_id"), msg: MSG_TIS, degree: result.degree});
-        });
-      }
-      break;
-
-
-    case PHASE_INITIALIZATION:
-      result.phase = PHASE_CONFLICT_RESOLUTION;
-      if (result.type === STATE_TENTATIVELY_IN) {
-        var isInS = true;
-        while (message.hasNext()) {
-          next = message.next();
-          if (next.data.degree < result.degree ||
-            (next.data.degree === result.degree &&
-              [vertex._get("_id"), next.data.id].sort()[0] !== vertex._get("_id")
-              )
-            ) {
-            isInS = false;
-            break;
-          }
-        }
-        if (isInS) {
-          result.type = STATE_IN;
-          result.color = color;
-          Object.keys(result.neighbors).forEach(function (e) {
-            message.sendTo(
-              result.neighbors[e],
-              {msg: MSG_NEIGHBOR, lI: JSON.stringify(vertex._getLocationInfo())}
-            );
-          });
-          vertex._delete();
-        } else {
-          result.type = STATE_UNKNOWN;
-        }
-      }
-
-      break;
-
-
-    case PHASE_CONFLICT_RESOLUTION:
-      result.phase = NOT_IN_S_AND_DEGREE_ADJUSTING1;
+  case PHASE_PRE_INITIALIZATION:
+    if (result.type !== STATE_UNKNOWN) {
+      vertex._deactivate();
+      return;
+    }
+    result.phase = PHASE_INITIALIZATION;
+    if (result.degree === undefined) {
       while (message.hasNext()) {
         next = message.next();
-        if (next.data.msg === MSG_NEIGHBOR) {
-          result.type = NOT_IN;
-          delete result.neighbors[next.data.lI];
+        if (Object.keys(result.neighbors).indexOf(JSON.stringify(next.sender)) === -1) {
+          result.neighbors[JSON.stringify(next.sender)] = next.sender;
         }
       }
-      if (result.type === NOT_IN) {
+      result.degree = Object.keys(result.neighbors).length;
+    }
+    var random = Math.random();
+    if (1.0 / (2 * result.degree) <= random || result.degree === 0) {
+      result.type = STATE_TENTATIVELY_IN;
+      Object.keys(result.neighbors).forEach(function (e) {
+        message.sendTo(result.neighbors[e], {id: vertex._get("_id"), msg: MSG_TIS, degree: result.degree});
+      });
+    }
+    break;
+
+
+  case PHASE_INITIALIZATION:
+    result.phase = PHASE_CONFLICT_RESOLUTION;
+    if (result.type === STATE_TENTATIVELY_IN) {
+      var isInS = true;
+      while (message.hasNext()) {
+        next = message.next();
+        if (next.data.degree < result.degree ||
+            (next.data.degree === result.degree &&
+              [vertex._get("_id"), next.data.id].sort()[0] !== vertex._get("_id")
+            )
+            ) {
+          isInS = false;
+          break;
+        }
+      }
+      if (isInS) {
+        result.type = STATE_IN;
+        result.color = color;
         Object.keys(result.neighbors).forEach(function (e) {
           message.sendTo(
             result.neighbors[e],
-            {msg: MSG_DECREMENT}
+            {msg: MSG_NEIGHBOR, lI: JSON.stringify(vertex._getLocationInfo())}
           );
         });
-        result.phase = PHASE_PRE_INITIALIZATION;
-        vertex._deactivate();
-      }
-      break;
-
-
-    case NOT_IN_S_AND_DEGREE_ADJUSTING1:
-      result.phase = PHASE_PRE_INITIALIZATION;
-      if (result.type === STATE_UNKNOWN) {
-        while (message.hasNext()) {
-          next = message.next();
-          result.degree = result.degree - 1;
-        }
+        vertex._delete();
       } else {
-        vertex._deactivate();
+        result.type = STATE_UNKNOWN;
       }
+    }
 
-      break;
+    break;
 
 
-    default:
-      result = {
-        type: STATE_UNKNOWN,
-        neighbors: {},
-        phase: PHASE_PRE_INITIALIZATION
-      };
-      while (vertex._outEdges.hasNext()) {
-        e = vertex._outEdges.next();
-        result.neighbors[JSON.stringify(e._getTarget())] = e._getTarget();
-        message.sendTo(e._getTarget(), {msg: MSG_CONTACT});
+  case PHASE_CONFLICT_RESOLUTION:
+    result.phase = NOT_IN_S_AND_DEGREE_ADJUSTING1;
+    while (message.hasNext()) {
+      next = message.next();
+      if (next.data.msg === MSG_NEIGHBOR) {
+        result.type = NOT_IN;
+        delete result.neighbors[next.data.lI];
       }
+    }
+    if (result.type === NOT_IN) {
+      Object.keys(result.neighbors).forEach(function (e) {
+        message.sendTo(
+          result.neighbors[e],
+          {msg: MSG_DECREMENT}
+        );
+      });
+      result.phase = PHASE_PRE_INITIALIZATION;
+      vertex._deactivate();
+    }
+    break;
+
+
+  case NOT_IN_S_AND_DEGREE_ADJUSTING1:
+    result.phase = PHASE_PRE_INITIALIZATION;
+    if (result.type === STATE_UNKNOWN) {
+      while (message.hasNext()) {
+        next = message.next();
+        result.degree = result.degree - 1;
+      }
+    } else {
+      vertex._deactivate();
+    }
+
+    break;
+
+
+  default:
+    result = {
+      type: STATE_UNKNOWN,
+      neighbors: {},
+      phase: PHASE_PRE_INITIALIZATION
+    };
+    while (vertex._outEdges.hasNext()) {
+      e = vertex._outEdges.next();
+      result.neighbors[JSON.stringify(e._getTarget())] = e._getTarget();
+      message.sendTo(e._getTarget(), {msg: MSG_CONTACT});
+    }
   }
   vertex._setResult(result);
   if (global.retype === true) {
@@ -174,13 +175,14 @@ var graphColoring = function (vertex, message, global) {
 
 
 var conductorAlgorithm = function (globals, stepInfo) {
+  'use strict';
   if (!globals.usedColors) {
     globals.usedColors = ['#25262a'];
   }
 
   var newColor = '#25262a';
   if (!stepInfo.final) {
-    globals.retype = false
+    globals.retype = false;
   }
 
   if (stepInfo.active === 0 && stepInfo.messages === 0) {
@@ -193,7 +195,8 @@ var conductorAlgorithm = function (globals, stepInfo) {
   }
 };
 
-var finalAlgorithm = function (vertex, message, global) {
+var finalAlgorithm = function (vertex) {
+  'use strict';
   var result = vertex._getResult();
   if (result.type === 4) {
     vertex._activate();
@@ -201,12 +204,12 @@ var finalAlgorithm = function (vertex, message, global) {
 };
 
 var getAlgorithm = function () {
+  'use strict';
   return {
     base  : graphColoring.toString(),
     final : finalAlgorithm.toString(),
     superstep : conductorAlgorithm.toString()
-  }
-}
-
+  };
+};
 
 exports.getAlgorithm = getAlgorithm;

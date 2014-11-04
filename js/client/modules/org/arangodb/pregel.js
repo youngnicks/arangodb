@@ -29,11 +29,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var arangodb = require("org/arangodb"),
-  PregelAPI = require ("org/arangodb/api/pregel").PregelAPI;
+  PregelAPI = require ("org/arangodb/api/pregel").PregelAPI,
   checkParameter = arangodb.checkParameter;
-
-
-
 
 exports.startExecution = function (graphName, pregelAlgorithm, conductorAlgorithm, aggregator, globals) {
   'use strict';

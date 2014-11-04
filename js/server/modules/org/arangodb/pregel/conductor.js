@@ -1,6 +1,5 @@
-/*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, Graph, arguments, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
-/*global KEY_SET, KEY_GET, KEY_PUSH, KEY_INCR, KEY_DECR, KEY_EXISTS, KEY_SET_CAS, KEY_REMOVE, KEYSPACE_CREATE*/
+/*global require, exports, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
+/*global KEY_SET, KEY_GET, KEY_PUSH, KEY_INCR, KEY_EXISTS, KEY_SET_CAS, KEY_REMOVE, KEYSPACE_CREATE, KEYSPACE_KEYS*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Graph functionality
@@ -28,8 +27,6 @@
 /// @author Florian Bartels, Michael Hackstein, Guido Schwab
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
-var p = require("org/arangodb/profiler");
-
 var internal = require("internal");
 var time = internal.time;
 var db = internal.db;
@@ -59,71 +56,57 @@ var STATEERROR = "error";
 var ERROR = "error";
 var GRAPH = "graph";
 
-var active = "active";
-var final = "final";
-var state = "state";
-var data = "data";
-var messages = "messages";
-var error = "error";
-var _ = require("underscore");
-
 function getCollection () {
+  'use strict';
   return pregel.getCollection();
 }
 
 var genTaskId = function (executionNumber) {
+  'use strict';
   return "Pregel_Task_" + executionNumber;
 };
 
 var genKeySpaceId = function (executionNumber, postfix) {
+  'use strict';
   return "P_C_" + executionNumber + "_" + postfix;
 };
 
 var serverKeySpace = function (executionNumber) {
+  'use strict';
   return genKeySpaceId(executionNumber, "server");
 };
 
 var globalKeySpace = function (executionNumber) {
+  'use strict';
   return genKeySpaceId(executionNumber, "global");
 };
 
 var timerKeySpace = function (executionNumber) {
+  'use strict';
   return genKeySpaceId(executionNumber, "timer");
 };
 
 var prepareNextStep = function (globalSpace) {
+  'use strict';
   KEY_SET(globalSpace, ACTIVE, 0);
   KEY_SET(globalSpace, MESSAGES, 0);
   KEY_SET(globalSpace, DATA, []);
   KEY_SET(globalSpace, FINAL, false);
 };
 
-var getExecutionInfo = function(executionNumber) {
-  return pregel.getExecutionInfo(executionNumber);
-};
-
-var updateExecutionInfo = function(executionNumber, infoObject) {
-  return pregel.updateExecutionInfo(executionNumber, infoObject);
-};
-
 var saveExecutionInfo = function(infoObject, globals) {
+  'use strict';
   infoObject.globalValues = globals;
   return getCollection().save(infoObject);
 };
 
-var getGlobals = function(executionNumber) {
-  return getCollection().document(executionNumber).globalValues;
-};
-
-var saveGlobals = function(executionNumber, globals) {
-  return getCollection().update(executionNumber, {globalValues : globals});
-};
-
 var startTimer = function (executionNumber) {
+  'use strict';
   KEY_SET(timerKeySpace(executionNumber), ONGOING, time());
 };
 
 var storeTime = function (executionNumber, title) {
+  'use strict';
   var space = timerKeySpace(executionNumber);
   var oldTime = KEY_GET(space, ONGOING);
   KEY_SET(space, title, Math.round(1000 * (time() - oldTime)));
@@ -131,6 +114,7 @@ var storeTime = function (executionNumber, title) {
 };
 
 var clearTimer = function (executionNumber) {
+  'use strict';
   var space = timerKeySpace(executionNumber);
   var log = require("console").log;
   KEY_REMOVE(timerKeySpace(executionNumber), ONGOING);
@@ -142,6 +126,7 @@ var clearTimer = function (executionNumber) {
 };
 
 var getWaitForAnswerMap = function(executionNumber) {
+  'use strict';
   var serverList;
   var space = serverKeySpace(executionNumber);
   if (ArangoServerState.isCoordinator()) {
@@ -156,7 +141,7 @@ var getWaitForAnswerMap = function(executionNumber) {
 };
 
 var startNextStep = function(executionNumber, options) {
-  var t = p.stopWatch();
+  'use strict';
   var dbServers;
   var space = globalKeySpace(executionNumber);
   var globals = KEY_GET(space, GLOBALS);
@@ -194,13 +179,11 @@ var startNextStep = function(executionNumber, options) {
       }
     );
     var i;
-    var debug;
     for (i = 0; i < dbServers.length; i++) {
-      debug = ArangoClusterComm.wait(coordOptions);
+      ArangoClusterComm.wait(coordOptions);
     }
   } else {
     dbServers = ["localhost"];
-    p.storeWatch("TriggerNextStep", t);
     if (globals) {
       pregel.Worker.executeStep(executionNumber, stepNo, options, globals);
     } else {
@@ -210,6 +193,7 @@ var startNextStep = function(executionNumber, options) {
 };
 
 var cleanUp = function (executionNumber, err) {
+  'use strict';
   var dbServers;
   var httpOptions = {};
   var space = globalKeySpace(executionNumber);
@@ -239,9 +223,8 @@ var cleanUp = function (executionNumber, err) {
       }
     );
     var i;
-    var debug;
     for (i = 0; i < dbServers.length; i++) {
-      debug = ArangoClusterComm.wait(coordOptions);
+      ArangoClusterComm.wait(coordOptions);
     }
   } else {
     dbServers = ["localhost"];
@@ -251,6 +234,7 @@ var cleanUp = function (executionNumber, err) {
 };
 
 var timeOutExecution = function (executionNumber) {
+  'use strict';
   var err = new ArangoError({
     errorNum: ERRORS.ERROR_PREGEL_TIMEOUT.code,
     errorMessage: ERRORS.ERROR_PREGEL_TIMEOUT.message
@@ -259,6 +243,7 @@ var timeOutExecution = function (executionNumber) {
 };
 
 var generateResultCollectionName = function (collectionName, executionNumber) {
+  'use strict';
   return "P_" + executionNumber + "_RESULT_" + collectionName;
 };
 
@@ -267,6 +252,7 @@ var generateResultCollectionName = function (collectionName, executionNumber) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var initNextStep = function (executionNumber) {
+  'use strict';
   var space = globalKeySpace(executionNumber);
   var step = KEY_INCR(space, STEP);
   var active = KEY_GET(space, ACTIVE);
@@ -284,7 +270,9 @@ var initNextStep = function (executionNumber) {
   var globals = KEY_GET(space, GLOBALS) || {};
   if (KEY_EXISTS(space, SUPERSTEP)) {
     globals.step = step - 1;
+    /*jshint evil : true */
     var x = new Function("a", "b", "return " + KEY_GET(space, SUPERSTEP) + "(a,b);");
+    /*jshint evil : false */
     x(globals, stepInfo);
     KEY_SET(space, GLOBALS, globals);
   }
@@ -300,7 +288,7 @@ var initNextStep = function (executionNumber) {
 
 
 var createResultGraph = function (graph, executionNumber) {
-  var t = p.stopWatch();
+  'use strict';
   var space = globalKeySpace(executionNumber);
   var i, j;
   var collections;
@@ -439,175 +427,6 @@ var createResultGraph = function (graph, executionNumber) {
   graphModule._create(generateResultCollectionName(graph.__name, executionNumber),
     resultEdgeDefinitions, orphanCollections);
   KEY_SET(space, GRAPH, generateResultCollectionName(graph.__name, executionNumber));
-  p.storeWatch("SetupResultGraph", t);
-  return resMap;
-
-
-
-
-  var properties = graph._getCollectionsProperties();
-  var map = {};
-  var tmpMap = {
-    edge: {},
-    vertex: {}
-  };
-  var shardKeyMap = {};
-  var shardMap = [];
-  var serverShardMap = {};
-  var serverResultShardMap = {};
-  var resultShards = {};
-  var collectionMap = {};
-  var numShards = 1;
-  var i;
-
-
-
-
-
-
-  var resultCollectionNames = [];
-
-  Object.keys(properties).forEach(function (collection) {
-    var mc = {};
-    map[collection] = mc;
-    var mprops = properties[collection];
-    mc.type = mprops.type;
-    mc.resultCollection = generateResultCollectionName(collection, executionNumber);
-    collectionMap[collection] = mc.resultCollection;
-    if (ArangoServerState.isCoordinator()) {
-      mc.originalShards =
-        ArangoClusterInfo.getCollectionInfo(db._name(), collection).shards;
-      mc.shardKeys = mprops.shardKeys;
-    } else {
-      mc.originalShards = {};
-      mc.originalShards[collection]= "localhost";
-      mc.shardKeys = [];
-    }
-    shardKeyMap[collection] = _.clone(mc.shardKeys);
-    var props = {
-      numberOfShards : mprops.numberOfShards,
-      shardKeys : mprops.shardKeys,
-      distributeShardsLike : collection
-    };
-    var newCol;
-    if (mc.type === 2) {
-      tmpMap.vertex[collection] = Object.keys(mc.originalShards);
-      shardMap = shardMap.concat(tmpMap.vertex[collection]);
-      numShards = tmpMap.vertex[collection].length;
-      _.each(mc.originalShards, function(server, shard) {
-        serverShardMap[server] = serverShardMap[server] || {};
-        serverShardMap[server][collection] = serverShardMap[server][collection] || [];
-        serverShardMap[server][collection].push(shard);
-      });
-      newCol = db._create(generateResultCollectionName(collection, executionNumber) , props);
-    } else {
-      tmpMap.edge[collection] = Object.keys(mc.originalShards);
-      shardMap = shardMap.concat(tmpMap.edge[collection]);
-      newCol = db._createEdgeCollection(
-        generateResultCollectionName(collection, executionNumber) , props
-      );
-    }
-    if (ArangoServerState.isCoordinator()) {
-      mc.resultShards =
-        ArangoClusterInfo.getCollectionInfo(
-          db._name(), generateResultCollectionName(collection, executionNumber)
-        ).shards;
-    } else {
-      var c = {};
-      c[generateResultCollectionName(collection, executionNumber)] = "localhost";
-      mc.resultShards = c;
-    }
-    if (mc.type === 2) {
-      _.each(mc.resultShards, function(server, shard) {
-        serverResultShardMap[server] = serverResultShardMap[server] || {};
-        serverResultShardMap[server][collection] = serverResultShardMap[server][collection] || [];
-        serverResultShardMap[server][collection].push(shard);
-      });
-    }
-    var origShards = Object.keys(mc.originalShards);
-    var resShards = Object.keys(mc.resultShards);
-    for (i = 0; i < origShards.length; i++) {
-      resultShards[origShards[i]] = resShards[i];
-    }
-  });
-  var lists = [];
-  var j;
-  var list;
-  for (j = 0; j < numShards; j++) {
-    list = [];
-    _.each(tmpMap.edge, function(edgeShards) {
-      list.push(edgeShards[j]);
-    });
-    lists.push(list);
-  }
-  var edgeShards = {};
-  _.each(tmpMap.vertex, function(shards) {
-    _.each(shards, function(sId, index) {
-      edgeShards[sId] = lists[index];
-    });
-  });
-  // ShardKeyMap: collection => [shardKeys]
-  // ShardMap: collection => [shard]
-  // serverResultShardMap: collection => server => [result_shard]
-  // serverShardMap: collection => server => [shard]
-  // edgeShards: vertexShard => [edgeShards]
-  // resultShards: shard => resultShard
-  // collectionMap: collection => resultCollection
-  //
-  // vertexShards = ["s01","s02"]
-  // edgeShards = ["s03", "s04"]
-  //
-  var resMap = {
-    shardKeyMap: shardKeyMap,
-    shardMap: shardMap,
-    serverResultShardMap: serverResultShardMap,
-    serverShardMap: serverShardMap,
-    edgeShards: edgeShards,
-    resultShards: resultShards,
-    collectionMap: collectionMap,
-    map: map
-  };
-
-  var resMap = [
-    vertexShards,
-    resultVertexShards,
-    serverVertexShards,
-    edgeShards,
-    resultEdgeShards,
-    serverEdgeShards,
-    resultCollectionNames
-  ];
-  // Create Vertex -> EdgeShards Mapping
-  var resultEdgeDefinitions = [], resultEdgeDefinition;
-  var edgeDefinitions = graph.__edgeDefinitions;
-  edgeDefinitions.forEach(
-    function(edgeDefinition) {
-      resultEdgeDefinition = {
-        from : [],
-        to : [],
-        collection : generateResultCollectionName(edgeDefinition.collection, executionNumber)
-      };
-      edgeDefinition.from.forEach(
-        function(col) {
-          resultEdgeDefinition.from.push(generateResultCollectionName(col, executionNumber));
-        }
-      );
-      edgeDefinition.to.forEach(
-        function(col) {
-          resultEdgeDefinition.to.push(generateResultCollectionName(col, executionNumber));
-        }
-      );
-      resultEdgeDefinitions.push(resultEdgeDefinition);
-    }
-  );
-  var orphanCollections = [];
-  graph.__orphanCollections.forEach(function (o) {
-    orphanCollections.push(generateResultCollectionName(o, executionNumber));
-  });
-  graphModule._create(generateResultCollectionName(graph.__name, executionNumber),
-    resultEdgeDefinitions, orphanCollections);
-  KEY_SET(space, GRAPH, generateResultCollectionName(graph.__name, executionNumber));
-  p.storeWatch("SetupResultGraph", t);
   return resMap;
 };
 
@@ -647,13 +466,14 @@ var createResultGraph = function (graph, executionNumber) {
 /// Final Step : Each Vertex changes the result from Step 1 to it's inverse.
 /// Furthermore the superStep provides a random color to each vertex in each step.
 ///
-/// As we only send one type of message in this job (the amount of neighbors) we can make use of the *aggregator* function
-/// So we first define this:
+/// As we only send one type of message in this job (the amount of neighbors) we can make use of
+/// the *aggregator* function so we first define this:
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelStartExecutionAggregator}
 /// | var aggregatorAlgorithm = function (message, oldMessage) {
 /// |    //We already aggregate the messages for a target vertex to reduce the amount of messages.
-/// |    //Note that the vertex might nevertheless receive more than one message as the aggregation only effects one pregel worker.
+/// |    //Note that the vertex might nevertheless receive more than one message as the aggregation
+/// |    //only effects one pregel worker.
 /// |    return message + oldMessage;
 ///   };
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
@@ -670,7 +490,8 @@ var createResultGraph = function (graph, executionNumber) {
 /// |     vertex._outEdges.forEach(function (e) {
 /// |      message.sendTo(e._targetVertex, vertex._outEdges.length, false);
 /// |     });
-/// |     //Notice we do not deactivate the vertex because we want him to participate in the next step even if he receives no message.
+/// |     //Notice we do not deactivate the vertex because we want him to participate in the next step
+/// |     //even if he receives no message.
 /// |     return;
 /// |   } else if (global.step === 1) {
 /// |     result.sum = 0;
@@ -691,8 +512,8 @@ var createResultGraph = function (graph, executionNumber) {
 ///   };
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
 ///
-/// So every vertex would has been deactivated after step 1 and no more messages have been sent. Now the pregel algorithm
-/// would normally terminate but we want it to execute a final step.
+/// So every vertex would has been deactivated after step 1 and no more messages have been sent.
+/// Now the pregel algorithm would normally terminate but we want it to execute a final step.
 /// Note: If one wants to exclude vertices completely (even from the final step) one simply calls *vertex._delete()*.
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelStartExecutionFinal}
@@ -751,8 +572,9 @@ var createResultGraph = function (graph, executionNumber) {
 /// @endDocuBlock
 ///
 ////////////////////////////////////////////////////////////////////////////////
+
 var startExecution = function(graphName, algorithms, globals) {
-  var t = p.stopWatch();
+  'use strict';
   var graph = graphModule._graph(graphName), infoObject = {state : STATERUNNING};
   var pregelAlgorithm = algorithms.base;
   var aggregator = algorithms.aggregator;
@@ -785,16 +607,6 @@ var startExecution = function(graphName, algorithms, globals) {
     options.final = algorithms.final;
     KEY_SET(space, FINALSTEP, algorithms.final);
   }
-  try {
-    /*jslint evil : true */
-    var x = new Function("(" + pregelAlgorithm + "())");
-    /*jslint evil : false */
-  } catch (e) {
-    var err = new ArangoError();
-    err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
-    err.errorMessage = arangodb.errors.ERROR_BAD_PARAMETER.message;
-    throw err;
-  }
   startTimer(key);
 
   options.algorithm = pregelAlgorithm;
@@ -803,7 +615,6 @@ var startExecution = function(graphName, algorithms, globals) {
   }
 
   options.map = createResultGraph(graph, key);
-  p.storeWatch("startExecution", t);
   storeTime(key, "Setup");
   startNextStep(key, options);
   return key;
@@ -856,6 +667,7 @@ var startExecution = function(graphName, algorithms, globals) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var getResult = function (executionNumber) {
+  'use strict';
   var space = globalKeySpace(executionNumber);
   var state = KEY_GET(space, STATE);
   var result = {};
@@ -915,6 +727,7 @@ var getResult = function (executionNumber) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var getInfo = function(executionNumber) {
+  'use strict';
   var space = globalKeySpace(executionNumber);
   return {
     step: KEY_GET(space, STEP),
@@ -924,6 +737,7 @@ var getInfo = function(executionNumber) {
 };
 
 var finishedCleanUp = function(executionNumber, serverName) {
+  'use strict';
   executionNumber = String(executionNumber);
   var space = globalKeySpace(executionNumber);
   var server = serverKeySpace(executionNumber);
@@ -942,6 +756,7 @@ var finishedCleanUp = function(executionNumber, serverName) {
 };
 
 var finishedStep = function(executionNumber, serverName, info) {
+  'use strict';
   executionNumber = String(executionNumber);
   var err;
   var space = globalKeySpace(executionNumber);
@@ -1041,6 +856,7 @@ var finishedStep = function(executionNumber, serverName, info) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 var dropResult = function(executionNumber) {
+  'use strict';
   var space = globalKeySpace(executionNumber);
   graphModule._drop(KEY_GET(space, GRAPH), true);
   pregel.removeExecutionInfo(executionNumber);

@@ -1,5 +1,5 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
-/*global require, exports, ArangoClusterInfo, ArangoServerState, ArangoAgency*/
+/*global require, exports, ArangoServerState, ArangoAgency*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel module. Offers all submodules of pregel.
@@ -27,20 +27,18 @@
 /// @author Florian Bartels, Michael Hackstein, Guido Schwab
 /// @author Copyright 2011-2014, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
-var p = require("org/arangodb/profiler");
 
 var db = require("internal").db;
 var _ = require("underscore");
-var arangodb = require("org/arangodb");
-var ERRORS = arangodb.errors;
-var ArangoError = arangodb.ArangoError;
 var SERVERNAME;
 
 exports.isClusterSetup = function () {
+  'use strict';
   return ArangoAgency.prefix() !== "";
 };
 
 exports.getServerName = function () {
+  'use strict';
   if (SERVERNAME === undefined) {
     SERVERNAME = ArangoServerState.id() || "localhost";
   }
@@ -48,60 +46,74 @@ exports.getServerName = function () {
 };
 
 exports.getCollection = function () {
+  'use strict';
   return db._pregel;
 };
 
 exports.getExecutionInfo = function(executionNumber) {
+  'use strict';
   return _.clone(exports.getCollection().document(executionNumber));
 };
 
 exports.updateExecutionInfo = function(executionNumber, infoObject) {
+  'use strict';
   return exports.getCollection().update(executionNumber, infoObject);
 };
 
 exports.removeExecutionInfo = function(executionNumber) {
+  'use strict';
   return exports.getCollection().remove(executionNumber);
 };
 
 exports.genGlobalCollectionName = function (executionNumber) {
+  'use strict';
   return "P_global_" + executionNumber;
 };
 
 exports.createWorkerCollections = function (executionNumber) {
+  'use strict';
   db._create(exports.genGlobalCollectionName(executionNumber));
 };
 
 exports.getWorkCollection = function (executionNumber) {
+  'use strict';
   return db[exports.genWorkCollectionName(executionNumber)];
 };
 
-exports.getTimeoutConst = function (executionNumber) {
+exports.getTimeoutConst = function () {
+  'use strict';
   return 300000;
 };
 
 exports.getGlobalCollection = function (executionNumber) {
+  'use strict';
   return db._collection(exports.genGlobalCollectionName(executionNumber));
 };
 
 exports.getMap = function (executionNumber) {
+  'use strict';
   return exports.getGlobalCollection(executionNumber).document("map").map;
 };
 
 var saveMapping = function (executionNumber, name, map) {
+  'use strict';
   var col = exports.getGlobalCollection(executionNumber);
   map._key = name;
   col.save(map);
 };
 
 exports.saveEdgeShardMapping = function (executionNumber, map) {
+  'use strict';
   saveMapping(executionNumber, "edgeShards", map);
 };
 
 exports.saveShardKeyMapping = function (executionNumber, map) {
+  'use strict';
   saveMapping(executionNumber, "shardKeys", map);
 };
 
 exports.saveShardMapping = function (executionNumber, list) {
+  'use strict';
   var col = exports.getGlobalCollection(executionNumber);
   col.save({
     _key: "shards",
@@ -110,10 +122,12 @@ exports.saveShardMapping = function (executionNumber, list) {
 };
 
 exports.saveLocalShardMapping = function (executionNumber, map) {
+  'use strict';
   saveMapping(executionNumber, "localShards", map[exports.getServerName()]);
 };
 
 exports.saveLocalResultShardMapping = function (executionNumber, map) {
+  'use strict';
   saveMapping(executionNumber, "localResultShards", map[exports.getServerName()]);
 };
 

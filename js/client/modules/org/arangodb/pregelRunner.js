@@ -29,11 +29,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 var arangodb = require("org/arangodb"),
-  PregelAPI = require("org/arangodb/pregel");
+  PregelAPI = require("org/arangodb/pregel"),
   checkParameter = arangodb.checkParameter;
 
 
-var Runner = function() {
+var Runner = function(execNumber) {
+  if (execNumber) {
+    this.executionNumber = execNumber;
+  }
 };
 
 
@@ -80,7 +83,7 @@ Runner.prototype.setGlobals = function (globals) {
 };
 
 Runner.prototype.setGlobal = function (key, value) {
-  this.globals = this.globals ? this.globals : {};
+  this.globals = this.globals || {};
   this.globals[key] = value;
   return this;
 };
@@ -93,18 +96,18 @@ Runner.prototype.getResult = function () {
 };
 
 
-Runner.prototype.getStatus = function (key, value) {
+Runner.prototype.getStatus = function () {
   if (this.executionNumber) {
     var state =  PregelAPI.getStatus(this.executionNumber);
     return {
       step : state.step,
       state : state.state
-    }
+    };
   }
 };
 
 
-Runner.prototype.dropResult = function (key, value) {
+Runner.prototype.dropResult = function () {
   if (this.executionNumber) {
     return PregelAPI.dropResult(this.executionNumber);
   }
@@ -112,15 +115,13 @@ Runner.prototype.dropResult = function (key, value) {
 
 
 Runner.prototype.start = function (graphName) {
-  if (this.worker) {
+  if (this.hasOwnProperty("worker")) {
     this.executionNumber = PregelAPI.startExecution(
       graphName,  this.worker, this.superstep, this.aggregator, this.globals
     ).executionNumber;
     return this.executionNumber;
   }
 };
-
-
 
 exports.Runner = Runner;
 

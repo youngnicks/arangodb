@@ -1,6 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports, ArangoClusterInfo, ArangoServerState*/
-/*global KEYSPACE_CREATE, KEY_SET, KEY_GET, KEY_GET_AT*/
+/*global KEY_GET, KEY_GET_AT*/
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Pregel module. Offers all submodules of pregel.
@@ -37,6 +37,7 @@ var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
 var Mapping = function(executionNumber) {
+  'use strict';
   this._isPrimary = ArangoServerState.role() === "PRIMARY";
   this.space = "P_" + executionNumber + "_MAPPING";
   this.vertexShards = KEY_GET(this.space, "vertexShards");
@@ -45,10 +46,12 @@ var Mapping = function(executionNumber) {
 };
 
 Mapping.prototype.getResultCollection = function (id) {
+  'use strict';
   return this._map.collectionMap[id];
 };
 
 Mapping.prototype.transformToFindShard = function (col, doc, prefix) {
+  'use strict';
   var t = p.stopWatch();
   if (!prefix) {
     prefix = "shard_";
@@ -64,50 +67,62 @@ Mapping.prototype.transformToFindShard = function (col, doc, prefix) {
 };
 
 Mapping.prototype.getShardKeys = function (col) {
+  'use strict';
   return this._map.shardKeyMap[col]; 
 };
 
 Mapping.prototype.getGlobalCollectionShards = function () {
+  'use strict';
   return this._map.shardMap; 
 };
 
 Mapping.prototype.getLocalShards = function () {
+  'use strict';
   return KEY_GET(this.space, "serverVertexShards");
 };
 
 Mapping.prototype.getGlobalShards = function () {
+  'use strict';
   return this.vertexShards;
 };
 
 Mapping.prototype.getLocalCollectionShards = function (col) {
+  'use strict';
   return this._map.serverShardMap[pregel.getServerName()][col]; 
 };
 
 Mapping.prototype.getLocalCollectionShardMapping = function () {
+  'use strict';
   return this._map.serverShardMap[pregel.getServerName()]; 
 };
 
 Mapping.prototype.getGlobalCollectionShardMapping = function () {
+  'use strict';
   return this._map.serverShardMap; 
 };
 
 Mapping.prototype.getLocalResultShards = function (col) {
+  'use strict';
   return this._map.serverResultShardMap[pregel.getServerName()][col]; 
 };
 
 Mapping.prototype.getLocalResultShardMapping = function () {
+  'use strict';
   return this._map.serverResultShardMap[pregel.getServerName()]; 
 };
 
 Mapping.prototype.getResultShard = function (shard) {
+  'use strict';
   return KEY_GET_AT(this.space, "resultVertexShards", shard);
 };
 
 Mapping.prototype.getResultEdgeShard = function (shard) {
+  'use strict';
   return KEY_GET_AT(this.space, "resultEdgeShards", shard);
 };
 
 Mapping.prototype.getShardKeysForCollection = function (collection) {
+  'use strict';
   var t = p.stopWatch();
   var keys = this.getShardKeys(collection);
   if (!keys) {
@@ -121,22 +136,27 @@ Mapping.prototype.getShardKeysForCollection = function (collection) {
 };
 
 Mapping.prototype.getVertexShard = function (shardIndex) {
+  'use strict';
   return this.vertexShards[shardIndex];
 };
 
 Mapping.prototype.getShardId = function (shard) {
+  'use strict';
   return this.vertexShards.indexOf(shard);
 };
 
 Mapping.prototype.getEdgeShard = function (shardIndex) {
+  'use strict';
   return KEY_GET_AT(this.space, "edgeShards", shardIndex);
 };
 
-Mapping.prototype.getResponsibleEdgeShards = function (shard) {
+Mapping.prototype.getResponsibleEdgeShards = function () {
+  'use strict';
   return KEY_GET(this.space, "serverEdgeShards");
 };
 
 Mapping.prototype.getToLocationObject = function (edge, toCol) {
+  'use strict';
   var t = p.stopWatch();
   var obj = {};
   var id = edge._to;
@@ -154,16 +174,18 @@ Mapping.prototype.getToLocationObject = function (edge, toCol) {
 };
 
 Mapping.prototype.findOriginalCollection = function (index) {
+  'use strict';
   return KEY_GET_AT(this.space, "collectionNames", index);
 };
 
 Mapping.prototype.getToShardKey = function(toKey, colName) {
+  'use strict';
   if (this._isPrimary) {
     var colId = this.clusterCollections[colName];
     var shardName = ArangoClusterInfo.getResponsibleShard(colId, {"_key" : toKey}).shardId;
     return this.vertexShards.indexOf(shardName);
   }
   return this.vertexShards.indexOf(colName);
-}
+};
 
 exports.Mapping = Mapping;

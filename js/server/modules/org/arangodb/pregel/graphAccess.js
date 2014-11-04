@@ -33,16 +33,19 @@ var graphModule = require("org/arangodb/general-graph");
 
 
 var GraphAccess = function (resultGraphName, stepInfo) {
+  'use strict';
   this._resultGraphName = resultGraphName;
   this._stepInfo = stepInfo;
 };
 
 GraphAccess.prototype._stopExecution = function () {
+  'use strict';
   this._stepInfo.messages = 0;
   this._stepInfo.active = 0;
 };
 
 GraphAccess.prototype._activateVerticesByExample = function (example) {
+  'use strict';
 
   var graph = graphModule._graph(this._resultGraphName);
   var updated = 0;
@@ -69,6 +72,7 @@ GraphAccess.prototype._activateVerticesByExample = function (example) {
 };
 
 GraphAccess.prototype._deleteVerticesByExample = function (example) {
+  'use strict';
 
   var graph = graphModule._graph(this._resultGraphName);
   var updated = 0;
@@ -93,6 +97,7 @@ GraphAccess.prototype._deleteVerticesByExample = function (example) {
 };
 
 GraphAccess.prototype._deleteEdgesByExample = function (example) {
+  'use strict';
   var graph = graphModule._graph(this._resultGraphName);
   var updated = 0;
   var self = this;
@@ -114,18 +119,21 @@ GraphAccess.prototype._deleteEdgesByExample = function (example) {
 };
 
 GraphAccess.prototype._verticesByExample = function (example) {
+  'use strict';
   example.deleted = false;
   var aql = "RETURN GRAPH_VERTICES(@name, @example)";
   return db._query(aql, {name : this._resultGraphName, example : example});
 };
 
 GraphAccess.prototype._countVerticesByExample = function (example) {
+  'use strict';
   example.deleted = false;
   var aql = "RETURN LENGTH(GRAPH_VERTICES(@name, @example))";
   return db._query(aql, {name : this._resultGraphName, example : example}).toArray()[0];
 };
 
 GraphAccess.prototype._countEdgesByExample = function (example) {
+  'use strict';
   var aql = "RETURN LENGTH(GRAPH_EDGES(@name, @example))";
   return db._query(aql, {name : this._resultGraphName, example : example}).toArray()[0];
 };

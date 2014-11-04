@@ -30,7 +30,7 @@
 
 var PregelAPI,
   arangodb = require("org/arangodb"),
-  arangosh = require("org/arangodb/arangosh")
+  arangosh = require("org/arangodb/arangosh");
 
 PregelAPI = {
   send: function (method, executionNumber, path, data) {
