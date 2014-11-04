@@ -87,11 +87,11 @@ function post_pregel (req, res) {
       body = JSON.parse(req.requestBody);
       var algorithms = {};
       algorithms.base = body.pregelAlgorithm;
-      if (body.conductorAlgorithm) {
+      if (body.hasOwnProperty("conductorAlgorithm")) {
         algorithms.superstep = body.conductorAlgorithm;
       }
-      if (body.aggregator) {
-        algorithms.aggregator = body.aggregator;
+      if (body.hasOwnProperty("combiner")) {
+        algorithms.combiner = body.combiner;
       }
       var result = conductor.startExecution(
         body.graphName, algorithms, body.options

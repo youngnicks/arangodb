@@ -76,7 +76,7 @@ var connectedSets = function (vertex, message, global) {
 };
 
 
-var aggregator = function (next, old) {
+var combiner = function (next, old) {
   'use strict';
   if (old === null || next < old) {
     return next;
@@ -88,7 +88,7 @@ var getAlgorithm = function () {
   'use strict';
   return {
     base  : connectedSets.toString(),
-    aggregator : aggregator.toString()
+    combiner : combiner.toString()
   };
 };
 

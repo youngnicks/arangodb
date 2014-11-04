@@ -66,7 +66,7 @@ var pageRank = function (vertex, message, global) {
   }
 };
 
-var aggregator = function (message, oldMessage) {
+var combiner = function (message, oldMessage) {
   "use strict";
   return message + oldMessage;
 };
@@ -80,7 +80,7 @@ var getAlgorithm = function () {
   "use strict";
   return {
     base: pageRank.toString(),
-    aggregator: aggregator.toString(),
+    combiner: combiner.toString(),
     conductorAlgorithm: superStep.toString()
   };
 };

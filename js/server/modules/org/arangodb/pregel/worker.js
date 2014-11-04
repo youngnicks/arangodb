@@ -97,7 +97,7 @@ var createScope = function (execNr, wId, inbox, algorithms) {
       db[shard].NTH2(wId, WORKERS).documents);
   }
   var queue = new pregel.MessageQueue(execNr, vertices,
-    inbox, localShards, globalShards, WORKERS, pregelMapping, algorithms.aggregator);
+    inbox, localShards, globalShards, WORKERS, pregelMapping, algorithms.combiner);
   var scope = {
     executionNumber: execNr,
     vertices: vertices,
@@ -120,7 +120,7 @@ var algorithmForQueue = function (algorithms, executionNumber, wIndex, inbox) {
     + "var paramAlgo = {"
     +   "algorithm:(" + algorithms.algorithm + "),"
     +   "finalAlgorithm:(" + algorithms.final + "),"
-    +   "aggregator:" + (algorithms.hasOwnProperty("aggregator") ? "(" + algorithms.aggregator + ")" : "null")
+    +   "combiner:" + (algorithms.hasOwnProperty("combiner") ? "(" + algorithms.combiner + ")" : "null")
     + "};"
     + "var scope = worker.createScope("
     +   executionNumber + ","
@@ -265,13 +265,13 @@ var dumpMessages = function(queue, shardList, workerId, execNr) {
     if (i !== workerId) {
       for (j = 0; j < shardList.length; j++) {
         space = getOutboxName(execNr, workerId, i);
-        KEY_SET(space, String(j), queue._dump(j, i));
+        KEY_SET(space, String(j), JSON.stringify(queue._dump(j, i)));
       }
     }
   }
 };
 
-var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
+var combineOtherWorkerData = function (queue, shardList, workerId, execNr) {
   'use strict';
   var i, j, space, incMessage;
   for (i = 0; i < WORKERS; i++) {
@@ -281,7 +281,7 @@ var aggregateOtherWorkerData = function (queue, shardList, workerId, execNr) {
         incMessage = KEY_GET(space, String(j));
         while (incMessage === undefined) {
           // Wait for other threads to dump data
-          require("internal").wait(0);
+          require("internal").wait(0.1, false);
           incMessage = KEY_GET(space, String(j));
         }
         queue._integrateMessage(j, workerId, JSON.parse(incMessage));
@@ -342,8 +342,8 @@ var workerCode = function (params) {
     // Dump Messages into Key-Value store
     dumpMessages(this.queue, this.shardList, this.workerId, this.executionNumber);
 
-    // Collect Data from Key-Value store and aggregate
-    aggregateOtherWorkerData(this.queue, this.shardList, this.workerId, this.executionNumber);
+    // Collect Data from Key-Value store and combine
+    combineOtherWorkerData(this.queue, this.shardList, this.workerId, this.executionNumber);
 
     sendMessages(this.queue, this.shardList, this.workerId, step + 1, this.executionNumber);
 

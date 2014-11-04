@@ -33,17 +33,17 @@ var arangodb = require("org/arangodb");
 var ERRORS = arangodb.errors;
 var ArangoError = arangodb.ArangoError;
 
-var joinMessageObject = function(v, oldV, aggFunc) {
+var joinMessageObject = function(v, oldV, combFunc) {
   'use strict';
-  var aggregate = v[0];
+  var combined = v[0];
   var plain = v[1];
-  var oldAggr = oldV[0];
+  var oldComb = oldV[0];
   var oldPlain = oldV[1];
-  if (aggregate !== null) {
-    if (oldAggr !== null) {
-      oldV[0] = aggFunc(aggregate, oldAggr);
+  if (combined !== null) {
+    if (oldComb !== null) {
+      oldV[0] = combFunc(combined, oldComb);
     } else {
-      oldV[0] = aggregate;
+      oldV[0] = combined;
     }
   }
   oldV[1] = oldPlain.concat(plain);
@@ -275,7 +275,7 @@ VertexMessageQueue.prototype._loadVertex = function (msgObj, vertexInfo) {
 // End of Vertex Message queue
 
 var Queue = function (executionNumber, vertices, inboxSpaces, localShardList,
-    globalShardList, workerCount, mapping, aggregate) {
+    globalShardList, workerCount, mapping, combiner) {
   'use strict';
   this.__vertices = vertices;
   this.__executionNumber = executionNumber;
@@ -299,8 +299,8 @@ var Queue = function (executionNumber, vertices, inboxSpaces, localShardList,
     this.__inbox[shard] = {};
   }
   this.__step = -1;
-  if (aggregate) {
-    this.__aggregate = aggregate;
+  if (combiner) {
+    this.__combiner = combiner;
   }
   this.__queue = new VertexMessageQueue(this);
 };
@@ -318,7 +318,7 @@ Queue.prototype._fillQueues = function () {
   var space = this.__spaces[this.__step % 2];
   var keys = KEYSPACE_KEYS(space);
   var msg;
-  var aggFunc = this.__aggregate;
+  var combFunc = this.__combiner;
   var inbox = this.__inbox;
   var i, key, shard, old, k, shardId;
   for (i = 0; i < keys.length; ++i) {
@@ -333,7 +333,7 @@ Queue.prototype._fillQueues = function () {
         if (!old.hasOwnProperty(k)) {
           old[k] = [null, []];
         }
-        joinMessageObject(msg[k], old[k], aggFunc);
+        joinMessageObject(msg[k], old[k], combFunc);
       }
     }
   }
@@ -352,10 +352,10 @@ Queue.prototype._send = function (target, msg, sender) {
   if (sender) {
     msg.sender = sender;
   }
-  if (sender || !this.__aggregate) {
+  if (sender || !this.hasOwnProperty("__combiner")) {
     outbox[key][1].push(msg);
   } else {
-    outbox[key][0] = this.__aggregate(msg.data, outbox[key][0]);
+    outbox[key][0] = this.__combiner(msg.data, outbox[key][0]);
   }
   outbox.count++;
 };
@@ -387,14 +387,14 @@ Queue.prototype._getShardList = function() {
 Queue.prototype._integrateMessage = function(shard, workerId, incMessage) {
   'use strict';
   var old = this.__outbox[shard][workerId];
-  var aggFunc = this.__aggregate;
+  var combFunc = this.__combiner;
   var k;
   for (k in incMessage) {
     if (incMessage.hasOwnProperty(k)) {
       if (!old.hasOwnProperty(k)) {
         old[k] = [null, []];
       }
-      joinMessageObject(incMessage[k], old[k], aggFunc);
+      joinMessageObject(incMessage[k], old[k], combFunc);
     }
   }
 };

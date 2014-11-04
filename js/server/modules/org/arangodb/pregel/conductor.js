@@ -449,7 +449,7 @@ var createResultGraph = function (graph, executionNumber) {
 ///     function (vertex, message, global) {}.
 ///   * *superstep* (optional): The superstep algorithm, this has to be a function with the following
 ///     signature: function (globals) {}.
-///   * *aggregator* (optional): The aggregator algorithm, this has to be a function with the following
+///   * *combiner* (optional): The combienr algorithm, this has to be a function with the following
 ///     signature: function (message, oldMessage) {}.
 ///   * *final* (optional): The final algorithm, this has to be a function with the following
 ///     signature: function (vertex, message, global) {}.
@@ -467,13 +467,13 @@ var createResultGraph = function (graph, executionNumber) {
 /// Furthermore the superStep provides a random color to each vertex in each step.
 ///
 /// As we only send one type of message in this job (the amount of neighbors) we can make use of
-/// the *aggregator* function so we first define this:
+/// the *combienr* function so we first define this:
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelStartExecutionAggregator}
-/// | var aggregatorAlgorithm = function (message, oldMessage) {
-/// |    //We already aggregate the messages for a target vertex to reduce the amount of messages.
-/// |    //Note that the vertex might nevertheless receive more than one message as the aggregation
-/// |    //only effects one pregel worker.
+/// | var combinerAlgorithm = function (message, oldMessage) {
+/// |    //We already combine the messages for a target vertex to reduce the amount of messages.
+/// |    //Note that the vertex might nevertheless receive more than one message as the combination
+/// |    //is only applied if the environment decides to apply combinition to improve speed at this point.
 /// |    return message + oldMessage;
 ///   };
 /// @END_EXAMPLE_ARANGOSH_OUTPUT
@@ -547,7 +547,7 @@ var createResultGraph = function (graph, executionNumber) {
 /// Now the four algorithms have been defined , we can start a pregel execution:
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelStartExecution}
 /// ~ var examples = require("org/arangodb/graph-examples/example-graph.js");
-/// ~ var aggregatorAlgorithm = examples.pregelAlgorithm().aggregator;
+/// ~ var combinerAlgorithm = examples.pregelAlgorithm().combiner;
 /// ~ var baseAlgorithm  = examples.pregelAlgorithm().base;
 /// ~ var finalAlgorithm = examples.pregelAlgorithm().final;
 /// ~ var superstep = examples.pregelAlgorithm().superstep;
@@ -558,7 +558,7 @@ var createResultGraph = function (graph, executionNumber) {
 /// |     base: baseAlgorithm.toString(),
 /// |     final : finalAlgorithm.toString(),
 /// |     superstep: superstep.toString(),
-/// |     aggregator: aggregatorAlgorithm.toString()
+/// |     combiner: combinerAlgorithm.toString()
 /// |   }, {
 /// |     someInteger : 10
 /// |   }
@@ -577,7 +577,6 @@ var startExecution = function(graphName, algorithms, globals) {
   'use strict';
   var graph = graphModule._graph(graphName), infoObject = {state : STATERUNNING};
   var pregelAlgorithm = algorithms.base;
-  var aggregator = algorithms.aggregator;
   var options = {};
   options.graphName = graphName;
   var stepInfo = {
@@ -610,8 +609,8 @@ var startExecution = function(graphName, algorithms, globals) {
   startTimer(key);
 
   options.algorithm = pregelAlgorithm;
-  if (aggregator) {
-    options.aggregator = aggregator;
+  if (algorithms.hasOwnProperty("combiner")) {
+    options.combiner = algorithms.combiner;
   }
 
   options.map = createResultGraph(graph, key);
@@ -639,7 +638,7 @@ var startExecution = function(graphName, algorithms, globals) {
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelGetResult}
 /// ~ var examples = require("org/arangodb/graph-examples/example-graph.js");
-/// ~ var aggregatorAlgorithm = examples.pregelAlgorithm().aggregator;
+/// ~ var combinerAlgorithm = examples.pregelAlgorithm().combiner;
 /// ~ var baseAlgorithm  = examples.pregelAlgorithm().base;
 /// ~ var finalAlgorithm = examples.pregelAlgorithm().final;
 /// ~ var superstep = examples.pregelAlgorithm().superstep;
@@ -650,7 +649,7 @@ var startExecution = function(graphName, algorithms, globals) {
 /// |     base: baseAlgorithm.toString(),
 /// |     final : finalAlgorithm.toString(),
 /// |     superstep: superstep.toString(),
-/// |     aggregator: aggregatorAlgorithm.toString()
+/// |     combiner: combinerAlgorithm.toString()
 /// |   }, {
 /// |     someInteger : 10
 /// |   }
@@ -701,7 +700,7 @@ var getResult = function (executionNumber) {
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelGetInfo}
 /// ~ var examples = require("org/arangodb/graph-examples/example-graph.js");
-/// ~ var aggregatorAlgorithm = examples.pregelAlgorithm().aggregator;
+/// ~ var combinerAlgorithm = examples.pregelAlgorithm().combiner;
 /// ~ var baseAlgorithm  = examples.pregelAlgorithm().base;
 /// ~ var finalAlgorithm = examples.pregelAlgorithm().final;
 /// ~ var superstep = examples.pregelAlgorithm().superstep;
@@ -712,7 +711,7 @@ var getResult = function (executionNumber) {
 /// |     base: baseAlgorithm.toString(),
 /// |     final : finalAlgorithm.toString(),
 /// |     superstep: superstep.toString(),
-/// |     aggregator: aggregatorAlgorithm.toString()
+/// |     combiner: combinerAlgorithm.toString()
 /// |   }, {
 /// |     someInteger : 10
 /// |   }
@@ -826,7 +825,7 @@ var finishedStep = function(executionNumber, serverName, info) {
 ///
 /// @EXAMPLE_ARANGOSH_OUTPUT{pregelDropResult}
 /// ~ var examples = require("org/arangodb/graph-examples/example-graph.js");
-/// ~ var aggregatorAlgorithm = examples.pregelAlgorithm().aggregator;
+/// ~ var combinerAlgorithm = examples.pregelAlgorithm().combiner;
 /// ~ var baseAlgorithm  = examples.pregelAlgorithm().base;
 /// ~ var finalAlgorithm = examples.pregelAlgorithm().final;
 /// ~ var superstep = examples.pregelAlgorithm().superstep;
@@ -837,7 +836,7 @@ var finishedStep = function(executionNumber, serverName, info) {
 /// |     base: baseAlgorithm.toString(),
 /// |     final : finalAlgorithm.toString(),
 /// |     superstep: superstep.toString(),
-/// |     aggregator: aggregatorAlgorithm.toString()
+/// |     combiner: combinerAlgorithm.toString()
 /// |   }, {
 /// |     someInteger : 10
 /// |   }
