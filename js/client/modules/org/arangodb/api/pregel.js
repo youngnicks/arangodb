@@ -58,7 +58,7 @@ PregelAPI = {
   },
 
   dropResult: function (executionNumber) {
-    return PregelAPI.sendWithoutData("POST", executionNumber, "dropResult/");
+    return PregelAPI.send("POST", executionNumber, "dropResult/", null);
   },
 
   getStatus: function (executionNumber) {
