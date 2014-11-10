@@ -32,12 +32,12 @@ var arangodb = require("org/arangodb"),
   PregelAPI = require ("org/arangodb/api/pregel").PregelAPI,
   checkParameter = arangodb.checkParameter;
 
-exports.startExecution = function (graphName, pregelAlgorithm, conductorAlgorithm, aggregator, globals) {
+exports.startExecution = function (graphName, pregelAlgorithm, conductorAlgorithm, combiner, globals) {
   'use strict';
 
   checkParameter(
     "startExecution(String <graphName>, function <pregelAlgorithm>,  function [<conductorAlgorithm>], " +
-      "function [<aggregator>] , Object [<version>])",
+      "function [<combiner>] , Object [<version>])",
     [ [ "GraphName graphName", "string" ],
       [ "PregelAlgorithm pregelAlgorithm", "function" ]
     ],
@@ -49,8 +49,8 @@ exports.startExecution = function (graphName, pregelAlgorithm, conductorAlgorith
   if (conductorAlgorithm) {
     body.conductorAlgorithm = conductorAlgorithm.toString();
   }
-  if (aggregator) {
-    body.aggregator = aggregator.toString();
+  if (combiner) {
+    body.combiner = combiner.toString();
   }
   if (globals) {
     body.options = globals;

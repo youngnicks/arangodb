@@ -115,7 +115,7 @@
   
   var pregelAlgorithm = function () {
     return {
-      aggregator : function (message, oldMessage) {
+      combiner : function (message, oldMessage) {
         return message + oldMessage;
       },
       base  : function (vertex, message, global) {
