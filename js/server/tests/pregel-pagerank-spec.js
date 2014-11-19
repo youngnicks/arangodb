@@ -159,10 +159,10 @@ describe("Pregel PageRank", function () {
             exp = 0.02764593471447821;
             break;
           case "2":
-            exp = 0.32349086932503;
+            exp = 0.3233837583245974;
             break;
           case "3":
-            exp = 0.2883784315887869;
+            exp = 0.28998668222489116;
             break;
           case "4":
             exp = 0.032963696654387226;
@@ -171,7 +171,7 @@ describe("Pregel PageRank", function () {
             exp = 0.06821411653266003;
             break;
           case "6":
-            exp = 0.032963696654387226;
+            exp = 0.0329636966539006;
             break;
           default:
             exp = 0.01363636363636364;
