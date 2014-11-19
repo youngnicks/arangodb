@@ -1,6 +1,6 @@
 /*jslint indent: 2, nomen: true, maxlen: 120, sloppy: true, vars: true, white: true, plusplus: true */
 /*global require, exports, ArangoClusterComm, ArangoServerState, ArangoClusterInfo */
-/*global KEYSPACE_CREATE, KEYSPACE_DROP, KEY_SET, KEY_INCR, KEY_GET */
+/*global KEYSPACE_CREATE, KEYSPACE_DROP, KEY_SET, KEY_INCR, KEY_GET, KEY_REMOVE */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief pregel worker functionality
@@ -284,6 +284,7 @@ var combineOtherWorkerData = function (queue, shardList, workerId, execNr) {
           require("internal").wait(0.1, false);
           incMessage = KEY_GET(space, String(j));
         }
+        KEY_REMOVE(space, String(j));
         queue._integrateMessage(j, workerId, JSON.parse(incMessage));
       }
     }
