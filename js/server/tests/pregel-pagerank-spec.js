@@ -153,27 +153,30 @@ describe("Pregel PageRank", function () {
         expect(resultVertices.length).toEqual(11);
         _.each(resultVertices, function (v) {
           var exp;
+          require("internal").print("Vertex",v._key,"has value",v.result);
           switch (v._key) {
           case "1":
-            exp = 0.028;
+            exp = 0.02764593471447821;
             break;
           case "2":
-            exp = 0.323;
+            exp = 0.32349086932503;
             break;
           case "3":
-            exp = 0.29;
+            exp = 0.2883784315887869;
             break;
           case "4":
-          case "6":
-            exp = 0.033;
+            exp = 0.032963696654387226;
             break;
           case "5":
-            exp = 0.068;
+            exp = 0.06821411653266003;
+            break;
+          case "6":
+            exp = 0.032963696654387226;
             break;
           default:
-            exp = 0.014;
+            exp = 0.01363636363636364;
           }
-          expect(v.result).toBeCloseTo(exp, 3, "for vertex " + v._key);
+          expect(v.result).toBeCloseTo(exp, 4, "for vertex " + v._key);
         });
         //conductor.dropResult(id);
       }
