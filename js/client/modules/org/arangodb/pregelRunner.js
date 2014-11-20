@@ -50,12 +50,12 @@ Runner.prototype.setWorker = function (worker) {
   return this;
 };
 
-Runner.prototype.setAggregator = function (aggregator) {
+Runner.prototype.setCombiner = function (combiner) {
   checkParameter(
-    "setAggregator(function <aggregator>)",
-    [ [ "Aggregator aggregator", "function" ]],
-    [ aggregator] );
-  this.aggregator = aggregator;
+    "setCombiner(function <combiner>)",
+    [ [ "Combiner combiner", "function" ]],
+    [ combiner] );
+  this.combiner = combiner;
   return this;
 };
 
@@ -117,7 +117,7 @@ Runner.prototype.dropResult = function () {
 Runner.prototype.start = function (graphName) {
   if (this.hasOwnProperty("worker")) {
     this.executionNumber = PregelAPI.startExecution(
-      graphName,  this.worker, this.superstep, this.aggregator, this.globals
+      graphName,  this.worker, this.superstep, this.combiner, this.globals
     ).executionNumber;
     return this.executionNumber;
   }
