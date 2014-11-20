@@ -43,7 +43,7 @@ var DATA = "data";
 var ERR = "error";
 var CONDUCTOR = "conductor";
 var id;
-var WORKERS = 1;
+var WORKERS = 4;
 
 var getInboxName = function (execNr, step, workerId) {
   'use strict';
