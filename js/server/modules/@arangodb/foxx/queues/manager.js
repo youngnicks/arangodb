@@ -1,31 +1,31 @@
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Foxx queues manager
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Alan Plum
-/// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Foxx queues manager
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Alan Plum
+// / @author Copyright 2014, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
 var _ = require('lodash');
 var tasks = require('@arangodb/tasks');
@@ -41,61 +41,61 @@ var runInDatabase = function () {
     },
     action: function () {
       db._queues.all().toArray()
-      .forEach(function (queue) {
-        var numBusy = db._jobs.byExample({
-          queue: queue._key,
-          status: 'progress'
-        }).count();
-
-        if (numBusy >= queue.maxWorkers) {
-          busy = true;
-          return;
-        }
-
-        var jobs = db._createStatement({
-          query: (
-            qb.for('job').in('_jobs')
-            .filter(
-              qb('pending').eq('job.status')
-              .and(qb.ref('@queue').eq('job.queue'))
-              .and(qb.ref('@now').gte('job.delayUntil'))
-            )
-            .sort('job.delayUntil', 'ASC')
-            .limit('@max')
-            .return('job')
-          ),
-          bindVars: {
+        .forEach(function (queue) {
+          var numBusy = db._jobs.byExample({
             queue: queue._key,
-            now: Date.now(),
-            max: queue.maxWorkers - numBusy
+            status: 'progress'
+          }).count();
+
+          if (numBusy >= queue.maxWorkers) {
+            busy = true;
+            return;
           }
-        }).execute().toArray();
 
-        if (jobs.length > 0) {
-          busy = true;
-        }
-
-        jobs.forEach(function (job) {
-          db._jobs.update(job, {status: 'progress'});
-          tasks.register({
-            command: function (cfg) {
-              var db = require('@arangodb').db;
-              var initialDatabase = db._name();
-              db._useDatabase(cfg.db);
-              try {
-                require('@arangodb/foxx/queues/worker').work(cfg.job);
-              } catch(e) {}
-              db._useDatabase(initialDatabase);
-            },
-            offset: 1,
-            isSystem: true,
-            params: {
-              job: _.extend({}, job, {status: 'progress'}),
-              db: db._name()
+          var jobs = db._createStatement({
+            query: (
+            qb.for('job').in('_jobs')
+              .filter(
+                qb('pending').eq('job.status')
+                  .and(qb.ref('@queue').eq('job.queue'))
+                  .and(qb.ref('@now').gte('job.delayUntil'))
+            )
+              .sort('job.delayUntil', 'ASC')
+              .limit('@max')
+              .return('job')
+            ),
+            bindVars: {
+              queue: queue._key,
+              now: Date.now(),
+              max: queue.maxWorkers - numBusy
             }
+          }).execute().toArray();
+
+          if (jobs.length > 0) {
+            busy = true;
+          }
+
+          jobs.forEach(function (job) {
+            db._jobs.update(job, {status: 'progress'});
+            tasks.register({
+              command: function (cfg) {
+                var db = require('@arangodb').db;
+                var initialDatabase = db._name();
+                db._useDatabase(cfg.db);
+                try {
+                  require('@arangodb/foxx/queues/worker').work(cfg.job);
+                } catch(e) {}
+                db._useDatabase(initialDatabase);
+              },
+              offset: 1,
+              isSystem: true,
+              params: {
+                job: _.extend({}, job, {status: 'progress'}),
+                db: db._name()
+              }
+            });
           });
         });
-      });
     }
   });
   if (!busy) {
@@ -108,7 +108,7 @@ exports.manage = function () {
   var now = Date.now();
 
   // fetch list of databases from cache
-  var databases = global.KEY_GET('queue-control', 'databases') || [ ];
+  var databases = global.KEY_GET('queue-control', 'databases') || [];
   var expires = global.KEY_GET('queue-control', 'databases-expire') || 0;
 
   if (expires < now || databases.length === 0) {

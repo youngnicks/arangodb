@@ -1,58 +1,56 @@
 /*jshint strict: false, unused: false */
 /*global ArangoClusterComm, AQL_QUERY_IS_KILLED */
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Traversal "classes"
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2011-2013 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Jan Steemann
-/// @author Michael Hackstein
-/// @author Copyright 2011-2013, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Traversal "classes"
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2011-2013 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Jan Steemann
+// / @author Michael Hackstein
+// / @author Copyright 2011-2013, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
-var graph = require("@arangodb/graph-blueprint");
-var generalGraph = require("@arangodb/general-graph");
-var arangodb = require("@arangodb");
-var BinaryHeap = require("@arangodb/heap").BinaryHeap;
+var graph = require('@arangodb/graph-blueprint');
+var generalGraph = require('@arangodb/general-graph');
+var arangodb = require('@arangodb');
+var BinaryHeap = require('@arangodb/heap').BinaryHeap;
 var ArangoError = arangodb.ArangoError;
-var ShapedJson = require("internal").ShapedJson; // this may be undefined/null on the client
+var ShapedJson = require('internal').ShapedJson; // this may be undefined/null on the client
 
 var db = arangodb.db;
 
 var ArangoTraverser;
 
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief whether or not the query was aborted
+// / use the AQL_QUERY_IS_KILLED function on the server side, and a dummy 
+// / function otherwise (ArangoShell etc.)
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief whether or not the query was aborted
-/// use the AQL_QUERY_IS_KILLED function on the server side, and a dummy 
-/// function otherwise (ArangoShell etc.)
-////////////////////////////////////////////////////////////////////////////////
-
-var throwIfAborted = function () {
-};
+var throwIfAborted = function () {};
 
 try {
-  if (typeof AQL_QUERY_IS_KILLED === "function") {
-    throwIfAborted = function () { 
+  if (typeof AQL_QUERY_IS_KILLED === 'function') {
+    throwIfAborted = function () {
       if (AQL_QUERY_IS_KILLED()) {
         var err = new ArangoError();
         err.errorNum = arangodb.errors.ERROR_QUERY_KILLED.code;
@@ -61,22 +59,20 @@ try {
       }
     };
   }
-}
-catch (err) {
-}
+} catch (err) {}
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief clone any object
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief clone any object
+// //////////////////////////////////////////////////////////////////////////////
 
 function clone (obj) {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return obj;
   }
 
   var copy;
   if (Array.isArray(obj)) {
-    copy = [ ];
+    copy = [];
     obj.forEach(function (i) {
       copy.push(clone(i));
     });
@@ -86,7 +82,7 @@ function clone (obj) {
       return obj;
     }
     copy = { };
-    Object.keys(obj).forEach(function(k) {
+    Object.keys(obj).forEach(function (k) {
       copy[k] = clone(obj[k]);
     });
   }
@@ -94,12 +90,12 @@ function clone (obj) {
   return copy;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief test if object is empty
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief test if object is empty
+// //////////////////////////////////////////////////////////////////////////////
 
-function isEmpty(obj) {
-  for(var key in obj) {
+function isEmpty (obj) {
+  for (var key in obj) {
     if (obj.hasOwnProperty(key)) {
       return false;
     }
@@ -107,28 +103,26 @@ function isEmpty(obj) {
   return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief traversal abortion exception
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief traversal abortion exception
+// //////////////////////////////////////////////////////////////////////////////
 
 var abortedException = function (message, options) {
   'use strict';
-  this.message = message || "traversal intentionally aborted by user";
+  this.message = message || 'traversal intentionally aborted by user';
   this.options = options || { };
   this._intentionallyAborted = true;
 };
 
 abortedException.prototype = new Error();
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief default ArangoCollection datasource
-///
-/// This is a factory function that creates a datasource that operates on the
-/// specified edge collection. The vertices and edges are the documents in the
-/// corresponding collections.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief default ArangoCollection datasource
+// /
+// / This is a factory function that creates a datasource that operates on the
+// / specified edge collection. The vertices and edges are the documents in the
+// / corresponding collections.
+// //////////////////////////////////////////////////////////////////////////////
 
 function collectionDatasourceFactory (edgeCollection) {
   var c = edgeCollection;
@@ -138,8 +132,8 @@ function collectionDatasourceFactory (edgeCollection) {
 
   // we can call the "fast" version of some edge functions if we are
   // running server-side and are not a coordinator
-  var useBuiltIn = (typeof ArangoClusterComm === "object");
-  if (useBuiltIn && require("@arangodb/cluster").isCoordinator()) {
+  var useBuiltIn = (typeof ArangoClusterComm === 'object');
+  if (useBuiltIn && require('@arangodb/cluster').isCoordinator()) {
     useBuiltIn = false;
   }
 
@@ -210,18 +204,18 @@ function collectionDatasourceFactory (edgeCollection) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief general graph datasource
-///
-/// This is a factory function that creates a datasource that operates on the
-/// specified general graph. The vertices and edges are delivered by the
-/// the general-graph module.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief general graph datasource
+// /
+// / This is a factory function that creates a datasource that operates on the
+// / specified general graph. The vertices and edges are delivered by the
+// / the general-graph module.
+// //////////////////////////////////////////////////////////////////////////////
 
 function generalGraphDatasourceFactory (graph) {
   var g = graph;
   if (typeof g === 'string') {
-   g = generalGraph._graph(g);
+    g = generalGraph._graph(g);
   }
 
   return {
@@ -281,12 +275,12 @@ function generalGraphDatasourceFactory (graph) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief default Graph datasource
-///
-/// This is a datasource that operates on the specified graph. The vertices
-/// are from type Vertex, the edges from type Edge.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief default Graph datasource
+// /
+// / This is a datasource that operates on the specified graph. The vertices
+// / are from type Vertex, the edges from type Edge.
+// //////////////////////////////////////////////////////////////////////////////
 
 function graphDatasourceFactory (name) {
   return {
@@ -338,14 +332,13 @@ function graphDatasourceFactory (name) {
   };
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief default outbound expander function
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief default outbound expander function
+// //////////////////////////////////////////////////////////////////////////////
 
 function outboundExpander (config, vertex, path) {
   var datasource = config.datasource;
-  var connections = [ ];
+  var connections = [];
   var outEdges = datasource.getOutEdges(vertex);
   var edgeIterator;
 
@@ -355,39 +348,37 @@ function outboundExpander (config, vertex, path) {
 
   if (config.buildVertices) {
     if (!config.expandFilter) {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         try {
           var v = datasource.getInVertex(edge);
           connections.push({ edge: edge, vertex: v });
-        }
-        catch (e) {
+        } catch (e) {
           // continue even in the face of non-existing documents
         }
       };
     } else {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         try {
           var v = datasource.getInVertex(edge);
           if (config.expandFilter(config, v, edge, path)) {
             connections.push({ edge: edge, vertex: v });
           }
-        }
-        catch (e) {
+        } catch (e) {
           // continue even in the face of non-existing documents
         }
       };
     }
   } else {
     if (!config.expandFilter) {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         var id = datasource.getEdgeTo(edge);
-        var v = { _id: id, _key: id.substr(id.indexOf("/") + 1)};
+        var v = { _id: id, _key: id.substr(id.indexOf('/') + 1)};
         connections.push({ edge: edge, vertex: v });
       };
     } else {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         var id = datasource.getEdgeTo(edge);
-        var v = { _id: id, _key: id.substr(id.indexOf("/") + 1)};
+        var v = { _id: id, _key: id.substr(id.indexOf('/') + 1)};
         if (config.expandFilter(config, v, edge, path)) {
           connections.push({ edge: edge, vertex: v });
         }
@@ -398,13 +389,13 @@ function outboundExpander (config, vertex, path) {
   return connections;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief default inbound expander function
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief default inbound expander function
+// //////////////////////////////////////////////////////////////////////////////
 
 function inboundExpander (config, vertex, path) {
   var datasource = config.datasource;
-  var connections = [ ];
+  var connections = [];
 
   var inEdges = datasource.getInEdges(vertex);
 
@@ -415,39 +406,37 @@ function inboundExpander (config, vertex, path) {
 
   if (config.buildVertices) {
     if (!config.expandFilter) {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         try {
           var v = datasource.getOutVertex(edge);
           connections.push({ edge: edge, vertex: v });
-        }
-        catch (e) {
+        } catch (e) {
           // continue even in the face of non-existing documents
         }
       };
     } else {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         try {
           var v = datasource.getOutVertex(edge);
           if (config.expandFilter(config, v, edge, path)) {
             connections.push({ edge: edge, vertex: v });
           }
-        }
-        catch (e) {
+        } catch (e) {
           // continue even in the face of non-existing documents
         }
       };
     }
   } else {
     if (!config.expandFilter) {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         var id = datasource.getEdgeFrom(edge);
-        var v = { _id: id, _key: id.substr(id.indexOf("/") + 1)};
+        var v = { _id: id, _key: id.substr(id.indexOf('/') + 1)};
         connections.push({ edge: edge, vertex: v });
       };
     } else {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         var id = datasource.getEdgeFrom(edge);
-        var v = { _id: id, _key: id.substr(id.indexOf("/") + 1)};
+        var v = { _id: id, _key: id.substr(id.indexOf('/') + 1)};
         if (config.expandFilter(config, v, edge, path)) {
           connections.push({ edge: edge, vertex: v });
         }
@@ -459,13 +448,13 @@ function inboundExpander (config, vertex, path) {
   return connections;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief default "any" expander function
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief default "any" expander function
+// //////////////////////////////////////////////////////////////////////////////
 
 function anyExpander (config, vertex, path) {
   var datasource = config.datasource;
-  var connections = [ ];
+  var connections = [];
   var edges = datasource.getAllEdges(vertex);
 
   if (edges.length > 1 && config.sort) {
@@ -475,45 +464,43 @@ function anyExpander (config, vertex, path) {
   var edgeIterator;
   if (config.buildVertices) {
     if (!config.expandFilter) {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         try {
           var v = datasource.getPeerVertex(edge, vertex);
           connections.push({ edge: edge, vertex: v });
-        }
-        catch (e) {
+        } catch (e) {
           // continue even in the face of non-existing documents
         }
       };
     } else {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         try {
           var v = datasource.getPeerVertex(edge, vertex);
           if (config.expandFilter(config, v, edge, path)) {
             connections.push({ edge: edge, vertex: v });
           }
-        }
-        catch (e) {
+        } catch (e) {
           // continue even in the face of non-existing documents
         }
       };
     }
   } else {
     if (!config.expandFilter) {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         var id = datasource.getEdgeFrom(edge);
         if (id === vertex._id) {
           id = datasource.getEdgeTo(edge);
         }
-        var v = { _id: id, _key: id.substr(id.indexOf("/") + 1)};
+        var v = { _id: id, _key: id.substr(id.indexOf('/') + 1)};
         connections.push({ edge: edge, vertex: v });
       };
     } else {
-      edgeIterator = function(edge) {
+      edgeIterator = function (edge) {
         var id = datasource.getEdgeFrom(edge);
         if (id === vertex._id) {
           id = datasource.getEdgeTo(edge);
         }
-        var v = { _id: id, _key: id.substr(id.indexOf("/") + 1)};
+        var v = { _id: id, _key: id.substr(id.indexOf('/') + 1)};
         if (config.expandFilter(config, v, edge, path)) {
           connections.push({ edge: edge, vertex: v });
         }
@@ -524,13 +511,13 @@ function anyExpander (config, vertex, path) {
   return connections;
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
-/// @brief expands all outbound edges labeled with at least one label in config.labels
-///////////////////////////////////////////////////////////////////////////////////////////
+// /////////////////////////////////////////////////////////////////////////////////////////
+// / @brief expands all outbound edges labeled with at least one label in config.labels
+// /////////////////////////////////////////////////////////////////////////////////////////
 
 function expandOutEdgesWithLabels (config, vertex, path) {
   var datasource = config.datasource;
-  var result = [ ];
+  var result = [];
   var i;
 
   if (! Array.isArray(config.labels)) {
@@ -553,13 +540,13 @@ function expandOutEdgesWithLabels (config, vertex, path) {
   return result;
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
-/// @brief expands all inbound edges labeled with at least one label in config.labels
-///////////////////////////////////////////////////////////////////////////////////////////
+// /////////////////////////////////////////////////////////////////////////////////////////
+// / @brief expands all inbound edges labeled with at least one label in config.labels
+// /////////////////////////////////////////////////////////////////////////////////////////
 
 function expandInEdgesWithLabels (config, vertex, path) {
   var datasource = config.datasource;
-  var result = [ ];
+  var result = [];
   var i;
 
   if (! Array.isArray(config.labels)) {
@@ -582,13 +569,13 @@ function expandInEdgesWithLabels (config, vertex, path) {
   return result;
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
-/// @brief expands all edges labeled with at least one label in config.labels
-///////////////////////////////////////////////////////////////////////////////////////////
+// /////////////////////////////////////////////////////////////////////////////////////////
+// / @brief expands all edges labeled with at least one label in config.labels
+// /////////////////////////////////////////////////////////////////////////////////////////
 
 function expandEdgesWithLabels (config, vertex, path) {
   var datasource = config.datasource;
-  var result = [ ];
+  var result = [];
   var i;
 
   if (! Array.isArray(config.labels)) {
@@ -611,10 +598,9 @@ function expandEdgesWithLabels (config, vertex, path) {
   return result;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief default visitor that just tracks every visit
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief default visitor that just tracks every visit
+// //////////////////////////////////////////////////////////////////////////////
 
 function trackingVisitor (config, result, vertex, path) {
   if (! result || ! result.visited) {
@@ -630,9 +616,9 @@ function trackingVisitor (config, result, vertex, path) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief a visitor that counts the number of nodes visited
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief a visitor that counts the number of nodes visited
+// //////////////////////////////////////////////////////////////////////////////
 
 function countingVisitor (config, result, vertex, path) {
   if (! result) {
@@ -641,32 +627,30 @@ function countingVisitor (config, result, vertex, path) {
 
   if (result.hasOwnProperty('count')) {
     ++result.count;
-  }
-  else {
+  } else {
     result.count = 1;
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief a visitor that does nothing - can be used to quickly traverse a
-/// graph, e.g. for performance comparisons etc.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief a visitor that does nothing - can be used to quickly traverse a
+// / graph, e.g. for performance comparisons etc.
+// //////////////////////////////////////////////////////////////////////////////
 
 function doNothingVisitor () {
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief default filter to visit & expand all vertices
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief default filter to visit & expand all vertices
+// //////////////////////////////////////////////////////////////////////////////
 
 function visitAllFilter () {
-  return "";
+  return '';
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief filter to visit & expand all vertices up to a given depth
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief filter to visit & expand all vertices up to a given depth
+// //////////////////////////////////////////////////////////////////////////////
 
 function maxDepthFilter (config, vertex, path) {
   if (path && path.vertices && path.vertices.length > config.maxDepth) {
@@ -674,9 +658,9 @@ function maxDepthFilter (config, vertex, path) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief exclude all vertices up to a given depth
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief exclude all vertices up to a given depth
+// //////////////////////////////////////////////////////////////////////////////
 
 function minDepthFilter (config, vertex, path) {
   if (path && path.vertices && path.vertices.length <= config.minDepth) {
@@ -684,9 +668,9 @@ function minDepthFilter (config, vertex, path) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief include all vertices matching one of the given attribute sets
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief include all vertices matching one of the given attribute sets
+// //////////////////////////////////////////////////////////////////////////////
 
 function includeMatchingAttributesFilter (config, vertex, path) {
   if (! Array.isArray(config.matchingAttributes)) {
@@ -695,7 +679,7 @@ function includeMatchingAttributesFilter (config, vertex, path) {
 
   var include = false;
 
-  config.matchingAttributes.forEach(function(example) {
+  config.matchingAttributes.forEach(function (example) {
     var count = 0;
     var keys = Object.keys(example);
 
@@ -713,19 +697,18 @@ function includeMatchingAttributesFilter (config, vertex, path) {
   var result;
 
   if (! include) {
-    result = "exclude";
+    result = 'exclude';
   }
 
   return result;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief combine an array of filters
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief combine an array of filters
+// //////////////////////////////////////////////////////////////////////////////
 
 function combineFilters (filters, config, vertex, path) {
-  var result = [ ];
+  var result = [];
 
   filters.forEach(function (f) {
     var tmp = f(config, vertex, path);
@@ -740,9 +723,9 @@ function combineFilters (filters, config, vertex, path) {
   return result;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief parse a filter result
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief parse a filter result
+// //////////////////////////////////////////////////////////////////////////////
 
 function parseFilterResult (args) {
   var result = {
@@ -757,7 +740,7 @@ function parseFilterResult (args) {
 
     var finish = false;
 
-    if (typeof(arg) === 'string') {
+    if (typeof (arg) === 'string') {
       if (arg === ArangoTraverser.EXCLUDE) {
         result.visit = false;
         finish = true;
@@ -793,9 +776,9 @@ function parseFilterResult (args) {
   return result;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief apply the uniqueness checks
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief apply the uniqueness checks
+// //////////////////////////////////////////////////////////////////////////////
 
 function checkUniqueness (config, visited, vertex, edge) {
   var uniqueness = config.uniqueness;
@@ -825,9 +808,9 @@ function checkUniqueness (config, visited, vertex, edge) {
   return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief check if we must process items in reverse order
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief check if we must process items in reverse order
+// //////////////////////////////////////////////////////////////////////////////
 
 function checkReverse (config) {
   var result = false;
@@ -839,14 +822,14 @@ function checkReverse (config) {
     }
   }
   else if (config.order === ArangoTraverser.PRE_ORDER ||
-           config.order === ArangoTraverser.PRE_ORDER_EXPANDER) {
+    config.order === ArangoTraverser.PRE_ORDER_EXPANDER) {
     // pre order
     if (config.itemOrder === ArangoTraverser.BACKWARD &&
-        config.strategy === ArangoTraverser.BREADTH_FIRST) {
+      config.strategy === ArangoTraverser.BREADTH_FIRST) {
       result = true;
     }
     else if (config.itemOrder === ArangoTraverser.FORWARD &&
-             config.strategy === ArangoTraverser.DEPTH_FIRST) {
+      config.strategy === ArangoTraverser.DEPTH_FIRST) {
       result = true;
     }
   }
@@ -854,9 +837,9 @@ function checkReverse (config) {
   return result;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief implementation details for breadth-first strategy
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief implementation details for breadth-first strategy
+// //////////////////////////////////////////////////////////////////////////////
 
 function breadthFirstSearch () {
   return {
@@ -878,7 +861,7 @@ function breadthFirstSearch () {
     },
 
     createPath: function (items, idx) {
-      var path = { edges: [ ], vertices: [ ] };
+      var path = { edges: [], vertices: [] };
       var pathItem = items[idx];
 
       while (true) {
@@ -906,10 +889,10 @@ function breadthFirstSearch () {
       var reverse = checkReverse(config);
 
       while ((step === 1 && index < toVisit.length) ||
-             (step === -1 && index >= 0)) {
+        (step === -1 && index >= 0)) {
         var current = toVisit[index];
-        var vertex  = current.vertex;
-        var edge    = current.edge;
+        var vertex = current.vertex;
+        var edge = current.edge;
         var path;
 
         if (visitCounter++ > maxIterations) {
@@ -937,8 +920,7 @@ function breadthFirstSearch () {
           if (! checkUniqueness(config, visited, vertex, edge)) {
             if (index < toVisit.length - 1) {
               index += step;
-            }
-            else {
+            } else {
               step = -1;
             }
             continue;
@@ -948,8 +930,7 @@ function breadthFirstSearch () {
           if (config.order === ArangoTraverser.PRE_ORDER && filterResult.visit) {
             // preorder
             config.visitor(config, result, vertex, path);
-          }
-          else {
+          } else {
             // postorder
             current.visit = filterResult.visit || false;
           }
@@ -961,7 +942,7 @@ function breadthFirstSearch () {
               connected.reverse();
             }
 
-            if (config.order === ArangoTraverser.PRE_ORDER_EXPANDER && filterResult.visit) { 
+            if (config.order === ArangoTraverser.PRE_ORDER_EXPANDER && filterResult.visit) {
               config.visitor(config, result, vertex, path, connected);
             }
 
@@ -971,19 +952,17 @@ function breadthFirstSearch () {
             }
           }
           else if (config.order === ArangoTraverser.PRE_ORDER_EXPANDER && filterResult.visit) {
-            config.visitor(config, result, vertex, path, [ ]);
-          } 
+            config.visitor(config, result, vertex, path, []);
+          }
 
           if (config.order === ArangoTraverser.POST_ORDER) {
             if (index < toVisit.length - 1) {
               index += step;
-            }
-            else {
+            } else {
               step = -1;
             }
           }
-        }
-        else {
+        } else {
           if (config.order === ArangoTraverser.POST_ORDER && current.visit) {
             path = this.createPath(toVisit, index);
             config.visitor(config, result, vertex, path);
@@ -995,9 +974,9 @@ function breadthFirstSearch () {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief implementation details for depth-first strategy
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief implementation details for depth-first strategy
+// //////////////////////////////////////////////////////////////////////////////
 
 function depthFirstSearch () {
   return {
@@ -1016,12 +995,12 @@ function depthFirstSearch () {
     run: function (config, result, startVertex) {
       var maxIterations = config.maxIterations, visitCounter = 0;
       var toVisit = [ { edge: null, vertex: startVertex, visit: null } ];
-      var path    = { edges: [ ], vertices: [ ] };
+      var path = { edges: [], vertices: [] };
       var visited = { edges: { }, vertices: { } };
       var reverse = checkReverse(config);
       var uniqueness = config.uniqueness;
       var haveUniqueness = ((uniqueness.vertices !== ArangoTraverser.UNIQUE_NONE) ||
-                            (uniqueness.edges !== ArangoTraverser.UNIQUE_NONE));
+        (uniqueness.edges !== ArangoTraverser.UNIQUE_NONE));
 
       while (toVisit.length > 0) {
         if (visitCounter++ > maxIterations) {
@@ -1030,13 +1009,13 @@ function depthFirstSearch () {
           err.errorMessage = arangodb.errors.ERROR_GRAPH_TOO_MANY_ITERATIONS.message;
           throw err;
         }
-        
+
         throwIfAborted();
 
         // peek at the top of the stack
         var current = toVisit[toVisit.length - 1];
-        var vertex  = current.vertex;
-        var edge    = current.edge;
+        var vertex = current.vertex;
+        var edge = current.edge;
 
         // check if we visit the element for the first time
         if (current.visit === null || current.visit === undefined) {
@@ -1070,8 +1049,7 @@ function depthFirstSearch () {
           if (config.order === ArangoTraverser.PRE_ORDER && filterResult.visit) {
             // preorder visit
             config.visitor(config, result, vertex, path);
-          }
-          else {
+          } else {
             // postorder. mark the element visitation flag because we'll got to check it later
             current.visit = filterResult.visit || false;
           }
@@ -1079,12 +1057,12 @@ function depthFirstSearch () {
           // expand the element's children?
           if (filterResult.expand) {
             var connected = config.expander(config, vertex, path), i;
-              
+
             if (reverse) {
               connected.reverse();
             }
-          
-            if (config.order === ArangoTraverser.PRE_ORDER_EXPANDER && filterResult.visit) { 
+
+            if (config.order === ArangoTraverser.PRE_ORDER_EXPANDER && filterResult.visit) {
               config.visitor(config, result, vertex, path, connected);
             }
 
@@ -1094,10 +1072,9 @@ function depthFirstSearch () {
             }
           }
           else if (config.order === ArangoTraverser.PRE_ORDER_EXPANDER && filterResult.visit) {
-            config.visitor(config, result, vertex, path, [ ]);
-          } 
-        }
-        else {
+            config.visitor(config, result, vertex, path, []);
+          }
+        } else {
           // we have already seen this element
           if (config.order === ArangoTraverser.POST_ORDER && current.visit) {
             // postorder visitation
@@ -1116,9 +1093,9 @@ function depthFirstSearch () {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief implementation details for dijkstra shortest path strategy
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief implementation details for dijkstra shortest path strategy
+// //////////////////////////////////////////////////////////////////////////////
 
 function dijkstraSearch () {
   return {
@@ -1138,7 +1115,7 @@ function dijkstraSearch () {
     },
 
     vertexList: function (vertex) {
-      var result = [ ];
+      var result = [];
       while (vertex) {
         result.push(vertex);
         vertex = vertex.parent;
@@ -1147,7 +1124,7 @@ function dijkstraSearch () {
     },
 
     buildPath: function (vertex) {
-      var path = { vertices: [ vertex.vertex ], edges: [ ] };
+      var path = { vertices: [ vertex.vertex ], edges: [] };
       var v = vertex;
 
       while (v.parent) {
@@ -1176,7 +1153,7 @@ function dijkstraSearch () {
           err.errorMessage = arangodb.errors.ERROR_GRAPH_TOO_MANY_ITERATIONS.message;
           throw err;
         }
-        
+
         throwIfAborted();
 
         var currentNode = heap.pop();
@@ -1232,13 +1209,12 @@ function dijkstraSearch () {
             weight = config.distance(config, currentNode.vertex, neighbor.vertex, edge);
           }
           else if (config.weight) {
-            if (typeof edge[config.weight] === "number") {
+            if (typeof edge[config.weight] === 'number') {
               weight = edge[config.weight];
             }
             else if (config.defaultWeight) {
               weight = config.defaultWeight;
-            }
-            else {
+            } else {
               weight = Infinity;
             }
           }
@@ -1274,7 +1250,7 @@ function dijkstraSearchMulti () {
     },
 
     vertexList: function (vertex) {
-      var result = [ ];
+      var result = [];
       while (vertex) {
         result.push(vertex);
         vertex = vertex.parent;
@@ -1283,7 +1259,7 @@ function dijkstraSearchMulti () {
     },
 
     buildPath: function (vertex) {
-      var path = { vertices: [ vertex.vertex ], edges: [ ] };
+      var path = { vertices: [ vertex.vertex ], edges: [] };
       var v = vertex;
 
       while (v.parent) {
@@ -1362,13 +1338,12 @@ function dijkstraSearchMulti () {
             weight = config.distance(config, currentNode.vertex, neighbor.vertex, edge);
           }
           else if (config.weight) {
-            if (typeof edge[config.weight] === "number") {
+            if (typeof edge[config.weight] === 'number') {
               weight = edge[config.weight];
             }
             else if (config.defaultWeight) {
               weight = config.defaultWeight;
-            }
-            else {
+            } else {
               weight = Infinity;
             }
           }
@@ -1386,9 +1361,9 @@ function dijkstraSearchMulti () {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief implementation details for a* shortest path strategy
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief implementation details for a* shortest path strategy
+// //////////////////////////////////////////////////////////////////////////////
 
 function astarSearch () {
   return {
@@ -1408,7 +1383,7 @@ function astarSearch () {
     },
 
     vertexList: function (vertex) {
-      var result = [ ];
+      var result = [];
       while (vertex) {
         result.push(vertex);
         vertex = vertex.parent;
@@ -1417,7 +1392,7 @@ function astarSearch () {
     },
 
     buildPath: function (vertex) {
-      var path = { vertices: [ vertex.vertex ], edges: [ ] };
+      var path = { vertices: [ vertex.vertex ], edges: [] };
       var v = vertex;
 
       while (v.parent) {
@@ -1436,7 +1411,6 @@ function astarSearch () {
       });
 
       heap.push(this.makeNode(startVertex));
-
 
       while (heap.size() > 0) {
         if (visitCounter++ > maxIterations) {
@@ -1477,7 +1451,7 @@ function astarSearch () {
             continue;
           }
 
-          var gScore = currentNode.g + 1;// + neighbor.cost;
+          var gScore = currentNode.g + 1; // + neighbor.cost;
           var beenVisited = neighbor.visited;
 
           if (! beenVisited || gScore < neighbor.g) {
@@ -1494,8 +1468,7 @@ function astarSearch () {
 
             if (! beenVisited) {
               heap.push(neighbor);
-            }
-            else {
+            } else {
               heap.rescoreElement(neighbor);
             }
           }
@@ -1505,34 +1478,32 @@ function astarSearch () {
   };
 }
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief traversal constructor
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief traversal constructor
+// //////////////////////////////////////////////////////////////////////////////
 
 ArangoTraverser = function (config) {
   var defaults = {
-    order: ArangoTraverser.PRE_ORDER,
-    itemOrder: ArangoTraverser.FORWARD,
-    strategy: ArangoTraverser.DEPTH_FIRST,
-    uniqueness: {
-      vertices: ArangoTraverser.UNIQUE_NONE,
-      edges: ArangoTraverser.UNIQUE_PATH
-    },
-    visitor: trackingVisitor,
-    filter: null,
-    expander: outboundExpander,
-    datasource: null,
-    maxIterations: 10000000,
-    minDepth: 0,
-    maxDepth: 256,
-    buildVertices: true
-  }, d;
+      order: ArangoTraverser.PRE_ORDER,
+      itemOrder: ArangoTraverser.FORWARD,
+      strategy: ArangoTraverser.DEPTH_FIRST,
+      uniqueness: {
+        vertices: ArangoTraverser.UNIQUE_NONE,
+        edges: ArangoTraverser.UNIQUE_PATH
+      },
+      visitor: trackingVisitor,
+      filter: null,
+      expander: outboundExpander,
+      datasource: null,
+      maxIterations: 10000000,
+      minDepth: 0,
+      maxDepth: 256,
+      buildVertices: true
+    }, d;
 
   var err;
 
-  if (typeof config !== "object") {
+  if (typeof config !== 'object') {
     err = new ArangoError();
     err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
     err.errorMessage = arangodb.errors.ERROR_BAD_PARAMETER.message;
@@ -1561,7 +1532,7 @@ ArangoTraverser = function (config) {
       }
     }
     if (typeof value === 'string') {
-      value = value.toLowerCase().replace(/-/, "");
+      value = value.toLowerCase().replace(/-/, '');
       if (map[value] !== null && map[value] !== undefined) {
         return map[value];
       }
@@ -1576,21 +1547,21 @@ ArangoTraverser = function (config) {
 
     err = new ArangoError();
     err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
-    err.errorMessage = "invalid value for " + param;
+    err.errorMessage = 'invalid value for ' + param;
     throw err;
   }
 
   config.uniqueness = {
     vertices: validate(config.uniqueness && config.uniqueness.vertices, {
-      none:   ArangoTraverser.UNIQUE_NONE,
+      none: ArangoTraverser.UNIQUE_NONE,
       global: ArangoTraverser.UNIQUE_GLOBAL,
-      path:   ArangoTraverser.UNIQUE_PATH
-    }, "uniqueness.vertices"),
+      path: ArangoTraverser.UNIQUE_PATH
+    }, 'uniqueness.vertices'),
     edges: validate(config.uniqueness && config.uniqueness.edges, {
-      path:   ArangoTraverser.UNIQUE_PATH,
-      none:   ArangoTraverser.UNIQUE_NONE,
+      path: ArangoTraverser.UNIQUE_PATH,
+      none: ArangoTraverser.UNIQUE_NONE,
       global: ArangoTraverser.UNIQUE_GLOBAL
-    }, "uniqueness.edges")
+    }, 'uniqueness.edges')
   };
 
   config.strategy = validate(config.strategy, {
@@ -1599,53 +1570,52 @@ ArangoTraverser = function (config) {
     astar: ArangoTraverser.ASTAR_SEARCH,
     dijkstra: ArangoTraverser.DIJKSTRA_SEARCH,
     dijkstramulti: ArangoTraverser.DIJKSTRA_SEARCH_MULTI
-  }, "strategy");
+  }, 'strategy');
 
   config.order = validate(config.order, {
     preorder: ArangoTraverser.PRE_ORDER,
     postorder: ArangoTraverser.POST_ORDER,
     preorderexpander: ArangoTraverser.PRE_ORDER_EXPANDER
-  }, "order");
+  }, 'order');
 
   config.itemOrder = validate(config.itemOrder, {
     forward: ArangoTraverser.FORWARD,
     backward: ArangoTraverser.BACKWARD
-  }, "itemOrder");
+  }, 'itemOrder');
 
-  if (typeof config.visitor !== "function") {
+  if (typeof config.visitor !== 'function') {
     err = new ArangoError();
     err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
-    err.errorMessage = "invalid visitor function";
+    err.errorMessage = 'invalid visitor function';
     throw err;
   }
 
   // prepare an array of filters
-  var filters = [ ];
+  var filters = [];
   if (config.minDepth !== undefined &&
-      config.minDepth !== null &&
-      config.minDepth > 0) {
+    config.minDepth !== null &&
+    config.minDepth > 0) {
     filters.push(minDepthFilter);
   }
   if (config.maxDepth !== undefined &&
-      config.maxDepth !== null &&
-      config.maxDepth > 0) {
+    config.maxDepth !== null &&
+    config.maxDepth > 0) {
     filters.push(maxDepthFilter);
   }
 
   if (! Array.isArray(config.filter)) {
-    if (typeof config.filter === "function") {
+    if (typeof config.filter === 'function') {
       config.filter = [ config.filter ];
-    }
-    else {
-      config.filter = [ ];
+    } else {
+      config.filter = [];
     }
   }
 
-  config.filter.forEach( function (f) {
-    if (typeof f !== "function") {
+  config.filter.forEach(function (f) {
+    if (typeof f !== 'function') {
       err = new ArangoError();
       err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
-      err.errorMessage = "invalid filter function";
+      err.errorMessage = 'invalid filter function';
       throw err;
     }
 
@@ -1661,40 +1631,38 @@ ArangoTraverser = function (config) {
   else if (filters.length === 1) {
     // exactly one filter
     config.filter = filters[0];
-  }
-  else {
+  } else {
     config.filter = visitAllFilter;
   }
 
-  if (typeof config.expander !== "function") {
+  if (typeof config.expander !== 'function') {
     config.expander = validate(config.expander, {
       outbound: outboundExpander,
       inbound: inboundExpander,
       any: anyExpander
-    }, "expander");
+    }, 'expander');
   }
 
-  if (typeof config.expander !== "function") {
+  if (typeof config.expander !== 'function') {
     err = new ArangoError();
     err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
-    err.errorMessage = "invalid expander function";
+    err.errorMessage = 'invalid expander function';
     throw err;
   }
 
-  if (typeof config.datasource !== "object") {
+  if (typeof config.datasource !== 'object') {
     err = new ArangoError();
     err.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
-    err.errorMessage = "invalid datasource";
+    err.errorMessage = 'invalid datasource';
     throw err;
   }
 
   this.config = config;
 };
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief execute the traversal
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief execute the traversal
+// //////////////////////////////////////////////////////////////////////////////
 
 ArangoTraverser.prototype.traverse = function (result, startVertex, endVertex) {
   // get the traversal strategy
@@ -1711,157 +1679,151 @@ ArangoTraverser.prototype.traverse = function (result, startVertex, endVertex) {
   }
   else if (this.config.strategy === ArangoTraverser.BREADTH_FIRST) {
     strategy = breadthFirstSearch();
-  }
-  else {
+  } else {
     strategy = depthFirstSearch();
   }
 
   // check the start vertex
   if (startVertex === undefined ||
-      startVertex === null ||
-      typeof startVertex !== 'object') {
+    startVertex === null ||
+    typeof startVertex !== 'object') {
     var err1 = new ArangoError();
     err1.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
     err1.errorMessage = arangodb.errors.ERROR_BAD_PARAMETER.message +
-                       ": invalid startVertex specified for traversal";
+    ': invalid startVertex specified for traversal';
     throw err1;
   }
 
   if (strategy.requiresEndVertex() &&
-      (endVertex === undefined ||
-       endVertex === null ||
-       typeof endVertex !== 'object')) {
+    (endVertex === undefined ||
+    endVertex === null ||
+    typeof endVertex !== 'object')) {
     var err2 = new ArangoError();
     err2.errorNum = arangodb.errors.ERROR_BAD_PARAMETER.code;
     err2.errorMessage = arangodb.errors.ERROR_BAD_PARAMETER.message +
-                       ": invalid endVertex specified for traversal";
+    ': invalid endVertex specified for traversal';
     throw err2;
   }
 
   // run the traversal
   try {
     strategy.run(this.config, result, startVertex, endVertex);
-  }
-  catch (err3) {
-    if (typeof err3 !== "object" || ! err3._intentionallyAborted) {
+  } catch (err3) {
+    if (typeof err3 !== 'object' || ! err3._intentionallyAborted) {
       throw err3;
     }
   }
 };
 
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief every element can be revisited
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief every element can be revisited
-////////////////////////////////////////////////////////////////////////////////
+ArangoTraverser.UNIQUE_NONE = 0;
 
-ArangoTraverser.UNIQUE_NONE          = 0;
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief element can only be revisited if not already in current path
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief element can only be revisited if not already in current path
-////////////////////////////////////////////////////////////////////////////////
+ArangoTraverser.UNIQUE_PATH = 1;
 
-ArangoTraverser.UNIQUE_PATH          = 1;
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief element can only be revisited if not already visited
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief element can only be revisited if not already visited
-////////////////////////////////////////////////////////////////////////////////
+ArangoTraverser.UNIQUE_GLOBAL = 2;
 
-ArangoTraverser.UNIQUE_GLOBAL        = 2;
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief visitation strategy breadth first
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief visitation strategy breadth first
-////////////////////////////////////////////////////////////////////////////////
+ArangoTraverser.BREADTH_FIRST = 0;
 
-ArangoTraverser.BREADTH_FIRST        = 0;
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief visitation strategy depth first
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief visitation strategy depth first
-////////////////////////////////////////////////////////////////////////////////
+ArangoTraverser.DEPTH_FIRST = 1;
 
-ArangoTraverser.DEPTH_FIRST          = 1;
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief astar search
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief astar search
-////////////////////////////////////////////////////////////////////////////////
+ArangoTraverser.ASTAR_SEARCH = 2;
 
-ArangoTraverser.ASTAR_SEARCH         = 2;
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief dijkstra search
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief dijkstra search
-////////////////////////////////////////////////////////////////////////////////
+ArangoTraverser.DIJKSTRA_SEARCH = 3;
 
-ArangoTraverser.DIJKSTRA_SEARCH      = 3;
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief dijkstra search with multiple end vertices
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief dijkstra search with multiple end vertices
+// //////////////////////////////////////////////////////////////////////////////
 
 ArangoTraverser.DIJKSTRA_SEARCH_MULTI = 4;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief pre-order traversal, visitor called before expander
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief pre-order traversal, visitor called before expander
+// //////////////////////////////////////////////////////////////////////////////
 
-ArangoTraverser.PRE_ORDER            = 0;
+ArangoTraverser.PRE_ORDER = 0;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief post-order traversal
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief post-order traversal
+// //////////////////////////////////////////////////////////////////////////////
 
-ArangoTraverser.POST_ORDER           = 1;
+ArangoTraverser.POST_ORDER = 1;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief pre-order traversal, visitor called at expander
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief pre-order traversal, visitor called at expander
+// //////////////////////////////////////////////////////////////////////////////
 
-ArangoTraverser.PRE_ORDER_EXPANDER   = 2;
+ArangoTraverser.PRE_ORDER_EXPANDER = 2;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief forward item processing order
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief forward item processing order
+// //////////////////////////////////////////////////////////////////////////////
 
-ArangoTraverser.FORWARD              = 0;
+ArangoTraverser.FORWARD = 0;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief backward item processing order
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief backward item processing order
+// //////////////////////////////////////////////////////////////////////////////
 
-ArangoTraverser.BACKWARD             = 1;
+ArangoTraverser.BACKWARD = 1;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief prune "constant"
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief prune "constant"
+// //////////////////////////////////////////////////////////////////////////////
 
-ArangoTraverser.PRUNE                = 'prune';
+ArangoTraverser.PRUNE = 'prune';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief exclude "constant"
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief exclude "constant"
+// //////////////////////////////////////////////////////////////////////////////
 
-ArangoTraverser.EXCLUDE              = 'exclude';
+ArangoTraverser.EXCLUDE = 'exclude';
 
+exports.collectionDatasourceFactory = collectionDatasourceFactory;
+exports.generalGraphDatasourceFactory = generalGraphDatasourceFactory;
+exports.graphDatasourceFactory = graphDatasourceFactory;
 
-exports.collectionDatasourceFactory     = collectionDatasourceFactory;
-exports.generalGraphDatasourceFactory   = generalGraphDatasourceFactory;
-exports.graphDatasourceFactory          = graphDatasourceFactory;
+exports.outboundExpander = outboundExpander;
+exports.inboundExpander = inboundExpander;
+exports.anyExpander = anyExpander;
+exports.expandOutEdgesWithLabels = expandOutEdgesWithLabels;
+exports.expandInEdgesWithLabels = expandInEdgesWithLabels;
+exports.expandEdgesWithLabels = expandEdgesWithLabels;
 
-exports.outboundExpander                = outboundExpander;
-exports.inboundExpander                 = inboundExpander;
-exports.anyExpander                     = anyExpander;
-exports.expandOutEdgesWithLabels        = expandOutEdgesWithLabels;
-exports.expandInEdgesWithLabels         = expandInEdgesWithLabels;
-exports.expandEdgesWithLabels           = expandEdgesWithLabels;
+exports.trackingVisitor = trackingVisitor;
+exports.countingVisitor = countingVisitor;
+exports.doNothingVisitor = doNothingVisitor;
 
-exports.trackingVisitor                 = trackingVisitor;
-exports.countingVisitor                 = countingVisitor;
-exports.doNothingVisitor                = doNothingVisitor;
-
-exports.visitAllFilter                  = visitAllFilter;
-exports.maxDepthFilter                  = maxDepthFilter;
-exports.minDepthFilter                  = minDepthFilter;
+exports.visitAllFilter = visitAllFilter;
+exports.maxDepthFilter = maxDepthFilter;
+exports.minDepthFilter = minDepthFilter;
 exports.includeMatchingAttributesFilter = includeMatchingAttributesFilter;
-exports.abortedException                = abortedException;
+exports.abortedException = abortedException;
 
-exports.Traverser                       = ArangoTraverser;
-
-
+exports.Traverser = ArangoTraverser;

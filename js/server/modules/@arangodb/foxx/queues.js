@@ -1,31 +1,31 @@
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Foxx queues
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2014-2015 triAGENS GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Alan Plum
-/// @author Copyright 2015, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Foxx queues
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2014-2015 triAGENS GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Alan Plum
+// / @author Copyright 2015, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
 var _ = require('lodash');
 var flatten = require('internal').flatten;
@@ -37,14 +37,14 @@ var db = arangodb.db;
 var queueCache = {};
 var jobCache = {};
 
-function validate(data, schema) {
+function validate (data, schema) {
   if (!schema) {
     schema = joi.forbidden();
   }
   var raw = data;
   var isTuple = Boolean(schema._meta && schema._meta.some(function (meta) {
-    return meta.isTuple;
-  }));
+      return meta.isTuple;
+    }));
   if (isTuple) {
     raw = Array.isArray(raw) ? raw : [raw];
     data = _.extend({}, raw);
@@ -61,7 +61,7 @@ function validate(data, schema) {
   return result.value;
 }
 
-function updateQueueDelay() {
+function updateQueueDelay () {
   try {
     db._executeTransaction({
       collections: {
@@ -70,12 +70,12 @@ function updateQueueDelay() {
       action: function () {
         var delayUntil = db._query(
           qb.let('queues', qb.for('queue').in('_queues').return('queue._key'))
-          .for('job').in('_jobs')
-          .filter(qb('pending').eq('job.status'))
-          .filter(qb.POSITION('queues', 'job.queue', false))
-          .filter(qb(null).neq('job.delayUntil'))
-          .sort('job.delayUntil', 'ASC')
-          .return('job.delayUntil')
+            .for('job').in('_jobs')
+            .filter(qb('pending').eq('job.status'))
+            .filter(qb.POSITION('queues', 'job.queue', false))
+            .filter(qb(null).neq('job.delayUntil'))
+            .sort('job.delayUntil', 'ASC')
+            .return('job.delayUntil')
         ).next();
         if (typeof delayUntil !== 'number') {
           delayUntil = -1;
@@ -87,7 +87,7 @@ function updateQueueDelay() {
   } catch (e) {}
 }
 
-function getQueue(key) {
+function getQueue (key) {
   var databaseName = db._name();
   var cache = queueCache[databaseName];
   if (!cache) {
@@ -102,12 +102,12 @@ function getQueue(key) {
   return cache[key];
 }
 
-function createQueue(key, maxWorkers) {
+function createQueue (key, maxWorkers) {
   try {
     db._queues.save({_key: key, maxWorkers: maxWorkers || 1});
   } catch (err) {
     if (!(err instanceof arangodb.ArangoError) ||
-        err.errorNum !== arangodb.ERROR_ARANGO_UNIQUE_CONSTRAINT_VIOLATED) {
+      err.errorNum !== arangodb.ERROR_ARANGO_UNIQUE_CONSTRAINT_VIOLATED) {
       throw err;
     }
     if (maxWorkers) {
@@ -123,7 +123,7 @@ function createQueue(key, maxWorkers) {
   return cache[key];
 }
 
-function deleteQueue(key) {
+function deleteQueue (key) {
   var result = false;
   db._executeTransaction({
     collections: {
@@ -140,7 +140,7 @@ function deleteQueue(key) {
   return result;
 }
 
-function getJobs(queue, status, type) {
+function getJobs (queue, status, type) {
   var query = qb.for('job').in('_jobs');
   var vars = {};
 
@@ -157,7 +157,7 @@ function getJobs(queue, status, type) {
   if (type !== undefined) {
     query = query.filter(
       qb.ref('@type.name').eq('job.type.name')
-      .and(qb.ref('@type.mount').eq('job.type.mount'))
+        .and(qb.ref('@type.mount').eq('job.type.mount'))
     );
     vars.type = {name: type.name, mount: type.mount};
   }
@@ -168,7 +168,7 @@ function getJobs(queue, status, type) {
   }).execute().toArray();
 }
 
-function Job(id) {
+function Job (id) {
   Object.defineProperty(this, 'id', {
     value: id,
     writable: false,
@@ -216,7 +216,7 @@ _.extend(Job.prototype, {
   }
 });
 
-function Queue(name) {
+function Queue (name) {
   Object.defineProperty(this, 'name', {
     get: function () {
       return name;
@@ -226,7 +226,7 @@ function Queue(name) {
   });
 }
 
-function asNumber(num) {
+function asNumber (num) {
   if (!num) {
     return 0;
   }
@@ -342,5 +342,3 @@ module.exports = {
   create: createQueue,
   delete: deleteQueue
 };
-
-

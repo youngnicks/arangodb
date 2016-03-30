@@ -1,49 +1,47 @@
 /*jshint strict: false, unused: false */
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Graph functionality
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2010-2012 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Dr. Frank Celler, Lucas Dohmen
-/// @author Copyright 2011-2012, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Graph functionality
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2010-2012 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Dr. Frank Celler, Lucas Dohmen
+// / @author Copyright 2011-2012, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
-var arangodb = require("@arangodb"),
-  is = require("@arangodb/is"),
+var arangodb = require('@arangodb'),
+  is = require('@arangodb/is'),
   db = arangodb.db,
   ArangoCollection = arangodb.ArangoCollection,
-  common = require("@arangodb/graph-common"),
-  newGraph = require("@arangodb/general-graph"),
+  common = require('@arangodb/graph-common'),
+  newGraph = require('@arangodb/general-graph'),
   Edge = common.Edge,
   Graph = common.Graph,
   Vertex = common.Vertex,
   GraphArray = common.GraphArray,
   Iterator = common.Iterator;
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief find or create a collection by name
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+  // / @brief find or create a collection by name
+  // //////////////////////////////////////////////////////////////////////////////
 
 var findOrCreateCollectionByName = function (name) {
   var col = db._collection(name);
@@ -51,7 +49,7 @@ var findOrCreateCollectionByName = function (name) {
   if (col === null) {
     col = db._create(name);
   } else if (!(col instanceof ArangoCollection) || col.type() !== ArangoCollection.TYPE_DOCUMENT) {
-    throw "<" + name + "> must be a document collection";
+    throw '<' + name + '> must be a document collection';
   }
 
   if (col === null) {
@@ -61,9 +59,9 @@ var findOrCreateCollectionByName = function (name) {
   return col;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief find or create an edge collection by name
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief find or create an edge collection by name
+// //////////////////////////////////////////////////////////////////////////////
 
 var findOrCreateEdgeCollectionByName = function (name) {
   var col = db._collection(name);
@@ -71,7 +69,7 @@ var findOrCreateEdgeCollectionByName = function (name) {
   if (col === null) {
     col = db._createEdgeCollection(name);
   } else if (!(col instanceof ArangoCollection) || col.type() !== ArangoCollection.TYPE_EDGE) {
-    throw "<" + name + "> must be an edge collection";
+    throw '<' + name + '> must be an edge collection';
   }
 
   if (col === null) {
@@ -81,11 +79,9 @@ var findOrCreateEdgeCollectionByName = function (name) {
   return col;
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock edgeSetProperty
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock edgeSetProperty
+// //////////////////////////////////////////////////////////////////////////////
 
 Edge.prototype.setProperty = function (name, value) {
   var shallow = this._properties._shallowCopy;
@@ -104,17 +100,15 @@ Edge.prototype.setProperty = function (name, value) {
   return value;
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block vertexEdges
-///
-/// `vertex.edges()`
-///
-/// Returns a list of in- or outbound edges of the *vertex*.
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block vertexEdges
+// /
+// / `vertex.edges()`
+// /
+// / Returns a list of in- or outbound edges of the *vertex*.
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.edges = function () {
   var graph = this._graph;
@@ -124,15 +118,15 @@ Vertex.prototype.edges = function () {
   });
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block vertexGetInEdges
-///
-///`vertex.getInEdges(label, ...)`
-///
-/// Returns a list of inbound edges of the *vertex* with given label(s).
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block vertexGetInEdges
+// /
+// /`vertex.getInEdges(label, ...)`
+// /
+// / Returns a list of inbound edges of the *vertex* with given label(s).
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.getInEdges = function () {
   var labels = Array.prototype.slice.call(arguments);
@@ -147,15 +141,15 @@ Vertex.prototype.getInEdges = function () {
   return result;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block vertexGetOutEdges
-///
-/// `vertex.getOutEdges(label, ...)`
-///
-/// Returns a list of outbound edges of the *vertex* with given label(s).
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block vertexGetOutEdges
+// /
+// / `vertex.getOutEdges(label, ...)`
+// /
+// / Returns a list of outbound edges of the *vertex* with given label(s).
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.getOutEdges = function () {
   var labels = Array.prototype.slice.call(arguments);
@@ -170,15 +164,15 @@ Vertex.prototype.getOutEdges = function () {
   return result;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block vertexGetEdges
-///
-/// `vertex.getEdges(label, ...)`
-///
-/// Returns a list of in- or outbound edges of the *vertex* with given
-/// label(s).
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block vertexGetEdges
+// /
+// / `vertex.getEdges(label, ...)`
+// /
+// / Returns a list of in- or outbound edges of the *vertex* with given
+// / label(s).
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.getEdges = function () {
   var labels = Array.prototype.slice.call(arguments);
@@ -193,14 +187,14 @@ Vertex.prototype.getEdges = function () {
   return result;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block vertexInbound
-///
-/// `vertex.inbound()`
-///
-/// Returns a list of inbound edges of the *vertex*.
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block vertexInbound
+// /
+// / `vertex.inbound()`
+// /
+// / Returns a list of inbound edges of the *vertex*.
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.inbound = function () {
   var graph = this._graph;
@@ -210,15 +204,15 @@ Vertex.prototype.inbound = function () {
   });
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block vertexOutbound
-///
-/// `vertex.outbound()`
-///
-/// Returns a list of outbound edges of the *vertex*.
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block vertexOutbound
+// /
+// / `vertex.outbound()`
+// /
+// / Returns a list of outbound edges of the *vertex*.
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.outbound = function () {
   var graph = this._graph;
@@ -228,15 +222,15 @@ Vertex.prototype.outbound = function () {
   });
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block vertexSetProperty
-///
-/// `vertex.setProperty(name, value)`
-///
-/// Changes or sets the property *name* a *vertex* to *value*.
-///
-/// @end Docu BLock
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block vertexSetProperty
+// /
+// / `vertex.setProperty(name, value)`
+// /
+// / Changes or sets the property *name* a *vertex* to *value*.
+// /
+// / @end Docu BLock
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.setProperty = function (name, value) {
   var shallow = this._properties._shallowCopy;
@@ -251,37 +245,35 @@ Vertex.prototype.setProperty = function (name, value) {
   return value;
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block graphConstruct
-///
-/// `Graph(name, vertices, edges)`
-///
-/// Constructs a new graph object using the collection *vertices* for all
-/// vertices and the collection *edges* for all edges. Note that it is
-/// possible to construct two graphs with the same vertex set, but different
-/// edge sets.
-///
-/// `Graph(name)`
-///
-/// Returns a known graph.
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block graphConstruct
+// /
+// / `Graph(name, vertices, edges)`
+// /
+// / Constructs a new graph object using the collection *vertices* for all
+// / vertices and the collection *edges* for all edges. Note that it is
+// / possible to construct two graphs with the same vertex set, but different
+// / edge sets.
+// /
+// / `Graph(name)`
+// /
+// / Returns a known graph.
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.initialize = function (name, vertices, edges, waitForSync) {
   this._name = name;
-  var gdb = db._collection("_graphs");
+  var gdb = db._collection('_graphs');
   var graphProperties;
   var graphPropertiesId;
 
   if (gdb === null) {
-    throw "_graphs collection does not exist.";
+    throw '_graphs collection does not exist.';
   }
 
-  if (typeof name !== "string" || name === "") {
-    throw "<name> must be a string";
+  if (typeof name !== 'string' || name === '') {
+    throw '<name> must be a string';
   }
 
   // convert collection objects to collection names
@@ -295,11 +287,9 @@ Graph.prototype.initialize = function (name, vertices, edges, waitForSync) {
 
   // find an existing graph by name
   if (vertices === undefined && edges === undefined) {
-
     try {
       graphProperties = gdb.document(name);
-    }
-    catch (e) {
+    } catch (e) {
       throw "no graph named '" + name + "' found";
     }
 
@@ -307,10 +297,10 @@ Graph.prototype.initialize = function (name, vertices, edges, waitForSync) {
       throw "no graph named '" + name + "' found";
     }
 
-    //check if graph can be loaded by this deprecated module
-    var newGraphError = "Graph can not be loaded, "
-      + "because more than 1 vertex collection is defined. "
-      + "Please use the new graph module";
+    // check if graph can be loaded by this deprecated module
+    var newGraphError = 'Graph can not be loaded, '
+      + 'because more than 1 vertex collection is defined. '
+      + 'Please use the new graph module';
     var edgeDefinitions = db._graphs.document(name).edgeDefinitions;
     if (edgeDefinitions.length === 0) {
       throw newGraphError;
@@ -339,42 +329,39 @@ Graph.prototype.initialize = function (name, vertices, edges, waitForSync) {
   }
 
   // sanity check for vertices
-  else if (typeof vertices !== "string" || vertices === "") {
-    throw "<vertices> must be a string or null";
+  else if (typeof vertices !== 'string' || vertices === '') {
+    throw '<vertices> must be a string or null';
   }
 
   // sanity check for edges
-  else if (typeof edges !== "string" || edges === "") {
-    throw "<edges> must be a string or null";
+  else if (typeof edges !== 'string' || edges === '') {
+    throw '<edges> must be a string or null';
   }
 
   // create a new graph or get an existing graph
   else {
     try {
       graphProperties = gdb.document(name);
-    }
-    catch (e1) {
+    } catch (e1) {
       graphProperties = null;
     }
 
     // graph doesn't exist yet, create it
     if (graphProperties === null) {
-
       // check if know that graph
       graphProperties = gdb.firstExample(
-        'edgeDefintions', [{"collection": edges, "from" :[vertices], "to": [vertices]}]
+        'edgeDefintions', [{'collection': edges, 'from': [vertices], 'to': [vertices]}]
       );
 
       if (graphProperties === null) {
-
         // check if edge is used in a graph
         gdb.toArray().forEach(
-          function(singleGraph) {
+          function (singleGraph) {
             var sGEDs = singleGraph.edgeDefinitions;
             sGEDs.forEach(
-              function(sGED) {
+              function (sGED) {
                 if (sGED.collection === edges) {
-                  graphProperties = "";
+                  graphProperties = '';
                 }
               }
             );
@@ -385,31 +372,28 @@ Graph.prototype.initialize = function (name, vertices, edges, waitForSync) {
           findOrCreateCollectionByName(vertices);
           findOrCreateEdgeCollectionByName(edges);
 
-          var newEdgeDefinition = [{"collection": edges, "from" :[vertices], "to": [vertices]}];
+          var newEdgeDefinition = [{'collection': edges, 'from': [vertices], 'to': [vertices]}];
 
           graphPropertiesId = gdb.save(
             {
-              'edgeDefinitions' : newEdgeDefinition,
-              '_key' : name
+              'edgeDefinitions': newEdgeDefinition,
+              '_key': name
             },
             waitForSync
           );
 
           graphProperties = gdb.document(graphPropertiesId._key);
+        } else {
+          throw 'edge collection already used';
         }
-        else {
-          throw "edge collection already used";
-        }
+      } else {
+        throw 'found graph but has different <name>';
       }
-      else {
-        throw "found graph but has different <name>";
-      }
-    }
-    else {
+    } else {
       if (graphProperties.edgeDefinitions[0].from[0] !== vertices
         || graphProperties.edgeDefinitions[0].to[0] !== vertices
         || graphProperties.edgeDefinitions[0].collection !== edges) {
-        throw "graph with that name already exists!";
+        throw 'graph with that name already exists!';
       }
     }
 
@@ -432,29 +416,27 @@ Graph.prototype.initialize = function (name, vertices, edges, waitForSync) {
   this.distances = {};
 };
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block JSF_graph_getAll
-///
-/// `graph.getAll()`
-///
-/// Returns all available graphs.
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block JSF_graph_getAll
+// /
+// / `graph.getAll()`
+// /
+// / Returns all available graphs.
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.getAll = function getAllGraphs () {
-  var gdb = db._collection("_graphs"),
-    graphs = [ ];
+  var gdb = db._collection('_graphs'),
+    graphs = [];
 
-  gdb.toArray().forEach(function(doc) {
+  gdb.toArray().forEach(function (doc) {
     try {
       var g = new Graph(doc._key);
 
       if (g._properties !== null) {
         graphs.push(g._properties);
       }
-    }
-    catch (err) {
+    } catch (err) {
       // if there's a problem, we just skip this graph
     }
   });
@@ -462,19 +444,18 @@ Graph.getAll = function getAllGraphs () {
   return graphs;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief static drop function
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief static drop function
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.drop = function (name, waitForSync) {
-  var gdb = db._collection("_graphs");
+  var gdb = db._collection('_graphs');
   var exists = gdb.exists(name);
 
   try {
     var obj = new Graph(name);
     return obj.drop(waitForSync);
-  }
-  catch (err) {
+  } catch (err) {
     if (exists) {
       // if the graph exists but cannot be deleted because one of the underlying
       // collections is missing, delete from _graphs "manually"
@@ -483,24 +464,24 @@ Graph.drop = function (name, waitForSync) {
   }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block graphDrop
-///
-/// `graph.drop(waitForSync)`
-///
-/// Drops the graph, the vertices, and the edges. Handle with care.
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block graphDrop
+// /
+// / `graph.drop(waitForSync)`
+// /
+// / Drops the graph, the vertices, and the edges. Handle with care.
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.drop = function (waitForSync) {
   newGraph._drop(this._name, true);
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief saves an edge to the graph
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief saves an edge to the graph
+// //////////////////////////////////////////////////////////////////////////////
 
-Graph.prototype._saveEdge = function(id, out_vertex_id, in_vertex_id, shallow, waitForSync) {
+Graph.prototype._saveEdge = function (id, out_vertex_id, in_vertex_id, shallow, waitForSync) {
   this.emptyCachedPredecessors();
 
   if (id !== undefined && id !== null) {
@@ -508,16 +489,16 @@ Graph.prototype._saveEdge = function(id, out_vertex_id, in_vertex_id, shallow, w
   }
 
   var ref = this._edges.save(out_vertex_id,
-                             in_vertex_id,
-                             shallow,
-                             waitForSync);
+    in_vertex_id,
+    shallow,
+    waitForSync);
 
   return this.constructEdge(ref._id);
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief saves a vertex to the graph
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief saves a vertex to the graph
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype._saveVertex = function (id, shallow, waitForSync) {
   var ref;
@@ -531,71 +512,70 @@ Graph.prototype._saveVertex = function (id, shallow, waitForSync) {
   return this.constructVertex(ref._id);
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief replaces a vertex to the graph
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief replaces a vertex to the graph
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype._replaceVertex = function (vertex_id, data) {
   this._vertices.replace(vertex_id, data);
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief replaces an edge in the graph
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief replaces an edge in the graph
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype._replaceEdge = function (edge_id, data) {
   this._edges.replace(edge_id, data);
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block graphGetVertex
-///
-/// `graph.getVertex(id)`
-///
-/// Returns the vertex identified by *id* or *null*.
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block graphGetVertex
+// /
+// / `graph.getVertex(id)`
+// /
+// / Returns the vertex identified by *id* or *null*.
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.getVertex = function (id) {
   try {
     return this.constructVertex(id);
-  }
-  catch (e) {
+  } catch (e) {
     return null;
   }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block GraphGetVertices
-///
-/// `graph.getVertices()`
-///
-/// Returns an iterator for all vertices of the graph. The iterator supports the
-/// methods *hasNext* and *next*.
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block GraphGetVertices
+// /
+// / `graph.getVertices()`
+// /
+// / Returns an iterator for all vertices of the graph. The iterator supports the
+// / methods *hasNext* and *next*.
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.getVertices = function () {
   var all = this._vertices.all(),
     graph = this,
-    wrapper = function(object) {
+    wrapper = function (object) {
       return graph.constructVertex(object);
     };
 
-  return new Iterator(wrapper, all, "[edge iterator]");
+  return new Iterator(wrapper, all, '[edge iterator]');
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block graphGetEdge
-///
-/// `graph.getEdge(id)`
-///
-/// Returns the edge identified by *id* or *null*.
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block graphGetEdge
+// /
+// / `graph.getEdge(id)`
+// /
+// / Returns the edge identified by *id* or *null*.
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.getEdge = function (id) {
   var ref, edge;
@@ -619,35 +599,35 @@ Graph.prototype.getEdge = function (id) {
   return edge;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block graphGetEdges
-///
-/// `graph.getEdges()`
-///
-/// Returns an iterator for all edges of the graph. The iterator supports the
-/// methods *hasNext* and *next*.
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block graphGetEdges
+// /
+// / `graph.getEdges()`
+// /
+// / Returns an iterator for all edges of the graph. The iterator supports the
+// / methods *hasNext* and *next*.
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.getEdges = function () {
   var all = this._edges.all(),
-  graph = this,
-  wrapper = function(object) {
-    return graph.constructEdge(object);
-  };
-  return new Iterator(wrapper, all, "[edge iterator]");
+    graph = this,
+    wrapper = function (object) {
+      return graph.constructEdge(object);
+    };
+  return new Iterator(wrapper, all, '[edge iterator]');
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block graphRemoveVertex
-///
-/// `graph.removeVertex(vertex, waitForSync)`
-///
-/// Deletes the *vertex* and all its edges.
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block graphRemoveVertex
+// /
+// / `graph.removeVertex(vertex, waitForSync)`
+// /
+// / Deletes the *vertex* and all its edges.
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.removeVertex = function (vertex, waitForSync) {
   var result, graph = this;
@@ -658,7 +638,7 @@ Graph.prototype.removeVertex = function (vertex, waitForSync) {
     result = this._vertices.remove(vertex._properties, true, waitForSync);
 
     if (!result) {
-      throw "cannot delete vertex";
+      throw 'cannot delete vertex';
     }
 
     vertex.edges().forEach(function (edge) {
@@ -669,15 +649,15 @@ Graph.prototype.removeVertex = function (vertex, waitForSync) {
   }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block graphRemoveEdge
-///
-/// `graph.removeEdge(vertex, waitForSync)`
-///
-/// Deletes the *edge*. Note that the in and out vertices are left untouched.
-///
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block graphRemoveEdge
+// /
+// / `graph.removeEdge(vertex, waitForSync)`
+// /
+// / Deletes the *edge*. Note that the in and out vertices are left untouched.
+// /
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.removeEdge = function (edge, waitForSync) {
   var result;
@@ -688,7 +668,7 @@ Graph.prototype.removeEdge = function (edge, waitForSync) {
     result = this._edges.remove(edge._properties, true, waitForSync);
 
     if (! result) {
-      throw "cannot delete edge";
+      throw 'cannot delete edge';
     }
 
     this._edgesCache[edge._properties._id] = undefined;
@@ -696,13 +676,9 @@ Graph.prototype.removeEdge = function (edge, waitForSync) {
   }
 };
 
-
 exports.Edge = Edge;
 exports.Graph = Graph;
 exports.Vertex = Vertex;
 exports.GraphArray = GraphArray;
 
-require("@arangodb/graph/algorithms-common");
-
-
-
+require('@arangodb/graph/algorithms-common');

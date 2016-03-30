@@ -1,124 +1,122 @@
 /*jshint strict: false, unused: false, esnext: true */
 /*global JSON_CURSOR */
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief JavaScript actions module
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2014-2015 ArangoDB GmbH, Cologne, Germany
-/// Copyright 2012-2014 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is ArangoDB GmbH, Cologne, Germany
-///
-/// @author Dr. Frank Celler
-/// @author Copyright 2014-2015, ArangoDB GmbH, Cologne, Germany
-/// @author Copyright 2012-2014, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief JavaScript actions module
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2014-2015 ArangoDB GmbH, Cologne, Germany
+// / Copyright 2012-2014 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is ArangoDB GmbH, Cologne, Germany
+// /
+// / @author Dr. Frank Celler
+// / @author Copyright 2014-2015, ArangoDB GmbH, Cologne, Germany
+// / @author Copyright 2012-2014, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
 module.isSystem = true;
 
-var internal = require("internal");
-var Module = require("module");
+var internal = require('internal');
+var Module = require('module');
 
-var fs = require("fs");
-var util = require("util");
-var console = require("console");
-var _ = require("lodash");
+var fs = require('fs');
+var util = require('util');
+var console = require('console');
+var _ = require('lodash');
 
-var arangodb = require("@arangodb");
-var foxxManager = require("@arangodb/foxx/manager");
-var ErrorStackParser = require("error-stack-parser");
+var arangodb = require('@arangodb');
+var foxxManager = require('@arangodb/foxx/manager');
+var ErrorStackParser = require('error-stack-parser');
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief current routing tree
-///
-/// The route tree contains the URL hierarchy. In order to find a handler for a
-/// request, you can traverse this tree. You need to backtrack if you handler
-/// issues a `next()`.
-///
-/// In order to speed up URL matching and next-finding, the tree is converted in
-/// to a flat list, such that the least-specific middleware method comes
-/// first. Then all other middleware methods with increasing specificity
-/// followed by the most-specific method. Then all other methods with decreasing
-/// specificity.
-///
-/// Note that the object first on an entry for each database.
-///
-///     {
-///       _system: {
-///         middleware: [ ... ],
-///         routes: [ ... ],
-///         ...
-///       }
-///     }
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief current routing tree
+// /
+// / The route tree contains the URL hierarchy. In order to find a handler for a
+// / request, you can traverse this tree. You need to backtrack if you handler
+// / issues a `next()`.
+// /
+// / In order to speed up URL matching and next-finding, the tree is converted in
+// / to a flat list, such that the least-specific middleware method comes
+// / first. Then all other middleware methods with increasing specificity
+// / followed by the most-specific method. Then all other methods with decreasing
+// / specificity.
+// /
+// / Note that the object first on an entry for each database.
+// /
+// /     {
+// /       _system: {
+// /         middleware: [ ... ],
+// /         routes: [ ... ],
+// /         ...
+// /       }
+// /     }
+// //////////////////////////////////////////////////////////////////////////////
 
 var RoutingTree = {};
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief current routing list
-///
-/// The flattened routing tree. The methods `flattenRoutingTree` takes a routing
-/// tree and returns a routing list.
-///
-/// Note that the object first contains an entry for each database, then an
-/// entry for each method (like `GET`).
-///
-///     {
-///       _system: {
-///         GET: [ ... ],
-///         POST: [ ... ],
-///         ...
-///       }
-///     }
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief current routing list
+// /
+// / The flattened routing tree. The methods `flattenRoutingTree` takes a routing
+// / tree and returns a routing list.
+// /
+// / Note that the object first contains an entry for each database, then an
+// / entry for each method (like `GET`).
+// /
+// /     {
+// /       _system: {
+// /         GET: [ ... ],
+// /         POST: [ ... ],
+// /         ...
+// /       }
+// /     }
+// //////////////////////////////////////////////////////////////////////////////
 
 var RoutingList = {};
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief all methods
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief all methods
+// //////////////////////////////////////////////////////////////////////////////
 
-var ALL_METHODS = [ "DELETE", "GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH" ];
+var ALL_METHODS = [ 'DELETE', 'GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH' ];
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief function that's returned for non-implemented actions
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief function that's returned for non-implemented actions
+// //////////////////////////////////////////////////////////////////////////////
 
 function notImplementedFunction (route, message) {
   'use strict';
 
-  message += "\nThis error was triggered by the following route: " + route.name;
+  message += '\nThis error was triggered by the following route: ' + route.name;
 
   console.errorLines(message);
 
   return function (req, res, options, next) {
     res.responseCode = exports.HTTP_NOT_IMPLEMENTED;
-    res.contentType = "text/plain";
+    res.contentType = 'text/plain';
     res.body = message;
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief creates a callback for a callback action given as string
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief creates a callback for a callback action given as string
+// //////////////////////////////////////////////////////////////////////////////
 
 function createCallbackFromActionCallbackString (callback, parentModule, route) {
   'use strict';
@@ -138,9 +136,9 @@ function createCallbackFromActionCallbackString (callback, parentModule, route) 
   return actionModule.exports;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief looks up a callback for a callback action given as string
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief looks up a callback for a callback action given as string
+// //////////////////////////////////////////////////////////////////////////////
 
 function lookupCallbackActionCallbackString (route, action, actionModule) {
   'use strict';
@@ -149,8 +147,7 @@ function lookupCallbackActionCallbackString (route, action, actionModule) {
 
   try {
     func = createCallbackFromActionCallbackString(action.callback, actionModule, route);
-  }
-  catch (err) {
+  } catch (err) {
     func = errorFunction(route, util.format(
       "an error occurred constructing callback for '%s': %s",
       action.callback, String(err.stack || err)
@@ -164,9 +161,9 @@ function lookupCallbackActionCallbackString (route, action, actionModule) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief looks up a callback for a callback action
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief looks up a callback for a callback action
+// //////////////////////////////////////////////////////////////////////////////
 
 function lookupCallbackActionCallback (route, action, actionModule) {
   'use strict';
@@ -193,24 +190,22 @@ function lookupCallbackActionCallback (route, action, actionModule) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief returns module or error function
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief returns module or error function
+// //////////////////////////////////////////////////////////////////////////////
 
 function requireModule (name, route, parentModule) {
   'use strict';
 
   try {
     return { module: parentModule.require(name) };
-  }
-  catch (err) {
+  } catch (err) {
     if (err instanceof internal.ArangoError && err.errorNum === internal.errors.ERROR_MODULE_NOT_FOUND.code) {
       return notImplementedFunction(route, util.format(
         "an error occurred while loading the action module '%s': %s",
         name, String(err.stack || err)
       ));
-    }
-    else {
+    } else {
       return errorFunction(route, util.format(
         "an error occurred while loading action module '%s': %s",
         name, String(err.stack || err)
@@ -219,9 +214,9 @@ function requireModule (name, route, parentModule) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief returns function in module or error function
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief returns function in module or error function
+// //////////////////////////////////////////////////////////////////////////////
 
 function moduleFunction (actionModule, name, route) {
   'use strict';
@@ -239,16 +234,16 @@ function moduleFunction (actionModule, name, route) {
   return func;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief looks up a callback for a module action
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief looks up a callback for a module action
+// //////////////////////////////////////////////////////////////////////////////
 
 function lookupCallbackActionDo (route, action, parentModule) {
   'use strict';
 
-  var path = action['do'].split("/");
+  var path = action['do'].split('/');
   var funcName = path.pop();
-  var moduleName = path.join("/");
+  var moduleName = path.join('/');
 
   var actionModule = requireModule(moduleName, route, parentModule);
 
@@ -268,8 +263,7 @@ function lookupCallbackActionDo (route, action, parentModule) {
 
   if (actionModule.hasOwnProperty(funcName)) {
     func = moduleFunction(actionModule, funcName, route);
-  }
-  else {
+  } else {
     func = notImplementedFunction(route, util.format(
       "could not find action named '%s' in module '%s'",
       funcName, moduleName
@@ -283,9 +277,9 @@ function lookupCallbackActionDo (route, action, parentModule) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief creates the callback for a controller action
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief creates the callback for a controller action
+// //////////////////////////////////////////////////////////////////////////////
 
 function createCallbackActionController (actionModule, route) {
   'use strict';
@@ -305,9 +299,9 @@ function createCallbackActionController (actionModule, route) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief looks up a callback for a controller action
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief looks up a callback for a controller action
+// //////////////////////////////////////////////////////////////////////////////
 
 function lookupCallbackActionController (route, action, parentModule) {
   'use strict';
@@ -329,9 +323,9 @@ function lookupCallbackActionController (route, action, parentModule) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief looks up a callback for a prefix controller action
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief looks up a callback for a prefix controller action
+// //////////////////////////////////////////////////////////////////////////////
 
 function lookupCallbackActionPrefixController (route, action, parentModule) {
   'use strict';
@@ -346,9 +340,8 @@ function lookupCallbackActionPrefixController (route, action, parentModule) {
       var path;
 
       if (req.hasOwnProperty('suffix')) {
-        path = prefix + "/" + req.suffix.join("/");
-      }
-      else {
+        path = prefix + '/' + req.suffix.join('/');
+      } else {
         path = prefix;
       }
 
@@ -357,8 +350,7 @@ function lookupCallbackActionPrefixController (route, action, parentModule) {
 
       if (typeof actionModule === 'function') {
         actionModule(req, res, options, next);
-      }
-      else {
+      } else {
         createCallbackActionController(actionModule.module, route)(req, res, options, next);
       }
     },
@@ -367,9 +359,9 @@ function lookupCallbackActionPrefixController (route, action, parentModule) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief looks up a callback for an action
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief looks up a callback for an action
+// //////////////////////////////////////////////////////////////////////////////
 
 function lookupCallbackAction (route, action, context) {
   'use strict';
@@ -417,9 +409,9 @@ function lookupCallbackAction (route, action, context) {
   return null;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief creates a callback for static data
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief creates a callback for static data
+// //////////////////////////////////////////////////////////////////////////////
 
 function createCallbackStatic (code, type, body) {
   return function (req, res, options, next) {
@@ -429,9 +421,9 @@ function createCallbackStatic (code, type, body) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief looks up a callback for static data
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief looks up a callback for static data
+// //////////////////////////////////////////////////////////////////////////////
 
 function lookupCallbackStatic (content) {
   'use strict';
@@ -442,14 +434,13 @@ function lookupCallbackStatic (content) {
   var options;
 
   if (typeof content === 'string') {
-    type = "text/plain";
+    type = 'text/plain';
     body = content;
     methods = [ exports.GET, exports.HEAD ];
     options = {};
-  }
-  else {
-    type = content.contentType || "text/plain";
-    body = content.body || "";
+  } else {
+    type = content.contentType || 'text/plain';
+    body = content.body || '';
     methods = content.methods || [ exports.GET, exports.HEAD ];
     options = content.options || {};
   }
@@ -461,21 +452,21 @@ function lookupCallbackStatic (content) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief looks up a callback
-///
-/// A callback is a structure with `controller`, `options`, and `methods`.
-///
-///     {
-///       controller: function (req, res, options, next) ...,
-///       options: { ... },
-///       methods: [ ... ]
-///     }
-///
-/// The controller contains the function to call. `req` is the request, `res`
-/// holds the response, `options` is the options array above and `methods` is a
-/// list of methods to which the controller applies.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief looks up a callback
+// /
+// / A callback is a structure with `controller`, `options`, and `methods`.
+// /
+// /     {
+// /       controller: function (req, res, options, next) ...,
+// /       options: { ... },
+// /       methods: [ ... ]
+// /     }
+// /
+// / The controller contains the function to call. `req` is the request, `res`
+// / holds the response, `options` is the options array above and `methods` is a
+// / list of methods to which the controller applies.
+// //////////////////////////////////////////////////////////////////////////////
 
 function lookupCallback (route, context) {
   'use strict';
@@ -490,10 +481,9 @@ function lookupCallback (route, context) {
   return null;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief splits a URL into parts
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief splits a URL into parts
+// //////////////////////////////////////////////////////////////////////////////
 
 function splitUrl (url) {
   'use strict';
@@ -508,17 +498,17 @@ function splitUrl (url) {
   re1 = /^(:[a-zA-Z]+)*$/;
   re2 = /^(:[a-zA-Z]+)\?$/;
 
-  parts = url.split("/");
+  parts = url.split('/');
   cleaned = [];
 
   for (i = 0;  i < parts.length;  ++i) {
     var part = parts[i];
 
-    if (part !== "" && part !== ".") {
-      if (part === "..") {
+    if (part !== '' && part !== '.') {
+      if (part === '..') {
         cleaned.pop();
       }
-      else if (part === "*") {
+      else if (part === '*') {
         cleaned.push({ prefix: true });
       }
       else if (re1.test(part)) {
@@ -528,8 +518,7 @@ function splitUrl (url) {
       else if (re2.test(part)) {
         ors = [ part.substr(1, part.length - 2) ];
         cleaned.push({ parameters: ors, optional: true });
-      }
-      else {
+      } else {
         cleaned.push(part);
       }
     }
@@ -538,17 +527,17 @@ function splitUrl (url) {
   return cleaned;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief looks up an URL
-///
-/// Splits an URL into
-///
-///     {
-///       urlParts: [ ... ],
-///       methods: [ ... ],
-///       constraints: {}
-///     }
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief looks up an URL
+// /
+// / Splits an URL into
+// /
+// /     {
+// /       urlParts: [ ... ],
+// /       methods: [ ... ],
+// /       constraints: {}
+// /     }
+// //////////////////////////////////////////////////////////////////////////////
 
 function lookupUrl (prefix, url) {
   'use strict';
@@ -559,7 +548,7 @@ function lookupUrl (prefix, url) {
 
   if (typeof url === 'string') {
     return {
-      urlParts: splitUrl(prefix + "/" + url),
+      urlParts: splitUrl(prefix + '/' + url),
       methods: [ exports.GET, exports.HEAD ],
       constraint: {}
     };
@@ -567,7 +556,7 @@ function lookupUrl (prefix, url) {
 
   if (url.hasOwnProperty('match')) {
     return {
-      urlParts: splitUrl(prefix + "/" + url.match),
+      urlParts: splitUrl(prefix + '/' + url.match),
       methods: url.methods || ALL_METHODS,
       constraint: url.constraint || {}
     };
@@ -576,9 +565,9 @@ function lookupUrl (prefix, url) {
   return null;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief defines a new route part
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief defines a new route part
+// //////////////////////////////////////////////////////////////////////////////
 
 function defineRoutePart (storage, route, parts, pos, constraint, callback) {
   'use strict';
@@ -596,7 +585,7 @@ function defineRoutePart (storage, route, parts, pos, constraint, callback) {
   // exact match
   // .............................................................................
 
-  if (typeof part === "string") {
+  if (typeof part === 'string') {
     if (! storage.hasOwnProperty('exact')) {
       storage.exact = {};
     }
@@ -609,8 +598,7 @@ function defineRoutePart (storage, route, parts, pos, constraint, callback) {
 
     if (pos + 1 < parts.length) {
       defineRoutePart(subpart, route, parts, pos + 1, constraint, callback);
-    }
-    else {
+    } else {
       if (! subpart.hasOwnProperty('routes')) {
         subpart.routes = [];
       }
@@ -659,8 +647,7 @@ function defineRoutePart (storage, route, parts, pos, constraint, callback) {
 
         if (pos + 1 < parts.length) {
           defineRoutePart(subsub.match, route, parts, pos + 1, constraint, callback);
-        }
-        else {
+        } else {
           var match = subsub.match;
 
           if (! match.hasOwnProperty('routes')) {
@@ -688,8 +675,7 @@ function defineRoutePart (storage, route, parts, pos, constraint, callback) {
 
     if (pos + 1 < parts.length) {
       console.error("cannot define prefix match within url, ignoring route '%s'", route.name);
-    }
-    else {
+    } else {
       var subprefix = storage.prefix;
 
       if (! subprefix.hasOwnProperty('routes')) {
@@ -705,9 +691,9 @@ function defineRoutePart (storage, route, parts, pos, constraint, callback) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief intersect methods
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief intersect methods
+// //////////////////////////////////////////////////////////////////////////////
 
 function intersectMethods (a, b) {
   'use strict';
@@ -735,9 +721,9 @@ function intersectMethods (a, b) {
   return results;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief defines a new route
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief defines a new route
+// //////////////////////////////////////////////////////////////////////////////
 
 function defineRoute (storage, route, url, callback) {
   'use strict';
@@ -753,9 +739,9 @@ function defineRoute (storage, route, url, callback) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief installs a new route in a tree
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief installs a new route in a tree
+// //////////////////////////////////////////////////////////////////////////////
 
 function installRoute (storage, route, urlPrefix, context) {
   'use strict';
@@ -777,9 +763,9 @@ function installRoute (storage, route, urlPrefix, context) {
   defineRoute(storage, route, url, callback);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief creates additional routing information
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief creates additional routing information
+// //////////////////////////////////////////////////////////////////////////////
 
 function analyseRoutes (storage, routes) {
   'use strict';
@@ -787,7 +773,7 @@ function analyseRoutes (storage, routes) {
   var j;
   var i;
 
-  var urlPrefix = routes.urlPrefix || "";
+  var urlPrefix = routes.urlPrefix || '';
 
   // use normal root module or app context
   var appContext = routes.appContext || {
@@ -805,17 +791,17 @@ function analyseRoutes (storage, routes) {
 
       for (i = 0;  i < r.length;  ++i) {
         installRoute(storage[key],
-                     r[i],
-                     urlPrefix,
-                     appContext);
+          r[i],
+          urlPrefix,
+          appContext);
       }
     }
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief builds a routing tree
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief builds a routing tree
+// //////////////////////////////////////////////////////////////////////////////
 
 function buildRoutingTree (routes) {
   'use strict';
@@ -837,18 +823,15 @@ function buildRoutingTree (routes) {
     try {
       if (route.hasOwnProperty('routes') || route.hasOwnProperty('middleware')) {
         analyseRoutes(storage, route);
-      }
-      else {
-
+      } else {
         // use normal root module or app context
         var appContext = routes.appContext || {
           module: new Module(route.name || 'anonymous')
         };
 
-        installRoute(storage.routes, route, "", appContext);
+        installRoute(storage.routes, route, '', appContext);
       }
-    }
-    catch (err) {
+    } catch (err) {
       console.errorLines("cannot install route '%s': %s", route.name, String(err.stack || err));
     }
   }
@@ -856,9 +839,9 @@ function buildRoutingTree (routes) {
   return storage;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief flattens the routing tree for either middleware or normal methods
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief flattens the routing tree for either middleware or normal methods
+// //////////////////////////////////////////////////////////////////////////////
 
 function flattenRouting (routes, path, rexpr, urlParameters, depth, prefix) {
   'use strict';
@@ -881,8 +864,8 @@ function flattenRouting (routes, path, rexpr, urlParameters, depth, prefix) {
       if (routes.exact.hasOwnProperty(k)) {
         result = result.concat(flattenRouting(
           routes.exact[k],
-          path + "/" + k,
-          rexpr + "/" + k.replace(/([\.\+\*\?\^\$\(\)\[\]])/g, "\\$1"),
+          path + '/' + k,
+          rexpr + '/' + k.replace(/([\.\+\*\?\^\$\(\)\[\]])/g, '\\$1'),
           _.clone(urlParameters),
           depth + 1,
           false));
@@ -903,20 +886,17 @@ function flattenRouting (routes, path, rexpr, urlParameters, depth, prefix) {
         var pattern = /\/.*\//;
 
         if (pattern.test(constraint)) {
-          match = "/" + constraint.substr(1, constraint.length - 2);
+          match = '/' + constraint.substr(1, constraint.length - 2);
+        } else {
+          match = '/' + constraint;
         }
-        else {
-          match = "/" + constraint;
-        }
-      }
-      else {
-        match = "/[^/]+";
+      } else {
+        match = '/[^/]+';
       }
 
       if (parameter.optional) {
-        cur = rexpr + "(" + match + ")?";
-      }
-      else {
+        cur = rexpr + '(' + match + ')?';
+      } else {
         cur = rexpr + match;
       }
 
@@ -925,7 +905,7 @@ function flattenRouting (routes, path, rexpr, urlParameters, depth, prefix) {
 
       result = result.concat(flattenRouting(
         parameter.match,
-        path + "/:" + parameter.parameter + (parameter.optional ? '?' : ''),
+        path + '/:' + parameter.parameter + (parameter.optional ? '?' : ''),
         cur,
         newUrlParameters,
         depth + 1,
@@ -938,14 +918,14 @@ function flattenRouting (routes, path, rexpr, urlParameters, depth, prefix) {
   // .............................................................................
 
   if (routes.hasOwnProperty('routes')) {
-    var sorted = _.clone(routes.routes.sort(function(a,b) {
+    var sorted = _.clone(routes.routes.sort(function (a, b) {
       return b.priority - a.priority;
     }));
 
     for (i = 0;  i < sorted.length;  ++i) {
       sorted[i] = {
         path: path,
-        regexp: new RegExp("^" + rexpr + "$"),
+        regexp: new RegExp('^' + rexpr + '$'),
         prefix: prefix,
         depth: depth,
         urlParameters: urlParameters,
@@ -964,8 +944,8 @@ function flattenRouting (routes, path, rexpr, urlParameters, depth, prefix) {
   if (routes.hasOwnProperty('prefix')) {
     result = result.concat(flattenRouting(
       routes.prefix,
-      path + "/*",
-      rexpr + "(/[^/]+)*/?",
+      path + '/*',
+      rexpr + '(/[^/]+)*/?',
       urlParameters._shallowCopy,
       depth + 1,
       true));
@@ -974,9 +954,9 @@ function flattenRouting (routes, path, rexpr, urlParameters, depth, prefix) {
   return result;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief flattens the routing tree complete
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief flattens the routing tree complete
+// //////////////////////////////////////////////////////////////////////////////
 
 function flattenRoutingTree (tree) {
   'use strict';
@@ -988,8 +968,8 @@ function flattenRoutingTree (tree) {
   for (i = 0;  i < ALL_METHODS.length;  ++i) {
     var method = ALL_METHODS[i];
 
-    var a = flattenRouting(tree.routes[method], "", "", {}, 0, false);
-    var b = flattenRouting(tree.middleware[method], "", "", {}, 0, false);
+    var a = flattenRouting(tree.routes[method], '', '', {}, 0, false);
+    var b = flattenRouting(tree.middleware[method], '', '', {}, 0, false);
 
     flat[method] = b.reverse().concat(a);
   }
@@ -997,9 +977,9 @@ function flattenRoutingTree (tree) {
   return flat;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief creates the foxx routing actions
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief creates the foxx routing actions
+// //////////////////////////////////////////////////////////////////////////////
 
 function foxxRouting (req, res, options, next) {
   var mount = options.mount;
@@ -1022,8 +1002,7 @@ function foxxRouting (req, res, options, next) {
 
       options.routing = flattenRoutingTree(buildRoutingTree([foxxManager.routes(mount)]));
     }
-  }
-  catch (err1) {
+  } catch (err1) {
     options.error = {
       code: exports.HTTP_SERVER_ERROR,
       num: arangodb.ERROR_HTTP_SERVER_ERROR,
@@ -1032,24 +1011,22 @@ function foxxRouting (req, res, options, next) {
     };
 
     if (err1.stack) {
-      options.error.info.stacktrace = String(err1.stack).split("\n");
+      options.error.info.stacktrace = String(err1.stack).split('\n');
     }
   }
 
   if (options.hasOwnProperty('error')) {
     exports.resultError(req,
-                        res,
-                        options.error.code,
-                        options.error.num,
-                        options.error.msg,
-                        {},
-                        options.error.info);
-  }
-  else {
+      res,
+      options.error.code,
+      options.error.num,
+      options.error.msg,
+      {},
+      options.error.info);
+  } else {
     try {
       routeRequest(req, res, options.routing);
-    }
-    catch (err2) {
+    } catch (err2) {
       resultException(
         req,
         res,
@@ -1060,23 +1037,23 @@ function foxxRouting (req, res, options, next) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief flushes cache and reload routing information
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief flushes cache and reload routing information
+// //////////////////////////////////////////////////////////////////////////////
 
 function buildRouting (dbname) {
   'use strict';
 
   // compute all routes
   var routes = [];
-  var routing = arangodb.db._collection("_routing");
+  var routing = arangodb.db._collection('_routing');
   if (routing !== null) {
     let i = routing.all();
 
     while (i.hasNext()) {
       var n = i.next();
       var c = _.extend({}, n);
-      
+
       c.name = '_routing.document("' + c._key + '")';
 
       routes.push(c);
@@ -1094,7 +1071,7 @@ function buildRouting (dbname) {
 
     routes.push({
       name: "foxx app mounted at '" + foxx + "'",
-      url: { match: foxx + "/*" },
+      url: { match: foxx + '/*' },
       action: { callback: foxxRouting, options: { mount: foxx } }
     });
   }
@@ -1106,10 +1083,9 @@ function buildRouting (dbname) {
   RoutingList[dbname] = flattenRoutingTree(RoutingTree[dbname]);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief finds the next routing
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief finds the next routing
+// //////////////////////////////////////////////////////////////////////////////
 
 function nextRouting (state) {
   'use strict';
@@ -1125,10 +1101,9 @@ function nextRouting (state) {
       state.route = route;
 
       if (route.prefix) {
-        state.prefix = "/" + state.parts.slice(0, route.depth - 1).join("/");
+        state.prefix = '/' + state.parts.slice(0, route.depth - 1).join('/');
         state.suffix = state.parts.slice(route.depth - 1, state.parts.length);
-      }
-      else {
+      } else {
         delete state.prefix;
         delete state.suffix;
       }
@@ -1155,9 +1130,9 @@ function nextRouting (state) {
   return state;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief finds the first routing
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief finds the first routing
+// //////////////////////////////////////////////////////////////////////////////
 
 function firstRouting (type, parts, routes) {
   'use strict';
@@ -1165,14 +1140,13 @@ function firstRouting (type, parts, routes) {
   var url = parts;
 
   if (typeof url === 'string') {
-    parts = url.split("/");
+    parts = url.split('/');
 
     if (parts[0] === '') {
       parts.shift();
     }
-  }
-  else {
-    url = "/" + parts.join("/");
+  } else {
+    url = '/' + parts.join('/');
   }
 
   if (! routes || ! routes.hasOwnProperty(type)) {
@@ -1193,9 +1167,9 @@ function firstRouting (type, parts, routes) {
   });
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief routing function
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief routing function
+// //////////////////////////////////////////////////////////////////////////////
 
 function routeRequest (req, res, routes) {
   if (routes === undefined) {
@@ -1219,29 +1193,25 @@ function routeRequest (req, res, routes) {
 
     if (action.route.path !== undefined) {
       req.path = action.route.path;
-    }
-    else {
+    } else {
       delete req.path;
     }
 
     if (action.prefix !== undefined) {
       req.prefix = action.prefix;
-    }
-    else {
+    } else {
       delete req.prefix;
     }
 
     if (action.suffix !== undefined) {
       req.suffix = action.suffix;
-    }
-    else {
+    } else {
       delete req.suffix;
     }
 
     if (action.urlParameters !== undefined) {
       req.urlParameters = action.urlParameters;
-    }
-    else {
+    } else {
       req.urlParameters = {};
     }
 
@@ -1266,16 +1236,15 @@ function routeRequest (req, res, routes) {
 
     if (func === null || typeof func !== 'function') {
       func = errorFunction(action.route,
-                           'Invalid callback definition found for route ' +
-                           JSON.stringify(action.route) +
-                           ' while searching for callback.controller');
+        'Invalid callback definition found for route ' +
+        JSON.stringify(action.route) +
+        ' while searching for callback.controller');
     }
 
     try {
       func(req, res, action.route.callback.options, next);
-    }
-    catch (err) {
-      if (! err.hasOwnProperty("route")) {
+    } catch (err) {
+      if (! err.hasOwnProperty('route')) {
         err.route = action.route;
       }
 
@@ -1286,8 +1255,7 @@ function routeRequest (req, res, routes) {
   function next (restart) {
     if (restart) {
       routeRequest(req, res);
-    }
-    else {
+    } else {
       action = nextRouting(action);
       execute();
     }
@@ -1296,9 +1264,9 @@ function routeRequest (req, res, routes) {
   execute();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief flushes the routing cache
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief flushes the routing cache
+// //////////////////////////////////////////////////////////////////////////////
 
 function reloadRouting () {
   'use strict';
@@ -1308,16 +1276,16 @@ function reloadRouting () {
   foxxManager._resetCache();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief loads all actions
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief loads all actions
+// //////////////////////////////////////////////////////////////////////////////
 
 function startup () {
   if (internal.defineAction === undefined) {
     return;
   }
 
-  var actionPath = fs.join(internal.startupPath, "actions");
+  var actionPath = fs.join(internal.startupPath, 'actions');
   var actions = fs.listTree(actionPath);
   var i;
 
@@ -1329,7 +1297,7 @@ function startup () {
       if (file.match(/.*\.js$/)) {
         var content = fs.read(full);
 
-        content = "(function () {\n" + content + "\n}());";
+        content = '(function () {\n' + content + '\n}());';
 
         internal.executeScript(content, undefined, full);
       }
@@ -1337,10 +1305,9 @@ function startup () {
   }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsDefineHttp
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsDefineHttp
+// //////////////////////////////////////////////////////////////////////////////
 
 function defineHttp (options) {
   'use strict';
@@ -1348,7 +1315,7 @@ function defineHttp (options) {
   var url = options.url;
   var callback = options.callback;
 
-  if (typeof callback !== "function") {
+  if (typeof callback !== 'function') {
     console.error("callback for '%s' must be a function, got '%s'", url, typeof callback);
     return;
   }
@@ -1358,11 +1325,11 @@ function defineHttp (options) {
     allowUseDatabase: false
   };
 
-  if (options.hasOwnProperty("prefix")) {
+  if (options.hasOwnProperty('prefix')) {
     parameter.prefix = options.prefix;
   }
 
-  if (options.hasOwnProperty("allowUseDatabase")) {
+  if (options.hasOwnProperty('allowUseDatabase')) {
     parameter.allowUseDatabase = options.allowUseDatabase;
   }
 
@@ -1373,9 +1340,9 @@ function defineHttp (options) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief add a cookie
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief add a cookie
+// //////////////////////////////////////////////////////////////////////////////
 
 function addCookie (res, name, value, lifeTime, path, domain, secure, httpOnly) {
   'use strict';
@@ -1388,8 +1355,8 @@ function addCookie (res, name, value, lifeTime, path, domain, secure, httpOnly) 
   }
 
   var cookie = {
-    'name' : name,
-    'value' : value
+    'name': name,
+    'value': value
   };
 
   if (lifeTime !== undefined && lifeTime !== null) {
@@ -1415,9 +1382,9 @@ function addCookie (res, name, value, lifeTime, path, domain, secure, httpOnly) 
   res.cookies.push(cookie);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsGetErrorMessage
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsGetErrorMessage
+// //////////////////////////////////////////////////////////////////////////////
 
 function getErrorMessage (code) {
   'use strict';
@@ -1432,12 +1399,12 @@ function getErrorMessage (code) {
     }
   }
 
-  return "";
+  return '';
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief extracts the body as json
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief extracts the body as json
+// //////////////////////////////////////////////////////////////////////////////
 
 function getJsonBody (req, res, code) {
   'use strict';
@@ -1446,9 +1413,8 @@ function getJsonBody (req, res, code) {
   var err;
 
   try {
-    body = JSON.parse(req.requestBody || "{}") || {};
-  }
-  catch (err1) {
+    body = JSON.parse(req.requestBody || '{}') || {};
+  } catch (err1) {
     resultBad(req, res, arangodb.ERROR_HTTP_CORRUPTED_JSON, err1);
     return undefined;
   }
@@ -1460,7 +1426,7 @@ function getJsonBody (req, res, code) {
 
     err = new internal.ArangoError();
     err.errorNum = code;
-    err.errorMessage = "expecting a valid JSON object as body";
+    err.errorMessage = 'expecting a valid JSON object as body';
 
     resultBad(req, res, code, err);
     return undefined;
@@ -1469,9 +1435,9 @@ function getJsonBody (req, res, code) {
   return body;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsResultError
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsResultError
+// //////////////////////////////////////////////////////////////////////////////
 
 function resultError (req, res, httpReturnCode, errorNum, errorMessage, headers, keyvals) {
   'use strict';
@@ -1480,9 +1446,9 @@ function resultError (req, res, httpReturnCode, errorNum, errorMessage, headers,
   var msg;
 
   res.responseCode = httpReturnCode;
-  res.contentType = "application/json; charset=utf-8";
+  res.contentType = 'application/json; charset=utf-8';
 
-  if (typeof errorNum === "string") {
+  if (typeof errorNum === 'string') {
     keyvals = headers;
     headers = errorMessage;
     errorMessage = errorNum;
@@ -1491,8 +1457,7 @@ function resultError (req, res, httpReturnCode, errorNum, errorMessage, headers,
 
   if (errorMessage === undefined || errorMessage === null) {
     msg = getErrorMessage(errorNum);
-  }
-  else {
+  } else {
     msg = String(errorMessage);
   }
 
@@ -1506,9 +1471,9 @@ function resultError (req, res, httpReturnCode, errorNum, errorMessage, headers,
     }
   }
 
-  result.error        = true;
-  result.code         = httpReturnCode;
-  result.errorNum     = errorNum;
+  result.error = true;
+  result.code = httpReturnCode;
+  result.errorNum = errorNum;
   result.errorMessage = msg;
 
   res.body = JSON.stringify(result);
@@ -1518,27 +1483,27 @@ function resultError (req, res, httpReturnCode, errorNum, errorMessage, headers,
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief function that's returned for actions that produce an error
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief function that's returned for actions that produce an error
+// //////////////////////////////////////////////////////////////////////////////
 
 function errorFunction (route, message) {
   'use strict';
 
-  message += "\nThis error was triggered by the following route " + JSON.stringify(route);
+  message += '\nThis error was triggered by the following route ' + JSON.stringify(route);
 
-  console.error("%s", message);
+  console.error('%s', message);
 
   return function (req, res, options, next) {
     res.responseCode = exports.HTTP_SERVER_ERROR;
-    res.contentType = "text/plain";
+    res.contentType = 'text/plain';
     res.body = message;
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief convenience function for a bad parameter
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief convenience function for a bad parameter
+// //////////////////////////////////////////////////////////////////////////////
 
 function badParameter (req, res, name) {
   'use strict';
@@ -1548,15 +1513,15 @@ function badParameter (req, res, name) {
   ));
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsResultOk
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsResultOk
+// //////////////////////////////////////////////////////////////////////////////
 
 function resultOk (req, res, httpReturnCode, result, headers) {
   'use strict';
 
   res.responseCode = httpReturnCode;
-  res.contentType = "application/json; charset=utf-8";
+  res.contentType = 'application/json; charset=utf-8';
 
   // add some default attributes to result
   if (result === undefined) {
@@ -1564,9 +1529,9 @@ function resultOk (req, res, httpReturnCode, result, headers) {
   }
 
   // check the type of the result. 
-  if (typeof result !== "string" && 
-      typeof result !== "number" &&
-      typeof result !== "boolean") {
+  if (typeof result !== 'string' &&
+    typeof result !== 'number' &&
+    typeof result !== 'boolean') {
     // only modify result properties if none of the above types
     // otherwise the strict mode will throw
     result.error = false;
@@ -1580,9 +1545,9 @@ function resultOk (req, res, httpReturnCode, result, headers) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsResultBad
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsResultBad
+// //////////////////////////////////////////////////////////////////////////////
 
 function resultBad (req, res, code, msg, headers) {
   'use strict';
@@ -1590,9 +1555,9 @@ function resultBad (req, res, code, msg, headers) {
   resultError(req, res, exports.HTTP_BAD, code, msg, headers);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsResultNotFound
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsResultNotFound
+// //////////////////////////////////////////////////////////////////////////////
 
 function resultNotFound (req, res, code, msg, headers) {
   'use strict';
@@ -1600,38 +1565,38 @@ function resultNotFound (req, res, code, msg, headers) {
   resultError(req, res, exports.HTTP_NOT_FOUND, code, msg, headers);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsResultNotImplemented
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsResultNotImplemented
+// //////////////////////////////////////////////////////////////////////////////
 
 function resultNotImplemented (req, res, msg, headers) {
   'use strict';
 
   resultError(req,
-              res,
-              exports.HTTP_NOT_IMPLEMENTED,
-              arangodb.ERROR_NOT_IMPLEMENTED,
-              msg,
-              headers);
+    res,
+    exports.HTTP_NOT_IMPLEMENTED,
+    arangodb.ERROR_NOT_IMPLEMENTED,
+    msg,
+    headers);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsResultUnsupported
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsResultUnsupported
+// //////////////////////////////////////////////////////////////////////////////
 
 function resultUnsupported (req, res, headers) {
   'use strict';
 
   resultError(req, res,
-              exports.HTTP_METHOD_NOT_ALLOWED,
-              arangodb.ERROR_HTTP_METHOD_NOT_ALLOWED,
-              "Unsupported method",
-              headers);
+    exports.HTTP_METHOD_NOT_ALLOWED,
+    arangodb.ERROR_HTTP_METHOD_NOT_ALLOWED,
+    'Unsupported method',
+    headers);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief internal function for handling redirects
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief internal function for handling redirects
+// //////////////////////////////////////////////////////////////////////////////
 
 function handleRedirect (req, res, options, headers) {
   var destination;
@@ -1639,47 +1604,42 @@ function handleRedirect (req, res, options, headers) {
 
   destination = options.destination;
 
-  if (destination.substr(0,5) !== "http:" && destination.substr(0,6) !== "https:") {
-
+  if (destination.substr(0, 5) !== 'http:' && destination.substr(0, 6) !== 'https:') {
     if (options.relative) {
       var u = req.url;
 
       if (0 < u.length && u[u.length - 1] === '/') {
-        url += "/_db/" + encodeURIComponent(req.database) + u + destination;
+        url += '/_db/' + encodeURIComponent(req.database) + u + destination;
+      } else {
+        url += '/_db/' + encodeURIComponent(req.database) + u + '/' + destination;
       }
-      else {
-        url += "/_db/" + encodeURIComponent(req.database) + u + "/" + destination;
-      }
-    }
-    else {
+    } else {
       url += destination;
     }
-  }
-  else {
+  } else {
     url = destination;
   }
 
-  res.contentType = "text/html";
-  res.body = "<html><head><title>Moved</title>"
-    + "</head><body><h1>Moved</h1><p>This page has moved to <a href=\""
+  res.contentType = 'text/html';
+  res.body = '<html><head><title>Moved</title>'
+    + '</head><body><h1>Moved</h1><p>This page has moved to <a href="'
     + url
-    + "\">"
+    + '">'
     + url
-    + "</a>.</p></body></html>";
+    + '</a>.</p></body></html>';
 
   if (headers !== undefined) {
     res.headers = headers._shallowCopy;
-  }
-  else {
+  } else {
     res.headers = {};
   }
 
   res.headers.location = url;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsResultPermanentRedirect
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsResultPermanentRedirect
+// //////////////////////////////////////////////////////////////////////////////
 
 function resultPermanentRedirect (req, res, options, headers) {
   'use strict';
@@ -1689,9 +1649,9 @@ function resultPermanentRedirect (req, res, options, headers) {
   handleRedirect(req, res, options, headers);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsResultTemporaryRedirect
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsResultTemporaryRedirect
+// //////////////////////////////////////////////////////////////////////////////
 
 function resultTemporaryRedirect (req, res, options, headers) {
   'use strict';
@@ -1701,9 +1661,9 @@ function resultTemporaryRedirect (req, res, options, headers) {
   handleRedirect(req, res, options, headers);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief function describing a cursor
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief function describing a cursor
+// //////////////////////////////////////////////////////////////////////////////
 
 function resultCursor (req, res, cursor, code, options) {
   'use strict';
@@ -1729,8 +1689,7 @@ function resultCursor (req, res, cursor, code, options) {
     hasCount = ((options && options.countRequested) ? true : false);
     count = cursor.json.length;
     rows = cursor.json;
-    extra = { };
-    [ "stats", "warnings", "profile" ].forEach(function(d) {
+    extra = { };[ 'stats', 'warnings', 'profile' ].forEach(function (d) {
       if (cursor.hasOwnProperty(d)) {
         extra[d] = cursor[d];
       }
@@ -1750,15 +1709,14 @@ function resultCursor (req, res, cursor, code, options) {
 
     if (hasNext) {
       cursorId = tmp.id;
-    }
-    else {
+    } else {
       cursorId = null;
     }
   }
 
   var result = {
-    result : rows,
-    hasMore : hasNext
+    result: rows,
+    hasMore: hasNext
   };
 
   if (cursorId) {
@@ -1780,55 +1738,53 @@ function resultCursor (req, res, cursor, code, options) {
   resultOk(req, res, code, result);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsCollectionNotFound
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsCollectionNotFound
+// //////////////////////////////////////////////////////////////////////////////
 
 function collectionNotFound (req, res, collection, headers) {
   'use strict';
 
   if (collection === undefined) {
     resultError(req, res,
-                exports.HTTP_BAD, arangodb.ERROR_HTTP_BAD_PARAMETER,
-                "expecting a collection name or identifier",
-                headers);
-  }
-  else {
+      exports.HTTP_BAD, arangodb.ERROR_HTTP_BAD_PARAMETER,
+      'expecting a collection name or identifier',
+      headers);
+  } else {
     resultError(req, res,
-                exports.HTTP_NOT_FOUND, arangodb.ERROR_ARANGO_COLLECTION_NOT_FOUND,
-                "unknown collection '" + collection + "'", headers);
+      exports.HTTP_NOT_FOUND, arangodb.ERROR_ARANGO_COLLECTION_NOT_FOUND,
+      "unknown collection '" + collection + "'", headers);
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsIndexNotFound
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsIndexNotFound
+// //////////////////////////////////////////////////////////////////////////////
 
 function indexNotFound (req, res, collection, index, headers) {
   'use strict';
 
   if (collection === undefined) {
     resultError(req, res,
-                exports.HTTP_BAD, arangodb.ERROR_HTTP_BAD_PARAMETER,
-                "expecting a collection name or identifier",
-                headers);
+      exports.HTTP_BAD, arangodb.ERROR_HTTP_BAD_PARAMETER,
+      'expecting a collection name or identifier',
+      headers);
   }
   else if (index === undefined) {
     resultError(req, res,
-                exports.HTTP_BAD, arangodb.ERROR_HTTP_BAD_PARAMETER,
-                "expecting an index identifier",
-                headers);
-  }
-  else {
+      exports.HTTP_BAD, arangodb.ERROR_HTTP_BAD_PARAMETER,
+      'expecting an index identifier',
+      headers);
+  } else {
     resultError(req, res,
-                exports.HTTP_NOT_FOUND, arangodb.ERROR_ARANGO_INDEX_NOT_FOUND,
-                "unknown index '" + index + "'", headers);
+      exports.HTTP_NOT_FOUND, arangodb.ERROR_ARANGO_INDEX_NOT_FOUND,
+      "unknown index '" + index + "'", headers);
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock actionsResultException
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief was docuBlock actionsResultException
+// //////////////////////////////////////////////////////////////////////////////
 
 function resultException (req, res, err, headers, verbose) {
   'use strict';
@@ -1858,7 +1814,7 @@ function resultException (req, res, err, headers, verbose) {
       num = arangodb.ERROR_INTERNAL;
     }
 
-    if (err.errorMessage !== "") {
+    if (err.errorMessage !== '') {
       if (verbose !== false) {
         info.message = err.errorMessage;
       }
@@ -1913,8 +1869,7 @@ function resultException (req, res, err, headers, verbose) {
   else if (err.statusCode) {
     num = err.statusCode;
     code = err.statusCode;
-  }
-  else {
+  } else {
     num = arangodb.ERROR_HTTP_SERVER_ERROR;
     code = exports.HTTP_SERVER_ERROR;
   }
@@ -1922,9 +1877,9 @@ function resultException (req, res, err, headers, verbose) {
   resultError(req, res, code, num, msg, headers, info);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief creates a simple post callback
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief creates a simple post callback
+// //////////////////////////////////////////////////////////////////////////////
 
 function easyPostCallback (opts) {
   'use strict';
@@ -1939,30 +1894,29 @@ function easyPostCallback (opts) {
     try {
       var result = opts.callback(body);
       resultOk(req, res, exports.HTTP_OK, result);
-    }
-    catch (err) {
+    } catch (err) {
       resultException(req, res, err, undefined, false);
     }
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief echos a request
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief echos a request
+// //////////////////////////////////////////////////////////////////////////////
 
 function echoRequest (req, res, options, next) {
   'use strict';
 
-  var result = { request : req, options : options };
+  var result = { request: req, options: options };
 
   res.responseCode = exports.HTTP_OK;
-  res.contentType = "application/json; charset=utf-8";
+  res.contentType = 'application/json; charset=utf-8';
   res.body = JSON.stringify(result);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief logs a request
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief logs a request
+// //////////////////////////////////////////////////////////////////////////////
 
 function logRequest (req, res, options, next) {
   'use strict';
@@ -1974,68 +1928,64 @@ function logRequest (req, res, options, next) {
   if (options.hasOwnProperty('level')) {
     level = options.level;
 
-    if (level === "debug") {
+    if (level === 'debug') {
       log = console.debug;
     }
-    else if (level === "error") {
+    else if (level === 'error') {
       log = console.error;
     }
-    else if (level === "info") {
+    else if (level === 'info') {
       log = console.info;
     }
-    else if (level === "log") {
+    else if (level === 'log') {
       log = console.log;
     }
-    else if (level === "warn" || level === "warning") {
+    else if (level === 'warn' || level === 'warning') {
       log = console.warn;
-    }
-    else {
+    } else {
       log = console.log;
     }
-  }
-  else {
+  } else {
     log = console.log;
   }
 
   if (options.hasOwnProperty('token')) {
     token = options.token;
-  }
-  else {
-    token = "@(#" + internal.time() + ") ";
+  } else {
+    token = '@(#' + internal.time() + ') ';
   }
 
-  log("received request %s: %s", token, JSON.stringify(req));
+  log('received request %s: %s', token, JSON.stringify(req));
   next();
-  log("produced response %s: %s", token, JSON.stringify(res));
+  log('produced response %s: %s', token, JSON.stringify(res));
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief redirects a request
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief redirects a request
+// //////////////////////////////////////////////////////////////////////////////
 
 function redirectRequest (req, res, options, next) {
   'use strict';
 
   if (options.permanently) {
     resultPermanentRedirect(req, res, options);
-  }
-  else {
+  } else {
     resultTemporaryRedirect(req, res, options);
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief rewrites a request
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief rewrites a request
+// //////////////////////////////////////////////////////////////////////////////
 
 function rewriteRequest (req, res, options, next) {
   'use strict';
 
   var i = 0;
-  var suffix = options.destination.split("/");
+  var suffix = options.destination.split('/');
 
   for (i = 0;  i < suffix.length;  ++i) {
-    if (suffix[i] !== "") {
+    if (suffix[i] !== '') {
       break;
     }
   }
@@ -2049,9 +1999,9 @@ function rewriteRequest (req, res, options, next) {
   next(true);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief redirects a request
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief redirects a request
+// //////////////////////////////////////////////////////////////////////////////
 
 function pathHandler (req, res, options, next) {
   'use strict';
@@ -2070,20 +2020,18 @@ function pathHandler (req, res, options, next) {
     res.contentType = arangodb.guessContentType(filename);
     if (options.hasOwnProperty('gzip')) {
       if (options.gzip === true) {
-
-        //check if client is capable of gzip encoding
+        // check if client is capable of gzip encoding
         if (req.hasOwnProperty('headers')) {
           if (req.headers.hasOwnProperty('accept-encoding')) {
             var encoding = req.headers['accept-encoding'];
             if (encoding.indexOf('gzip') > -1) {
-
-              //check if gzip file is available
+              // check if gzip file is available
               encodedFilename = encodedFilename + '.gz';
               if (fs.exists(encodedFilename)) {
                 if (!res.hasOwnProperty('headers')) {
                   res.headers = {};
                 }
-                res.headers['Content-Encoding'] = "gzip";
+                res.headers['Content-Encoding'] = 'gzip';
               }
             }
           }
@@ -2091,114 +2039,110 @@ function pathHandler (req, res, options, next) {
       }
     }
     res.bodyFromFile = encodedFilename;
-  }
-  else {
+  } else {
     res.responseCode = exports.HTTP_NOT_FOUND;
-    res.contentType = "text/plain";
+    res.contentType = 'text/plain';
     res.body = "cannot find file '" + filename + "'";
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief helper function to stringify a request
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief helper function to stringify a request
+// //////////////////////////////////////////////////////////////////////////////
 
-function stringifyRequest(req) {
-  return req.requestType + " " + req.absoluteUrl();
+function stringifyRequest (req) {
+  return req.requestType + ' ' + req.absoluteUrl();
 }
 
-
 // load all actions from the actions directory
-exports.startup                  = startup;
+exports.startup = startup;
 
 // only for debugging
-exports.buildRouting             = buildRouting;
-exports.buildRoutingTree         = buildRoutingTree;
-exports.flattenRoutingTree       = flattenRoutingTree;
-exports.routingTree              = function() { return RoutingTree; };
-exports.routingList              = function() { return RoutingList; };
+exports.buildRouting = buildRouting;
+exports.buildRoutingTree = buildRoutingTree;
+exports.flattenRoutingTree = flattenRoutingTree;
+exports.routingTree = function () { return RoutingTree; };
+exports.routingList = function () { return RoutingList; };
 
 // public functions
-exports.routeRequest             = routeRequest;
-exports.defineHttp               = defineHttp;
-exports.getErrorMessage          = getErrorMessage;
-exports.getJsonBody              = getJsonBody;
-exports.errorFunction            = errorFunction;
-exports.reloadRouting            = reloadRouting;
-exports.firstRouting             = firstRouting;
-exports.nextRouting              = nextRouting;
-exports.addCookie                = addCookie;
-exports.stringifyRequest         = stringifyRequest;
+exports.routeRequest = routeRequest;
+exports.defineHttp = defineHttp;
+exports.getErrorMessage = getErrorMessage;
+exports.getJsonBody = getJsonBody;
+exports.errorFunction = errorFunction;
+exports.reloadRouting = reloadRouting;
+exports.firstRouting = firstRouting;
+exports.nextRouting = nextRouting;
+exports.addCookie = addCookie;
+exports.stringifyRequest = stringifyRequest;
 
 // standard HTTP responses
-exports.badParameter             = badParameter;
-exports.resultBad                = resultBad;
-exports.resultError              = resultError;
-exports.resultNotFound           = resultNotFound;
-exports.resultNotImplemented     = resultNotImplemented;
-exports.resultOk                 = resultOk;
-exports.resultPermanentRedirect  = resultPermanentRedirect;
-exports.resultTemporaryRedirect  = resultTemporaryRedirect;
-exports.resultUnsupported        = resultUnsupported;
+exports.badParameter = badParameter;
+exports.resultBad = resultBad;
+exports.resultError = resultError;
+exports.resultNotFound = resultNotFound;
+exports.resultNotImplemented = resultNotImplemented;
+exports.resultOk = resultOk;
+exports.resultPermanentRedirect = resultPermanentRedirect;
+exports.resultTemporaryRedirect = resultTemporaryRedirect;
+exports.resultUnsupported = resultUnsupported;
 
 // ArangoDB specific responses
-exports.resultCursor             = resultCursor;
-exports.collectionNotFound       = collectionNotFound;
-exports.indexNotFound            = indexNotFound;
-exports.resultException          = resultException;
+exports.resultCursor = resultCursor;
+exports.collectionNotFound = collectionNotFound;
+exports.indexNotFound = indexNotFound;
+exports.resultException = resultException;
 
 // standard actions
-exports.easyPostCallback         = easyPostCallback;
-exports.echoRequest              = echoRequest;
-exports.logRequest               = logRequest;
-exports.redirectRequest          = redirectRequest;
-exports.rewriteRequest           = rewriteRequest;
-exports.pathHandler              = pathHandler;
+exports.easyPostCallback = easyPostCallback;
+exports.echoRequest = echoRequest;
+exports.logRequest = logRequest;
+exports.redirectRequest = redirectRequest;
+exports.rewriteRequest = rewriteRequest;
+exports.pathHandler = pathHandler;
 
 // some useful constants
-exports.DELETE                   = "DELETE";
-exports.GET                      = "GET";
-exports.HEAD                     = "HEAD";
-exports.OPTIONS                  = "OPTIONS";
-exports.POST                     = "POST";
-exports.PUT                      = "PUT";
-exports.PATCH                    = "PATCH";
+exports.DELETE = 'DELETE';
+exports.GET = 'GET';
+exports.HEAD = 'HEAD';
+exports.OPTIONS = 'OPTIONS';
+exports.POST = 'POST';
+exports.PUT = 'PUT';
+exports.PATCH = 'PATCH';
 
-exports.ALL_METHODS              = ALL_METHODS;
+exports.ALL_METHODS = ALL_METHODS;
 
 // HTTP 2xx
-exports.HTTP_OK                  = 200;
-exports.HTTP_CREATED             = 201;
-exports.HTTP_ACCEPTED            = 202;
-exports.HTTP_PARTIAL             = 203;
-exports.HTTP_NO_CONTENT          = 204;
+exports.HTTP_OK = 200;
+exports.HTTP_CREATED = 201;
+exports.HTTP_ACCEPTED = 202;
+exports.HTTP_PARTIAL = 203;
+exports.HTTP_NO_CONTENT = 204;
 
 // HTTP 3xx
-exports.HTTP_MOVED_PERMANENTLY   = 301;
-exports.HTTP_FOUND               = 302;
-exports.HTTP_SEE_OTHER           = 303;
-exports.HTTP_NOT_MODIFIED        = 304;
-exports.HTTP_TEMPORARY_REDIRECT  = 307;
+exports.HTTP_MOVED_PERMANENTLY = 301;
+exports.HTTP_FOUND = 302;
+exports.HTTP_SEE_OTHER = 303;
+exports.HTTP_NOT_MODIFIED = 304;
+exports.HTTP_TEMPORARY_REDIRECT = 307;
 
 // HTTP 4xx
-exports.HTTP_BAD                 = 400;
-exports.HTTP_UNAUTHORIZED        = 401;
-exports.HTTP_PAYMENT             = 402;
-exports.HTTP_FORBIDDEN           = 403;
-exports.HTTP_NOT_FOUND           = 404;
-exports.HTTP_METHOD_NOT_ALLOWED  = 405;
-exports.HTTP_REQUEST_TIMEOUT     = 408;
-exports.HTTP_CONFLICT            = 409;
+exports.HTTP_BAD = 400;
+exports.HTTP_UNAUTHORIZED = 401;
+exports.HTTP_PAYMENT = 402;
+exports.HTTP_FORBIDDEN = 403;
+exports.HTTP_NOT_FOUND = 404;
+exports.HTTP_METHOD_NOT_ALLOWED = 405;
+exports.HTTP_REQUEST_TIMEOUT = 408;
+exports.HTTP_CONFLICT = 409;
 exports.HTTP_PRECONDITION_FAILED = 412;
-exports.HTTP_ENTITY_TOO_LARGE    = 413;
-exports.HTTP_I_AM_A_TEAPOT       = 418;
+exports.HTTP_ENTITY_TOO_LARGE = 413;
+exports.HTTP_I_AM_A_TEAPOT = 418;
 exports.HTTP_UNPROCESSABLE_ENTIT = 422;
-exports.HTTP_HEADER_TOO_LARGE    = 431;
+exports.HTTP_HEADER_TOO_LARGE = 431;
 
 // HTTP 5xx
-exports.HTTP_SERVER_ERROR        = 500;
-exports.HTTP_NOT_IMPLEMENTED     = 501;
-exports.HTTP_BAD_GATEWAY         = 502;
+exports.HTTP_SERVER_ERROR = 500;
+exports.HTTP_NOT_IMPLEMENTED = 501;
+exports.HTTP_BAD_GATEWAY = 502;
 exports.HTTP_SERVICE_UNAVAILABLE = 503;
-
-

@@ -1,39 +1,39 @@
 /*jshint globalstrict: true */
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief ArangoDB Application Launcher Utilities
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2013 triAGENS GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Jan Steemann
-/// @author Dr. Frank Celler
-/// @author Michael Hackstein
-/// @author Copyright 2014, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief ArangoDB Application Launcher Utilities
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2013 triAGENS GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Jan Steemann
+// / @author Dr. Frank Celler
+// / @author Michael Hackstein
+// / @author Copyright 2014, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
-var joi = require("joi");
-var fs = require("fs");
+var joi = require('joi');
+var fs = require('fs');
 var _ = require('lodash');
-var arangodb = require("@arangodb");
+var arangodb = require('@arangodb');
 var db = arangodb.db;
 var internal = require('internal');
 
@@ -46,26 +46,26 @@ var mountAppRegEx = /\/APP(\/|$)/i;
 var mountNumberRegEx = /^\/[\d\-%]/;
 var pathRegex = /^((\.{0,2}(\/|\\))|(~\/)|[a-zA-Z]:\\)/;
 
-var getReadableName = function(name) {
+var getReadableName = function (name) {
   return name.split(/([-_]|\s)+/).map(function (token) {
     return token.slice(0, 1).toUpperCase() + token.slice(1);
   }).join(' ');
 };
 
-var getStorage = function() {
-  var c = db._collection("_apps");
+var getStorage = function () {
+  var c = db._collection('_apps');
   if (c === null) {
-    c = db._create("_apps", {isSystem: true});
-    c.ensureIndex({ type: "hash", fields: [ "mount" ], unique: true });
+    c = db._create('_apps', {isSystem: true});
+    c.ensureIndex({ type: 'hash', fields: [ 'mount' ], unique: true });
   }
   return c;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief comparator for mount points
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief comparator for mount points
+// //////////////////////////////////////////////////////////////////////////////
 
-var compareMounts = function(l, r) {
+var compareMounts = function (l, r) {
   var left = l.mount.toLowerCase();
   var right = r.mount.toLowerCase();
 
@@ -75,25 +75,25 @@ var compareMounts = function(l, r) {
   return 1;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief builds a github repository URL
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief builds a github repository URL
+// //////////////////////////////////////////////////////////////////////////////
 
 function buildGithubUrl (repository, version) {
   if (version === undefined) {
-    version = "master";
+    version = 'master';
   }
 
-  var urlPrefix = require("process").env.FOXX_BASE_URL;
+  var urlPrefix = require('process').env.FOXX_BASE_URL;
   if (urlPrefix === undefined) {
     urlPrefix = 'https://github.com/';
   }
-  return  urlPrefix + repository + '/archive/' + version + '.zip';
+  return urlPrefix + repository + '/archive/' + version + '.zip';
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief extracts the name and version from a manifest file
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief extracts the name and version from a manifest file
+// //////////////////////////////////////////////////////////////////////////////
 
 function extractNameAndVersionManifest (source, filename) {
   var manifest = JSON.parse(fs.read(filename));
@@ -102,10 +102,9 @@ function extractNameAndVersionManifest (source, filename) {
   source.version = manifest.version;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief processes files in a directory
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief processes files in a directory
+// //////////////////////////////////////////////////////////////////////////////
 
 function processDirectory (source) {
   var location = source.location;
@@ -118,7 +117,7 @@ function processDirectory (source) {
   // extract name and version from manifest
   // .............................................................................
 
-  extractNameAndVersionManifest(source, fs.join(location, "manifest.json"));
+  extractNameAndVersionManifest(source, fs.join(location, 'manifest.json'));
 
   // .............................................................................
   // extract name and version from manifest
@@ -141,7 +140,7 @@ function processDirectory (source) {
     throwFileNotFound("Directory '" + String(location) + "' is empty");
   }
 
-  var tempFile = fs.getTempFile("downloads", false);
+  var tempFile = fs.getTempFile('downloads', false);
   source.filename = tempFile;
   source.removeFile = true;
 
@@ -149,16 +148,15 @@ function processDirectory (source) {
   return tempFile;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief extracts the name and version from a zip
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief extracts the name and version from a zip
+// //////////////////////////////////////////////////////////////////////////////
 
 function repackZipFile (source) {
   var i;
 
   var filename = source.filename;
-  var path = fs.getTempFile("zip", false);
+  var path = fs.getTempFile('zip', false);
 
   fs.makeDirectory(path);
   fs.unzipFile(filename, path, false, true);
@@ -167,11 +165,11 @@ function repackZipFile (source) {
   // locate the manifest file
   // .............................................................................
 
-  var tree = fs.listTree(path).sort(function(a,b) {
+  var tree = fs.listTree(path).sort(function (a, b) {
     return a.length - b.length;
   });
   var found;
-  var mf = "manifest.json";
+  var mf = 'manifest.json';
   var re = /[\/\\\\]manifest\.json$/; // Windows!
   var tf;
 
@@ -190,9 +188,8 @@ function repackZipFile (source) {
   var mp;
 
   if (found === mf) {
-    mp = ".";
-  }
-  else {
+    mp = '.';
+  } else {
     mp = found.substr(0, found.length - mf.length - 1);
   }
 
@@ -203,8 +200,7 @@ function repackZipFile (source) {
   if (source.removeFile && source.filename !== '') {
     try {
       fs.remove(source.filename);
-    }
-    catch (err1) {
+    } catch (err1) {
       arangodb.printf("Cannot remove temporary file '%s'\n", source.filename);
     }
   }
@@ -231,22 +227,21 @@ function repackZipFile (source) {
 
   try {
     fs.removeDirectoryRecursive(path);
-  }
-  catch (err2) {
+  } catch (err2) {
     arangodb.printf("Cannot remove temporary directory '%s'\n", path);
   }
 }
-////////////////////////////////////////////////////////////////////////////////
-/// @brief processes files from a github repository
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief processes files from a github repository
+// //////////////////////////////////////////////////////////////////////////////
 
 function processGithubRepository (source) {
   var url = buildGithubUrl(source.location, source.version);
-  var tempFile = fs.getTempFile("downloads", false);
+  var tempFile = fs.getTempFile('downloads', false);
 
   try {
-    var result = internal.download(url, "", {
-      method: "get",
+    var result = internal.download(url, '', {
+      method: 'get',
       followRedirects: true,
       timeout: 30
     }, tempFile);
@@ -254,19 +249,17 @@ function processGithubRepository (source) {
     if (result.code >= 200 && result.code <= 299) {
       source.filename = tempFile;
       source.removeFile = true;
-    }
-    else {
+    } else {
       var msg = "Could not download from repository '" + url + "'";
       if (result.hasOwnProperty('message')) {
-        msg += " message: " + result.message;
+        msg += ' message: ' + result.message;
       }
       throwDownloadError(msg);
     }
-  }
-  catch (err) {
+  } catch (err) {
     var msg = "Could not download from repository '" + url + "': " + String(err);
     if (err.hasOwnProperty('message')) {
-      msg += " message: " + err.message;
+      msg += ' message: ' + err.message;
     }
     throwDownloadError(msg);
   }
@@ -274,9 +267,9 @@ function processGithubRepository (source) {
   repackZipFile(source);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief returns all running Foxx applications
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief returns all running Foxx applications
+// //////////////////////////////////////////////////////////////////////////////
 
 function listJson (showPrefix, onlyDevelopment) {
   var mounts = getStorage();
@@ -307,7 +300,7 @@ function listJson (showPrefix, onlyDevelopment) {
   });
 }
 
-function getScripts(scripts) {
+function getScripts (scripts) {
   var names = {};
   _.each(scripts, function (script, name) {
     names[name] = getReadableName(name);
@@ -315,7 +308,7 @@ function getScripts(scripts) {
   return names;
 }
 
-function getConfiguration(definitions, options) {
+function getConfiguration (definitions, options) {
   var cfg = {};
   _.each(definitions, function (definition, name) {
     cfg[name] = _.clone(definition);
@@ -325,7 +318,7 @@ function getConfiguration(definitions, options) {
   return cfg;
 }
 
-function getDependencies(definitions, options) {
+function getDependencies (definitions, options) {
   var deps = {};
   _.each(definitions, function (definition, name) {
     deps[name] = {
@@ -337,58 +330,57 @@ function getDependencies(definitions, options) {
   return deps;
 }
 
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief prints all running Foxx applications
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief prints all running Foxx applications
-////////////////////////////////////////////////////////////////////////////////
-
-function list(onlyDevelopment) {
+function list (onlyDevelopment) {
   var apps = listJson(undefined, onlyDevelopment);
 
   arangodb.printTable(
     apps.sort(compareMounts),
-    [ "mount", "name", "author", "description", "version", "development" ],
+    [ 'mount', 'name', 'author', 'description', 'version', 'development' ],
     {
       prettyStrings: true,
-      totalString: "%s application(s) found",
-      emptyString: "no applications found",
+      totalString: '%s application(s) found',
+      emptyString: 'no applications found',
       rename: {
-        "mount": "Mount",
-        "name" : "Name",
-        "author" : "Author",
-        "description" : "Description",
-        "version" : "Version",
-        "development" : "Development"
+        'mount': 'Mount',
+        'name': 'Name',
+        'author': 'Author',
+        'description': 'Description',
+        'version': 'Version',
+        'development': 'Development'
       }
     }
   );
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief returns all running Foxx applications in development mode
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief returns all running Foxx applications in development mode
+// //////////////////////////////////////////////////////////////////////////////
 
 function listDevelopmentJson (showPrefix) {
   return listJson(showPrefix, true);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief prints all running Foxx applications
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief prints all running Foxx applications
+// //////////////////////////////////////////////////////////////////////////////
 
-function listDevelopment() {
+function listDevelopment () {
   return list(true);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief validate the mount point of an app
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief validate the mount point of an app
+// //////////////////////////////////////////////////////////////////////////////
 
-function validateMount(mount, internal) {
-  if (mount[0] !== "/") {
+function validateMount (mount, internal) {
+  if (mount[0] !== '/') {
     throw new ArangoError({
       errorNum: errors.ERROR_INVALID_MOUNTPOINT.code,
-      errorMessage: "Mountpoint has to start with /."
+      errorMessage: 'Mountpoint has to start with /.'
     });
   }
   if (!mountRegEx.test(mount)) {
@@ -396,7 +388,7 @@ function validateMount(mount, internal) {
     if (!internal || mount.length !== 1) {
       throw new ArangoError({
         errorNum: errors.ERROR_INVALID_MOUNTPOINT.code,
-        errorMessage: "Mountpoint can only contain a-z, A-Z, 0-9 or _."
+        errorMessage: 'Mountpoint can only contain a-z, A-Z, 0-9 or _.'
       });
     }
   }
@@ -404,31 +396,31 @@ function validateMount(mount, internal) {
     // routes starting with _ are disallowed...
     // ...except they start with _open. the _open prefix provides a non-authenticated
     // way to access routes
-    if (mount[1] === "_" && ! /^\/_open\//.test(mount)) {
+    if (mount[1] === '_' && ! /^\/_open\//.test(mount)) {
       throw new ArangoError({
         errorNum: errors.ERROR_INVALID_MOUNTPOINT.code,
-        errorMessage: "/_ apps are reserved for internal use."
+        errorMessage: '/_ apps are reserved for internal use.'
       });
     }
     if (mountNumberRegEx.test(mount)) {
       throw new ArangoError({
         errorNum: errors.ERROR_INVALID_MOUNTPOINT.code,
-        errorMessage: "Mointpoints are not allowed to start with a number, - or %."
+        errorMessage: 'Mointpoints are not allowed to start with a number, - or %.'
       });
     }
     if (mountAppRegEx.test(mount)) {
       throw new ArangoError({
         errorNum: errors.ERROR_INVALID_MOUNTPOINT.code,
-        errorMessage: "Mountpoint is not allowed to contain /app/."
+        errorMessage: 'Mountpoint is not allowed to contain /app/.'
       });
     }
   }
   return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief validate an app name and fail if it is invalid
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief validate an app name and fail if it is invalid
+// //////////////////////////////////////////////////////////////////////////////
 
 function validateAppName (name) {
   if (typeof name === 'string' && name.length > 0) {
@@ -441,26 +433,25 @@ function validateAppName (name) {
   });
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief get the app mounted at this mount point
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief get the app mounted at this mount point
+// //////////////////////////////////////////////////////////////////////////////
 
 function mountedApp (mount) {
   return getStorage().firstExample({mount: mount});
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Update the app mounted at this mountpoint with the new app
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Update the app mounted at this mountpoint with the new app
+// //////////////////////////////////////////////////////////////////////////////
 
 function updateApp (mount, update) {
   return getStorage().updateByExample({mount: mount}, update);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief define validators for parameter types
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief define validators for parameter types
+// //////////////////////////////////////////////////////////////////////////////
 
 var parameterTypes = {
   integer: joi.number().integer(),
@@ -473,14 +464,14 @@ parameterTypes.password = parameterTypes.string;
 parameterTypes.int = parameterTypes.integer;
 parameterTypes.bool = parameterTypes.boolean;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief creates a zip archive of a foxx app. Returns the absolute path
-////////////////////////////////////////////////////////////////////////////////
-var zipDirectory = function(directory) {
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief creates a zip archive of a foxx app. Returns the absolute path
+// //////////////////////////////////////////////////////////////////////////////
+var zipDirectory = function (directory) {
   if (!fs.isDirectory(directory)) {
-    throw directory + " is not a directory.";
+    throw directory + ' is not a directory.';
   }
-  var tempFile = fs.getTempFile("zip", false);
+  var tempFile = fs.getTempFile('zip', false);
 
   var tree = fs.listTree(directory);
   var files = [];
@@ -501,9 +492,9 @@ var zipDirectory = function(directory) {
   return tempFile;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Exports
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Exports
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.mountedApp = mountedApp;
 exports.updateApp = updateApp;
@@ -522,4 +513,3 @@ exports.parameterTypes = parameterTypes;
 exports.zipDirectory = zipDirectory;
 exports.getStorage = getStorage;
 exports.pathRegex = pathRegex;
-

@@ -1,33 +1,33 @@
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Foxx template engine
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2013-2015 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Lucas Dohmen
-/// @author Michael Hackstein
-/// @author Alan Plum
-/// @author Copyright 2013-2015, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Foxx template engine
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2013-2015 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Lucas Dohmen
+// / @author Michael Hackstein
+// / @author Alan Plum
+// / @author Copyright 2013-2015, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
 var _ = require('lodash');
 var fs = require('fs');
@@ -42,7 +42,7 @@ var templatePath = fs.join(
   'templates'
 );
 
-function Engine(opts) {
+function Engine (opts) {
   this._path = templatePath;
   this.folder = opts.path;
   this.name = opts.name;
@@ -54,7 +54,7 @@ function Engine(opts) {
 }
 
 _.extend(Engine.prototype, {
-  write: function() {
+  write: function () {
     fs.makeDirectory(this.folder);
     fs.makeDirectory(fs.join(this.folder, 'controllers'));
     fs.makeDirectory(fs.join(this.folder, 'models'));
@@ -80,7 +80,7 @@ _.extend(Engine.prototype, {
     fs.write(fs.join(this.folder, 'test', 'example.js'), this.buildTest());
   },
 
-  template: function(name) {
+  template: function (name) {
     return _.template(fs.read(fs.join(this._path, name)));
   },
 
@@ -136,7 +136,7 @@ _.extend(Engine.prototype, {
     }, this);
   },
 
-  buildManifest: function() {
+  buildManifest: function () {
     var manifest = {
       name: this.name,
       version: '0.0.1',
@@ -161,8 +161,7 @@ _.extend(Engine.prototype, {
     return JSON.stringify(manifest, 0, 2);
   },
 
-
-  buildSetup: function(collections) {
+  buildSetup: function (collections) {
     var templ = this.template('setup.js.tmpl');
 
     return templ({
@@ -170,7 +169,7 @@ _.extend(Engine.prototype, {
     });
   },
 
-  buildTeardown: function(collections) {
+  buildTeardown: function (collections) {
     var templ = this.template('teardown.js.tmpl');
 
     return templ({
@@ -178,20 +177,19 @@ _.extend(Engine.prototype, {
     });
   },
 
-  buildController: function(controller) {
+  buildController: function (controller) {
     var templ = this.template('controller.js.tmpl');
 
     return templ(controller);
   },
 
-
-  buildRepository: function() {
+  buildRepository: function () {
     var templ = this.template('repository.js.tmpl');
 
     return templ();
   },
 
-  buildModel: function() {
+  buildModel: function () {
     var templ = this.template('model.js.tmpl');
 
     return templ();

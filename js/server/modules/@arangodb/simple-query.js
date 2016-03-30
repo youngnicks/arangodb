@@ -1,38 +1,38 @@
 /*jshint strict: false */
 /*global ArangoClusterComm, ArangoClusterInfo */
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Arango Simple Query Language
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2012 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Dr. Frank Celler
-/// @author Copyright 2012, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Arango Simple Query Language
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2012 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Dr. Frank Celler
+// / @author Copyright 2012, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
-var internal = require("internal");
+var internal = require('internal');
 
-var ArangoError = require("@arangodb").ArangoError;
+var ArangoError = require('@arangodb').ArangoError;
 
-var sq = require("@arangodb/simple-query-common");
+var sq = require('@arangodb/simple-query-common');
 
 var GeneralArrayCursor = sq.GeneralArrayCursor;
 var SimpleQueryAll = sq.SimpleQueryAll;
@@ -46,29 +46,27 @@ var SimpleQueryRange = sq.SimpleQueryRange;
 var SimpleQueryWithin = sq.SimpleQueryWithin;
 var SimpleQueryWithinRectangle = sq.SimpleQueryWithinRectangle;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief rewrites an index id by stripping the collection name from it
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief rewrites an index id by stripping the collection name from it
+// //////////////////////////////////////////////////////////////////////////////
 
 var rewriteIndex = function (id) {
   if (id === null || id === undefined) {
     return;
   }
 
-  if (typeof id === "string") {
+  if (typeof id === 'string') {
     return id.replace(/^[a-zA-Z0-9_\-]+\//, '');
   }
-  if (typeof id === "object" && id.hasOwnProperty("id")) {
+  if (typeof id === 'object' && id.hasOwnProperty('id')) {
     return id.id.replace(/^[a-zA-Z0-9_\-]+\//, '');
   }
   return id;
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief executes an all query
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief executes an all query
+// //////////////////////////////////////////////////////////////////////////////
 
 SimpleQueryAll.prototype.execute = function () {
   if (this._execution === null) {
@@ -77,10 +75,10 @@ SimpleQueryAll.prototype.execute = function () {
     }
 
     var documents;
-    var cluster = require("@arangodb/cluster");
+    var cluster = require('@arangodb/cluster');
 
     if (cluster.isCoordinator()) {
-      var dbName = require("internal").db._name();
+      var dbName = require('internal').db._name();
       var shards = cluster.shardList(dbName, this._collection.name());
       var coord = { coordTransactionID: ArangoClusterInfo.uniqid() };
       var options = { coordTransactionID: coord.coordTransactionID, timeout: 360 };
@@ -92,21 +90,21 @@ SimpleQueryAll.prototype.execute = function () {
       }
 
       shards.forEach(function (shard) {
-        ArangoClusterComm.asyncRequest("put",
-                                       "shard:" + shard,
-                                       dbName,
-                                       "/_api/simple/all",
-                                       JSON.stringify({
-                                         collection: shard,
-                                         skip: 0,
-                                         limit: limit || undefined,
-                                         batchSize: 100000000
-                                       }),
-                                       { },
-                                       options);
+        ArangoClusterComm.asyncRequest('put',
+          'shard:' + shard,
+          dbName,
+          '/_api/simple/all',
+          JSON.stringify({
+            collection: shard,
+            skip: 0,
+            limit: limit || undefined,
+            batchSize: 100000000
+          }),
+          { },
+          options);
       });
 
-      var _documents = [ ], total = 0;
+      var _documents = [], total = 0;
       var result = cluster.wait(coord, shards);
       var toSkip = this._skip, toLimit = this._limit;
 
@@ -115,7 +113,7 @@ SimpleQueryAll.prototype.execute = function () {
         toLimit = null;
       }
 
-      result.forEach(function(part) {
+      result.forEach(function (part) {
         var body = JSON.parse(part.body);
         total += body.count;
 
@@ -133,8 +131,7 @@ SimpleQueryAll.prototype.execute = function () {
           if (body.result.length >= toLimit) {
             body.result = body.result.slice(0, toLimit);
             toLimit = 0;
-          }
-          else {
+          } else {
             toLimit -= body.result.length;
           }
         }
@@ -153,8 +150,7 @@ SimpleQueryAll.prototype.execute = function () {
         count: _documents.length,
         total: total
       };
-    }
-    else {
+    } else {
       documents = this._collection.ALL(this._skip, this._limit);
     }
 
@@ -164,18 +160,16 @@ SimpleQueryAll.prototype.execute = function () {
   }
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief normalise attribute names for searching in indexes
-/// this will turn
-/// { a: { b: { c: 1, d: true }, e: "bar" } }
-/// into
-/// { "a.b.c" : 1, "a.b.d" : true, "a.e" : "bar" }
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief normalise attribute names for searching in indexes
+// / this will turn
+// / { a: { b: { c: 1, d: true }, e: "bar" } }
+// / into
+// / { "a.b.c" : 1, "a.b.d" : true, "a.e" : "bar" }
+// //////////////////////////////////////////////////////////////////////////////
 
 function normalizeAttributes (obj, prefix) {
-  var prep = ((prefix === "" || prefix === undefined) ? "" : prefix + "."), o, normalized = { };
+  var prep = ((prefix === '' || prefix === undefined) ? '' : prefix + '.'), o, normalized = { };
 
   for (o in obj) {
     if (obj.hasOwnProperty(o)) {
@@ -186,8 +180,7 @@ function normalizeAttributes (obj, prefix) {
             normalized[i] = sub[i];
           }
         }
-      }
-      else {
+      } else {
         normalized[prep + o] = obj[o];
       }
     }
@@ -196,9 +189,9 @@ function normalizeAttributes (obj, prefix) {
   return normalized;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief whether or not an index supports a query
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief whether or not an index supports a query
+// //////////////////////////////////////////////////////////////////////////////
 
 function supportsQuery (idx, attributes) {
   var matches = 0;
@@ -218,9 +211,9 @@ function supportsQuery (idx, attributes) {
   return (matches > 0);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief get the type of a document attribute
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief get the type of a document attribute
+// //////////////////////////////////////////////////////////////////////////////
 
 function docType (value) {
   'use strict';
@@ -230,7 +223,7 @@ function docType (value) {
       return 'array';
     }
 
-    switch (typeof(value)) {
+    switch (typeof (value)) {
       case 'boolean':
         return 'boolean';
       case 'number':
@@ -249,9 +242,9 @@ function docType (value) {
   return 'null';
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief checks whether or not the example is contained in the document
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief checks whether or not the example is contained in the document
+// //////////////////////////////////////////////////////////////////////////////
 
 function isContained (doc, example) {
   'use strict';
@@ -261,13 +254,13 @@ function isContained (doc, example) {
   if (eType !== dType) {
     return false;
   }
-     
-  var i; 
+
+  var i;
   if (eType === 'object') {
     for (i in example) {
       if (example.hasOwnProperty(i)) {
         if (! doc.hasOwnProperty(i) ||
-            ! isContained(doc[i], example[i])) {
+          ! isContained(doc[i], example[i])) {
           return false;
         }
       }
@@ -290,9 +283,9 @@ function isContained (doc, example) {
   return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief whether or not the example contains null attributes
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief whether or not the example contains null attributes
+// //////////////////////////////////////////////////////////////////////////////
 
 function containsNullAttributes (example) {
   var k;
@@ -306,21 +299,21 @@ function containsNullAttributes (example) {
   return false;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief finds documents by example
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief finds documents by example
+// //////////////////////////////////////////////////////////////////////////////
 
 function byExample (data) {
   var k;
 
   var collection = data._collection;
-  var example    = data._example;
-  var skip       = data._skip;
-  var limit      = data._limit;
+  var example = data._example;
+  var skip = data._skip;
+  var limit = data._limit;
 
-  if (example === null || 
-      typeof example !== "object" || 
-      Array.isArray(example)) {
+  if (example === null ||
+    typeof example !== 'object' ||
+    Array.isArray(example)) {
     // invalid datatype for example
     var err1 = new ArangoError();
     err1.errorNum = internal.errors.ERROR_ARANGO_DOCUMENT_TYPE_INVALID.code;
@@ -334,52 +327,43 @@ function byExample (data) {
     postFilter = true;
   }
 
-  var candidates = { total: 0, count: 0, documents: [ ] };
+  var candidates = { total: 0, count: 0, documents: [] };
   if (example.hasOwnProperty('_id')) {
     // we can use the collection's primary index
     try {
       candidates.documents = [ collection.document(example._id) ];
       postFilter = true;
-    }
-    catch (n1) {
-    }
+    } catch (n1) {}
   }
   else if (example.hasOwnProperty('_key')) {
     // we can use the collection's primary index
     try {
       candidates.documents = [ collection.document(example._key) ];
       postFilter = true;
-    }
-    catch (n2) {
-    }
+    } catch (n2) {}
   }
   else if (example.hasOwnProperty('_from')) {
     // use edge index
     try {
       candidates.documents = collection.outEdges(example._from);
       postFilter = true;
-    }
-    catch (n3) {
-    }
+    } catch (n3) {}
   }
   else if (example.hasOwnProperty('_to')) {
     // use edge index
     try {
       candidates.documents = collection.inEdges(example._to);
       postFilter = true;
-    }
-    catch (n4) {
-    }
-  }
-  else {
+    } catch (n4) {}
+  } else {
     // check indexes
     var idx = null;
-    var normalized = normalizeAttributes(example, "");
+    var normalized = normalizeAttributes(example, '');
     var keys = Object.keys(normalized);
     var index;
 
     if (data._index !== undefined && data._index !== null) {
-      if (typeof data._index === 'object' && data._index.hasOwnProperty("id")) {
+      if (typeof data._index === 'object' && data._index.hasOwnProperty('id')) {
         index = data._index.id;
       }
       else if (typeof data._index === 'string') {
@@ -392,8 +376,7 @@ function byExample (data) {
       var all = collection.getIndexes();
       for (k = 0; k < all.length; ++k) {
         if (all[k].type === data._type &&
-            rewriteIndex(all[k].id) === rewriteIndex(index)) {
-
+          rewriteIndex(all[k].id) === rewriteIndex(index)) {
           if (supportsQuery(all[k], keys)) {
             idx = all[k];
           }
@@ -404,14 +387,14 @@ function byExample (data) {
     else if (keys.length > 0) {
       // try these index types
       var checks = [
-        { type: "hash", fields: keys, unique: true },
-        { type: "skiplist", fields: keys, unique: true },
-        { type: "hash", fields: keys, unique: false },
-        { type: "skiplist", fields: keys, unique: false }
+        { type: 'hash', fields: keys, unique: true },
+        { type: 'skiplist', fields: keys, unique: true },
+        { type: 'hash', fields: keys, unique: false },
+        { type: 'skiplist', fields: keys, unique: false }
       ];
 
       if (containsNullAttributes(example)) {
-        checks.forEach(function(check) {
+        checks.forEach(function (check) {
           check.sparse = false;
         });
       }
@@ -428,7 +411,7 @@ function byExample (data) {
         }
       }
     }
-  
+
     if (idx !== null) {
       // use an index
       if (idx.type === 'hash') {
@@ -437,9 +420,8 @@ function byExample (data) {
       else if (idx.type === 'skiplist') {
         candidates = collection.BY_EXAMPLE_SKIPLIST(idx.id, normalized, skip, limit);
       }
-    }
-    else {
-      if (typeof data._type === "string") {
+    } else {
+      if (typeof data._type === 'string') {
         // an index was specified, but none can be used
         var err2 = new ArangoError();
         err2.errorNum = internal.errors.ERROR_ARANGO_NO_INDEX.code;
@@ -449,15 +431,14 @@ function byExample (data) {
 
       if (postFilter) {
         candidates = collection.ALL(skip, limit);
-      }
-      else {
+      } else {
         candidates = collection.BY_EXAMPLE(example, skip, limit);
       }
     }
   }
-    
+
   if (postFilter) {
-    var result = [ ];
+    var result = [];
 
     for (k = 0; k < candidates.documents.length; ++k) {
       var doc = candidates.documents[k];
@@ -475,7 +456,7 @@ function byExample (data) {
         break;
       }
     }
-    
+
     candidates.total = candidates.documents.length;
     candidates.count = result.length;
     candidates.documents = result;
@@ -484,9 +465,9 @@ function byExample (data) {
   return candidates;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief executes a query-by-example
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief executes a query-by-example
+// //////////////////////////////////////////////////////////////////////////////
 
 SimpleQueryByExample.prototype.execute = function () {
   var documents;
@@ -496,10 +477,10 @@ SimpleQueryByExample.prototype.execute = function () {
       this._skip = 0;
     }
 
-    var cluster = require("@arangodb/cluster");
+    var cluster = require('@arangodb/cluster');
 
     if (cluster.isCoordinator()) {
-      var dbName = require("internal").db._name();
+      var dbName = require('internal').db._name();
       var shards = cluster.shardList(dbName, this._collection.name());
       var coord = { coordTransactionID: ArangoClusterInfo.uniqid() };
       var options = { coordTransactionID: coord.coordTransactionID, timeout: 360 };
@@ -510,37 +491,37 @@ SimpleQueryByExample.prototype.execute = function () {
         }
       }
 
-      var method = "by-example";
+      var method = 'by-example';
       if (this._type !== undefined) {
         switch (this._type) {
-          case "hash":
-            method = "by-example-hash";
+          case 'hash':
+            method = 'by-example-hash';
             break;
-          case "skiplist":
-            method = "by-example-skiplist";
+          case 'skiplist':
+            method = 'by-example-skiplist';
             break;
         }
       }
 
       var self = this;
       shards.forEach(function (shard) {
-        ArangoClusterComm.asyncRequest("put",
-                                       "shard:" + shard,
-                                       dbName,
-                                       "/_api/simple/" + method,
-                                       JSON.stringify({
-                                         example: self._example,
-                                         collection: shard,
-                                         skip: 0,
-                                         limit: limit || undefined,
-                                         batchSize: 100000000,
-                                         index: rewriteIndex(self._index)
-                                       }),
-                                       { },
-                                       options);
+        ArangoClusterComm.asyncRequest('put',
+          'shard:' + shard,
+          dbName,
+          '/_api/simple/' + method,
+          JSON.stringify({
+            example: self._example,
+            collection: shard,
+            skip: 0,
+            limit: limit || undefined,
+            batchSize: 100000000,
+            index: rewriteIndex(self._index)
+          }),
+          { },
+          options);
       });
 
-      var _documents = [ ], total = 0;
+      var _documents = [], total = 0;
       var result = cluster.wait(coord, shards);
       var toSkip = this._skip, toLimit = this._limit;
 
@@ -549,7 +530,7 @@ SimpleQueryByExample.prototype.execute = function () {
         toLimit = null;
       }
 
-      result.forEach(function(part) {
+      result.forEach(function (part) {
         var body = JSON.parse(part.body);
         total += body.count;
 
@@ -567,8 +548,7 @@ SimpleQueryByExample.prototype.execute = function () {
           if (body.result.length >= toLimit) {
             body.result = body.result.slice(0, toLimit);
             toLimit = 0;
-          }
-          else {
+          } else {
             toLimit -= body.result.length;
           }
         }
@@ -587,8 +567,7 @@ SimpleQueryByExample.prototype.execute = function () {
         count: _documents.length,
         total: total
       };
-    }
-    else {
+    } else {
       documents = byExample(this);
     }
 
@@ -598,43 +577,42 @@ SimpleQueryByExample.prototype.execute = function () {
   }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief query by condition
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief query by condition
+// //////////////////////////////////////////////////////////////////////////////
 
 function byCondition (data) {
   var collection = data._collection;
-  var condition  = data._condition;
-  var skip       = data._skip;
-  var limit      = data._limit;
+  var condition = data._condition;
+  var skip = data._skip;
+  var limit = data._limit;
   var index;
 
   if (data._index !== undefined && data._index !== null) {
-    if (typeof data._index === 'object' && data._index.hasOwnProperty("id")) {
+    if (typeof data._index === 'object' && data._index.hasOwnProperty('id')) {
       index = data._index.id;
     }
     else if (typeof data._index === 'string') {
       index = data._index;
     }
-  }
-  else {
+  } else {
     var err1 = new ArangoError();
     err1.errorNum = internal.errors.ERROR_ARANGO_NO_INDEX.code;
     err1.errorMessage = internal.errors.ERROR_ARANGO_NO_INDEX.message;
     throw err1;
   }
 
-  if (typeof condition !== "object" || Array.isArray(condition)) {
+  if (typeof condition !== 'object' || Array.isArray(condition)) {
     // invalid datatype for condition
     var err2 = new ArangoError();
     err2.errorNum = internal.errors.ERROR_ARANGO_DOCUMENT_TYPE_INVALID.code;
-    err2.errorMessage = "invalid document type";
+    err2.errorMessage = 'invalid document type';
     throw err2;
   }
 
   // always se an index
   switch (data._type) {
-    case "skiplist":
+    case 'skiplist':
       return collection.BY_CONDITION_SKIPLIST(index, condition, skip, limit);
   }
 
@@ -645,9 +623,9 @@ function byCondition (data) {
   throw err3;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief executes a query-by-condition
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief executes a query-by-condition
+// //////////////////////////////////////////////////////////////////////////////
 
 SimpleQueryByCondition.prototype.execute = function () {
   var documents;
@@ -657,10 +635,10 @@ SimpleQueryByCondition.prototype.execute = function () {
       this._skip = 0;
     }
 
-    var cluster = require("@arangodb/cluster");
+    var cluster = require('@arangodb/cluster');
 
     if (cluster.isCoordinator()) {
-      var dbName = require("internal").db._name();
+      var dbName = require('internal').db._name();
       var shards = cluster.shardList(dbName, this._collection.name());
       var coord = { coordTransactionID: ArangoClusterInfo.uniqid() };
       var options = { coordTransactionID: coord.coordTransactionID, timeout: 360 };
@@ -674,31 +652,31 @@ SimpleQueryByCondition.prototype.execute = function () {
       var method;
       if (this._type !== undefined) {
         switch (this._type) {
-          case "skiplist":
-            method = "by-condition-skiplist";
+          case 'skiplist':
+            method = 'by-condition-skiplist';
             break;
         }
       }
 
       var self = this;
       shards.forEach(function (shard) {
-        ArangoClusterComm.asyncRequest("put",
-                                       "shard:" + shard,
-                                       dbName,
-                                       "/_api/simple/" + method,
-                                       JSON.stringify({
-                                         condition: self._condition,
-                                         collection: shard,
-                                         skip: 0,
-                                         limit: limit || undefined,
-                                         batchSize: 100000000,
-                                         index: rewriteIndex(self._index)
-                                       }),
-                                       { },
-                                       options);
+        ArangoClusterComm.asyncRequest('put',
+          'shard:' + shard,
+          dbName,
+          '/_api/simple/' + method,
+          JSON.stringify({
+            condition: self._condition,
+            collection: shard,
+            skip: 0,
+            limit: limit || undefined,
+            batchSize: 100000000,
+            index: rewriteIndex(self._index)
+          }),
+          { },
+          options);
       });
 
-      var _documents = [ ], total = 0;
+      var _documents = [], total = 0;
       var result = cluster.wait(coord, shards);
       var toSkip = this._skip, toLimit = this._limit;
 
@@ -707,7 +685,7 @@ SimpleQueryByCondition.prototype.execute = function () {
         toLimit = null;
       }
 
-      result.forEach(function(part) {
+      result.forEach(function (part) {
         var body = JSON.parse(part.body);
         total += body.count;
 
@@ -725,8 +703,7 @@ SimpleQueryByCondition.prototype.execute = function () {
           if (body.result.length >= toLimit) {
             body.result = body.result.slice(0, toLimit);
             toLimit = 0;
-          }
-          else {
+          } else {
             toLimit -= body.result.length;
           }
         }
@@ -745,8 +722,7 @@ SimpleQueryByCondition.prototype.execute = function () {
         count: _documents.length,
         total: total
       };
-    }
-    else {
+    } else {
       documents = byCondition(this);
     }
 
@@ -756,18 +732,16 @@ SimpleQueryByCondition.prototype.execute = function () {
   }
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief ranged query
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief ranged query
+// //////////////////////////////////////////////////////////////////////////////
 
 function rangedQuery (collection, attribute, left, right, type, skip, limit) {
   var documents;
-  var cluster = require("@arangodb/cluster");
+  var cluster = require('@arangodb/cluster');
 
   if (cluster.isCoordinator()) {
-    var dbName = require("internal").db._name();
+    var dbName = require('internal').db._name();
     var shards = cluster.shardList(dbName, collection.name());
     var coord = { coordTransactionID: ArangoClusterInfo.uniqid() };
     var options = { coordTransactionID: coord.coordTransactionID, timeout: 360 };
@@ -779,28 +753,28 @@ function rangedQuery (collection, attribute, left, right, type, skip, limit) {
     }
 
     shards.forEach(function (shard) {
-      ArangoClusterComm.asyncRequest("put",
-                                     "shard:" + shard,
-                                     dbName,
-                                     "/_api/simple/range",
-                                     JSON.stringify({
-                                       collection: shard,
-                                       attribute: attribute,
-                                       left: left,
-                                       right: right,
-                                       closed: type,
-                                       skip: 0,
-                                       limit: _limit || undefined,
-                                       batchSize: 100000000
-                                     }),
-                                     { },
-                                     options);
+      ArangoClusterComm.asyncRequest('put',
+        'shard:' + shard,
+        dbName,
+        '/_api/simple/range',
+        JSON.stringify({
+          collection: shard,
+          attribute: attribute,
+          left: left,
+          right: right,
+          closed: type,
+          skip: 0,
+          limit: _limit || undefined,
+          batchSize: 100000000
+        }),
+        { },
+        options);
     });
 
-    var _documents = [ ], total = 0;
+    var _documents = [], total = 0;
     var result = cluster.wait(coord, shards);
 
-    result.forEach(function(part) {
+    result.forEach(function (part) {
       var body = JSON.parse(part.body);
       total += body.count;
 
@@ -808,7 +782,7 @@ function rangedQuery (collection, attribute, left, right, type, skip, limit) {
     });
 
     if (shards.length > 1) {
-      var cmp = require("@arangodb/aql").RELATIONAL_CMP;
+      var cmp = require('@arangodb/aql').RELATIONAL_CMP;
       _documents.sort(function (l, r) {
         return cmp(l[attribute], r[attribute]);
       });
@@ -831,10 +805,9 @@ function rangedQuery (collection, attribute, left, right, type, skip, limit) {
       count: _documents.length,
       total: total
     };
-  }
-  else {
+  } else {
     var idx = null;
-    var attrs = { type: "skiplist", fields: [ attribute ], unique: true };
+    var attrs = { type: 'skiplist', fields: [ attribute ], unique: true };
     if (left === undefined || left === null) {
       attrs.sparse = false;
     }
@@ -844,23 +817,21 @@ function rangedQuery (collection, attribute, left, right, type, skip, limit) {
       attrs.unique = false;
       idx = collection.lookupIndex(attrs);
     }
-    
+
     if (idx !== null) {
       var cond = {};
 
       if (type === 0) {
-        cond[attribute] = [ [ ">=", left ], [ "<", right ] ];
+        cond[attribute] = [ [ '>=', left ], [ '<', right ] ];
       }
       else if (type === 1) {
-        cond[attribute] = [ [ ">=", left ], [ "<=", right ] ];
-      }
-      else {
-        throw "unknown type";
+        cond[attribute] = [ [ '>=', left ], [ '<=', right ] ];
+      } else {
+        throw 'unknown type';
       }
 
       documents = collection.BY_CONDITION_SKIPLIST(idx.id, cond, skip, limit);
-    }
-    else {
+    } else {
       var err = new ArangoError();
       err.errorNum = internal.errors.ERROR_ARANGO_NO_INDEX.code;
       err.errorMessage = internal.errors.ERROR_ARANGO_NO_INDEX.message;
@@ -871,9 +842,9 @@ function rangedQuery (collection, attribute, left, right, type, skip, limit) {
   return documents;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief executes a range query
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief executes a range query
+// //////////////////////////////////////////////////////////////////////////////
 
 SimpleQueryRange.prototype.execute = function () {
   var documents;
@@ -884,12 +855,12 @@ SimpleQueryRange.prototype.execute = function () {
     }
 
     documents = rangedQuery(this._collection,
-                            this._attribute,
-                            this._left,
-                            this._right,
-                            this._type,
-                            this._skip,
-                            this._limit);
+      this._attribute,
+      this._left,
+      this._right,
+      this._type,
+      this._skip,
+      this._limit);
 
     this._execution = new GeneralArrayCursor(documents.documents);
     this._countQuery = documents.count;
@@ -897,11 +868,9 @@ SimpleQueryRange.prototype.execute = function () {
   }
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief executes a near query
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief executes a near query
+// //////////////////////////////////////////////////////////////////////////////
 
 SimpleQueryNear.prototype.execute = function () {
   var documents;
@@ -920,21 +889,20 @@ SimpleQueryNear.prototype.execute = function () {
   if (this._skip < 0) {
     var err = new ArangoError();
     err.errorNum = internal.errors.ERROR_BAD_PARAMETER.code;
-    err.errorMessage = "skip must be non-negative";
+    err.errorMessage = 'skip must be non-negative';
     throw err;
   }
 
   if (this._limit === null) {
     limit = this._skip + 100;
-  }
-  else {
+  } else {
     limit = this._skip + this._limit;
   }
 
-  var cluster = require("@arangodb/cluster");
+  var cluster = require('@arangodb/cluster');
 
   if (cluster.isCoordinator()) {
-    var dbName = require("internal").db._name();
+    var dbName = require('internal').db._name();
     var shards = cluster.shardList(dbName, this._collection.name());
     var coord = { coordTransactionID: ArangoClusterInfo.uniqid() };
     var options = { coordTransactionID: coord.coordTransactionID, timeout: 360 };
@@ -948,36 +916,35 @@ SimpleQueryNear.prototype.execute = function () {
     var attribute;
     if (this._distance !== null) {
       attribute = this._distance;
-    }
-    else {
+    } else {
       // use a pseudo-attribute for distance (we need this for sorting)
-      attribute = "$distance";
+      attribute = '$distance';
     }
 
     var self = this;
     shards.forEach(function (shard) {
-      ArangoClusterComm.asyncRequest("put",
-                                     "shard:" + shard,
-                                     dbName,
-                                     "/_api/simple/near",
-                                     JSON.stringify({
-                                       collection: shard,
-                                       latitude: self._latitude,
-                                       longitude: self._longitude,
-                                       distance: attribute,
-                                       geo: rewriteIndex(self._index),
-                                       skip: 0,
-                                       limit: _limit || undefined,
-                                       batchSize: 100000000
-                                     }),
-                                     { },
-                                     options);
+      ArangoClusterComm.asyncRequest('put',
+        'shard:' + shard,
+        dbName,
+        '/_api/simple/near',
+        JSON.stringify({
+          collection: shard,
+          latitude: self._latitude,
+          longitude: self._longitude,
+          distance: attribute,
+          geo: rewriteIndex(self._index),
+          skip: 0,
+          limit: _limit || undefined,
+          batchSize: 100000000
+        }),
+        { },
+        options);
     });
 
-    var _documents = [ ], total = 0;
+    var _documents = [], total = 0;
     result = cluster.wait(coord, shards);
 
-    result.forEach(function(part) {
+    result.forEach(function (part) {
       var body = JSON.parse(part.body);
       total += body.total;
 
@@ -1009,8 +976,7 @@ SimpleQueryNear.prototype.execute = function () {
       count: _documents.length,
       total: total
     };
-  }
-  else {
+  } else {
     result = this._collection.NEAR(this._index, this._latitude, this._longitude, limit);
 
     documents = {
@@ -1033,11 +999,9 @@ SimpleQueryNear.prototype.execute = function () {
   this._countTotal = documents.total;
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief executes a within query
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief executes a within query
+// //////////////////////////////////////////////////////////////////////////////
 
 SimpleQueryWithin.prototype.execute = function () {
   var result;
@@ -1055,14 +1019,14 @@ SimpleQueryWithin.prototype.execute = function () {
   if (this._skip < 0) {
     var err = new ArangoError();
     err.errorNum = internal.errors.ERROR_BAD_PARAMETER.code;
-    err.errorMessage = "skip must be non-negative";
+    err.errorMessage = 'skip must be non-negative';
     throw err;
   }
 
-  var cluster = require("@arangodb/cluster");
+  var cluster = require('@arangodb/cluster');
 
   if (cluster.isCoordinator()) {
-    var dbName = require("internal").db._name();
+    var dbName = require('internal').db._name();
     var shards = cluster.shardList(dbName, this._collection.name());
     var coord = { coordTransactionID: ArangoClusterInfo.uniqid() };
     var options = { coordTransactionID: coord.coordTransactionID, timeout: 360 };
@@ -1076,37 +1040,36 @@ SimpleQueryWithin.prototype.execute = function () {
     var attribute;
     if (this._distance !== null) {
       attribute = this._distance;
-    }
-    else {
+    } else {
       // use a pseudo-attribute for distance (we need this for sorting)
-      attribute = "$distance";
+      attribute = '$distance';
     }
 
     var self = this;
     shards.forEach(function (shard) {
-      ArangoClusterComm.asyncRequest("put",
-                                     "shard:" + shard,
-                                     dbName,
-                                     "/_api/simple/within",
-                                     JSON.stringify({
-                                       collection: shard,
-                                       latitude: self._latitude,
-                                       longitude: self._longitude,
-                                       distance: attribute,
-                                       radius: self._radius,
-                                       geo: rewriteIndex(self._index),
-                                       skip: 0,
-                                       limit: _limit || undefined,
-                                       batchSize: 100000000
-                                     }),
-                                     { },
-                                     options);
+      ArangoClusterComm.asyncRequest('put',
+        'shard:' + shard,
+        dbName,
+        '/_api/simple/within',
+        JSON.stringify({
+          collection: shard,
+          latitude: self._latitude,
+          longitude: self._longitude,
+          distance: attribute,
+          radius: self._radius,
+          geo: rewriteIndex(self._index),
+          skip: 0,
+          limit: _limit || undefined,
+          batchSize: 100000000
+        }),
+        { },
+        options);
     });
 
-    var _documents = [ ], total = 0;
+    var _documents = [], total = 0;
     result = cluster.wait(coord, shards);
 
-    result.forEach(function(part) {
+    result.forEach(function (part) {
       var body = JSON.parse(part.body);
       total += body.total;
 
@@ -1138,8 +1101,7 @@ SimpleQueryWithin.prototype.execute = function () {
       count: _documents.length,
       total: total
     };
-  }
-  else {
+  } else {
     result = this._collection.WITHIN(this._index, this._latitude, this._longitude, this._radius);
 
     documents = {
@@ -1166,11 +1128,9 @@ SimpleQueryWithin.prototype.execute = function () {
   this._countTotal = documents.total;
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief executes a within-rectangle query
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief executes a within-rectangle query
+// //////////////////////////////////////////////////////////////////////////////
 
 SimpleQueryWithinRectangle.prototype.execute = function () {
   var result;
@@ -1187,14 +1147,14 @@ SimpleQueryWithinRectangle.prototype.execute = function () {
   if (this._skip < 0) {
     var err = new ArangoError();
     err.errorNum = internal.errors.ERROR_BAD_PARAMETER.code;
-    err.errorMessage = "skip must be non-negative";
+    err.errorMessage = 'skip must be non-negative';
     throw err;
   }
 
-  var cluster = require("@arangodb/cluster");
+  var cluster = require('@arangodb/cluster');
 
   if (cluster.isCoordinator()) {
-    var dbName = require("internal").db._name();
+    var dbName = require('internal').db._name();
     var shards = cluster.shardList(dbName, this._collection.name());
     var coord = { coordTransactionID: ArangoClusterInfo.uniqid() };
     var options = { coordTransactionID: coord.coordTransactionID, timeout: 360 };
@@ -1207,29 +1167,29 @@ SimpleQueryWithinRectangle.prototype.execute = function () {
 
     var self = this;
     shards.forEach(function (shard) {
-      ArangoClusterComm.asyncRequest("put",
-                                     "shard:" + shard,
-                                     dbName,
-                                     "/_api/simple/within-rectangle",
-                                     JSON.stringify({
-                                       collection: shard,
-                                       latitude1: self._latitude1,
-                                       longitude1: self._longitude1,
-                                       latitude2: self._latitude2,
-                                       longitude2: self._longitude2,
-                                       geo: rewriteIndex(self._index),
-                                       skip: 0,
-                                       limit: _limit || undefined,
-                                       batchSize: 100000000
-                                     }),
-                                     { },
-                                     options);
+      ArangoClusterComm.asyncRequest('put',
+        'shard:' + shard,
+        dbName,
+        '/_api/simple/within-rectangle',
+        JSON.stringify({
+          collection: shard,
+          latitude1: self._latitude1,
+          longitude1: self._longitude1,
+          latitude2: self._latitude2,
+          longitude2: self._longitude2,
+          geo: rewriteIndex(self._index),
+          skip: 0,
+          limit: _limit || undefined,
+          batchSize: 100000000
+        }),
+        { },
+        options);
     });
 
-    var _documents = [ ], total = 0;
+    var _documents = [], total = 0;
     result = cluster.wait(coord, shards);
 
-    result.forEach(function(part) {
+    result.forEach(function (part) {
       var body = JSON.parse(part.body);
       total += body.total;
 
@@ -1245,25 +1205,24 @@ SimpleQueryWithinRectangle.prototype.execute = function () {
       count: _documents.length,
       total: total
     };
-  }
-  else {
-    var distanceMeters = function (lat1, lon1, lat2, lon2) {  
+  } else {
+    var distanceMeters = function (lat1, lon1, lat2, lon2) {
       var deltaLat = (lat2 - lat1) * Math.PI / 180;
       var deltaLon = (lon2 - lon1) * Math.PI / 180;
       var a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
       var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-      return 6378.137 /* radius of earth in kilometers */  
-             * c 
-             * 1000; // kilometers to meters;
+      return 6378.137 /* radius of earth in kilometers */
+      * c
+      * 1000; // kilometers to meters;
     };
 
     var diameter = distanceMeters(this._latitude1, this._longitude1, this._latitude2, this._longitude2);
-    var midpoint = [ 
-      this._latitude1 + (this._latitude2 - this._latitude1) * 0.5, 
-      this._longitude1 + (this._longitude2 - this._longitude1) * 0.5 
+    var midpoint = [
+      this._latitude1 + (this._latitude2 - this._latitude1) * 0.5,
+      this._longitude1 + (this._longitude2 - this._longitude1) * 0.5
     ];
 
     result = this._collection.WITHIN(this._index, midpoint[0], midpoint[1], diameter);
@@ -1274,8 +1233,7 @@ SimpleQueryWithinRectangle.prototype.execute = function () {
     if (this._latitude1 < this._latitude2) {
       latLower = this._latitude1;
       latUpper = this._latitude2;
-    }
-    else {
+    } else {
       latLower = this._latitude2;
       latUpper = this._latitude1;
     }
@@ -1283,13 +1241,12 @@ SimpleQueryWithinRectangle.prototype.execute = function () {
     if (this._longitude1 < this._longitude2) {
       lonLower = this._longitude1;
       lonUpper = this._longitude2;
-    }
-    else {
+    } else {
       lonLower = this._longitude2;
       lonUpper = this._longitude1;
     }
-      
-    var deref = function(doc, parts) {
+
+    var deref = function (doc, parts) {
       if (parts.length === 1) {
         return doc[parts[0]];
       }
@@ -1301,20 +1258,19 @@ SimpleQueryWithinRectangle.prototype.execute = function () {
           ++i;
         }
         return doc;
-      }
-      catch (err) {
+      } catch (err) {
         return null;
       }
-    }; 
+    };
 
-    documents = [ ];
+    documents = [];
     if (idx.type === 'geo1') {
       // geo1, we have both coordinates in a list
       var attribute = idx.fields[0];
-      var parts = attribute.split(".");
-    
+      var parts = attribute.split('.');
+
       if (idx.geoJson) {
-        result.documents.forEach(function(document) {
+        result.documents.forEach(function (document) {
           var doc = deref(document, parts);
           if (! Array.isArray(doc)) {
             return;
@@ -1323,13 +1279,12 @@ SimpleQueryWithinRectangle.prototype.execute = function () {
           // check if within bounding rectangle
           // first list value is longitude, then latitude
           if (doc[1] >= latLower && doc[1] <= latUpper &&
-              doc[0] >= lonLower && doc[0] <= lonUpper) {
+            doc[0] >= lonLower && doc[0] <= lonUpper) {
             documents.push(document);
           }
         });
-      }
-      else {
-        result.documents.forEach(function(document) {
+      } else {
+        result.documents.forEach(function (document) {
           var doc = deref(document, parts);
           if (! Array.isArray(doc)) {
             return;
@@ -1338,19 +1293,18 @@ SimpleQueryWithinRectangle.prototype.execute = function () {
           // check if within bounding rectangle
           // first list value is latitude, then longitude
           if (doc[0] >= latLower && doc[0] <= latUpper &&
-              doc[1] >= lonLower && doc[1] <= lonUpper) {
+            doc[1] >= lonLower && doc[1] <= lonUpper) {
             documents.push(document);
           }
         });
       }
-    }
-    else {
+    } else {
       // geo2, we have dedicated latitude and longitude attributes
       var latAtt = idx.fields[0], lonAtt = idx.fields[1];
-      var latParts = latAtt.split(".");
-      var lonParts = lonAtt.split(".");
+      var latParts = latAtt.split('.');
+      var lonParts = lonAtt.split('.');
 
-      result.documents.forEach(function(document) {
+      result.documents.forEach(function (document) {
         var latDoc = deref(document, latParts);
         if (latDoc === null || latDoc === undefined) {
           return;
@@ -1362,18 +1316,18 @@ SimpleQueryWithinRectangle.prototype.execute = function () {
 
         // check if within bounding rectangle
         if (latDoc >= latLower && latDoc <= latUpper &&
-            lonDoc >= lonLower && lonDoc <= lonUpper) {
+          lonDoc >= lonLower && lonDoc <= lonUpper) {
           documents.push(document);
         }
       });
     }
-    
+
     documents = {
       documents: documents,
       count: result.documents.length,
       total: result.documents.length
     };
-    
+
     if (this._limit > 0) {
       documents.documents = documents.documents.slice(0, this._skip + this._limit);
       documents.count = documents.documents.length;
@@ -1386,11 +1340,9 @@ SimpleQueryWithinRectangle.prototype.execute = function () {
   this._countTotal = documents.total;
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief executes a fulltext query
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief executes a fulltext query
+// //////////////////////////////////////////////////////////////////////////////
 
 SimpleQueryFulltext.prototype.execute = function () {
   var result;
@@ -1400,10 +1352,10 @@ SimpleQueryFulltext.prototype.execute = function () {
     return;
   }
 
-  var cluster = require("@arangodb/cluster");
+  var cluster = require('@arangodb/cluster');
 
   if (cluster.isCoordinator()) {
-    var dbName = require("internal").db._name();
+    var dbName = require('internal').db._name();
     var shards = cluster.shardList(dbName, this._collection.name());
     var coord = { coordTransactionID: ArangoClusterInfo.uniqid() };
     var options = { coordTransactionID: coord.coordTransactionID, timeout: 360 };
@@ -1416,27 +1368,27 @@ SimpleQueryFulltext.prototype.execute = function () {
 
     var self = this;
     shards.forEach(function (shard) {
-      ArangoClusterComm.asyncRequest("put",
-                                     "shard:" + shard,
-                                     dbName,
-                                     "/_api/simple/fulltext",
-                                     JSON.stringify({
-                                       collection: shard,
-                                       attribute: self._attribute,
-                                       query: self._query,
-                                       index: rewriteIndex(self._index),
-                                       skip: 0,
-                                       limit: _limit || undefined,
-                                       batchSize: 100000000
-                                     }),
-                                     { },
-                                     options);
+      ArangoClusterComm.asyncRequest('put',
+        'shard:' + shard,
+        dbName,
+        '/_api/simple/fulltext',
+        JSON.stringify({
+          collection: shard,
+          attribute: self._attribute,
+          query: self._query,
+          index: rewriteIndex(self._index),
+          skip: 0,
+          limit: _limit || undefined,
+          batchSize: 100000000
+        }),
+        { },
+        options);
     });
 
-    var _documents = [ ], total = 0;
+    var _documents = [], total = 0;
     result = cluster.wait(coord, shards);
 
-    result.forEach(function(part) {
+    result.forEach(function (part) {
       var body = JSON.parse(part.body);
       total += body.total;
 
@@ -1452,8 +1404,7 @@ SimpleQueryFulltext.prototype.execute = function () {
       count: _documents.length,
       total: total
     };
-  }
-  else {
+  } else {
     result = this._collection.FULLTEXT(this._index, this._query);
 
     documents = {
@@ -1472,7 +1423,6 @@ SimpleQueryFulltext.prototype.execute = function () {
   this._countTotal = documents.total;
 };
 
-
 exports.GeneralArrayCursor = GeneralArrayCursor;
 exports.SimpleQueryAll = SimpleQueryAll;
 exports.SimpleQueryArray = SimpleQueryArray;
@@ -1485,5 +1435,3 @@ exports.SimpleQueryRange = SimpleQueryRange;
 exports.SimpleQueryWithin = SimpleQueryWithin;
 exports.SimpleQueryWithinRectangle = SimpleQueryWithinRectangle;
 exports.byExample = byExample;
-
-

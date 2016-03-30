@@ -1,44 +1,43 @@
 /*jshint strict: false */
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Graph functionality
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2010-2012 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Dr. Frank Celler, Lucas Dohmen
-/// @author Copyright 2011-2012, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Graph functionality
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2010-2012 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Dr. Frank Celler, Lucas Dohmen
+// / @author Copyright 2011-2012, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
-var graph = require("@arangodb/graph-blueprint");
+var graph = require('@arangodb/graph-blueprint');
 
 var Graph = graph.Graph;
 var Vertex = graph.Vertex;
-
 
 function unite (l, r) {
   return r.concat(l.filter(function (element) {
     return (r.indexOf(element) === -1);
   }));
 }
-  
+
 function intersect (l, r) {
   return l.filter(function (element) {
     return (r.indexOf(element) > -1);
@@ -49,14 +48,12 @@ function removeLastOccurrenceOf (l, element) {
   return l.splice(l.lastIndexOf(element), 1);
 }
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief return the number of common neighbors
-///
-/// @FUN{@FA{vertex}.commonNeighborsWith(@FA{target_vertex}, @FA{options})}
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief return the number of common neighbors
+// /
+// / @FUN{@FA{vertex}.commonNeighborsWith(@FA{target_vertex}, @FA{options})}
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.commonNeighborsWith = function (target_vertex, options) {
   var neighbor_set_one,
@@ -72,8 +69,8 @@ Vertex.prototype.commonNeighborsWith = function (target_vertex, options) {
     return neighbor.id;
   };
 
-  if (typeof(target_vertex) !== 'object') {
-    throw "<target_vertex> must be a vertex object";
+  if (typeof (target_vertex) !== 'object') {
+    throw '<target_vertex> must be a vertex object';
   }
 
   neighbor_set_one = this.getNeighbors(options).map(id_only);
@@ -87,20 +84,19 @@ Vertex.prototype.commonNeighborsWith = function (target_vertex, options) {
   else if ((options.normalized !== undefined) && (options.normalized === true)) {
     all_neighbors = unite(neighbor_set_one, neighbor_set_two);
     return_value = (common_neighbors.length / all_neighbors.length);
-  }
-  else {
+  } else {
     return_value = common_neighbors.length;
   }
 
   return return_value;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief return the number of common properties
-///
-/// @FUN{@FA{vertex}.commonPropertiesWith(@FA{target_vertex}, @FA{options})}
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief return the number of common properties
+// /
+// / @FUN{@FA{vertex}.commonPropertiesWith(@FA{target_vertex}, @FA{options})}
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.commonPropertiesWith = function (other_vertex, options) {
   var property_names,
@@ -129,27 +125,27 @@ Vertex.prototype.commonPropertiesWith = function (other_vertex, options) {
   return return_value;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief find the shortest path to a certain vertex, return the ID
-///
-/// @FUN{@FA{vertex}.pathTo(@FA{target_vertex}, @FA{options})}
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief find the shortest path to a certain vertex, return the ID
+// /
+// / @FUN{@FA{vertex}.pathTo(@FA{target_vertex}, @FA{options})}
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.pathTo = function (target_vertex, options) {
-  if (typeof(target_vertex) !== 'object') {
-    throw "<target_vertex> must be an object";
+  if (typeof (target_vertex) !== 'object') {
+    throw '<target_vertex> must be an object';
   }
   var predecessors = target_vertex.determinePredecessors(this, options || {});
   return (predecessors ? target_vertex.pathesForTree(predecessors) : []);
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief find the shortest path and return the number of edges to the target vertex
-///
-/// @FUN{@FA{vertex}.distanceTo(@FA{target_vertex}, @FA{options})}
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief find the shortest path and return the number of edges to the target vertex
+// /
+// / @FUN{@FA{vertex}.distanceTo(@FA{target_vertex}, @FA{options})}
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.distanceTo = function (target_vertex, options) {
   var predecessors = target_vertex.determinePredecessors(this, options || {}),
@@ -168,23 +164,23 @@ Vertex.prototype.distanceTo = function (target_vertex, options) {
   return count;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief determine all the pathes to this node from source
-///
-/// @FUN{@FA{vertex}.determinePredecessors(@FA{source}, @FA{options})}
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief determine all the pathes to this node from source
+// /
+// / @FUN{@FA{vertex}.determinePredecessors(@FA{source}, @FA{options})}
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.determinePredecessors = function (source, options) {
-  var graph = this._graph,      // Graph
-    determined_list = [],       // [ID]
-    predecessors,               // { ID => [ID] }
+  var graph = this._graph, // Graph
+    determined_list = [], // [ID]
+    predecessors, // { ID => [ID] }
     source_id = source.getId(), // ID
-    todo_list = [source_id],    // [ID]
-    distances = {},             // { ID => Number }
-    current_vertex,             // Vertex
-    current_vertex_id,          // ID
-    return_value = false;       // { ID => [ID]}
+    todo_list = [source_id], // [ID]
+    distances = {}, // { ID => Number }
+    current_vertex, // Vertex
+    current_vertex_id, // ID
+    return_value = false; // { ID => [ID]}
   distances[source_id] = 0;
 
   if (options.cached) {
@@ -218,12 +214,12 @@ Vertex.prototype.determinePredecessors = function (source, options) {
   return return_value;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Helper function for determinePredecessors (changes distance and predecessors
-///
-/// @FUN{@FA{vertex}._processNeighbors(@FA{determined}, @FA{distances}, @FA{predecessors})}
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Helper function for determinePredecessors (changes distance and predecessors
+// /
+// / @FUN{@FA{vertex}._processNeighbors(@FA{determined}, @FA{distances}, @FA{predecessors})}
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype._processNeighbors = function (determined_list, distances, predecessors, options) {
   var i,
@@ -258,12 +254,12 @@ Vertex.prototype._processNeighbors = function (determined_list, distances, prede
   return not_determined_neighbors;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Get all paths from root to leave vertices for a given tree
-///
-/// @FUN{@FA{vertex}.pathesForTree(@FA{tree}, @FA{path_to_here})}
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Get all paths from root to leave vertices for a given tree
+// /
+// / @FUN{@FA{vertex}.pathesForTree(@FA{tree}, @FA{path_to_here})}
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.pathesForTree = function (tree, path_to_here) {
   var my_children = tree[this.getId()],
@@ -286,12 +282,12 @@ Vertex.prototype.pathesForTree = function (tree, path_to_here) {
   return pathes;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Get all neighbours for this vertex
-///
-/// @FUN{@FA{vertex}.getNeighbors(@FA{options})}
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Get all neighbours for this vertex
+// /
+// / @FUN{@FA{vertex}.getNeighbors(@FA{options})}
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.getNeighbors = function (options) {
   var current_vertex,
@@ -349,13 +345,13 @@ Vertex.prototype.getNeighbors = function (options) {
   return target_array;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Get the shortest distance for a given list of vertices and
-/// their distances
-///
-/// @FUN{@FA{vertex}._getShortestDistance(@FA{todo_list}, @FA{distances})}
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Get the shortest distance for a given list of vertices and
+// / their distances
+// /
+// / @FUN{@FA{vertex}._getShortestDistance(@FA{todo_list}, @FA{distances})}
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype._getShortestDistance = function (todo_list, distances) {
   var shortest_distance = Infinity,
@@ -374,21 +370,21 @@ Vertex.prototype._getShortestDistance = function (todo_list, distances) {
   return vertex;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief calculate a measurement
-///
-/// @FUN{@FA{vertex}.measurement(@FA{measurement})}
-///
-/// Calculates the eccentricity, betweenness or closeness of the vertex
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief calculate a measurement
+// /
+// / @FUN{@FA{vertex}.measurement(@FA{measurement})}
+// /
+// / Calculates the eccentricity, betweenness or closeness of the vertex
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Vertex.prototype.measurement = function (measurement) {
   var graph = this._graph,
     source = this,
     value;
 
-  if (measurement === "betweenness") {
+  if (measurement === 'betweenness') {
     value = graph.geodesics({
       grouped: true,
       threshold: true
@@ -399,12 +395,12 @@ Vertex.prototype.measurement = function (measurement) {
 
       return (included ? count + (included.length / geodesic_group.length) : count);
     }, 0);
-  } else if (measurement === "eccentricity") {
+  } else if (measurement === 'eccentricity') {
     value = graph._vertices.toArray().reduce(function (calculated, target) {
       var distance = source.distanceTo(graph.getVertex(target._id));
       return Math.max(calculated, distance);
     }, 0);
-  } else if (measurement === "closeness") {
+  } else if (measurement === 'closeness') {
     value = graph._vertices.toArray().reduce(function (calculated, target) {
       var distance = source.distanceTo(graph.getVertex(target._id));
       return calculated + distance;
@@ -416,22 +412,20 @@ Vertex.prototype.measurement = function (measurement) {
   return value;
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief return all shortest paths
-///
-/// @FUN{@FA{graph}.geodesics(@FA{options})}
-///
-/// Return all shortest paths
-/// An optional `options` JSON object can be specified to control the result.
-/// `options` can have the following sub-attributes:
-/// - `grouped`: if not specified or set to `false`, the result will be a flat
-///   list. If set to `true`, the result will be a list containing list of
-///   paths, grouped for each combination of source and target.
-/// - `threshold`: if not specified, all paths will be returned. If `threshold`
-///   is `true`, only paths with a minimum length of 3 will be returned
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief return all shortest paths
+// /
+// / @FUN{@FA{graph}.geodesics(@FA{options})}
+// /
+// / Return all shortest paths
+// / An optional `options` JSON object can be specified to control the result.
+// / `options` can have the following sub-attributes:
+// / - `grouped`: if not specified or set to `false`, the result will be a flat
+// /   list. If set to `true`, the result will be a list containing list of
+// /   paths, grouped for each combination of source and target.
+// / - `threshold`: if not specified, all paths will be returned. If `threshold`
+// /   is `true`, only paths with a minimum length of 3 will be returned
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.geodesics = function (options) {
   var sources = this._vertices.toArray(),
@@ -468,17 +462,17 @@ Graph.prototype.geodesics = function (options) {
   return geodesics;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief calculate a measurement
-///
-/// @FUN{@FA{graph}.measurement(@FA{measurement})}
-///
-/// Calculates the diameter or radius of a graph.
-/// `measurement` can either be:
-/// - `diameter`: to calculate the diameter
-/// - `radius`: to calculate the radius
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief calculate a measurement
+// /
+// / @FUN{@FA{graph}.measurement(@FA{measurement})}
+// /
+// / Calculates the diameter or radius of a graph.
+// / `measurement` can either be:
+// / - `diameter`: to calculate the diameter
+// / - `radius`: to calculate the radius
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.measurement = function (measurement) {
   var graph = this,
@@ -486,45 +480,45 @@ Graph.prototype.measurement = function (measurement) {
     start_value;
 
   switch (measurement) {
-  case "diameter":
-    start_value = 0;
-    break;
-  case "radius":
-    start_value = Infinity;
-    break;
-  default:
-    throw "Unknown Measurement '" + measurement + "'";
+    case 'diameter':
+      start_value = 0;
+      break;
+    case 'radius':
+      start_value = Infinity;
+      break;
+    default:
+      throw "Unknown Measurement '" + measurement + "'";
   }
 
   return vertices.reduce(function (calculated, vertex) {
     vertex = graph.getVertex(vertex._id);
 
     switch (measurement) {
-    case "diameter":
-      calculated = Math.max(calculated, vertex.measurement("eccentricity"));
-      break;
-    case "radius":
-      calculated = Math.min(calculated, vertex.measurement("eccentricity"));
-      break;
+      case 'diameter':
+        calculated = Math.max(calculated, vertex.measurement('eccentricity'));
+        break;
+      case 'radius':
+        calculated = Math.min(calculated, vertex.measurement('eccentricity'));
+        break;
     }
 
     return calculated;
   }, start_value);
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief calculate a normalized measurement
-///
-/// @FUN{@FA{graph}.normalizedMeasurement(@FA{measurement})}
-///
-/// Calculates the normalized degree, closeness, betweenness or eccentricity
-/// of all vertices in a graph
-/// `measurement` can either be:
-/// - `closeness`: to calculate the closeness
-/// - `betweenness`: to calculate the betweenness
-/// - `eccentricity`: to calculate the eccentricity
-///
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief calculate a normalized measurement
+// /
+// / @FUN{@FA{graph}.normalizedMeasurement(@FA{measurement})}
+// /
+// / Calculates the normalized degree, closeness, betweenness or eccentricity
+// / of all vertices in a graph
+// / `measurement` can either be:
+// / - `closeness`: to calculate the closeness
+// / - `betweenness`: to calculate the betweenness
+// / - `eccentricity`: to calculate the eccentricity
+// /
+// //////////////////////////////////////////////////////////////////////////////
 
 Graph.prototype.normalizedMeasurement = function (measurement) {
   var graph = this,
@@ -536,18 +530,18 @@ Graph.prototype.normalizedMeasurement = function (measurement) {
     var vertex = graph.constructVertex(raw_vertex._id),
       measured;
 
-    switch(measurement) {
-      case "closeness":
-        measured = 1 / vertex.measurement("closeness");
+    switch (measurement) {
+      case 'closeness':
+        measured = 1 / vertex.measurement('closeness');
         break;
-      case "betweenness":
-        measured = vertex.measurement("betweenness");
+      case 'betweenness':
+        measured = vertex.measurement('betweenness');
         break;
-      case "eccentricity":
-        measured = 1 / vertex.measurement("eccentricity");
+      case 'eccentricity':
+        measured = 1 / vertex.measurement('eccentricity');
         break;
       default:
-        throw "Unknown measurement";
+        throw 'Unknown measurement';
     }
 
     if (measured > max) {
@@ -559,11 +553,9 @@ Graph.prototype.normalizedMeasurement = function (measurement) {
     return map;
   }, {});
 
-  Object.keys(vertex_map).forEach(function(key) {
+  Object.keys(vertex_map).forEach(function (key) {
     vertex_map[key] = vertex_map[key] / max;
   });
 
   return vertex_map;
 };
-
-

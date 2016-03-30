@@ -1,35 +1,34 @@
 /*jshint unused: false */
 /*global ArangoAgency */
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Agency Communication
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2013 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Michael Hackstein
-/// @author Copyright 2013, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Agency Communication
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2013 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Michael Hackstein
+// / @author Copyright 2013, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
-
-exports.Communication = function() {
+exports.Communication = function () {
   'use strict';
   var agency,
     AgencyWrapper,
@@ -40,19 +39,18 @@ exports.Communication = function() {
     updateCollectionRouteForName,
     updateDatabaseRoutes,
     self = this,
-    _ = require("lodash");
+    _ = require('lodash');
 
-  splitServerName = function(route) {
-    var splits = route.split("/");
+  splitServerName = function (route) {
+    var splits = route.split('/');
     return splits[splits.length - 1];
   };
 
-
-  mapCollectionIDsToNames = function(list) {
+  mapCollectionIDsToNames = function (list) {
     var res = {};
-    _.each(list, function(v, k) {
+    _.each(list, function (v, k) {
       var n = splitServerName(k);
-      if (n === "Lock" || n === "Version") {
+      if (n === 'Lock' || n === 'Version') {
         return;
       }
       res[v.name] = n;
@@ -60,128 +58,125 @@ exports.Communication = function() {
     return res;
   };
 
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Wrapper for Agency
+  // /
+  // / Creates access to routes via objects instead of route strings.
+  // / And defines specific operations allowed on these routes.
+  // //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Wrapper for Agency
-///
-/// Creates access to routes via objects instead of route strings.
-/// And defines specific operations allowed on these routes.
-////////////////////////////////////////////////////////////////////////////////
-
-  AgencyWrapper = function() {
+  AgencyWrapper = function () {
     var _agency = exports._createAgency();
     var stubs = {
-      get: function(route, recursive) {
+      get: function (route, recursive) {
         return _agency.get(route, recursive);
       },
-      getValue: function(route, name) {
-        var res  = _agency.get(route + "/" + name);
+      getValue: function (route, name) {
+        var res = _agency.get(route + '/' + name);
         return _.values(res)[0];
       },
-      set: function(route, name, value) {
+      set: function (route, name, value) {
         if (value !== undefined) {
-          return _agency.set(route + "/" + name, value);
+          return _agency.set(route + '/' + name, value);
         }
         return _agency.set(route, name);
       },
-      remove: function(route, name) {
-        return _agency.remove(route + "/" + name);
+      remove: function (route, name) {
+        return _agency.remove(route + '/' + name);
       },
-      checkVersion: function(route) {
+      checkVersion: function (route) {
         return false;
       },
-      list: function(route) {
+      list: function (route) {
         return _.map(_agency.list(route, false, true), splitServerName).sort();
       }
     };
-    var addLevel = function(base, name, route, functions) {
+    var addLevel = function (base, name, route, functions) {
       var newRoute = base.route;
       if (newRoute) {
-        newRoute += "/";
+        newRoute += '/';
       } else {
-        newRoute = "";
+        newRoute = '';
       }
       newRoute += route;
       var newLevel = {
         route: newRoute
       };
-      _.each(functions, function(f) {
+      _.each(functions, function (f) {
         newLevel[f] = stubs[f].bind(null, newLevel.route);
       });
       base[name] = newLevel;
       return newLevel;
     };
-    var target = addLevel(this, "target", "Target");
-    addLevel(target, "dbServers", "DBServers", ["get", "set", "remove", "checkVersion"]);
-    addLevel(target, "db", "Databases", ["list"]);
-    addLevel(target, "coordinators", "Coordinators", ["list", "get", "set", "remove", "checkVersion"]);
-    addLevel(target, "endpoints", "MapIDToEndpoint", ["getValue"]);
-    var plan = addLevel(this, "plan", "Plan");
-    addLevel(plan, "dbServers", "DBServers", ["get", "checkVersion"]);
-    addLevel(plan, "db", "Databases", ["list"]);
-    addLevel(plan, "coordinators", "Coordinators", ["list", "get", "checkVersion"]);
-    var current = addLevel(this, "current", "Current");
-    addLevel(current, "dbServers", "DBServers", ["get", "checkVersion"]);
-    addLevel(current, "db", "Databases", ["list"]);
-    addLevel(current, "coordinators", "Coordinators", ["list", "get", "checkVersion"]);
-    addLevel(current, "registered", "ServersRegistered", ["get", "checkVersion"]);
+    var target = addLevel(this, 'target', 'Target');
+    addLevel(target, 'dbServers', 'DBServers', ['get', 'set', 'remove', 'checkVersion']);
+    addLevel(target, 'db', 'Databases', ['list']);
+    addLevel(target, 'coordinators', 'Coordinators', ['list', 'get', 'set', 'remove', 'checkVersion']);
+    addLevel(target, 'endpoints', 'MapIDToEndpoint', ['getValue']);
+    var plan = addLevel(this, 'plan', 'Plan');
+    addLevel(plan, 'dbServers', 'DBServers', ['get', 'checkVersion']);
+    addLevel(plan, 'db', 'Databases', ['list']);
+    addLevel(plan, 'coordinators', 'Coordinators', ['list', 'get', 'checkVersion']);
+    var current = addLevel(this, 'current', 'Current');
+    addLevel(current, 'dbServers', 'DBServers', ['get', 'checkVersion']);
+    addLevel(current, 'db', 'Databases', ['list']);
+    addLevel(current, 'coordinators', 'Coordinators', ['list', 'get', 'checkVersion']);
+    addLevel(current, 'registered', 'ServersRegistered', ['get', 'checkVersion']);
 
-    var sync = addLevel(this, "sync", "Sync");
-    addLevel(sync, "beat", "ServerStates", ["get"]);
-    addLevel(sync, "interval", "HeartbeatIntervalMs", ["get"]);
+    var sync = addLevel(this, 'sync', 'Sync');
+    addLevel(sync, 'beat', 'ServerStates', ['get']);
+    addLevel(sync, 'interval', 'HeartbeatIntervalMs', ['get']);
 
     this.addLevel = addLevel;
   };
 
   agency = new AgencyWrapper();
 
-
-
-  updateDatabaseRoutes = function(base, writeAccess) {
+  updateDatabaseRoutes = function (base, writeAccess) {
     var list = self.plan.Databases().getList();
-    _.each(_.keys(base), function(k) {
-      if (k !== "route" && k !== "list") {
+    _.each(_.keys(base), function (k) {
+      if (k !== 'route' && k !== 'list') {
         delete base[k];
       }
     });
     var oldRoute = base.route;
-    base.route = base.route.replace("Databases", "Collections");
-    _.each(list, function(d) {
-      agency.addLevel(base, d, d, ["get", "checkVersion"]);
+    base.route = base.route.replace('Databases', 'Collections');
+    _.each(list, function (d) {
+      agency.addLevel(base, d, d, ['get', 'checkVersion']);
     });
     base.route = oldRoute;
   };
 
-  updateCollectionRouteForName = function(route, db, name, writeAccess) {
+  updateCollectionRouteForName = function (route, db, name, writeAccess) {
     var list = self.plan.Databases().select(db).getCollectionObjects();
     var cId = null;
-    _.each(list, function(v, k) {
+    _.each(list, function (v, k) {
       if (v.name === name) {
         cId = splitServerName(k);
       }
     });
-    var acts = ["get"];
+    var acts = ['get'];
     if (writeAccess) {
-      acts.push("set");
+      acts.push('set');
     }
     agency.addLevel(route, name, cId, acts);
   };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Stores database servers in cache
-///
-/// Stores a list of database servers into a cache object.
-/// It will convert their roles accordingly.
-////////////////////////////////////////////////////////////////////////////////
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Stores database servers in cache
+  // /
+  // / Stores a list of database servers into a cache object.
+  // / It will convert their roles accordingly.
+  // //////////////////////////////////////////////////////////////////////////////
 
-  storeServersInCache = function(place, servers) {
-    _.each(servers, function(v, k) {
+  storeServersInCache = function (place, servers) {
+    _.each(servers, function (v, k) {
       var pName = splitServerName(k);
       place[pName] = place[pName] || {};
-      place[pName].role = "primary";
-      if (v !== "none") {
+      place[pName].role = 'primary';
+      if (v !== 'none') {
         place[v] = {
-          role: "secondary"
+          role: 'secondary'
         };
         place[pName] = place[pName] || {};
         place[pName].secondary = v;
@@ -189,20 +184,18 @@ exports.Communication = function() {
     });
   };
 
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Object for DBServer configuration
+  // /
+  // / Allows to list all database servers for the given hierarchy level.
+  // / If write access is granted also options to add
+  // / and remove servers are allowed.
+  // //////////////////////////////////////////////////////////////////////////////
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Object for DBServer configuration
-///
-/// Allows to list all database servers for the given hierarchy level.
-/// If write access is granted also options to add
-/// and remove servers are allowed.
-////////////////////////////////////////////////////////////////////////////////
-
-  var DBServersObject = function(route, endpoints, writeAccess) {
+  var DBServersObject = function (route, endpoints, writeAccess) {
     var cache = {};
     var servers;
-    var getList = function() {
+    var getList = function () {
       if (!route.checkVersion()) {
         cache = {};
         servers = route.get(true);
@@ -210,45 +203,45 @@ exports.Communication = function() {
       }
       return cache;
     };
-    this.getList = function() {
+    this.getList = function () {
       return getList();
     };
-    this.getEndpoint = function(name) {
-      return endpoints.getValue(name).split("://")[1];
+    this.getEndpoint = function (name) {
+      return endpoints.getValue(name).split('://')[1];
     };
-    this.getProtocol = function(name) {
-      return endpoints.getValue(name).split("://")[0]
-        .replace("tcp", "http").replace("ssl","https");
+    this.getProtocol = function (name) {
+      return endpoints.getValue(name).split('://')[0]
+        .replace('tcp', 'http').replace('ssl', 'https');
     };
     if (writeAccess) {
-      this.addPrimary = function(name) {
-        return route.set(name, "none");
+      this.addPrimary = function (name) {
+        return route.set(name, 'none');
       };
-      this.addSecondary = function(name, primaryName) {
+      this.addSecondary = function (name, primaryName) {
         return route.set(primaryName, name);
       };
-      this.addPair = function(primaryName, secondaryName) {
+      this.addPair = function (primaryName, secondaryName) {
         return route.set(primaryName, secondaryName);
       };
-      this.removeServer = function(name) {
+      this.removeServer = function (name) {
         var res = -1;
-        _.each(getList(), function(opts, n) {
+        _.each(getList(), function (opts, n) {
           if (n === name) {
             // The removed server is a primary
-            if (opts.role === "primary") {
+            if (opts.role === 'primary') {
               res = route.remove(name);
               if (!res) {
                 res = -1;
                 return;
               }
-              if (opts.secondary !== "none") {
-                res = route.set(opts.secondary, "none");
+              if (opts.secondary !== 'none') {
+                res = route.set(opts.secondary, 'none');
               }
               return;
             }
           }
-          if (opts.role === "primary" && opts.secondary === name) {
-            res = route.set(n, "none");
+          if (opts.role === 'primary' && opts.secondary === name) {
+            res = route.set(n, 'none');
             return;
           }
         });
@@ -257,17 +250,17 @@ exports.Communication = function() {
     }
   };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Object for Coordinator configuration
-///
-/// Allows to list all coordinators for the given hierarchy level.
-/// If write access is granted also options to add
-/// and remove servers are allowed.
-////////////////////////////////////////////////////////////////////////////////
-  var CoordinatorsObject = function(route, endpoints, writeAccess) {
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Object for Coordinator configuration
+  // /
+  // / Allows to list all coordinators for the given hierarchy level.
+  // / If write access is granted also options to add
+  // / and remove servers are allowed.
+  // //////////////////////////////////////////////////////////////////////////////
+  var CoordinatorsObject = function (route, endpoints, writeAccess) {
     var cache = {};
     var servers;
-    var getList = function() {
+    var getList = function () {
       if (!route.checkVersion()) {
         cache = {};
         servers = route.get(true);
@@ -275,53 +268,53 @@ exports.Communication = function() {
       }
       return cache;
     };
-    this.getList = function() {
+    this.getList = function () {
       return getList();
-      //return route.list();
+    // return route.list();
     };
-    this.getEndpoint = function(name) {
-      return endpoints.getValue(name).split("://")[1];
+    this.getEndpoint = function (name) {
+      return endpoints.getValue(name).split('://')[1];
     };
-    this.getProtocol = function(name) {
-      return endpoints.getValue(name).split("://")[0]
-        .replace("tcp", "http").replace("ssl","https");
+    this.getProtocol = function (name) {
+      return endpoints.getValue(name).split('://')[0]
+        .replace('tcp', 'http').replace('ssl', 'https');
     };
     if (writeAccess) {
-      this.add = function(name) {
-        return route.set(name, "none");
+      this.add = function (name) {
+        return route.set(name, 'none');
       };
-      this.remove = function(name) {
+      this.remove = function (name) {
         return route.remove(name);
       };
     }
   };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Object for Collection configuration
-///
-/// Allows to collect the information stored about a collection.
-/// This includes indices, journalSize etc. and also shards.
-/// Also convenience functions for shards are added,
-/// allowing to get a mapping server -> shards
-/// and a mapping shard -> server.
-/// If write access is granted also an option to move a shard is added.
-////////////////////////////////////////////////////////////////////////////////
-  var ColObject = function(route, writeAccess) {
-    this.info = function() {
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Object for Collection configuration
+  // /
+  // / Allows to collect the information stored about a collection.
+  // / This includes indices, journalSize etc. and also shards.
+  // / Also convenience functions for shards are added,
+  // / allowing to get a mapping server -> shards
+  // / and a mapping shard -> server.
+  // / If write access is granted also an option to move a shard is added.
+  // //////////////////////////////////////////////////////////////////////////////
+  var ColObject = function (route, writeAccess) {
+    this.info = function () {
       var res = route.get();
       return _.values(res)[0];
     };
-    this.getShards = function() {
+    this.getShards = function () {
       var info = this.info();
       if (!info) {
         return;
       }
       return info.shards;
     };
-    this.getShardsByServers = function() {
+    this.getShardsByServers = function () {
       var list = this.getShards();
       var res = {};
-      _.each(list, function(v, k) {
+      _.each(list, function (v, k) {
         res[v] = res[v] || {
           shards: [],
           name: v
@@ -329,25 +322,25 @@ exports.Communication = function() {
         res[v].shards.push(k);
       });
       var resList = [];
-      _.each(res, function(v) { resList.push(v);});
+      _.each(res, function (v) { resList.push(v);});
       return resList;
     };
-    this.getShardsForServer = function(name) {
+    this.getShardsForServer = function (name) {
       var list = this.getShards();
       var res = [];
-      _.each(list, function(v, k) {
+      _.each(list, function (v, k) {
         if (v === name) {
           res.push(k);
         }
       });
       return res;
     };
-    this.getServerForShard = function(name) {
+    this.getServerForShard = function (name) {
       var list = this.getShards();
       return list[name];
     };
     if (writeAccess) {
-      this.moveShard = function(shard, target) {
+      this.moveShard = function (shard, target) {
         var toUpdate = this.info();
         toUpdate.shards[shard] = target;
         return route.set(toUpdate);
@@ -355,33 +348,33 @@ exports.Communication = function() {
     }
   };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Object for content of a Database
-///
-/// Allows to collect the information stored about a database.
-/// It allos to get a list of collections and to select one of them for
-/// further information.
-////////////////////////////////////////////////////////////////////////////////
-  var DBObject = function(route, db, writeAccess) {
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Object for content of a Database
+  // /
+  // / Allows to collect the information stored about a database.
+  // / It allos to get a list of collections and to select one of them for
+  // / further information.
+  // //////////////////////////////////////////////////////////////////////////////
+  var DBObject = function (route, db, writeAccess) {
     var cache;
-    var getRaw = function() {
+    var getRaw = function () {
       if (!cache || !route.checkVersion()) {
         cache = route.get(true);
       }
       return cache;
     };
-    var getList = function() {
+    var getList = function () {
       return _.keys(mapCollectionIDsToNames(
         self.plan.Databases().select(db).getCollectionObjects()
       )).sort();
     };
-    this.getCollectionObjects = function() {
+    this.getCollectionObjects = function () {
       return getRaw();
     };
-    this.getCollections = function() {
+    this.getCollections = function () {
       return getList();
     };
-    this.collection = function(name) {
+    this.collection = function (name) {
       updateCollectionRouteForName(route, db, name, writeAccess);
       var colroute = route[name];
       if (!colroute) {
@@ -391,18 +384,18 @@ exports.Communication = function() {
     };
   };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Object for Database configuration
-///
-/// Allows to list all added databases.
-/// Also allows to select one database for further information.
-////////////////////////////////////////////////////////////////////////////////
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Object for Database configuration
+  // /
+  // / Allows to list all added databases.
+  // / Also allows to select one database for further information.
+  // //////////////////////////////////////////////////////////////////////////////
 
-  var DatabasesObject = function(route, writeAccess) {
-    this.getList = function() {
+  var DatabasesObject = function (route, writeAccess) {
+    this.getList = function () {
       return route.list();
     };
-    this.select = function(name) {
+    this.select = function (name) {
       updateDatabaseRoutes(route, writeAccess);
       var subroute = route[name];
       if (!subroute) {
@@ -412,38 +405,36 @@ exports.Communication = function() {
     };
   };
 
-
   // Not yet defined
 
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Access point for "Target" level.
+  // /
+  // / Gives access to all information stored in the target level.
+  // / This includes DBServers, Databases and Coordinators.
+  // / Also grants write access.
+  // //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Access point for "Target" level.
-///
-/// Gives access to all information stored in the target level.
-/// This includes DBServers, Databases and Coordinators.
-/// Also grants write access.
-////////////////////////////////////////////////////////////////////////////////
-
-  Target = function() {
+  Target = function () {
     var DBServers;
     var Databases;
     var Coordinators;
 
-    this.DBServers = function() {
+    this.DBServers = function () {
       if (!DBServers) {
         DBServers = new DBServersObject(agency.target.dbServers, agency.target.endpoints, true);
       }
       return DBServers;
     };
 
-    this.Databases = function() {
+    this.Databases = function () {
       if (!Databases) {
         Databases = new DatabasesObject(agency.target.db, true);
       }
       return Databases;
     };
 
-    this.Coordinators = function() {
+    this.Coordinators = function () {
       if (!Coordinators) {
         Coordinators = new CoordinatorsObject(agency.target.coordinators, agency.target.endpoints, true);
       }
@@ -451,35 +442,34 @@ exports.Communication = function() {
     };
   };
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Access point for "Plan" level.
-///
-/// Gives access to all information stored in the plan level.
-/// This includes DBServers, Databases and Coordinators.
-/// Does not grant write access.
-////////////////////////////////////////////////////////////////////////////////
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Access point for "Plan" level.
+  // /
+  // / Gives access to all information stored in the plan level.
+  // / This includes DBServers, Databases and Coordinators.
+  // / Does not grant write access.
+  // //////////////////////////////////////////////////////////////////////////////
 
   var Plan = function () {
     var DBServers;
     var Databases;
     var Coordinators;
 
-    this.DBServers = function() {
+    this.DBServers = function () {
       if (!DBServers) {
         DBServers = new DBServersObject(agency.plan.dbServers, agency.target.endpoints);
       }
       return DBServers;
     };
 
-    this.Databases = function() {
+    this.Databases = function () {
       if (!Databases) {
         Databases = new DatabasesObject(agency.plan.db);
       }
       return Databases;
     };
 
-    this.Coordinators = function() {
+    this.Coordinators = function () {
       if (!Coordinators) {
         Coordinators = new CoordinatorsObject(agency.plan.coordinators, agency.target.endpoints);
       }
@@ -487,69 +477,68 @@ exports.Communication = function() {
     };
   };
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Access point for "Current" level.
-///
-/// Gives access to all information stored in the current level.
-/// This includes DBServers, Databases and Coordinators.
-/// Furthermore this consideres IP addresses of all servers.
-/// Does not grant write access.
-////////////////////////////////////////////////////////////////////////////////
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Access point for "Current" level.
+  // /
+  // / Gives access to all information stored in the current level.
+  // / This includes DBServers, Databases and Coordinators.
+  // / Furthermore this consideres IP addresses of all servers.
+  // / Does not grant write access.
+  // //////////////////////////////////////////////////////////////////////////////
 
   var Current = function () {
     var DBServers;
     var Databases;
     var Coordinators;
 
-    var DBServersObject = function() {
+    var DBServersObject = function () {
       var cache = {};
       var servers;
-      var getList = function() {
+      var getList = function () {
         if (
-            !agency.current.dbServers.checkVersion()
-            || !agency.current.registered.checkVersion()
-          ) {
+          !agency.current.dbServers.checkVersion()
+          || !agency.current.registered.checkVersion()
+        ) {
           cache = {};
           servers = agency.current.dbServers.get(true);
           storeServersInCache(cache, servers);
           var addresses = agency.current.registered.get(true);
-          _.each(addresses, function(v, k) {
+          _.each(addresses, function (v, k) {
             var pName = splitServerName(k);
             if (cache[pName]) {
-              cache[pName].address = v.endpoint.split("://")[1];
-              cache[pName].protocol = v.endpoint.split("://")[0]
-                .replace("tcp", "http").replace("ssl","https");
+              cache[pName].address = v.endpoint.split('://')[1];
+              cache[pName].protocol = v.endpoint.split('://')[0]
+                .replace('tcp', 'http').replace('ssl', 'https');
             }
           });
         }
         return cache;
       };
-      this.getList = function() {
+      this.getList = function () {
         return getList();
       };
     };
-    var CoordinatorsObject = function() {
+    var CoordinatorsObject = function () {
       var cache;
       var servers;
-      this.getList = function() {
+      this.getList = function () {
         if (
-            !agency.current.coordinators.checkVersion()
-            || !agency.current.registered.checkVersion()
-           ) {
+          !agency.current.coordinators.checkVersion()
+          || !agency.current.registered.checkVersion()
+        ) {
           cache = {};
           servers = agency.current.coordinators.get(true);
-          _.each(servers, function(v, k) {
+          _.each(servers, function (v, k) {
             var pName = splitServerName(k);
             cache[pName] = {};
           });
           var addresses = agency.current.registered.get(true);
-          _.each(addresses, function(v, k) {
+          _.each(addresses, function (v, k) {
             var pName = splitServerName(k);
             if (cache[pName]) {
-              cache[pName].address = v.endpoint.split("://")[1];
-              cache[pName].protocol = v.endpoint.split("://")[0]
-                .replace("tcp", "http").replace("ssl","https");
+              cache[pName].address = v.endpoint.split('://')[1];
+              cache[pName].protocol = v.endpoint.split('://')[0]
+                .replace('tcp', 'http').replace('ssl', 'https');
             }
           });
         }
@@ -557,21 +546,21 @@ exports.Communication = function() {
       };
     };
 
-    this.DBServers = function() {
+    this.DBServers = function () {
       if (!DBServers) {
         DBServers = new DBServersObject();
       }
       return DBServers;
     };
 
-    this.Databases = function() {
+    this.Databases = function () {
       if (!Databases) {
         Databases = new DatabasesObject(agency.current.db);
       }
       return Databases;
     };
 
-    this.Coordinators = function() {
+    this.Coordinators = function () {
       if (!Coordinators) {
         Coordinators = new CoordinatorsObject();
       }
@@ -580,111 +569,108 @@ exports.Communication = function() {
 
   };
 
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Access point for "Sync" level.
+  // /
+  // / Gives access to all information stored in the sync level.
+  // / This includes the heartbeat of the servers.
+  // / Offers convenience functions to get serving primaries,
+  // / list of primaries and secondaries inSync and out of sync
+  // / and a list of all inactive servers (servers that do not serve
+  // / or act as secondary).
+  // / Furthermore offers a function to check if a server has not send a heartbeat
+  // / in time.
+  // / Does not grant write access.
+  // //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Access point for "Sync" level.
-///
-/// Gives access to all information stored in the sync level.
-/// This includes the heartbeat of the servers.
-/// Offers convenience functions to get serving primaries,
-/// list of primaries and secondaries inSync and out of sync
-/// and a list of all inactive servers (servers that do not serve
-/// or act as secondary).
-/// Furthermore offers a function to check if a server has not send a heartbeat
-/// in time.
-/// Does not grant write access.
-////////////////////////////////////////////////////////////////////////////////
-
-  var Sync = function() {
+  var Sync = function () {
     var Heartbeats;
     var interval = agency.sync.interval.get();
     interval = _.values(interval)[0];
 
-    var didBeatInTime = function(time) {
+    var didBeatInTime = function (time) {};
 
+    var isInSync = function (status) {
+      return (status === 'SERVINGSYNC' || status === 'INSYNC');
     };
-
-    var isInSync = function(status) {
-      return (status === "SERVINGSYNC" || status === "INSYNC");
+    var isOutSync = function (status) {
+      return (status === 'SERVINGASYNC' || status === 'SYNCING');
     };
-    var isOutSync = function(status) {
-      return (status === "SERVINGASYNC" || status === "SYNCING");
+    var isServing = function (status) {
+      return (status === 'SERVINGASYNC' || status === 'SERVINGSYNC');
     };
-    var isServing = function(status) {
-      return (status === "SERVINGASYNC" || status === "SERVINGSYNC");
-    };
-    var isInactive = function(status) {
+    var isInactive = function (status) {
       return !isInSync(status) && !isOutSync(status);
     };
 
-    var HeartbeatsObject = function() {
-      this.list = function() {
+    var HeartbeatsObject = function () {
+      this.list = function () {
         var res = agency.sync.beat.get(true);
-        _.each(res, function(v, k) {
+        _.each(res, function (v, k) {
           delete res[k];
           res[splitServerName(k)] = v;
         });
         return res;
       };
-      this.getInactive = function() {
+      this.getInactive = function () {
         var list = this.list();
         var res = [];
-        _.each(list, function(v, k) {
+        _.each(list, function (v, k) {
           if (isInactive(v.status)) {
             res.push(k);
           }
         });
         return res.sort();
       };
-      this.getServing = function() {
+      this.getServing = function () {
         var list = this.list();
         var res = [];
-        _.each(list, function(v, k) {
+        _.each(list, function (v, k) {
           if (isServing(v.status)) {
             res.push(k);
           }
         });
         return res.sort();
       };
-      this.getInSync = function() {
+      this.getInSync = function () {
         var list = this.list();
         var res = [];
-        _.each(list, function(v, k) {
+        _.each(list, function (v, k) {
           if (isInSync(v.status)) {
             res.push(k);
           }
         });
         return res.sort();
       };
-      this.getOutSync = function() {
+      this.getOutSync = function () {
         var list = this.list();
         var res = [];
-        _.each(list, function(v, k) {
+        _.each(list, function (v, k) {
           if (isOutSync(v.status)) {
             res.push(k);
           }
         });
         return res.sort();
       };
-      this.noBeat = function() {
+      this.noBeat = function () {
         // Do not use, will only work in highly synced clocks
         var lastAccepted = new Date((new Date()).getTime() - (2 * interval));
         var res = [];
         var list = this.list();
-        _.each(list, function(v, k) {
+        _.each(list, function (v, k) {
           if (new Date(v.time) < lastAccepted) {
             res.push(k);
           }
         });
         return res.sort();
       };
-      this.didBeat = function() {
+      this.didBeat = function () {
         return _.keys(this.list());
       };
 
     };
 
-    this.Heartbeats = function() {
+    this.Heartbeats = function () {
       if (!Heartbeats) {
         Heartbeats = new HeartbeatsObject();
       }
@@ -693,35 +679,33 @@ exports.Communication = function() {
 
   };
 
+  // //////////////////////////////////////////////////////////////////////////////
+  // / @brief Access point to visualize differences between levels.
+  // /
+  // / Gives convenient access to compute discrepancies between levels.
+  // / It allows to get differences between target and plan.
+  // / (These require a user to step in, the managers do not have enough
+  // / resources to reach the target).
+  // / And the differences between plan and current.
+  // / (These do not require a user to step in, its the managers duty)
+  // / Supports differences for DBServers and Coordinators.
+  // / Databases not yet included.
+  // //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Access point to visualize differences between levels.
-///
-/// Gives convenient access to compute discrepancies between levels.
-/// It allows to get differences between target and plan.
-/// (These require a user to step in, the managers do not have enough
-/// resources to reach the target).
-/// And the differences between plan and current.
-/// (These do not require a user to step in, its the managers duty)
-/// Supports differences for DBServers and Coordinators.
-/// Databases not yet included.
-////////////////////////////////////////////////////////////////////////////////
-
-  var Diff = function(target, plan, current) {
-
-    var DiffObject = function(supRoute, infRoute, supName) {
+  var Diff = function (target, plan, current) {
+    var DiffObject = function (supRoute, infRoute, supName) {
       var infName;
       switch (supName) {
-        case "target":
-          infName = "plan";
+        case 'target':
+          infName = 'plan';
           break;
-        case "plan":
-          infName = "current";
+        case 'plan':
+          infName = 'current';
           break;
         default:
-          throw "Sorry please give a correct superior name";
+          throw 'Sorry please give a correct superior name';
       }
-      var difference = function(superior, inferior, getEndpoint, getProtocol) {
+      var difference = function (superior, inferior, getEndpoint, getProtocol) {
         var diff = {
           missing: [],
           difference: {}
@@ -734,7 +718,7 @@ exports.Communication = function() {
             // Current stores ips no array
             comp = _.keys(inferior);
           }
-          _.each(superior, function(v) {
+          _.each(superior, function (v) {
             if (!_.contains(comp, v)) {
               var toAdd = {
                 name: v,
@@ -747,7 +731,7 @@ exports.Communication = function() {
           return diff;
         }
         // diff of current
-        _.each(superior, function(v, k) {
+        _.each(superior, function (v, k) {
           if (!inferior.hasOwnProperty(k)) {
             var toAdd = {
               name: k,
@@ -768,25 +752,24 @@ exports.Communication = function() {
         });
         return diff;
       };
-      this.DBServers = function() {
+      this.DBServers = function () {
         return difference(supRoute.DBServers().getList(),
-                          infRoute.DBServers().getList(),
-                          supRoute.DBServers().getEndpoint,
-                          supRoute.DBServers().getProtocol);
+          infRoute.DBServers().getList(),
+          supRoute.DBServers().getEndpoint,
+          supRoute.DBServers().getProtocol);
       };
-      this.Coordinators = function() {
+      this.Coordinators = function () {
         return difference(supRoute.Coordinators().getList(),
-                          infRoute.Coordinators().getList(),
-                          supRoute.Coordinators().getEndpoint,
-                          supRoute.Coordinators().getProtocol);
+          infRoute.Coordinators().getList(),
+          supRoute.Coordinators().getEndpoint,
+          supRoute.Coordinators().getProtocol);
       };
     };
 
-    this.plan = new DiffObject(target, plan, "target");
-    this.current = new DiffObject(plan, current, "plan");
+    this.plan = new DiffObject(target, plan, 'target');
+    this.current = new DiffObject(plan, current, 'plan');
 
   };
-
 
   this.target = new Target();
   this.plan = new Plan();
@@ -794,12 +777,11 @@ exports.Communication = function() {
   this.sync = new Sync();
   this.diff = new Diff(this.target, this.plan, this.current);
 
-
   this.addPrimary = this.target.DBServers().addPrimary;
   this.addSecondary = this.target.DBServers().addSecondary;
   this.addCoordinator = this.target.Coordinators().add;
   this.addPair = this.target.DBServers().addPair;
-  this.removeServer = function(name) {
+  this.removeServer = function (name) {
     var res = this.target.DBServers().removeServer(name);
     if (res === -1) {
       return this.target.Coordinators().remove(name);
@@ -807,22 +789,22 @@ exports.Communication = function() {
     return res;
   };
 };
-////////////////////////////////////////////////////////////////////////////////
-/// @start Docu Block JSF_agency-communication_agency
-/// @brief A wrapper around the Agency initialization
-///
-/// @FUN{_createAgency()}
-///
-/// This returns a singleton instance for the agency or creates it.
-///
-/// *Examples*
-///
-/// @code
-///     agency  = communication._createAgency();
-/// @endcode
-/// @end Docu Block
-////////////////////////////////////////////////////////////////////////////////
-exports._createAgency = function() {
+// //////////////////////////////////////////////////////////////////////////////
+// / @start Docu Block JSF_agency-communication_agency
+// / @brief A wrapper around the Agency initialization
+// /
+// / @FUN{_createAgency()}
+// /
+// / This returns a singleton instance for the agency or creates it.
+// /
+// / *Examples*
+// /
+// / @code
+// /     agency  = communication._createAgency();
+// / @endcode
+// / @end Docu Block
+// //////////////////////////////////////////////////////////////////////////////
+exports._createAgency = function () {
   'use strict';
   var agency;
   if (agency) {
@@ -831,4 +813,3 @@ exports._createAgency = function() {
   agency = ArangoAgency;
   return agency;
 };
-

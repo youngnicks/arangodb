@@ -1,58 +1,57 @@
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Foxx BaseMiddleware
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2013 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Lucas Dohmen
-/// @author Copyright 2013, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Foxx BaseMiddleware
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2013 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Lucas Dohmen
+// / @author Copyright 2013, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// JSF_foxx_BaseMiddleware_initializer
-/// @brief The Base Middleware
-///
-/// The `BaseMiddleware` manipulates the request and response
-/// objects to give you a nicer API.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / JSF_foxx_BaseMiddleware_initializer
+// / @brief The Base Middleware
+// /
+// / The `BaseMiddleware` manipulates the request and response
+// / objects to give you a nicer API.
+// //////////////////////////////////////////////////////////////////////////////
 
-function BaseMiddleware() {
+function BaseMiddleware () {
   var middleware = function (request, response, options, next) {
     var responseFunctions,
       requestFunctions,
       trace,
-      _ = require("lodash"),
-      console = require("console"),
-      crypto = require("@arangodb/crypto"),
-      actions = require("@arangodb/actions"),
-      internal = require("internal"),
-      fs = require("fs"),
-      arangodb = require("@arangodb");
+      _ = require('lodash'),
+      console = require('console'),
+      crypto = require('@arangodb/crypto'),
+      actions = require('@arangodb/actions'),
+      internal = require('internal'),
+      fs = require('fs'),
+      arangodb = require('@arangodb');
 
     requestFunctions = {
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_request_cookie
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_request_cookie
+      // //////////////////////////////////////////////////////////////////////////////
 
       cookie: function (name, cfg) {
         if (!cfg || typeof cfg !== 'object') {
@@ -74,42 +73,42 @@ function BaseMiddleware() {
         return value;
       },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_request_body
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_request_body
+      // //////////////////////////////////////////////////////////////////////////////
 
       body: function () {
         var requestBody = this.requestBody || '{}';
         return JSON.parse(requestBody);
       },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_request_rawBody
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_request_rawBody
+      // //////////////////////////////////////////////////////////////////////////////
 
       rawBody: function () {
         return this.requestBody;
       },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_request_rawBodyBuffer
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_request_rawBodyBuffer
+      // //////////////////////////////////////////////////////////////////////////////
 
       rawBodyBuffer: function () {
         return internal.rawRequestBody(this);
       },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_request_requestParts
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_request_requestParts
+      // //////////////////////////////////////////////////////////////////////////////
 
       requestParts: function () {
         return internal.requestParts(this);
       },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_request_params
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_request_params
+      // //////////////////////////////////////////////////////////////////////////////
 
       params: function (key) {
         if (this.parameters && this.parameters.hasOwnProperty(key)) {
@@ -120,10 +119,9 @@ function BaseMiddleware() {
     };
 
     responseFunctions = {
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_response_cookie
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_response_cookie
+      // //////////////////////////////////////////////////////////////////////////////
 
       cookie: function (name, value, cfg) {
         if (!cfg || typeof cfg !== 'object') {
@@ -140,17 +138,17 @@ function BaseMiddleware() {
         }
       },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_response_status
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_response_status
+      // //////////////////////////////////////////////////////////////////////////////
 
       status: function (code) {
         this.responseCode = code;
       },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_response_set
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_response_set
+      // //////////////////////////////////////////////////////////////////////////////
 
       set: function (key, value) {
         var attributes = {};
@@ -165,32 +163,32 @@ function BaseMiddleware() {
           this.headers = this.headers || {};
           this.headers[key] = value;
 
-          if (key === "content-type") {
+          if (key === 'content-type') {
             this.contentType = value;
           }
         }, this);
       },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_response_json
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_response_json
+      // //////////////////////////////////////////////////////////////////////////////
 
       json: function (obj) {
-        this.contentType = "application/json";
+        this.contentType = 'application/json';
         this.body = JSON.stringify(obj);
       },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_response_send
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_response_send
+      // //////////////////////////////////////////////////////////////////////////////
 
       send: function (obj) {
         if (obj instanceof Buffer) {
           // Buffer
           if (! this.contentType) {
-            this.contentType = "application/octet-stream";
+            this.contentType = 'application/octet-stream';
           }
-          // fallthrough
+        // fallthrough
         }
         else if (obj !== null && typeof obj === 'object' && ! Array.isArray(obj)) {
           // JSON body, treat regularly
@@ -200,23 +198,23 @@ function BaseMiddleware() {
         else if (typeof obj === 'string') {
           // string
           if (! this.contentType) {
-            this.contentType = "text/html";
+            this.contentType = 'text/html';
           }
         }
 
         this.body = obj;
       },
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_foxx_BaseMiddleware_response_sendFile
-////////////////////////////////////////////////////////////////////////////////
+      // //////////////////////////////////////////////////////////////////////////////
+      // / @brief was docuBlock JSF_foxx_BaseMiddleware_response_sendFile
+      // //////////////////////////////////////////////////////////////////////////////
 
       sendFile: function (filename, options) {
         options = options || { };
 
         this.body = fs.readBuffer(filename);
         if (options.lastModified) {
-          this.set("Last-Modified", new Date(fs.mtime(filename) * 1000).toUTCString());
+          this.set('Last-Modified', new Date(fs.mtime(filename) * 1000).toUTCString());
         }
 
         if (! this.contentType) {
@@ -225,21 +223,21 @@ function BaseMiddleware() {
       }
     };
 
-////////////////////////////////////////////////////////////////////////////////
-/// JSF_foxx_BaseMiddleware_response_trace
-/// @brief trace
-////////////////////////////////////////////////////////////////////////////////
+    // //////////////////////////////////////////////////////////////////////////////
+    // / JSF_foxx_BaseMiddleware_response_trace
+    // / @brief trace
+    // //////////////////////////////////////////////////////////////////////////////
 
     trace = options.isDevelopment;
-    if (!trace && options.hasOwnProperty("options")) {
+    if (!trace && options.hasOwnProperty('options')) {
       trace = options.options.trace;
     }
 
     if (trace) {
-      console.log("%s, incoming request from %s: %s",
-                  options.mount,
-                  request.client.address,
-                  actions.stringifyRequest(request));
+      console.log('%s, incoming request from %s: %s',
+        options.mount,
+        request.client.address,
+        actions.stringifyRequest(request));
     }
 
     _.extend(request, requestFunctions);
@@ -248,10 +246,10 @@ function BaseMiddleware() {
     next();
 
     if (trace) {
-      if (response.hasOwnProperty("body")) {
+      if (response.hasOwnProperty('body')) {
         var bodyLength = 0;
         if (response.body !== undefined) {
-          if (typeof response.body === "string") {
+          if (typeof response.body === 'string') {
             bodyLength = parseInt(response.body.length, 10);
           } else {
             try {
@@ -261,22 +259,22 @@ function BaseMiddleware() {
             }
           }
         }
-        console.log("%s, outgoing response with status %s of type %s, body length: %d",
-                    options.mount,
-                    response.responseCode || 200,
-                    response.contentType,
-                    bodyLength);
-      } else if (response.hasOwnProperty("bodyFromFile")) {
-        console.log("%s, outgoing response with status %s of type %s, body file: %s",
-                    options.mount,
-                    response.responseCode || 200,
-                    response.contentType,
-                    response.bodyFromFile);
+        console.log('%s, outgoing response with status %s of type %s, body length: %d',
+          options.mount,
+          response.responseCode || 200,
+          response.contentType,
+          bodyLength);
+      } else if (response.hasOwnProperty('bodyFromFile')) {
+        console.log('%s, outgoing response with status %s of type %s, body file: %s',
+          options.mount,
+          response.responseCode || 200,
+          response.contentType,
+          response.bodyFromFile);
       } else {
-        console.log("%s, outgoing response with status %s of type %s, no body",
-                    options.mount,
-                    response.responseCode || 200,
-                    response.contentType);
+        console.log('%s, outgoing response with status %s of type %s, no body',
+          options.mount,
+          response.responseCode || 200,
+          response.contentType);
       }
     }
   };
@@ -287,4 +285,3 @@ function BaseMiddleware() {
 }
 
 exports.BaseMiddleware = BaseMiddleware;
-

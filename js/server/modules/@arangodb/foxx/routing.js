@@ -1,49 +1,46 @@
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Foxx routing
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2013-2015 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Dr. Frank Celler
-/// @author Alan Plum
-/// @author Copyright 2013-2015, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Foxx routing
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2013-2015 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Dr. Frank Celler
+// / @author Alan Plum
+// / @author Copyright 2013-2015, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
-
-
-var arangodb = require("@arangodb");
+var arangodb = require('@arangodb');
 var ArangoError = arangodb.ArangoError;
 var errors = arangodb.errors;
-var preprocess = require("@arangodb/foxx/preprocessor").preprocess;
-var _ = require("lodash");
-var fs = require("fs");
-var is = require("@arangodb/is");
-var console = require("console");
-var actions = require("@arangodb/actions");
+var preprocess = require('@arangodb/foxx/preprocessor').preprocess;
+var _ = require('lodash');
+var fs = require('fs');
+var is = require('@arangodb/is');
+var console = require('console');
+var actions = require('@arangodb/actions');
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief excludes certain files
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief excludes certain files
+// //////////////////////////////////////////////////////////////////////////////
 
 var excludeFile = function (name) {
   var parts = name.split('/');
@@ -60,11 +57,11 @@ var excludeFile = function (name) {
   return false;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief builds one asset of an app
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief builds one asset of an app
+// //////////////////////////////////////////////////////////////////////////////
 
-var buildAssetContent = function(app, assets, basePath) {
+var buildAssetContent = function (app, assets, basePath) {
   var i, j, m;
 
   var reSub = /(.*)\/\*\*$/;
@@ -94,14 +91,12 @@ var buildAssetContent = function(app, assets, basePath) {
           }
         }
       }
-    }
-    else {
+    } else {
       match = reAll.exec(asset);
 
       if (match !== null) {
-        throw new Error("Not implemented");
-      }
-      else {
+        throw new Error('Not implemented');
+      } else {
         if (! excludeFile(asset)) {
           files.push(fs.join(basePath, asset));
         }
@@ -109,15 +104,14 @@ var buildAssetContent = function(app, assets, basePath) {
     }
   }
 
-  var content = "";
+  var content = '';
 
   for (i = 0; i < files.length; ++i) {
     try {
       var c = fs.read(files[i]);
 
-      content += c + "\n";
-    }
-    catch (err) {
+      content += c + '\n';
+    } catch (err) {
       console.error("Cannot read asset '%s'", files[i]);
     }
   }
@@ -125,11 +119,11 @@ var buildAssetContent = function(app, assets, basePath) {
   return content;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief installs an asset for an app
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief installs an asset for an app
+// //////////////////////////////////////////////////////////////////////////////
 
-var buildFileAsset = function(app, path, basePath, asset) {
+var buildFileAsset = function (app, path, basePath, asset) {
   var content = buildAssetContent(app, asset.files, basePath);
   var type;
 
@@ -155,7 +149,7 @@ var buildFileAsset = function(app, path, basePath, asset) {
 
   // use built-in defaulti content-type
   else {
-    type = arangodb.guessContentType("");
+    type = arangodb.guessContentType('');
   }
 
   // .............................................................................
@@ -165,9 +159,9 @@ var buildFileAsset = function(app, path, basePath, asset) {
   return { contentType: type, body: content };
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief generates asset action
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief generates asset action
+// //////////////////////////////////////////////////////////////////////////////
 
 var buildAssetRoute = function (app, path, basePath, asset) {
   var c = buildFileAsset(app, path, basePath, asset);
@@ -178,10 +172,9 @@ var buildAssetRoute = function (app, path, basePath, asset) {
   };
 };
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief installs the assets of an app
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief installs the assets of an app
+// //////////////////////////////////////////////////////////////////////////////
 
 var installAssets = function (app, routes) {
   var path;
@@ -189,7 +182,7 @@ var installAssets = function (app, routes) {
   var desc = app.manifest;
 
   if (! desc) {
-    throw new Error("Invalid application manifest");
+    throw new Error('Invalid application manifest');
   }
 
   var normalized;
@@ -205,7 +198,7 @@ var installAssets = function (app, routes) {
           basePath = asset.basePath;
         }
 
-        normalized = arangodb.normalizeURL("/" + path);
+        normalized = arangodb.normalizeURL('/' + path);
 
         if (asset.hasOwnProperty('files')) {
           route = buildAssetRoute(app, normalized, basePath, asset);
@@ -222,8 +215,7 @@ var installAssets = function (app, routes) {
 
         if (desc.files[path].hasOwnProperty('path')) {
           directory = desc.files[path].path;
-        }
-        else {
+        } else {
           directory = desc.files[path];
         }
 
@@ -233,13 +225,13 @@ var installAssets = function (app, routes) {
           }
         }
 
-        normalized = arangodb.normalizeURL("/" + path);
+        normalized = arangodb.normalizeURL('/' + path);
 
         route = {
-          url: { match: normalized + "/*" },
+          url: { match: normalized + '/*' },
           action: {
-            "do": "@arangodb/actions/pathHandler",
-            "options": {
+            'do': '@arangodb/actions/pathHandler',
+            'options': {
               root: app.root,
               path: fs.join(app.path, directory),
               gzip: gzip
@@ -253,33 +245,32 @@ var installAssets = function (app, routes) {
   }
 };
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create middleware matchers
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief create middleware matchers
+// //////////////////////////////////////////////////////////////////////////////
 
 var createMiddlewareMatchers = function (rt, routes, controller, prefix) {
   var j, route;
   for (j = 0;  j < rt.length;  ++j) {
     route = rt[j];
-    if (route.hasOwnProperty("url")) {
-      route.url.match = arangodb.normalizeURL(prefix + "/" + route.url.match);
+    if (route.hasOwnProperty('url')) {
+      route.url.match = arangodb.normalizeURL(prefix + '/' + route.url.match);
     }
     route.context = controller;
     routes.middleware.push(route);
   }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief transform the internal route objects into proper routing callbacks
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief transform the internal route objects into proper routing callbacks
+// //////////////////////////////////////////////////////////////////////////////
 
 var transformControllerToRoute = function (routeInfo, route, isDevel) {
   return function (req, res) {
     var i, errInfo, tmp;
     try {
       // Check constraints
-      if (routeInfo.hasOwnProperty("constraints")) {
+      if (routeInfo.hasOwnProperty('constraints')) {
         var constraints = routeInfo.constraints;
         try {
           _.each({
@@ -333,7 +324,7 @@ var transformControllerToRoute = function (routeInfo, route, isDevel) {
           "Error in foxx route '%s': '%s', Stacktrace:\n%s",
           route,
           e.message || String(e),
-          e.stack || ""
+          e.stack || ''
         );
       }
       actions.resultException(req, res, e, undefined, isDevel);
@@ -341,19 +332,19 @@ var transformControllerToRoute = function (routeInfo, route, isDevel) {
   };
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief transform the internal route objects into proper routing callbacks
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief transform the internal route objects into proper routing callbacks
+// //////////////////////////////////////////////////////////////////////////////
 
 var transformRoutes = function (rt, routes, controller, prefix, isDevel) {
   var j, route;
   for (j = 0;  j < rt.length;  ++j) {
     route = rt[j];
     route.action = {
-      callback: transformControllerToRoute(route.action, route.url || "No Route", isDevel)
+      callback: transformControllerToRoute(route.action, route.url || 'No Route', isDevel)
     };
-    if (route.hasOwnProperty("url")) {
-      route.url.match = arangodb.normalizeURL(prefix + "/" + route.url.match);
+    if (route.hasOwnProperty('url')) {
+      route.url.match = arangodb.normalizeURL(prefix + '/' + route.url.match);
     }
     route.context = controller;
     routes.routes.push(route);
@@ -362,11 +353,11 @@ var transformRoutes = function (rt, routes, controller, prefix, isDevel) {
 
 var routeRegEx = /^(\/:?[a-zA-Z0-9_\-%]+)+\/?$/;
 
-var validateRoute = function(route) {
-  if (route[0] !== "/") {
+var validateRoute = function (route) {
+  if (route[0] !== '/') {
     throw new ArangoError({
       errorNum: errors.ERROR_INVALID_MOUNTPOINT.code,
-      errorMessage: "Route has to start with /."
+      errorMessage: 'Route has to start with /.'
     });
   }
   if (!routeRegEx.test(route)) {
@@ -380,10 +371,9 @@ var validateRoute = function(route) {
   }
 };
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief computes the exports of an app
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief computes the exports of an app
+// //////////////////////////////////////////////////////////////////////////////
 
 var exportApp = function (app) {
   if (app.needsConfiguration()) {
@@ -399,10 +389,10 @@ var exportApp = function (app) {
   app.main.exports = {};
 
   // mount all exports
-  if (app.manifest.hasOwnProperty("exports")) {
+  if (app.manifest.hasOwnProperty('exports')) {
     var appExports = app.manifest.exports;
 
-    if (typeof appExports === "string") {
+    if (typeof appExports === 'string') {
       app.main.exports = app.run(appExports);
     } else if (appExports) {
       Object.keys(appExports).forEach(function (key) {
@@ -415,66 +405,65 @@ var exportApp = function (app) {
 
 };
 
-////////////////////////////////////////////////////////////////////////////////
-///// @brief escapes all html reserved characters that are not allowed in <pre>
-//////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// /// @brief escapes all html reserved characters that are not allowed in <pre>
+// ////////////////////////////////////////////////////////////////////////////////
 function escapeHTML (string) {
-var list = string.split("");
-var i = 0;
-for (i = 0; i < list.length; ++i) {
-  switch (list[i]) {
-    case "'":
-    list[i] = "&apos;";
-    break;
-    case '"':
-    list[i] = "&quot;";
-    break;
-    case "&":
-    list[i] = "&amp;";
-    break;
-    case "<":
-    list[i] = "&lt;";
-    break;
-    case ">":
-    list[i] = "&gt;";
-    break;
-    default:
+  var list = string.split('');
+  var i = 0;
+  for (i = 0; i < list.length; ++i) {
+    switch (list[i]) {
+      case "'":
+        list[i] = '&apos;';
+        break;
+      case '"':
+        list[i] = '&quot;';
+        break;
+      case '&':
+        list[i] = '&amp;';
+        break;
+      case '<':
+        list[i] = '&lt;';
+        break;
+      case '>':
+        list[i] = '&gt;';
+        break;
+      default:
+    }
   }
+  return list.join('');
 }
-return list.join("");
-}
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief routes a default Configuration Required app
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief routes a default Configuration Required app
+// //////////////////////////////////////////////////////////////////////////////
 
-var routeNeedsConfigurationApp = function(app) {
-
+var routeNeedsConfigurationApp = function (app) {
   return {
-    urlPrefix: "",
+    urlPrefix: '',
     name: 'foxx("' + app.mount + '")',
     routes: [{
-      "internal": true,
-      "url" : {
-        match: "/*",
+      'internal': true,
+      'url': {
+        match: '/*',
         methods: actions.ALL_METHODS
       },
-      "action": {
-        "callback": function(req, res) {
+      'action': {
+        'callback': function (req, res) {
           res.responseCode = actions.HTTP_SERVICE_UNAVAILABLE;
-          res.contentType = "text/html; charset=utf-8";
+          res.contentType = 'text/html; charset=utf-8';
           if (app.isDevelopment) {
-            res.body = "<html><head><title>Service Unavailable</title></head><body><p>" +
-                       "This service is not configured.</p>";
-            res.body += "<h3>Configuration Information</h3>";
-            res.body += "<pre>";
+            res.body = '<html><head><title>Service Unavailable</title></head><body><p>' +
+              'This service is not configured.</p>';
+            res.body += '<h3>Configuration Information</h3>';
+            res.body += '<pre>';
             res.body += escapeHTML(JSON.stringify(app.getConfiguration(), undefined, 2));
-            res.body += "</pre>";
-            res.budy += "</body></html>";
+            res.body += '</pre>';
+            res.budy += '</body></html>';
 
           } else {
-            res.body = "<html><head><title>Service Unavailable</title></head><body><p>" +
-            "This service is not configured.</p></body></html>";
+            res.body = '<html><head><title>Service Unavailable</title></head><body><p>' +
+              'This service is not configured.</p></body></html>';
 
           }
           return;
@@ -487,35 +476,34 @@ var routeNeedsConfigurationApp = function(app) {
 
     foxx: true
   };
-  
+
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief routes this app if the original is broken app
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief routes this app if the original is broken app
+// //////////////////////////////////////////////////////////////////////////////
 
-var routeBrokenApp = function(app, err) {
-
+var routeBrokenApp = function (app, err) {
   return {
-    urlPrefix: "",
+    urlPrefix: '',
     name: 'foxx("' + app.mount + '")',
     routes: [{
-      "internal": true,
-      "url" : {
-        match: "/*",
+      'internal': true,
+      'url': {
+        match: '/*',
         methods: actions.ALL_METHODS
       },
-      "action": {
-        "callback": function(req, res) {
+      'action': {
+        'callback': function (req, res) {
           res.responseCode = actions.HTTP_SERVICE_UNAVAILABLE;
-          res.contentType = "text/html; charset=utf-8";
+          res.contentType = 'text/html; charset=utf-8';
           if (app.isDevelopment) {
             var errToPrint = err.cause ? err.cause : err;
-            res.body = "<html><head><title>" + escapeHTML(String(errToPrint)) +
-                     "</title></head><body><pre>" + escapeHTML(String(errToPrint.stack)) + "</pre></body></html>";
+            res.body = '<html><head><title>' + escapeHTML(String(errToPrint)) +
+              '</title></head><body><pre>' + escapeHTML(String(errToPrint.stack)) + '</pre></body></html>';
           } else {
-            res.body = "<html><head><title>Service Unavailable</title></head><body><p>" +
-            "This service is temporarily not available. Please check the log file for errors.</p></body></html>";
+            res.body = '<html><head><title>Service Unavailable</title></head><body><p>' +
+              'This service is temporarily not available. Please check the log file for errors.</p></body></html>';
 
           }
           return;
@@ -528,14 +516,12 @@ var routeBrokenApp = function(app, err) {
 
     foxx: true
   };
-  
+
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief computes the routes of an app
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief computes the routes of an app
+// //////////////////////////////////////////////////////////////////////////////
 
 var routeApp = function (app, isInstallProcess) {
   if (app.needsConfiguration()) {
@@ -546,7 +532,7 @@ var routeApp = function (app, isInstallProcess) {
 
   // setup the routes
   var routes = {
-    urlPrefix: "",
+    urlPrefix: '',
     name: 'foxx("' + app.mount + '")',
     routes: [],
     middleware: [],
@@ -564,13 +550,13 @@ var routeApp = function (app, isInstallProcess) {
   if ((app.mount + defaultDocument) !== app.mount) {
     // only add redirection if src and target are not the same
     routes.routes.push({
-      "url" : { match: "/" },
-      "action" : {
-        "do" : "@arangodb/actions/redirectRequest",
-        "options" : {
-          "permanently" : !app.isDevelopment,
-          "destination" : defaultDocument,
-          "relative" : true
+      'url': { match: '/' },
+      'action': {
+        'do': '@arangodb/actions/redirectRequest',
+        'options': {
+          'permanently': !app.isDevelopment,
+          'destination': defaultDocument,
+          'relative': true
         }
       }
     });
@@ -636,8 +622,6 @@ var mountController = function (service, routes, mount, filename) {
   }
 };
 
-
 exports.exportApp = exportApp;
 exports.routeApp = routeApp;
 exports.__test_transformControllerToRoute = transformControllerToRoute;
-

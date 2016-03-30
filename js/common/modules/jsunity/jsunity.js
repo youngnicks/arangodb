@@ -1,6 +1,6 @@
 /* jshint evil: true, strict: false */
 /* global require, exports */
-//<%
+// <%
 /**
  * jsUnity Universal JavaScript Testing Framework v0.6
  * http://jsunity.com/
@@ -12,38 +12,38 @@
 
 var counter; // crying
 var jsUnity = exports.jsUnity = (function () {
-  function fmt(str) {
-    var internal = require("internal");
+  function fmt (str) {
+    var internal = require('internal');
     var a = Array.prototype.slice.call(arguments, 1);
-    return "at assertion #" + counter + ": " + str.replace(/\?/g, function () { 
+    return 'at assertion #' + counter + ': ' + str.replace(/\?/g, function () {
       internal.startCaptureMode();
       internal.print(a.shift());
 
       var outputWithoutNewline = internal.stopCaptureMode();
       return outputWithoutNewline.substr(0, outputWithoutNewline.length - 1);
     });
-    
+
   }
 
-  function hash(v) {
+  function hash (v) {
     if (v instanceof Object && v !== null) {
       var arr = [];
       var sorted = Object.keys(v).sort(), n = sorted.length;
-      
+
       for (var i = 0; i < n; i++) {
         var p = sorted[i];
         if (v.hasOwnProperty(p)) {
           arr.push(p);
-          arr.push(hash(v[p]));    
+          arr.push(hash(v[p]));
         }
       }
-      
-      return arr.join("#");
+
+      return arr.join('#');
     } else {
       return String(v);
     }
   }
-  
+
   var defaultAssertions = {
     assertException: function (fn, message) {
       counter++;
@@ -56,35 +56,35 @@ var jsUnity = exports.jsUnity = (function () {
       }
       var err = new Error();
 
-      throw fmt("?: (?) does not raise an exception or not a function\n(?)",
-                message || "assertException", fn, err.stack);
+      throw fmt('?: (?) does not raise an exception or not a function\n(?)',
+        message || 'assertException', fn, err.stack);
     },
 
     assertTrue: function (actual, message) {
       counter++;
       if (! actual) {
         var err = new Error();
-        throw fmt("?: (?) does not evaluate to true\n(?)",
-                  message || "assertTrue", actual, err.stack);
+        throw fmt('?: (?) does not evaluate to true\n(?)',
+          message || 'assertTrue', actual, err.stack);
       }
     },
-    
+
     assertFalse: function (actual, message) {
       counter++;
       if (actual) {
         var err = new Error();
-        throw fmt("?: (?) does not evaluate to false\n(?)",
-                  message || "assertFalse", actual, err.stack);
+        throw fmt('?: (?) does not evaluate to false\n(?)',
+          message || 'assertFalse', actual, err.stack);
       }
     },
-    
+
     assertIdentical: function (expected, actual, message) {
       counter++;
       if (expected !== actual) {
         var err = new Error();
-        throw fmt("?: (?) is not identical to (?)\n(?)",
-                  message || "assertIdentical", actual,
-                  expected, err.stack);
+        throw fmt('?: (?) is not identical to (?)\n(?)',
+          message || 'assertIdentical', actual,
+          expected, err.stack);
       }
     },
 
@@ -92,8 +92,8 @@ var jsUnity = exports.jsUnity = (function () {
       counter++;
       if (expected === actual) {
         var err = new Error();
-        throw fmt("?: (?) is identical to (?)\n(?)",
-                  message || "assertNotIdentical", actual, expected, err.stack);
+        throw fmt('?: (?) is identical to (?)\n(?)',
+          message || 'assertNotIdentical', actual, expected, err.stack);
       }
     },
 
@@ -101,44 +101,44 @@ var jsUnity = exports.jsUnity = (function () {
       counter++;
       if (hash(expected) !== hash(actual)) {
         var err = new Error();
-        throw fmt("?: (?) is not equal to (?)\n(?)",
-                  message || "assertEqual", actual, expected, err.stack);
+        throw fmt('?: (?) is not equal to (?)\n(?)',
+          message || 'assertEqual', actual, expected, err.stack);
       }
     },
-    
+
     assertNotEqual: function (expected, actual, message) {
       counter++;
       if (hash(expected) === hash(actual)) {
         var err = new Error();
-        throw fmt("?: (?) is equal to (?)\n(?)",
-                  message || "assertNotEqual", actual, expected, err.stack);
+        throw fmt('?: (?) is equal to (?)\n(?)',
+          message || 'assertNotEqual', actual, expected, err.stack);
       }
     },
-    
+
     assertMatch: function (re, actual, message) {
       counter++;
       if (! re.test(actual)) {
         var err = new Error();
-        throw fmt("?: (?) does not match (?)\n(?)",
-                  message || "assertMatch", actual, re, err.stack);
+        throw fmt('?: (?) does not match (?)\n(?)',
+          message || 'assertMatch', actual, re, err.stack);
       }
     },
-    
+
     assertNotMatch: function (re, actual, message) {
       counter++;
       if (re.test(actual)) {
         var err = new Error();
-        throw fmt("?: (?) matches (?)\n(?)",
-                  message || "assertNotMatch", actual, re, err.stack);
+        throw fmt('?: (?) matches (?)\n(?)',
+          message || 'assertNotMatch', actual, re, err.stack);
       }
     },
-    
+
     assertTypeOf: function (typ, actual, message) {
       counter++;
       if (typeof actual !== typ) {
         var err = new Error();
-        throw fmt("?: (?) is not of type (?)\n(?)",
-                  message || "assertTypeOf", actual, typ, err.stack);
+        throw fmt('?: (?) is not of type (?)\n(?)',
+          message || 'assertTypeOf', actual, typ, err.stack);
       }
     },
 
@@ -146,17 +146,17 @@ var jsUnity = exports.jsUnity = (function () {
       counter++;
       if (typeof actual === typ) {
         var err = new Error();
-        throw fmt("?: (?) is of type (?)\n(?)",
-                  message || "assertNotTypeOf", actual, typ, err.stack);
+        throw fmt('?: (?) is of type (?)\n(?)',
+          message || 'assertNotTypeOf', actual, typ, err.stack);
       }
     },
-    
+
     assertInstanceOf: function (cls, actual, message) {
       counter++;
       if (!(actual instanceof cls)) {
         var err = new Error();
-        throw fmt("?: (?) is not an instance of (?)\n(?)",
-                  message || "assertInstanceOf", actual, cls, err.stack);
+        throw fmt('?: (?) is not an instance of (?)\n(?)',
+          message || 'assertInstanceOf', actual, cls, err.stack);
       }
     },
 
@@ -164,8 +164,8 @@ var jsUnity = exports.jsUnity = (function () {
       counter++;
       if (actual instanceof cls) {
         var err = new Error();
-        throw fmt("?: (?) is an instance of (?)\n(?)",
-                  message || "assertNotInstanceOf", actual, cls, err.stack);
+        throw fmt('?: (?) is an instance of (?)\n(?)',
+          message || 'assertNotInstanceOf', actual, cls, err.stack);
       }
     },
 
@@ -173,88 +173,88 @@ var jsUnity = exports.jsUnity = (function () {
       counter++;
       if (actual !== null) {
         var err = new Error();
-        throw fmt("?: (?) is not null\n(?)",
-                  message || "assertNull", actual, err.stack);
+        throw fmt('?: (?) is not null\n(?)',
+          message || 'assertNull', actual, err.stack);
       }
     },
-    
+
     assertNotNull: function (actual, message) {
       counter++;
       if (actual === null) {
         var err = new Error();
-        throw fmt("?: (?) is null\n(?)",
-                  message || "assertNotNull", actual, err.stack);
+        throw fmt('?: (?) is null\n(?)',
+          message || 'assertNotNull', actual, err.stack);
       }
     },
-    
+
     assertUndefined: function (actual, message) {
       counter++;
       if (actual !== undefined) {
         var err = new Error();
-        throw fmt("?: (?) is not undefined\n(?)",
-                  message || "assertUndefined", actual, err.stack);
+        throw fmt('?: (?) is not undefined\n(?)',
+          message || 'assertUndefined', actual, err.stack);
       }
     },
-    
+
     assertNotUndefined: function (actual, message) {
       counter++;
       if (actual === undefined) {
         var err = new Error();
-        throw fmt("?: (?) is undefined\n(?)",
-                  message || "assertNotUndefined", actual, err.stack);
+        throw fmt('?: (?) is undefined\n(?)',
+          message || 'assertNotUndefined', actual, err.stack);
       }
     },
-    
+
     assertNaN: function (actual, message) {
       counter++;
       if (!isNaN(actual)) {
         var err = new Error();
-        throw fmt("?: (?) is not NaN\n(?)",
-                  message || "assertNaN", actual, err.stack);
+        throw fmt('?: (?) is not NaN\n(?)',
+          message || 'assertNaN', actual, err.stack);
       }
     },
-    
+
     assertNotNaN: function (actual, message) {
       counter++;
       if (isNaN(actual)) {
         var err = new Error();
-        throw fmt("?: (?) is NaN\n(?)",
-                  message || "assertNotNaN", actual, err.stack);
+        throw fmt('?: (?) is NaN\n(?)',
+          message || 'assertNotNaN', actual, err.stack);
       }
     },
-    
+
     fail: function (message) {
-      throw message || "fail";
+      throw message || 'fail';
     }
   };
-  
-  function empty() {}
-  
-  function plural(cnt, unit) {
-    return cnt + " " + unit + (cnt === 1 ? "" : "s");
+
+  function empty () {}
+
+  function plural (cnt, unit) {
+    return cnt + ' ' + unit + (cnt === 1 ? '' : 's');
   }
 
-  function splitFunction(fn) {
+  function splitFunction (fn) {
     var tokens =
-      /^[\s\r\n]*function[\s\r\n]*([^\(\s\r\n]*?)[\s\r\n]*\([^\)\s\r\n]*\)[\s\r\n]*\{((?:[^}]*\}?)+)\}[\s\r\n]*$/
+    /^[\s\r\n]*function[\s\r\n]*([^\(\s\r\n]*?)[\s\r\n]*\([^\)\s\r\n]*\)[\s\r\n]*\{((?:[^}]*\}?)+)\}[\s\r\n]*$/
       .exec(fn);
-    
+
     return {
       name: tokens[1].length ? tokens[1] : undefined,
       body: tokens[2]
     };
   }
-  
+
   var probeOutside = function () {
     try {
       return eval(
-        [ "typeof ", " === \"function\" && ", "" ].join(arguments[0]));
+        [ 'typeof ', ' === "function" && ', '' ].join(arguments[0]));
     } catch (e) {
       return false;
     }
   };
 
-  function parseSuiteString(str) {
+  function parseSuiteString (str) {
     var obj = {};
 
     var probeInside = new Function(
@@ -266,11 +266,10 @@ var jsUnity = exports.jsUnity = (function () {
     while ((tokens = tokenRe.exec(str))) {
       var token = tokens[1];
       var fn;
-      
-      if (!obj[token]
-          && (fn = probeInside(token))
-          && fn !== probeOutside(token)) {
 
+      if (!obj[token]
+        && (fn = probeInside(token))
+        && fn !== probeOutside(token)) {
         obj[token] = fn;
       }
     }
@@ -278,7 +277,7 @@ var jsUnity = exports.jsUnity = (function () {
     return parseSuiteObject(obj);
   }
 
-  function parseSuiteFunction(fn) {
+  function parseSuiteFunction (fn) {
     var fnParts = splitFunction(fn);
     var suite = parseSuiteString(fnParts.body);
 
@@ -287,24 +286,24 @@ var jsUnity = exports.jsUnity = (function () {
     return suite;
   }
 
-  function parseSuiteArray(tests) {
+  function parseSuiteArray (tests) {
     var obj = {};
 
     for (var i = 0; i < tests.length; i++) {
       var item = tests[i];
-      
+
       if (!obj[item]) {
         switch (typeof item) {
-        case "function":
-          var fnParts = splitFunction(item);
-          obj[fnParts.name] = item;
-          break;
-        case "string":
-          var fn;
-          fn = probeOutside(item);
-          if (typeof (fn) !== 'undefined') {
-            obj[item] = fn;
-          }
+          case 'function':
+            var fnParts = splitFunction(item);
+            obj[fnParts.name] = item;
+            break;
+          case 'string':
+            var fn;
+            fn = probeOutside(item);
+            if (typeof (fn) !== 'undefined') {
+              obj[item] = fn;
+            }
         }
       }
     }
@@ -312,14 +311,14 @@ var jsUnity = exports.jsUnity = (function () {
     return parseSuiteObject(obj);
   }
 
-  function parseSuiteObject(obj) {
+  function parseSuiteObject (obj) {
     var suite = new jsUnity.TestSuite(obj.suiteName, obj);
 
     for (var name in obj) {
       if (obj.hasOwnProperty(name)) {
         var fn = obj[name];
 
-        if (typeof fn === "function") {
+        if (typeof fn === 'function') {
           if (/^test/.test(name)) {
             suite.tests.push({ name: name, fn: fn });
           } else if (/^(setUp|tearDown)$/.test(name)) {
@@ -328,7 +327,7 @@ var jsUnity = exports.jsUnity = (function () {
         }
       }
     }
-    
+
     return suite;
   }
 
@@ -338,15 +337,15 @@ var jsUnity = exports.jsUnity = (function () {
     info: 3,
     debug: 4
   };
-  
+
   var logStream = {
     write: empty,
-    level: "info"
+    level: 'info'
   };
 
   var streamLoglevel = function (strLevel, numLevel) {
     return function (s) {
-      if (numLevel >= logLevels[this.level] ) {
+      if (numLevel >= logLevels[this.level]) {
         this.write(s, strLevel);
       }
     };
@@ -363,32 +362,32 @@ var jsUnity = exports.jsUnity = (function () {
 
   var resultsStream = {
     begin: function (total, suiteName) {
-      jsUnity.tap.write("TAP version 13");
-      jsUnity.tap.write("# " + suiteName);
-      jsUnity.tap.write("1.." + total);
+      jsUnity.tap.write('TAP version 13');
+      jsUnity.tap.write('# ' + suiteName);
+      jsUnity.tap.write('1..' + total);
 
-      jsUnity.log.info("Running "
-                       + (suiteName || "unnamed test suite"));
-      jsUnity.log.info(plural(total, "test") + " found");
+      jsUnity.log.info('Running '
+        + (suiteName || 'unnamed test suite'));
+      jsUnity.log.info(plural(total, 'test') + ' found');
     },
 
     pass: function (index, testName) {
-      jsUnity.tap.write(fmt("ok ? - ?", index, testName));
-      jsUnity.log.info("[PASSED] " + testName);
+      jsUnity.tap.write(fmt('ok ? - ?', index, testName));
+      jsUnity.log.info('[PASSED] ' + testName);
     },
 
     fail: function (index, testName, message) {
-      jsUnity.tap.write(fmt("not ok ? - ?", index, testName));
-      jsUnity.tap.write("  ---");
-      jsUnity.tap.write("  " + message);
-      jsUnity.tap.write("  ...");
-      jsUnity.log.info(fmt("[FAILED] ?: ?", testName, message));
+      jsUnity.tap.write(fmt('not ok ? - ?', index, testName));
+      jsUnity.tap.write('  ---');
+      jsUnity.tap.write('  ' + message);
+      jsUnity.tap.write('  ...');
+      jsUnity.log.info(fmt('[FAILED] ?: ?', testName, message));
     },
 
     end: function (passed, failed, duration) {
-      jsUnity.log.info(plural(passed, "test") + " passed");
-      jsUnity.log.info(plural(failed, "test") + " failed");
-      jsUnity.log.info(plural(duration, "millisecond") + " elapsed");
+      jsUnity.log.info(plural(passed, 'test') + ' passed');
+      jsUnity.log.info(plural(failed, 'test') + ' failed');
+      jsUnity.log.info(plural(duration, 'millisecond') + ' elapsed');
     }
   };
 
@@ -418,7 +417,7 @@ var jsUnity = exports.jsUnity = (function () {
         return new Date();
       }
     },
-    
+
     attachAssertions: function (scope) {
       scope = scope || this.env.defaultScope;
 
@@ -442,24 +441,23 @@ var jsUnity = exports.jsUnity = (function () {
         return parseSuiteArray(v);
       } else if (v instanceof Object) {
         return parseSuiteObject(v);
-      } else if (typeof v === "string") {
+      } else if (typeof v === 'string') {
         return parseSuiteString(v);
       } else {
-        throw "Argument must be a function, array, object, string or "
-          + "TestSuite instance.";
+        throw 'Argument must be a function, array, object, string or '
+        + 'TestSuite instance.';
       }
     },
-
 
     run: function () {
       var getFixtureUtil = function (fnName, suite) {
         var fn = suite[fnName];
-        
+
         return fn
           ? function (testName) {
             fn.call(suite.scope, testName);
           }
-        : empty;
+          : empty;
       };
       var results = new jsUnity.TestResults();
 
@@ -471,7 +469,7 @@ var jsUnity = exports.jsUnity = (function () {
         try {
           suite = jsUnity.compile(arguments[i]);
         } catch (e) {
-          this.log.error("Invalid test suite: " + e);
+          this.log.error('Invalid test suite: ' + e);
           return false;
         }
 
@@ -479,19 +477,19 @@ var jsUnity = exports.jsUnity = (function () {
 
         this.results.begin(cnt, suite.suiteName);
         // when running multiple suites, report counts at end?
-        
+
         suiteNames.push(suite.suiteName);
         results.total += cnt;
-        
-        
-        var setUp = getFixtureUtil("setUp", suite);
-        var tearDown = getFixtureUtil("tearDown", suite);
+
+
+        var setUp = getFixtureUtil('setUp', suite);
+        var tearDown = getFixtureUtil('tearDown', suite);
 
         for (var j = 0; j < cnt; j++) {
           var test = suite.tests[j];
-          
+
           counter = 0;
-          
+
           try {
             setUp(test.name);
             test.fn.call(suite.scope, test.name);
@@ -503,51 +501,48 @@ var jsUnity = exports.jsUnity = (function () {
           } catch (e) {
             try {
               tearDown(test.name); // if tearDown above throws exc, will call again!
-            }
-            catch (x) {
-              var xstack; 
+            } catch (x) {
+              var xstack;
               if (x.stack !== undefined) {
                 xstack = x.stack;
               }
               if (e.stack !== undefined) {
                 this.results.fail(j + 1,
-                                  test.name,
-                                  e + " - " + String(e.stack) + 
-                                  " - teardown failed - " +
-                                  x +
-                                  " - " +
-                                  xstack);
-              }
-              else {
+                  test.name,
+                  e + ' - ' + String(e.stack) +
+                  ' - teardown failed - ' +
+                  x +
+                  ' - ' +
+                  xstack);
+              } else {
                 this.results.fail(j + 1,
-                                  test.name,
-                                  e +
-                                  " - teardown failed - " +
-                                  x +
-                                  " - " +
-                                  xstack);
-              }             
+                  test.name,
+                  e +
+                  ' - teardown failed - ' +
+                  x +
+                  ' - ' +
+                  xstack);
+              }
 
-              this.log.error("Teardown failed (again): " +
-                             x +
-                             " - " +
-                             xstack +
-                             " aborting tests");
+              this.log.error('Teardown failed (again): ' +
+                x +
+                ' - ' +
+                xstack +
+                ' aborting tests');
 
               i = arguments.length; j = cnt; break;
             }
 
             if (e.stack !== undefined) {
-              this.results.fail(j + 1, test.name, e + " - " + String(e.stack));
-            }
-            else {
+              this.results.fail(j + 1, test.name, e + ' - ' + String(e.stack));
+            } else {
               this.results.fail(j + 1, test.name, e);
             }
           }
         }
       }
 
-      results.suiteName = suiteNames.join(",");
+      results.suiteName = suiteNames.join(',');
       results.failed = results.total - results.passed;
       results.duration = jsUnity.env.getDate() - start;
 
@@ -557,4 +552,4 @@ var jsUnity = exports.jsUnity = (function () {
     }
   };
 })();
-//%>
+// %>

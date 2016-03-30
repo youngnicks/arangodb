@@ -1,31 +1,31 @@
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief FoxxService and FoxxContext types
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2015 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Alan Plum
-/// @author Copyright 2015, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief FoxxService and FoxxContext types
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2015 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Alan Plum
+// / @author Copyright 2015, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
 const _ = require('lodash');
 const internal = require('internal');
@@ -69,8 +69,8 @@ class AppContext {
 
   collectionName(name) {
     let fqn = (
-      this.collectionPrefix
-      + name.replace(/[^a-z0-9]/ig, '_').replace(/(^_+|_+$)/g, '').substr(0, 64)
+    this.collectionPrefix
+    + name.replace(/[^a-z0-9]/ig, '_').replace(/(^_+|_+$)/g, '').substr(0, 64)
     );
     if (!fqn.length) {
       throw new Error(`Cannot derive collection name from "${name}"`);
@@ -144,7 +144,7 @@ Object.defineProperties(AppContext.prototype, {
   }
 });
 
-function createConfiguration(definitions) {
+function createConfiguration (definitions) {
   const config = {};
   Object.keys(definitions).forEach(function (name) {
     const def = definitions[name];
@@ -155,7 +155,7 @@ function createConfiguration(definitions) {
   return config;
 }
 
-function createDependencies(definitions, options) {
+function createDependencies (definitions, options) {
   const deps = {};
   Object.keys(definitions).forEach(function (name) {
     Object.defineProperty(deps, name, {
@@ -214,11 +214,11 @@ class FoxxService {
         this.thumbnail = fs.read64(thumb);
       } catch (e) {
         this.thumbnail = null;
-        /*
-        console.warnLines(
-          `Cannot read thumbnail "${thumb}" for app "${data.mount}": ${e.stack}`
-        );
-        */
+      /*
+      console.warnLines(
+        `Cannot read thumbnail "${thumb}" for app "${data.mount}": ${e.stack}`
+      );
+      */
       }
     } else {
       this.thumbnail = null;
@@ -438,25 +438,25 @@ class FoxxService {
   static get _appPath() {
     return APP_PATH ? (
       path.join(APP_PATH, '_db', internal.db._name())
-    ) : undefined;
+      ) : undefined;
   }
 
   static get _systemAppPath() {
     return APP_PATH ? (
       path.join(STARTUP_PATH, 'apps', 'system')
-    ) : undefined;
+      ) : undefined;
   }
 
   static get _oldAppPath() {
     return APP_PATH ? (
       path.join(APP_PATH, 'databases', internal.db._name())
-    ) : undefined;
+      ) : undefined;
   }
 
   static get _devAppPath() {
     return DEV_APP_PATH ? (
       path.join(DEV_APP_PATH, 'databases', internal.db._name())
-    ) : undefined;
+      ) : undefined;
   }
 }
 

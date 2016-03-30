@@ -1,44 +1,41 @@
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief JavaScript base module
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2004-2013 triAGENS GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Dr. Frank Celler
-/// @author Copyright 2012-2013, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief JavaScript base module
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2004-2013 triAGENS GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Dr. Frank Celler
+// / @author Copyright 2012-2013, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
-var internal = require("internal");
+var internal = require('internal');
 
-var fs = require("fs");
+var fs = require('fs');
 
-var mimetypes = require("@arangodb/mimetypes").mimeTypes;
+var mimetypes = require('@arangodb/mimetypes').mimeTypes;
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief errors
-////////////////////////////////////////////////////////////////////////////////
-
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief errors
+// //////////////////////////////////////////////////////////////////////////////
 
 Object.keys(internal.errors).forEach(function (key) {
   exports[key] = internal.errors[key].code;
@@ -46,17 +43,15 @@ Object.keys(internal.errors).forEach(function (key) {
 
 exports.errors = internal.errors;
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief ArangoError
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief ArangoError
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.ArangoError = internal.ArangoError;
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief defines a module
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief defines a module
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.defineModule = function (path, file) {
   var content;
@@ -65,10 +60,10 @@ exports.defineModule = function (path, file) {
 
   content = fs.read(file);
 
-  mc = internal.db._collection("_modules");
+  mc = internal.db._collection('_modules');
 
   if (mc === null) {
-    mc = internal.db._create("_modules", { isSystem: true });
+    mc = internal.db._create('_modules', { isSystem: true });
   }
 
   path = module.normalize(path);
@@ -76,15 +71,14 @@ exports.defineModule = function (path, file) {
 
   if (m === null) {
     mc.save({ path: path, content: content });
-  }
-  else {
+  } else {
     mc.replace(m, { path: path, content: content });
   }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief guessContentType
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief guessContentType
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.guessContentType = function (filename, defaultValue) {
   var re = /\.([a-zA-Z0-9]+)$/;
@@ -98,31 +92,31 @@ exports.guessContentType = function (filename, defaultValue) {
 
       if (type[1]) {
         // append charset
-        return type[0] + "; charset=utf-8";
+        return type[0] + '; charset=utf-8';
       }
 
       return type[0];
     }
-    // fall-through intentional
+  // fall-through intentional
   }
 
   // default mimetype
   if (defaultValue) {
     return defaultValue;
   }
-  return "text/plain; charset=utf-8";
+  return 'text/plain; charset=utf-8';
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief normalizeURL
-///
-/// If @FA{path} starts with "." or "..", then it is a relative path.
-/// Otherwise it is an absolute path. Normalizing will remove `//`,
-/// `/./`, `/../` from the url - expect in the beginning, where it keeps
-/// `../` and or at most one `./`.
-///
-/// If @FA{path} is empty, the url `./` will be returned.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief normalizeURL
+// /
+// / If @FA{path} starts with "." or "..", then it is a relative path.
+// / Otherwise it is an absolute path. Normalizing will remove `//`,
+// / `/./`, `/../` from the url - expect in the beginning, where it keeps
+// / `../` and or at most one `./`.
+// /
+// / If @FA{path} is empty, the url `./` will be returned.
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.normalizeURL = function (path) {
   var i;
@@ -132,29 +126,29 @@ exports.normalizeURL = function (path) {
   var r;
   var x;
 
-  if (path === "") {
-    return "./";
+  if (path === '') {
+    return './';
   }
 
   p = path.split('/');
 
   // relative path
-  if (p[0] === "." || p[0] === "..") {
-    r = p[0] + "/";
+  if (p[0] === '.' || p[0] === '..') {
+    r = p[0] + '/';
     p.shift();
     q = p;
   }
 
   // absolute path
-  else if (p[0] === "") {
-    r = "/";
+  else if (p[0] === '') {
+    r = '/';
     p.shift();
     q = p;
   }
 
   // assume that the path is relative
   else {
-    r = "./";
+    r = './';
     q = p;
   }
 
@@ -164,26 +158,24 @@ exports.normalizeURL = function (path) {
   for (i = 0;  i < q.length;  ++i) {
     x = q[i];
 
-    if (x === "..") {
+    if (x === '..') {
       if (n.length === 0) {
-        if (r === "../") {
+        if (r === '../') {
           n.push(x);
         }
-        else if (r === "./") {
-          r = "../";
-        }
-        else {
+        else if (r === './') {
+          r = '../';
+        } else {
           throw "cannot use '..' to escape top-level-directory";
         }
       }
-      else if (n[n.length - 1] === "..") {
+      else if (n[n.length - 1] === '..') {
         n.push(x);
-      }
-      else {
+      } else {
         n.pop();
       }
     }
-    else if (x !== "" && x !== ".") {
+    else if (x !== '' && x !== '.') {
       n.push(x);
     }
   }
@@ -191,55 +183,55 @@ exports.normalizeURL = function (path) {
   return r + n.join('/');
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief inspect
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief inspect
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.inspect = internal.inspect;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief output
-///
-/// In order to allow "capture" output to work, we cannot assigne the
-/// function here.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief output
+// /
+// / In order to allow "capture" output to work, we cannot assigne the
+// / function here.
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.output = function () {
   internal.output.apply(internal.output, arguments);
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief print
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief print
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.print = internal.print;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief printf
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief printf
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.printf = internal.printf;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief sprintf
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief sprintf
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.sprintf = internal.sprintf;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief printObject
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief printObject
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.printObject = internal.printObject;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief 2D ASCII table printing
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief 2D ASCII table printing
+// //////////////////////////////////////////////////////////////////////////////
 
-exports.printTable = function  (list, columns, options) {
+exports.printTable = function (list, columns, options) {
   options = options || { };
   if (options.totalString === undefined) {
-    options.totalString = "%s document(s)\n";
+    options.totalString = '%s document(s)\n';
   }
 
   var pad = '...';
@@ -254,14 +246,13 @@ exports.printTable = function  (list, columns, options) {
     columns.forEach(function (col) {
       what[col] = null;
     });
-  }
-  else {
+  } else {
     what = columns;
   }
 
   j = 0;
-  descriptions = [ ];
-  matrix = [ [ ] ];
+  descriptions = [];
+  matrix = [ [] ];
 
   for (col in what) {
     if (what.hasOwnProperty(col)) {
@@ -275,7 +266,7 @@ exports.printTable = function  (list, columns, options) {
       var name = col;
 
       // rename header?
-      if (options.hasOwnProperty("rename")) {
+      if (options.hasOwnProperty('rename')) {
         if (options.rename.hasOwnProperty(col)) {
           name = options.rename[col];
         }
@@ -293,16 +284,14 @@ exports.printTable = function  (list, columns, options) {
 
   // determine values & max widths
   list.forEach(function (row, i) {
-    matrix[i + 1] = [ ];
+    matrix[i + 1] = [];
     descriptions.forEach(function (col) {
-
       if (row.hasOwnProperty(col.id)) {
         var value;
         if (options.prettyStrings && typeof row[col.id] === 'string') {
           value = row[col.id];
-        }
-        else {
-          value = JSON.stringify(row[col.id]) || "";
+        } else {
+          value = JSON.stringify(row[col.id]) || '';
         }
 
         matrix[i + 1].push(value);
@@ -310,8 +299,7 @@ exports.printTable = function  (list, columns, options) {
         if (value.length > col.length && ! col.fixedLength) {
           col.length = Math.min(value.length, 100);
         }
-      }
-      else {
+      } else {
         // undefined
         matrix[i + 1].push('');
       }
@@ -319,7 +307,7 @@ exports.printTable = function  (list, columns, options) {
   });
 
   var divider = function () {
-    var parts = [ ];
+    var parts = [];
     descriptions.forEach(function (desc) {
       parts.push(exports.stringPadding('', desc.length, '-', 'r'));
     });
@@ -338,10 +326,9 @@ exports.printTable = function  (list, columns, options) {
       result += divider();
     }
     matrix.forEach(function (row, i) {
-      var parts = [ ];
+      var parts = [];
 
       row.forEach(function (col, j) {
-
         var len = descriptions[j].length, value = row[j];
         if (value.length > len) {
           value = value.substr(0, len - pad.length) + pad;
@@ -351,8 +338,7 @@ exports.printTable = function  (list, columns, options) {
 
       if (options.framed) {
         result += '| ' + parts.join(' | ') + ' |\n';
-      }
-      else {
+      } else {
         result += parts.join('   ') + '\n';
       }
 
@@ -375,16 +361,15 @@ exports.printTable = function  (list, columns, options) {
   }
 
   if (list.length === 0) {
-    exports.print(options.emptyString || "no document(s)");
-  }
-  else {
+    exports.print(options.emptyString || 'no document(s)');
+  } else {
     exports.print(compose());
   }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief stringPadding
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief stringPadding
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.stringPadding = function (str, len, pad, dir) {
   // yes, this is more code than new Array(length).join(chr), but it makes jslint happy
@@ -396,16 +381,15 @@ exports.stringPadding = function (str, len, pad, dir) {
     return result;
   }
 
-  if (typeof(len) === "undefined") {
+  if (typeof (len) === 'undefined') {
     len = 0;
   }
-  if (typeof(pad) === "undefined") {
+  if (typeof (pad) === 'undefined') {
     pad = ' ';
   }
 
   if (len + 1 >= str.length) {
-    switch (dir || "r"){
-
+    switch (dir || 'r') {
       // LEFT
       case 'l':
         str = fill(len + 1 - str.length, pad) + str;
@@ -420,17 +404,17 @@ exports.stringPadding = function (str, len, pad, dir) {
         break;
 
       default:
-         str = str + fill(len + 1 - str.length, pad);
-         break;
+        str = str + fill(len + 1 - str.length, pad);
+        break;
     }
   }
 
   return str;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief throws an error in case a download failed
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief throws an error in case a download failed
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.throwDownloadError = function (msg) {
   throw new exports.ArangoError({
@@ -439,9 +423,9 @@ exports.throwDownloadError = function (msg) {
   });
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief throws an error in case of missing file
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief throws an error in case of missing file
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.throwFileNotFound = function (msg) {
   throw new exports.ArangoError({
@@ -450,9 +434,9 @@ exports.throwFileNotFound = function (msg) {
   });
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief throws an error in case of a bad parameter
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief throws an error in case of a bad parameter
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.throwBadParameter = function (msg) {
   throw new exports.ArangoError({
@@ -461,9 +445,9 @@ exports.throwBadParameter = function (msg) {
   });
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief checks parameter, throws an error if missing
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief checks parameter, throws an error if missing
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.checkParameter = function (usage, descs, vars) {
   var i;
@@ -471,29 +455,28 @@ exports.checkParameter = function (usage, descs, vars) {
   for (i = 0;  i < descs.length;  ++i) {
     var desc = descs[i];
 
-    if (typeof vars[i] === "undefined") {
-      exports.throwBadParameter(desc[0] + " missing, usage: " + usage);
+    if (typeof vars[i] === 'undefined') {
+      exports.throwBadParameter(desc[0] + ' missing, usage: ' + usage);
     }
 
     if (typeof vars[i] !== desc[1]) {
       exports.throwBadParameter(desc[0] + " should be a '" + desc[1] + "', "
-                              + "not '" + (typeof vars[i]) + "'");
+        + "not '" + (typeof vars[i]) + "'");
     }
   }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief generate info message for newer version(s) available
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief generate info message for newer version(s) available
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.checkAvailableVersions = function (version) {
-  var console = require("console");
+  var console = require('console');
   var log;
 
-  if (require("@arangodb").isServer) {
+  if (require('@arangodb').isServer) {
     log = console.info;
-  }
-  else {
+  } else {
     log = internal.print;
   }
 
@@ -507,28 +490,25 @@ exports.checkAvailableVersions = function (version) {
   }
 
   try {
-    var u = "https://www.arangodb.com/repositories/versions.php?version=" + version +
-            "&os=" + internal.platform;
-    var d = internal.download(u, "", {timeout: 300});
+    var u = 'https://www.arangodb.com/repositories/versions.php?version=' + version +
+    '&os=' + internal.platform;
+    var d = internal.download(u, '', {timeout: 300});
     var v = JSON.parse(d.body);
 
-    if (v.hasOwnProperty("bugfix")) {
+    if (v.hasOwnProperty('bugfix')) {
       log("Please note that a new bugfix version '" + v.bugfix.version + "' is available");
     }
 
-    if (v.hasOwnProperty("minor")) {
+    if (v.hasOwnProperty('minor')) {
       log("Please note that a new minor version '" + v.minor.version + "' is available");
     }
 
-    if (v.hasOwnProperty("major")) {
+    if (v.hasOwnProperty('major')) {
       log("Please note that a new major version '" + v.major.version + "' is available");
     }
-  }
-  catch (err) {
+  } catch (err) {
     if (console && console.debug) {
-      console.debug("cannot check for newer version: ", err.stack);
+      console.debug('cannot check for newer version: ', err.stack);
     }
   }
 };
-
-

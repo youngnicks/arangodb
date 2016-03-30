@@ -2,33 +2,33 @@
 /*global ArangoServerState, ArangoClusterInfo, ArangoClusterComm */
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Foxx application manager
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2013 triagens GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Dr. Frank Celler
-/// @author Michael Hackstein
-/// @author Copyright 2013, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Foxx application manager
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2013 triagens GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Dr. Frank Celler
+// / @author Michael Hackstein
+// / @author Copyright 2013, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
 const _ = require('lodash');
 const fs = require('fs');
@@ -66,75 +66,75 @@ const RE_NOT_EMPTY = /./;
 
 const manifestSchema = {
   assets: (
-    joi.object().optional()
+  joi.object().optional()
     .pattern(RE_EMPTY, joi.forbidden())
     .pattern(RE_NOT_EMPTY, (
       joi.object().required()
-      .keys({
-        files: (
+        .keys({
+          files: (
           joi.array().required()
-          .items(joi.string().required())
-        ),
-        contentType: joi.string().optional()
-      })
-    ))
+            .items(joi.string().required())
+          ),
+          contentType: joi.string().optional()
+        })
+      ))
   ),
   author: joi.string().allow('').default(''),
   configuration: (
-    joi.object().optional()
+  joi.object().optional()
     .pattern(RE_EMPTY, joi.forbidden())
     .pattern(RE_NOT_EMPTY, (
       joi.object().required()
-      .keys({
-        default: joi.any().optional(),
-        type: (
+        .keys({
+          default: joi.any().optional(),
+          type: (
           joi.only(Object.keys(utils.parameterTypes))
-          .default('string')
-        ),
-        description: joi.string().optional(),
-        required: joi.boolean().default(true)
-      })
-    ))
+            .default('string')
+          ),
+          description: joi.string().optional(),
+          required: joi.boolean().default(true)
+        })
+      ))
   ),
   contributors: joi.array().optional(),
   controllers: joi.alternatives().try(
     joi.string().optional(),
     (
-      joi.object().optional()
+    joi.object().optional()
       .pattern(RE_NOT_FQPATH, joi.forbidden())
       .pattern(RE_FQPATH, joi.string().required())
     )
   ),
   defaultDocument: joi.string().allow('').allow(null).default('index.html'),
   dependencies: (
-    joi.object().optional()
+  joi.object().optional()
     .pattern(RE_EMPTY, joi.forbidden())
     .pattern(RE_NOT_EMPTY, joi.alternatives().try(
       joi.string().required(),
       joi.object().required()
-      .keys({
-        name: joi.string().default('*'),
-        version: joi.string().default('*'),
-        required: joi.boolean().default(true)
-      })
+        .keys({
+          name: joi.string().default('*'),
+          version: joi.string().default('*'),
+          required: joi.boolean().default(true)
+        })
     ))
   ),
   description: joi.string().allow('').default(''),
   engines: (
-    joi.object().optional()
+  joi.object().optional()
     .pattern(RE_EMPTY, joi.forbidden())
     .pattern(RE_NOT_EMPTY, joi.string().required())
   ),
   exports: joi.alternatives().try(
     joi.string().optional(),
     (
-      joi.object().optional()
+    joi.object().optional()
       .pattern(RE_EMPTY, joi.forbidden())
       .pattern(RE_NOT_EMPTY, joi.string().required())
     )
   ),
   files: (
-    joi.object().optional()
+  joi.object().optional()
     .pattern(RE_EMPTY, joi.forbidden())
     .pattern(RE_NOT_EMPTY, joi.alternatives().try(joi.string().required(), joi.object().required()))
   ),
@@ -144,14 +144,14 @@ const manifestSchema = {
   license: joi.string().optional(),
   name: joi.string().regex(/^[-_a-z][-_a-z0-9]*$/i).required(),
   repository: (
-    joi.object().optional()
+  joi.object().optional()
     .keys({
       type: joi.string().required(),
       url: joi.string().required()
     })
   ),
   scripts: (
-    joi.object().optional()
+  joi.object().optional()
     .pattern(RE_EMPTY, joi.forbidden())
     .pattern(RE_NOT_EMPTY, joi.string().required())
     .default(Object, 'empty scripts object')
@@ -159,21 +159,20 @@ const manifestSchema = {
   setup: joi.string().optional(),
   teardown: joi.string().optional(),
   tests: (
-    joi.alternatives()
+  joi.alternatives()
     .try(
       joi.string().required(),
       (
-        joi.array().optional()
+      joi.array().optional()
         .items(joi.string().required())
         .default(Array, 'empty test files array')
       )
-    )
+  )
   ),
   thumbnail: joi.string().optional(),
   version: joi.string().required(),
   rootElement: joi.boolean().default(false)
 };
-
 
 var appCache = {};
 var usedSystemMountPoints = [
@@ -185,30 +184,29 @@ var usedSystemMountPoints = [
   '/_system/simple-auth' // Authentication.
 ];
 
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Searches through a tree of files and returns true for all app roots
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Searches through a tree of files and returns true for all app roots
-////////////////////////////////////////////////////////////////////////////////
-
-function filterAppRoots(folder) {
+function filterAppRoots (folder) {
   return /[\\\/]APP$/i.test(folder) && !/(APP[\\\/])(.*)APP$/i.test(folder);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Trigger reload routing
-/// Triggers reloading of routes in this as well as all other threads.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Trigger reload routing
+// / Triggers reloading of routes in this as well as all other threads.
+// //////////////////////////////////////////////////////////////////////////////
 
-function reloadRouting() {
+function reloadRouting () {
   executeGlobalContextFunction('reloadRouting');
   actions.reloadRouting();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Resets the app cache
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Resets the app cache
+// //////////////////////////////////////////////////////////////////////////////
 
-function resetCache() {
+function resetCache () {
   _.each(appCache, function (cache) {
     _.each(cache, function (app) {
       app.main.loaded = false;
@@ -217,12 +215,12 @@ function resetCache() {
   appCache = {};
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief lookup app in cache
-/// Returns either the app or undefined if it is not cached.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief lookup app in cache
+// / Returns either the app or undefined if it is not cached.
+// //////////////////////////////////////////////////////////////////////////////
 
-function lookupApp(mount) {
+function lookupApp (mount) {
   var dbname = arangodb.db._name();
   if (!appCache.hasOwnProperty(dbname) || Object.keys(appCache[dbname]).length === 0) {
     refillCaches(dbname);
@@ -240,12 +238,11 @@ function lookupApp(mount) {
   return appCache[dbname][mount];
 }
 
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief refills the routing cache
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief refills the routing cache
-////////////////////////////////////////////////////////////////////////////////
-
-function refillCaches(dbname) {
+function refillCaches (dbname) {
   var cache = {};
   _.each(appCache[dbname], function (app) {
     app.main.loaded = false;
@@ -266,20 +263,20 @@ function refillCaches(dbname) {
   return routes;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief routes of an foxx
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief routes of an foxx
+// //////////////////////////////////////////////////////////////////////////////
 
-function routes(mount) {
+function routes (mount) {
   var app = lookupApp(mount);
   return routeApp(app);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Makes sure all system apps are mounted.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Makes sure all system apps are mounted.
+// //////////////////////////////////////////////////////////////////////////////
 
-function checkMountedSystemApps(dbname) {
+function checkMountedSystemApps (dbname) {
   var i, mount;
   var collection = utils.getStorage();
   for (i = 0; i < usedSystemMountPoints.length; ++i) {
@@ -294,13 +291,13 @@ function checkMountedSystemApps(dbname) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief check a manifest for completeness
-///
-/// this implements issue #590: Manifest Lint
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief check a manifest for completeness
+// /
+// / this implements issue #590: Manifest Lint
+// //////////////////////////////////////////////////////////////////////////////
 
-function checkManifest(filename, manifest) {
+function checkManifest (filename, manifest) {
   const serverVersion = plainServerVersion();
   const validationErrors = [];
 
@@ -323,7 +320,7 @@ function checkManifest(filename, manifest) {
     manifest.engines
     && manifest.engines.arangodb
     && !semver.satisfies(serverVersion, manifest.engines.arangodb)
-   ) {
+  ) {
     console.warn(
       `Manifest "${filename}" for app "${manifest.name}":`
       + ` ArangoDB version ${serverVersion} probably not compatible`
@@ -335,7 +332,7 @@ function checkManifest(filename, manifest) {
     deprecated('3.0', (
       `Manifest "${filename}" for app "${manifest.name}" contains deprecated attribute "setup",`
       + ` use "scripts.setup" instead.`
-    ));
+      ));
     manifest.scripts.setup = manifest.scripts.setup || manifest.setup;
     delete manifest.setup;
   }
@@ -344,7 +341,7 @@ function checkManifest(filename, manifest) {
     deprecated('3.0', (
       `Manifest "${filename}" for app "${manifest.name}" contains deprecated attribute "teardown",`
       + ` use "scripts.teardown" instead.`
-    ));
+      ));
     manifest.scripts.teardown = manifest.scripts.teardown || manifest.teardown;
     delete manifest.teardown;
   }
@@ -353,7 +350,7 @@ function checkManifest(filename, manifest) {
     deprecated('3.0', (
       `Manifest "${filename}" for app "${manifest.name}" contains deprecated attribute "assets",`
       + ` use "files" and an external build tool instead.`
-    ));
+      ));
   }
 
   Object.keys(manifest).forEach(function (key) {
@@ -392,14 +389,12 @@ function checkManifest(filename, manifest) {
   }
 }
 
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief validates a manifest file and returns it.
+// / All errors are handled including file not found. Returns undefined if manifest is invalid
+// //////////////////////////////////////////////////////////////////////////////
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief validates a manifest file and returns it.
-/// All errors are handled including file not found. Returns undefined if manifest is invalid
-////////////////////////////////////////////////////////////////////////////////
-
-function validateManifestFile(filename) {
+function validateManifestFile (filename) {
   var mf, msg;
   if (!fs.exists(filename)) {
     msg = `Cannot find manifest file "${filename}"`;
@@ -411,8 +406,8 @@ function validateManifestFile(filename) {
     const error = new ArangoError({
       errorNum: errors.ERROR_MALFORMED_MANIFEST_FILE.code,
       errorMessage: errors.ERROR_MALFORMED_MANIFEST_FILE.message
-      + '\nFile: ' + filename
-      + '\nCause: ' + e
+        + '\nFile: ' + filename
+        + '\nCause: ' + e
     });
     error.cause = e;
     throw error;
@@ -423,8 +418,8 @@ function validateManifestFile(filename) {
     const error = new ArangoError({
       errorNum: errors.ERROR_INVALID_APPLICATION_MANIFEST.code,
       errorMessage: errors.ERROR_INVALID_APPLICATION_MANIFEST.message
-      + '\nFile: ' + filename
-      + '\nCause: ' + e
+        + '\nFile: ' + filename
+        + '\nCause: ' + e
     });
     error.cause = e;
     throw error;
@@ -432,60 +427,60 @@ function validateManifestFile(filename) {
   return mf;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Checks if the mountpoint is reserved for system apps
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Checks if the mountpoint is reserved for system apps
+// //////////////////////////////////////////////////////////////////////////////
 
-function isSystemMount(mount) {
+function isSystemMount (mount) {
   return (/^\/_/).test(mount);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief returns the root path for application. Knows about system apps
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief returns the root path for application. Knows about system apps
+// //////////////////////////////////////////////////////////////////////////////
 
-function computeRootAppPath(mount) {
+function computeRootAppPath (mount) {
   if (isSystemMount(mount)) {
     return FoxxService._systemAppPath;
   }
   return FoxxService._appPath;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief transforms a mount point to a sub-path relative to root
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief transforms a mount point to a sub-path relative to root
+// //////////////////////////////////////////////////////////////////////////////
 
-function transformMountToPath(mount) {
+function transformMountToPath (mount) {
   var list = mount.split('/');
   list.push('APP');
   return fs.join.apply(fs, list);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief transforms a sub-path to a mount point
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief transforms a sub-path to a mount point
+// //////////////////////////////////////////////////////////////////////////////
 
-function transformPathToMount(path) {
+function transformPathToMount (path) {
   var list = path.split(fs.pathSeparator);
   list.pop();
   return '/' + list.join('/');
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief returns the application path for mount point
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief returns the application path for mount point
+// //////////////////////////////////////////////////////////////////////////////
 
-function computeAppPath(mount) {
+function computeAppPath (mount) {
   var root = computeRootAppPath(mount);
   var mountPath = transformMountToPath(mount);
   return fs.join(root, mountPath);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief executes an app script
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief executes an app script
+// //////////////////////////////////////////////////////////////////////////////
 
-function executeAppScript(scriptName, app, argv) {
+function executeAppScript (scriptName, app, argv) {
   var scripts = app.manifest.scripts;
   // Only run setup/teardown scripts if they exist
   if (scripts[scriptName] || (scriptName !== 'setup' && scriptName !== 'teardown')) {
@@ -497,11 +492,11 @@ function executeAppScript(scriptName, app, argv) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief returns a valid app config for validation purposes
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief returns a valid app config for validation purposes
+// //////////////////////////////////////////////////////////////////////////////
 
-function fakeAppConfig(path) {
+function fakeAppConfig (path) {
   var file = fs.join(path, 'manifest.json');
   return {
     id: '__internal',
@@ -515,16 +510,16 @@ function fakeAppConfig(path) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief returns the app path and manifest
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief returns the app path and manifest
+// //////////////////////////////////////////////////////////////////////////////
 
-function appConfig(mount, options, activateDevelopment) {
+function appConfig (mount, options, activateDevelopment) {
   var root = computeRootAppPath(mount);
   var path = transformMountToPath(mount);
 
   var file = fs.join(root, path, 'manifest.json');
-   return {
+  return {
     id: mount,
     path: path,
     options: options || {},
@@ -535,13 +530,13 @@ function appConfig(mount, options, activateDevelopment) {
   };
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Creates an app with options and returns it
-/// All errors are handled including app not found. Returns undefined if app is invalid.
-/// If the app is valid it will be added into the local app cache.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Creates an app with options and returns it
+// / All errors are handled including app not found. Returns undefined if app is invalid.
+// / If the app is valid it will be added into the local app cache.
+// //////////////////////////////////////////////////////////////////////////////
 
-function createApp(mount, options, activateDevelopment) {
+function createApp (mount, options, activateDevelopment) {
   var dbname = arangodb.db._name();
   var config = appConfig(mount, options, activateDevelopment);
   var app = new FoxxService(config);
@@ -549,11 +544,11 @@ function createApp(mount, options, activateDevelopment) {
   return app;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Distributes zip file to peer coordinators. Only used in cluster
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Distributes zip file to peer coordinators. Only used in cluster
+// //////////////////////////////////////////////////////////////////////////////
 
-function uploadToPeerCoordinators(appInfo, coordinators) {
+function uploadToPeerCoordinators (appInfo, coordinators) {
   let coordOptions = {
     coordTransactionID: ArangoClusterInfo.uniqid()
   };
@@ -573,12 +568,11 @@ function uploadToPeerCoordinators(appInfo, coordinators) {
   };
 }
 
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Generates an App with the given options into the targetPath
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Generates an App with the given options into the targetPath
-////////////////////////////////////////////////////////////////////////////////
-
-function installAppFromGenerator(targetPath, options) {
+function installAppFromGenerator (targetPath, options) {
   var invalidOptions = [];
   // Set default values:
   options.name = options.name || 'MyApp';
@@ -609,7 +603,7 @@ function installAppFromGenerator(targetPath, options) {
     throw new ArangoError({
       errorNum: errors.ERROR_INVALID_FOXX_OPTIONS.code,
       errorMessage: errors.ERROR_INVALID_FOXX_OPTIONS.message
-      + '\nOptions: ' + JSON.stringify(invalidOptions, undefined, 2)
+        + '\nOptions: ' + JSON.stringify(invalidOptions, undefined, 2)
     });
   }
   options.path = targetPath;
@@ -617,13 +611,13 @@ function installAppFromGenerator(targetPath, options) {
   engine.write();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Extracts an app from zip and moves it to temporary path
-///
-/// return path to app
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Extracts an app from zip and moves it to temporary path
+// /
+// / return path to app
+// //////////////////////////////////////////////////////////////////////////////
 
-function extractAppToPath(archive, targetPath, noDelete) {
+function extractAppToPath (archive, targetPath, noDelete) {
   var tempFile = fs.getTempFile('zip', false);
   fs.makeDirectory(tempFile);
   fs.unzipFile(archive, tempFile, false, true);
@@ -634,8 +628,7 @@ function extractAppToPath(archive, targetPath, noDelete) {
   if (!noDelete) {
     try {
       fs.remove(archive);
-    }
-    catch (err1) {
+    } catch (err1) {
       arangodb.printf(`Cannot remove temporary file "${archive}"\n`);
     }
   }
@@ -644,7 +637,7 @@ function extractAppToPath(archive, targetPath, noDelete) {
   // locate the manifest file
   // .............................................................................
 
-  var tree = fs.listTree(tempFile).sort(function(a, b) {
+  var tree = fs.listTree(tempFile).sort(function (a, b) {
     return a.length - b.length;
   });
   var found;
@@ -669,8 +662,7 @@ function extractAppToPath(archive, targetPath, noDelete) {
 
   if (found === mf) {
     mp = '.';
-  }
-  else {
+  } else {
     mp = found.substr(0, found.length - mf.length - 1);
   }
 
@@ -682,19 +674,18 @@ function extractAppToPath(archive, targetPath, noDelete) {
   if (found !== mf) {
     try {
       fs.removeDirectoryRecursive(tempFile);
-    }
-    catch (err1) {
+    } catch (err1) {
       let details = String(err1.stack || err1);
       arangodb.printf(`Cannot remove temporary folder "${tempFile}"\n Stack: ${details}`);
     }
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief builds a github repository URL
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief builds a github repository URL
+// //////////////////////////////////////////////////////////////////////////////
 
-function buildGithubUrl(appInfo) {
+function buildGithubUrl (appInfo) {
   var splitted = appInfo.split(':');
   var repository = splitted[1];
   var version = splitted[2];
@@ -709,11 +700,11 @@ function buildGithubUrl(appInfo) {
   return urlPrefix + repository + '/archive/' + version + '.zip';
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Downloads an app from remote zip file and copies it to mount path
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Downloads an app from remote zip file and copies it to mount path
+// //////////////////////////////////////////////////////////////////////////////
 
-function installAppFromRemote(url, targetPath) {
+function installAppFromRemote (url, targetPath) {
   var tempFile = fs.getTempFile('downloads', false);
   var auth;
 
@@ -739,19 +730,18 @@ function installAppFromRemote(url, targetPath) {
     if (result.code < 200 || result.code > 299) {
       throwDownloadError(`Could not download from "${url}"`);
     }
-  }
-  catch (err) {
+  } catch (err) {
     let details = String(err.stack || err);
     throwDownloadError(`Could not download from "${url}": ${details}`);
   }
   extractAppToPath(tempFile, targetPath);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Copies an app from local, either zip file or folder, to mount path
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Copies an app from local, either zip file or folder, to mount path
+// //////////////////////////////////////////////////////////////////////////////
 
-function installAppFromLocal(path, targetPath) {
+function installAppFromLocal (path, targetPath) {
   if (fs.isDirectory(path)) {
     extractAppToPath(utils.zipDirectory(path), targetPath);
   } else {
@@ -759,19 +749,18 @@ function installAppFromLocal(path, targetPath) {
   }
 }
 
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief run a Foxx application script
+// /
+// / Input:
+// / * scriptName: the script name
+// / * mount: the mount path starting with a "/"
+// /
+// / Output:
+// / -
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief run a Foxx application script
-///
-/// Input:
-/// * scriptName: the script name
-/// * mount: the mount path starting with a "/"
-///
-/// Output:
-/// -
-////////////////////////////////////////////////////////////////////////////////
-
-function runScript(scriptName, mount, options) {
+function runScript (scriptName, mount, options) {
   checkParameter(
     'runScript(<scriptName>, <mount>, [<options>])',
     [ [ 'Script name', 'string' ], [ 'Mount path', 'string' ] ],
@@ -783,17 +772,17 @@ function runScript(scriptName, mount, options) {
   return executeAppScript(scriptName, app, options) || null;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief return the app's README.md
-///
-/// Input:
-/// * mount: the mount path starting with a "/"
-///
-/// Output:
-/// -
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief return the app's README.md
+// /
+// / Input:
+// / * mount: the mount path starting with a "/"
+// /
+// / Output:
+// / -
+// //////////////////////////////////////////////////////////////////////////////
 
-function readme(mount) {
+function readme (mount) {
   checkParameter(
     'readme(<mount>)',
     [ [ 'Mount path', 'string' ] ],
@@ -811,17 +800,17 @@ function readme(mount) {
   return readmeText || null;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief run a Foxx application's tests
-///
-/// Input:
-/// * mount: the mount path starting with a "/"
-///
-/// Output:
-/// -
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief run a Foxx application's tests
+// /
+// / Input:
+// / * mount: the mount path starting with a "/"
+// /
+// / Output:
+// / -
+// //////////////////////////////////////////////////////////////////////////////
 
-function runTests(mount, options) {
+function runTests (mount, options) {
   checkParameter(
     'runTests(<mount>, [<options>])',
     [ [ 'Mount path', 'string' ] ],
@@ -833,23 +822,23 @@ function runTests(mount, options) {
   return require('@arangodb/foxx/mocha').run(app, reporter);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Initializes the appCache and fills it initially for each db.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Initializes the appCache and fills it initially for each db.
+// //////////////////////////////////////////////////////////////////////////////
 
-function initCache() {
+function initCache () {
   var dbname = arangodb.db._name();
   if (!appCache.hasOwnProperty(dbname)) {
     initializeFoxx();
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Internal scanFoxx function. Check scanFoxx.
-/// Does not check parameters and throws errors.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Internal scanFoxx function. Check scanFoxx.
+// / Does not check parameters and throws errors.
+// //////////////////////////////////////////////////////////////////////////////
 
-function _scanFoxx(mount, options, activateDevelopment) {
+function _scanFoxx (mount, options, activateDevelopment) {
   options = options || { };
   var dbname = arangodb.db._name();
   delete appCache[dbname][mount];
@@ -857,8 +846,7 @@ function _scanFoxx(mount, options, activateDevelopment) {
   if (!options.__clusterDistribution) {
     try {
       utils.getStorage().save(app.toJSON());
-    }
-    catch (err) {
+    } catch (err) {
       if (!options.replace || err.errorNum !== errors.ERROR_ARANGO_UNIQUE_CONSTRAINT_VIOLATED.code) {
         throw err;
       }
@@ -873,34 +861,34 @@ function _scanFoxx(mount, options, activateDevelopment) {
   return app;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Scans the sources of the given mountpoint and publishes the routes
-///
-/// TODO: Long Documentation!
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Scans the sources of the given mountpoint and publishes the routes
+// /
+// / TODO: Long Documentation!
+// //////////////////////////////////////////////////////////////////////////////
 
-function scanFoxx(mount, options) {
+function scanFoxx (mount, options) {
   checkParameter(
     'scanFoxx(<mount>)',
     [ [ 'Mount path', 'string' ] ],
-    [ mount ] );
+    [ mount ]);
   initCache();
   var app = _scanFoxx(mount, options);
   reloadRouting();
   return app.simpleJSON();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Scans the sources of the given mountpoint and publishes the routes
-///
-/// TODO: Long Documentation!
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Scans the sources of the given mountpoint and publishes the routes
+// /
+// / TODO: Long Documentation!
+// //////////////////////////////////////////////////////////////////////////////
 
-function rescanFoxx(mount) {
+function rescanFoxx (mount) {
   checkParameter(
     'scanFoxx(<mount>)',
     [ [ 'Mount path', 'string' ] ],
-    [ mount ] );
+    [ mount ]);
 
   var old = lookupApp(mount);
   var collection = utils.getStorage();
@@ -919,11 +907,11 @@ function rescanFoxx(mount) {
   });
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Build app in path
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Build app in path
+// //////////////////////////////////////////////////////////////////////////////
 
-function _buildAppInPath(appInfo, path, options) {
+function _buildAppInPath (appInfo, path, options) {
   try {
     if (appInfo === 'EMPTY') {
       // Make Empty app
@@ -950,12 +938,12 @@ function _buildAppInPath(appInfo, path, options) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Internal app validation function
-/// Does not check parameters and throws errors.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Internal app validation function
+// / Does not check parameters and throws errors.
+// //////////////////////////////////////////////////////////////////////////////
 
-function _validateApp(appInfo) {
+function _validateApp (appInfo) {
   var tempPath = fs.getTempFile('apps', false);
   try {
     _buildAppInPath(appInfo, tempPath, {});
@@ -969,13 +957,12 @@ function _validateApp(appInfo) {
   }
 }
 
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Internal install function. Check install.
+// / Does not check parameters and throws errors.
+// //////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Internal install function. Check install.
-/// Does not check parameters and throws errors.
-////////////////////////////////////////////////////////////////////////////////
-
-function _install(appInfo, mount, options, runSetup) {
+function _install (appInfo, mount, options, runSetup) {
   var targetPath = computeAppPath(mount, true);
   var app;
   var collection = utils.getStorage();
@@ -1034,25 +1021,25 @@ function _install(appInfo, mount, options, runSetup) {
   return app;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Installs a new foxx application on the given mount point.
-///
-/// TODO: Long Documentation!
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Installs a new foxx application on the given mount point.
+// /
+// / TODO: Long Documentation!
+// //////////////////////////////////////////////////////////////////////////////
 
-function install(appInfo, mount, options) {
+function install (appInfo, mount, options) {
   checkParameter(
     'install(<appInfo>, <mount>, [<options>])',
     [ [ 'Install information', 'string' ],
       [ 'Mount path', 'string' ] ],
-    [ appInfo, mount ] );
+    [ appInfo, mount ]);
   utils.validateMount(mount);
   let hasToBeDistributed = /^uploads[\/\\]tmp-/.test(appInfo);
   var app = _install(appInfo, mount, options, true);
   options = options || {};
   if (ArangoServerState.isCoordinator() && !options.__clusterDistribution) {
     let name = ArangoServerState.id();
-    let coordinators = ArangoClusterInfo.getCoordinators().filter(function(c) {
+    let coordinators = ArangoClusterInfo.getCoordinators().filter(function (c) {
       return c !== name;
     });
     if (hasToBeDistributed) {
@@ -1096,12 +1083,12 @@ function install(appInfo, mount, options) {
   return app.simpleJSON();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Internal install function. Check install.
-/// Does not check parameters and throws errors.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Internal install function. Check install.
+// / Does not check parameters and throws errors.
+// //////////////////////////////////////////////////////////////////////////////
 
-function _uninstall(mount, options) {
+function _uninstall (mount, options) {
   var dbname = arangodb.db._name();
   if (!appCache.hasOwnProperty(dbname)) {
     initializeFoxx(options);
@@ -1165,17 +1152,17 @@ function _uninstall(mount, options) {
   return app;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Uninstalls the foxx application on the given mount point.
-///
-/// TODO: Long Documentation!
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Uninstalls the foxx application on the given mount point.
+// /
+// / TODO: Long Documentation!
+// //////////////////////////////////////////////////////////////////////////////
 
-function uninstall(mount, options) {
+function uninstall (mount, options) {
   checkParameter(
     'uninstall(<mount>, [<options>])',
     [ [ 'Mount path', 'string' ] ],
-    [ mount ] );
+    [ mount ]);
   utils.validateMount(mount);
   options = options || {};
   var app = _uninstall(mount, options);
@@ -1202,25 +1189,25 @@ function uninstall(mount, options) {
   return app.simpleJSON();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Replaces a foxx application on the given mount point by an other one.
-///
-/// TODO: Long Documentation!
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Replaces a foxx application on the given mount point by an other one.
+// /
+// / TODO: Long Documentation!
+// //////////////////////////////////////////////////////////////////////////////
 
-function replace(appInfo, mount, options) {
+function replace (appInfo, mount, options) {
   checkParameter(
     'replace(<appInfo>, <mount>, [<options>])',
     [ [ 'Install information', 'string' ],
       [ 'Mount path', 'string' ] ],
-    [ appInfo, mount ] );
+    [ appInfo, mount ]);
   utils.validateMount(mount);
   _validateApp(appInfo);
   options = options || {};
   let hasToBeDistributed = /^uploads[\/\\]tmp-/.test(appInfo);
   if (ArangoServerState.isCoordinator() && !options.__clusterDistribution) {
     let name = ArangoServerState.id();
-    let coordinators = ArangoClusterInfo.getCoordinators().filter(function(c) {
+    let coordinators = ArangoClusterInfo.getCoordinators().filter(function (c) {
       return c !== name;
     });
     if (hasToBeDistributed) {
@@ -1269,25 +1256,25 @@ function replace(appInfo, mount, options) {
   return app.simpleJSON();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Upgrade a foxx application on the given mount point by a new one.
-///
-/// TODO: Long Documentation!
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Upgrade a foxx application on the given mount point by a new one.
+// /
+// / TODO: Long Documentation!
+// //////////////////////////////////////////////////////////////////////////////
 
-function upgrade(appInfo, mount, options) {
+function upgrade (appInfo, mount, options) {
   checkParameter(
     'upgrade(<appInfo>, <mount>, [<options>])',
     [ [ 'Install information', 'string' ],
       [ 'Mount path', 'string' ] ],
-    [ appInfo, mount ] );
+    [ appInfo, mount ]);
   utils.validateMount(mount);
   _validateApp(appInfo);
   options = options || {};
   let hasToBeDistributed = /^uploads[\/\\]tmp-/.test(appInfo);
   if (ArangoServerState.isCoordinator() && !options.__clusterDistribution) {
     let name = ArangoServerState.id();
-    let coordinators = ArangoClusterInfo.getCoordinators().filter(function(c) {
+    let coordinators = ArangoClusterInfo.getCoordinators().filter(function (c) {
       return c !== name;
     });
     if (hasToBeDistributed) {
@@ -1351,11 +1338,11 @@ function upgrade(appInfo, mount, options) {
   return app.simpleJSON();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief initializes the Foxx apps
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief initializes the Foxx apps
+// //////////////////////////////////////////////////////////////////////////////
 
-function initializeFoxx(options) {
+function initializeFoxx (options) {
   var dbname = arangodb.db._name();
   var mounts = syncWithFolder(options);
   refillCaches(dbname);
@@ -1365,20 +1352,20 @@ function initializeFoxx(options) {
   });
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief compute all app routes
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief compute all app routes
+// //////////////////////////////////////////////////////////////////////////////
 
-function mountPoints() {
+function mountPoints () {
   var dbname = arangodb.db._name();
   return refillCaches(dbname);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief toggles development mode of app and reloads routing
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief toggles development mode of app and reloads routing
+// //////////////////////////////////////////////////////////////////////////////
 
-function _toggleDevelopment(mount, activate) {
+function _toggleDevelopment (mount, activate) {
   var app = lookupApp(mount);
   app.development(activate);
   utils.updateApp(mount, app.toJSON());
@@ -1386,41 +1373,41 @@ function _toggleDevelopment(mount, activate) {
   return app;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief activate development mode
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief activate development mode
+// //////////////////////////////////////////////////////////////////////////////
 
-function setDevelopment(mount) {
+function setDevelopment (mount) {
   checkParameter(
     'development(<mount>)',
     [ [ 'Mount path', 'string' ] ],
-    [ mount ] );
+    [ mount ]);
   var app = _toggleDevelopment(mount, true);
   return app.simpleJSON();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief activate production mode
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief activate production mode
+// //////////////////////////////////////////////////////////////////////////////
 
-function setProduction(mount) {
+function setProduction (mount) {
   checkParameter(
     'production(<mount>)',
     [ [ 'Mount path', 'string' ] ],
-    [ mount ] );
+    [ mount ]);
   var app = _toggleDevelopment(mount, false);
   return app.simpleJSON();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Configure the app at the mountpoint
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Configure the app at the mountpoint
+// //////////////////////////////////////////////////////////////////////////////
 
-function configure(mount, options) {
+function configure (mount, options) {
   checkParameter(
     'configure(<mount>)',
     [ [ 'Mount path', 'string' ] ],
-    [ mount ] );
+    [ mount ]);
   utils.validateMount(mount, true);
   var app = lookupApp(mount);
   var invalid = app.applyConfiguration(options.configuration || {});
@@ -1433,15 +1420,15 @@ function configure(mount, options) {
   return app.simpleJSON();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Set up dependencies of the app at the mountpoint
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Set up dependencies of the app at the mountpoint
+// //////////////////////////////////////////////////////////////////////////////
 
-function updateDeps(mount, options) {
+function updateDeps (mount, options) {
   checkParameter(
     'updateDeps(<mount>)',
     [ [ 'Mount path', 'string' ] ],
-    [ mount ] );
+    [ mount ]);
   utils.validateMount(mount, true);
   var app = lookupApp(mount);
   var invalid = app.applyDependencies(options.dependencies || {});
@@ -1454,53 +1441,53 @@ function updateDeps(mount, options) {
   return app.simpleJSON();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Get the configuration for the app at the given mountpoint
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Get the configuration for the app at the given mountpoint
+// //////////////////////////////////////////////////////////////////////////////
 
-function configuration(mount) {
+function configuration (mount) {
   checkParameter(
     'configuration(<mount>)',
     [ [ 'Mount path', 'string' ] ],
-    [ mount ] );
+    [ mount ]);
   utils.validateMount(mount, true);
   var app = lookupApp(mount);
   return app.getConfiguration();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Get the dependencies for the app at the given mountpoint
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Get the dependencies for the app at the given mountpoint
+// //////////////////////////////////////////////////////////////////////////////
 
-function dependencies(mount) {
+function dependencies (mount) {
   checkParameter(
     'dependencies(<mount>)',
     [ [ 'Mount path', 'string' ] ],
-    [ mount ] );
+    [ mount ]);
   utils.validateMount(mount, true);
   var app = lookupApp(mount);
   return app.getDependencies();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Require the exports defined on the mount point
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Require the exports defined on the mount point
+// //////////////////////////////////////////////////////////////////////////////
 
-function requireApp(mount) {
+function requireApp (mount) {
   checkParameter(
     'requireApp(<mount>)',
     [ [ 'Mount path', 'string' ] ],
-    [ mount ] );
+    [ mount ]);
   utils.validateMount(mount, true);
   var app = lookupApp(mount);
   return exportApp(app);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Syncs the apps in ArangoDB with the applications stored on disc
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Syncs the apps in ArangoDB with the applications stored on disc
+// //////////////////////////////////////////////////////////////////////////////
 
-function syncWithFolder(options) {
+function syncWithFolder (options) {
   var dbname = arangodb.db._name();
   options = options || {};
   options.replace = true;
@@ -1523,10 +1510,9 @@ function syncWithFolder(options) {
   });
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Exports
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Exports
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.syncWithFolder = syncWithFolder;
 exports.install = install;
@@ -1547,9 +1533,9 @@ exports.dependencies = dependencies;
 exports.requireApp = requireApp;
 exports._resetCache = resetCache;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Serverside only API
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Serverside only API
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.scanFoxx = scanFoxx;
 exports.mountPoints = mountPoints;
@@ -1557,9 +1543,9 @@ exports.routes = routes;
 exports.rescanFoxx = rescanFoxx;
 exports.lookupApp = lookupApp;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Exports from foxx utils module.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Exports from foxx utils module.
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.mountedApp = utils.mountedApp;
 exports.list = utils.list;
@@ -1567,9 +1553,9 @@ exports.listJson = utils.listJson;
 exports.listDevelopment = utils.listDevelopment;
 exports.listDevelopmentJson = utils.listDevelopmentJson;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Exports from foxx store module.
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Exports from foxx store module.
+// //////////////////////////////////////////////////////////////////////////////
 
 exports.available = store.available;
 exports.availableJson = store.availableJson;

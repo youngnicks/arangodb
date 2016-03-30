@@ -1,31 +1,31 @@
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief ArangoDB Mocha integration
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2015-2016 triAGENS GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Alan Plum
-/// @author Copyright 2015-2016, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief ArangoDB Mocha integration
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2015-2016 triAGENS GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Alan Plum
+// / @author Copyright 2015-2016, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
 var interfaces = require('mocha/lib/interfaces');
 var MochaContext = require('mocha/lib/context');
@@ -35,13 +35,13 @@ var BaseReporter = require('mocha/lib/reporters/base');
 var DefaultReporter = require('mocha/lib/reporters/json');
 var escapeRe = require('mocha/node_modules/escape-string-regexp');
 
-function notIn(arr) {
+function notIn (arr) {
   return function (item) {
     return arr.indexOf(item) === -1;
   };
 }
 
-function deleteFrom(obj) {
+function deleteFrom (obj) {
   return function (key) {
     delete obj[key];
   };
@@ -53,7 +53,7 @@ var reporters = {
   default: DefaultReporter
 };
 
-exports.run = function runMochaTests(run, files, reporterName) {
+exports.run = function runMochaTests (run, files, reporterName) {
   if (!Array.isArray(files)) {
     files = [files];
   }
@@ -112,18 +112,18 @@ exports.run = function runMochaTests(run, files, reporterName) {
     runner.run();
   } finally {
     Object.getOwnPropertyNames(global)
-    .filter(notIn(globals))
-    .forEach(deleteFrom(global));
+      .filter(notIn(globals))
+      .forEach(deleteFrom(global));
     Object.getOwnPropertyNames(Object.prototype)
-    .filter(notIn(objectProps))
-    .forEach(deleteFrom(Object.prototype));
+      .filter(notIn(objectProps))
+      .forEach(deleteFrom(Object.prototype));
     global.process.stdout.write = _stdoutWrite;
   }
 
   return runner.testResults || reporter.stats;
 };
 
-function StreamReporter(runner) {
+function StreamReporter (runner) {
   var self = this;
   BaseReporter.call(this, runner);
   var items = [];
@@ -147,7 +147,7 @@ function StreamReporter(runner) {
   runner.testResults = items;
 }
 
-function SuiteReporter(runner) {
+function SuiteReporter (runner) {
   var self = this;
   BaseReporter.call(this, runner);
   var suites = [];
@@ -208,7 +208,7 @@ function SuiteReporter(runner) {
  * @api private
  */
 
-function clean(test) {
+function clean (test) {
   return {
     title: test.title,
     fullTitle: test.fullTitle(),
@@ -223,9 +223,9 @@ function clean(test) {
  * @return {Object}
  */
 
-function errorJSON(err) {
+function errorJSON (err) {
   var res = {};
-  Object.getOwnPropertyNames(err).forEach(function(key) {
+  Object.getOwnPropertyNames(err).forEach(function (key) {
     res[key] = err[key];
   }, err);
   return res;

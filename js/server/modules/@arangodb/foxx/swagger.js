@@ -1,31 +1,31 @@
 'use strict';
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Foxx Swagger integration
-///
-/// @file
-///
-/// DISCLAIMER
-///
-/// Copyright 2015 triAGENS GmbH, Cologne, Germany
-///
-/// Licensed under the Apache License, Version 2.0 (the "License");
-/// you may not use this file except in compliance with the License.
-/// You may obtain a copy of the License at
-///
-///     http://www.apache.org/licenses/LICENSE-2.0
-///
-/// Unless required by applicable law or agreed to in writing, software
-/// distributed under the License is distributed on an "AS IS" BASIS,
-/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-/// See the License for the specific language governing permissions and
-/// limitations under the License.
-///
-/// Copyright holder is triAGENS GmbH, Cologne, Germany
-///
-/// @author Alan Plum
-/// @author Copyright 2015, triAGENS GmbH, Cologne, Germany
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
+// / @brief Foxx Swagger integration
+// /
+// / @file
+// /
+// / DISCLAIMER
+// /
+// / Copyright 2015 triAGENS GmbH, Cologne, Germany
+// /
+// / Licensed under the Apache License, Version 2.0 (the "License");
+// / you may not use this file except in compliance with the License.
+// / You may obtain a copy of the License at
+// /
+// /     http://www.apache.org/licenses/LICENSE-2.0
+// /
+// / Unless required by applicable law or agreed to in writing, software
+// / distributed under the License is distributed on an "AS IS" BASIS,
+// / WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// / See the License for the specific language governing permissions and
+// / limitations under the License.
+// /
+// / Copyright holder is triAGENS GmbH, Cologne, Germany
+// /
+// / @author Alan Plum
+// / @author Copyright 2015, triAGENS GmbH, Cologne, Germany
+// //////////////////////////////////////////////////////////////////////////////
 
 var _ = require('lodash');
 var fs = require('fs');
@@ -44,7 +44,7 @@ var jsonSchemaPrimitives = [
   'string'
 ];
 
-function createSwaggerRouteHandler(appPath, opts) {
+function createSwaggerRouteHandler (appPath, opts) {
   if (!opts) {
     opts = {};
   }
@@ -92,7 +92,7 @@ function createSwaggerRouteHandler(appPath, opts) {
   };
 }
 
-function swaggerPath(path, basePath) {
+function swaggerPath (path, basePath) {
   if (path.charAt(0) === '/') {
     return path;
   }
@@ -102,7 +102,7 @@ function swaggerPath(path, basePath) {
   return fs.safeJoin(basePath, path);
 }
 
-function swaggerJson(req, res, opts) {
+function swaggerJson (req, res, opts) {
   var foxx;
   try {
     foxx = FoxxManager.routes(opts.appPath);
@@ -131,7 +131,7 @@ function swaggerJson(req, res, opts) {
   });
 }
 
-function fixSchema(model) {
+function fixSchema (model) {
   if (!model) {
     return undefined;
   }
@@ -154,11 +154,11 @@ function fixSchema(model) {
   return model;
 }
 
-function swaggerifyPath(path) {
+function swaggerifyPath (path) {
   return path.replace(/(?::)([^\/]*)/g, '{$1}');
 }
 
-function parseRoutes(tag, routes, models) {
+function parseRoutes (tag, routes, models) {
   var paths = {};
   var definitions = {};
 
