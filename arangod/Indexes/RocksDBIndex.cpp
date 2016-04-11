@@ -18,17 +18,20 @@
 ///
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
-/// @author Dr. Frank Celler
+/// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "SkiplistIndex.h"
+#include "RocksDBIndex.h"
 #include "Aql/AstNode.h"
 #include "Aql/SortCondition.h"
 #include "Basics/AttributeNameParser.h"
 #include "Basics/debugging.h"
 #include "Basics/VelocyPackHelper.h"
+#include "Indexes/PrimaryIndex.h"
+#include "Indexes/RocksDBKeyComparator.h"
 #include "VocBase/document-collection.h"
 
+#include <iostream>
 #include <velocypack/Iterator.h>
 #include <velocypack/velocypack-aliases.h>
 
@@ -53,15 +56,6 @@ static size_t sortWeight(arangodb::aql::AstNode const* node) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief frees an element in the skiplist
-////////////////////////////////////////////////////////////////////////////////
-
-static void FreeElm(void* e) {
-  auto element = static_cast<TRI_index_element_t*>(e);
-  TRI_index_element_t::freeElement(element);
-}
-
 // .............................................................................
 // recall for all of the following comparison functions:
 //
@@ -80,93 +74,131 @@ static void FreeElm(void* e) {
 // strings: lexicographical
 // lists: lexicographically and within each slot according to these rules.
 // ...........................................................................
+  
+RocksDBIterator::RocksDBIterator(arangodb::Transaction* trx, 
+                                 arangodb::RocksDBIndex const* index,
+                                 arangodb::PrimaryIndex* primaryIndex,
+                                 rocksdb::DB* db,
+                                 bool reverse, arangodb::velocypack::Slice const& left,
+                                 arangodb::velocypack::Slice const& right)
+    : _trx(trx),
+      _primaryIndex(primaryIndex),
+      _db(db),
+      _leftEndpoint(nullptr),
+      _rightEndpoint(nullptr),
+      _reverse(reverse) {
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief compares a key with an element, version with proper types
-////////////////////////////////////////////////////////////////////////////////
+  TRI_idx_iid_t const id = index->id();
 
-static int CompareKeyElement(VPackSlice const* left,
-                             TRI_index_element_t const* right,
-                             size_t rightPosition) {
-  TRI_ASSERT(nullptr != left);
-  TRI_ASSERT(nullptr != right);
-  auto rightSubobjects = right->subObjects();
-  return arangodb::basics::VelocyPackHelper::compare(*left,
-      rightSubobjects[rightPosition].slice(right->document()), true);
-}
+  _leftEndpoint = new arangodb::velocypack::Buffer<char>();
+  _leftEndpoint->append(reinterpret_cast<char const*>(&id), sizeof(TRI_idx_iid_t));
+  _leftEndpoint->append(left.startAs<char const>(), left.byteSize());
+ 
+  std::cout << "LOOKUP\n"; 
+  std::cout << "SEARCHING. LEFT: (" << std::to_string(_leftEndpoint->size()) << ")\n";
+  for (size_t j = 0; j < _leftEndpoint->size(); ++j) {
+    std::cout << std::hex << (int) _leftEndpoint->data()[j] << " ";
+  }
+  std::cout << "\n";
+   
+  _rightEndpoint = new arangodb::velocypack::Buffer<char>();
+  _rightEndpoint->append(reinterpret_cast<char const*>(&id), sizeof(TRI_idx_iid_t));
+  _rightEndpoint->append(right.startAs<char const>(), right.byteSize());
+  
+  std::cout << "SEARCHING. RIGHT: (" << std::to_string(_rightEndpoint->size()) << ")\n";
+  for (size_t j = 0; j < _rightEndpoint->size(); ++j) {
+    std::cout << std::hex << (int) _rightEndpoint->data()[j] << " ";
+  }
+  std::cout << "\n";
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief compares elements, version with proper types
-////////////////////////////////////////////////////////////////////////////////
+  std::cout << "CREATING CURSOR\n";
+  _cursor.reset(_db->NewIterator(rocksdb::ReadOptions()));
 
-static int CompareElementElement(TRI_index_element_t const* left,
-                                 size_t leftPosition,
-                                 TRI_index_element_t const* right,
-                                 size_t rightPosition) {
-  TRI_ASSERT(nullptr != left);
-  TRI_ASSERT(nullptr != right);
-
-  auto leftSubobjects = left->subObjects();
-  auto rightSubobjects = right->subObjects();
-  VPackSlice l = leftSubobjects[leftPosition].slice(left->document());
-  VPackSlice r = rightSubobjects[rightPosition].slice(right->document());
-  return arangodb::basics::VelocyPackHelper::compare(l, r, true);
+  reset();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Reset the cursor
 ////////////////////////////////////////////////////////////////////////////////
 
-void SkiplistIterator::reset() {
+void RocksDBIterator::reset() {
   if (_reverse) {
-    _cursor = _rightEndPoint;
+    _cursor->Seek(rocksdb::Slice(_rightEndpoint->data(), _rightEndpoint->size()));
   } else {
-    _cursor = _leftEndPoint;
+    _cursor->Seek(rocksdb::Slice(_leftEndpoint->data(), _leftEndpoint->size()));
   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief Get the next element in the skiplist
+/// @brief Get the next element in the index
 ////////////////////////////////////////////////////////////////////////////////
 
-TRI_doc_mptr_t* SkiplistIterator::next() {
-  if (_cursor == nullptr) {
-    // We are exhausted already, sorry
-    return nullptr;
-  }
-  Node* tmp = _cursor;
-  if (_reverse) {
-    if (_cursor == _leftEndPoint) {
-      _cursor = nullptr;
-    } else {
-      _cursor = _cursor->prevNode();
+TRI_doc_mptr_t* RocksDBIterator::next() {
+  // TODO: append document key to make entries unambiguous
+  auto comparator = _db->GetOptions().comparator;
+
+  while (true) {
+    std::cout << "COMPARE ITERATION\n";
+    if (!_cursor->Valid()) {
+      // We are exhausted already, sorry
+  std::cout << "- CURSOR INVALID\n"; 
+      return nullptr;
     }
-  } else {
-    if (_cursor == _rightEndPoint) {
-      _cursor = nullptr;
-    } else {
-      _cursor = _cursor->nextNode();
-    }
+  
+  rocksdb::Slice key = _cursor->key();
+  std::cout << "KEY: (" << key.size() << ")\n";
+  for (size_t j = 0; j < key.size(); ++j) {
+    std::cout << std::hex << (int) key[j] << " ";
   }
-  TRI_ASSERT(tmp != nullptr);
-  TRI_ASSERT(tmp->document() != nullptr);
-  return tmp->document()->document();
+  std::cout << "\n";
+  
+  std::cout << "- FIRST COMP. KEY SIZE: " << key.size() << ", LEP SIZE: " << _leftEndpoint->size() << "\n";
+    int res = comparator->Compare(key, rocksdb::Slice(_leftEndpoint->data(), _leftEndpoint->size()));
+  std::cout << "- FIRST COMP DONE. RES: " << res << "\n";
+
+    if (res < 0) {
+  std::cout << "- FIRST COMP DONE. LEFT < RIGHT\n";
+      if (_reverse) {
+        _cursor->Prev();
+      } else {
+        _cursor->Next();
+      }
+      continue;
+    }
+  std::cout << "- FIRST COMP DONE. LEFT <= RIGHT\n";
+  
+    int res2 = comparator->Compare(key, rocksdb::Slice(_rightEndpoint->data(), _rightEndpoint->size()));
+  std::cout << "- SECOND COMP DONE. RES: " << res2 << "\n";
+    if (res2 > 0) {
+  std::cout << "- SECOND COMP DONE. RIGHT > LEFT\n";
+      return nullptr;
+    }
+  std::cout << "SECOND COMP DONE. RIGHT <= LEFT\n";
+
+    break;
+  }
+
+  std::cout << "- FOUND A MATCH\n";
+
+  rocksdb::Slice value = _cursor->value();
+  _cursor->Next();
+  
+  std::cout << "MATCH VALUE: " << VPackSlice(value.data()).toJson() << "\n";
+
+  // use primary index to lookup the document
+  return _primaryIndex->lookupKey(_trx, VPackSlice(value.data()));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief create the skiplist index
+/// @brief create the index
 ////////////////////////////////////////////////////////////////////////////////
 
-SkiplistIndex::SkiplistIndex(
+RocksDBIndex::RocksDBIndex(
     TRI_idx_iid_t iid, TRI_document_collection_t* collection,
     std::vector<std::vector<arangodb::basics::AttributeName>> const& fields,
     bool unique, bool sparse)
     : PathBasedIndex(iid, collection, fields, unique, sparse, true),
-      CmpElmElm(this),
-      CmpKeyElm(this),
-      _skiplistIndex(nullptr) {
-  _skiplistIndex =
-      new TRI_Skiplist(CmpElmElm, CmpKeyElm, FreeElm, unique, _useExpansion);
+      _db(RocksDBFeature::instance()->db()) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -174,29 +206,28 @@ SkiplistIndex::SkiplistIndex(
 /// this is used in the cluster coordinator case
 ////////////////////////////////////////////////////////////////////////////////
 
-SkiplistIndex::SkiplistIndex(VPackSlice const& slice)
+RocksDBIndex::RocksDBIndex(VPackSlice const& slice)
     : PathBasedIndex(slice, true),
-      CmpElmElm(this),
-      CmpKeyElm(this),
-      _skiplistIndex(nullptr) {}
+      _db(nullptr) {}
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief destroy the skiplist index
+/// @brief destroy the index
 ////////////////////////////////////////////////////////////////////////////////
 
-SkiplistIndex::~SkiplistIndex() { delete _skiplistIndex; }
+RocksDBIndex::~RocksDBIndex() {}
 
-size_t SkiplistIndex::memory() const {
-  return _skiplistIndex->memoryUsage() +
-         static_cast<size_t>(_skiplistIndex->getNrUsed()) * elementSize();
+size_t RocksDBIndex::memory() const {
+  return 0; // TODO
+//  return _skiplistIndex->memoryUsage() +
+//         static_cast<size_t>(_skiplistIndex->getNrUsed()) * elementSize();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief return a VelocyPack representation of the index
 ////////////////////////////////////////////////////////////////////////////////
 
-void SkiplistIndex::toVelocyPack(VPackBuilder& builder,
-                                 bool withFigures) const {
+void RocksDBIndex::toVelocyPack(VPackBuilder& builder,
+                                bool withFigures) const {
   Index::toVelocyPack(builder, withFigures);
   builder.add("unique", VPackValue(_unique));
   builder.add("sparse", VPackValue(_sparse));
@@ -206,18 +237,18 @@ void SkiplistIndex::toVelocyPack(VPackBuilder& builder,
 /// @brief return a VelocyPack representation of the index figures
 ////////////////////////////////////////////////////////////////////////////////
 
-void SkiplistIndex::toVelocyPackFigures(VPackBuilder& builder) const {
+void RocksDBIndex::toVelocyPackFigures(VPackBuilder& builder) const {
   TRI_ASSERT(builder.isOpenObject());
   builder.add("memory", VPackValue(memory()));
-  _skiplistIndex->appendToVelocyPack(builder);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief inserts a document into a skiplist index
+/// @brief inserts a document into the index
 ////////////////////////////////////////////////////////////////////////////////
 
-int SkiplistIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
-                          bool) {
+int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
+                         bool) {
+  // TODO: append document key to make entries unambiguous
   std::vector<TRI_index_element_t*> elements;
 
   int res;
@@ -236,23 +267,57 @@ int SkiplistIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     return res;
   }
 
-  // insert into the index. the memory for the element will be owned or freed
-  // by the index
+  VPackBuilder builder;
+  std::vector<std::string> values;
+  for (auto& it : elements) {
+    builder.clear();
+    builder.openArray();
+    for (size_t i = 0; i < _fields.size(); ++i) {
+      builder.add(it->subObjects()[i].slice(doc));
+    }
+    builder.close();
+    VPackSlice const s = builder.slice();
+    std::string value(reinterpret_cast<char const*>(&_iid), sizeof(TRI_idx_iid_t));
+    value.append(s.startAs<char const>(), s.byteSize());
+    values.emplace_back(std::move(value));
+  }
+
+  VPackSlice const key = VPackSlice(doc->vpack()).get(TRI_VOC_ATTRIBUTE_KEY);
+  std::string const keyString(key.startAs<char const>(), key.byteSize());
+
+  rocksdb::ReadOptions readOptions;
+  rocksdb::WriteOptions writeOptions;
+  writeOptions.sync = false;
 
   size_t const count = elements.size();
 
   for (size_t i = 0; i < count; ++i) {
-    res = _skiplistIndex->insert(elements[i]);
+    if (_unique) {
+      std::string existing;
+      auto status = _db->Get(readOptions, values[i], &existing); 
+
+      if (status.ok()) {
+        // duplicate key
+        res = TRI_ERROR_ARANGO_UNIQUE_CONSTRAINT_VIOLATED;
+      }
+    }
+
+    if (res == TRI_ERROR_NO_ERROR) {
+  std::cout << "INSERTING: (" << std::to_string(values[i].size()) << ")\n";
+  for (size_t j = 0; j < values[i].size(); ++j) {
+    std::cout << std::hex << (int) values[i][j] << " ";
+  }
+
+  std::cout << "\n";
+      auto status = _db->Put(writeOptions, values[i], keyString);
+      if (! status.ok()) {
+        res = TRI_ERROR_INTERNAL;
+      }
+    }
 
     if (res != TRI_ERROR_NO_ERROR) {
-      TRI_index_element_t::freeElement(elements[i]);
-      // Note: this element is freed already
-      for (size_t j = i + 1; j < count; ++j) {
-        TRI_index_element_t::freeElement(elements[j]);
-      }
       for (size_t j = 0; j < i; ++j) {
-        _skiplistIndex->remove(elements[j]);
-        // No need to free elements[j] skiplist has taken over already
+        _db->Delete(writeOptions, values[i]);
       }
     
       if (res == TRI_ERROR_ARANGO_UNIQUE_CONSTRAINT_VIOLATED && !_unique) {
@@ -262,15 +327,20 @@ int SkiplistIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
       break;
     }
   }
+      
+  for (size_t i = 0; i < count; ++i) {
+    TRI_index_element_t::freeElement(elements[i]);
+  }
   return res;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief removes a document from a skiplist index
+/// @brief removes a document from the index
 ////////////////////////////////////////////////////////////////////////////////
 
-int SkiplistIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
-                          bool) {
+int RocksDBIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
+                         bool) {
+  // TODO: append document key to make entries unambiguous
   std::vector<TRI_index_element_t*> elements;
 
   int res;
@@ -288,19 +358,34 @@ int SkiplistIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
 
     return res;
   }
+  
+  VPackBuilder builder;
+  std::vector<std::string> values;
+  for (auto& it : elements) {
+    builder.clear();
+    builder.openArray();
+    for (size_t i = 0; i < _fields.size(); ++i) {
+      builder.add(it->subObjects()[i].slice(doc));
+    }
+    builder.close();
+    VPackSlice const s = builder.slice();
+    std::string value(reinterpret_cast<char const*>(&_iid), sizeof(TRI_idx_iid_t));
+    value.append(s.startAs<char const>(), s.byteSize());
+    values.emplace_back(std::move(value));
+  }
 
-  // attempt the removal for skiplist indexes
-  // ownership for the index element is transferred to the index
+  VPackSlice const key = VPackSlice(doc->vpack()).get(TRI_VOC_ATTRIBUTE_KEY);
+  std::string const keyString(key.startAs<char const>(), key.byteSize());
 
   size_t const count = elements.size();
 
   for (size_t i = 0; i < count; ++i) {
-    int result = _skiplistIndex->remove(elements[i]);
+    auto status = _db->Delete(rocksdb::WriteOptions(), values[i]);
 
     // we may be looping through this multiple times, and if an error
     // occurs, we want to keep it
-    if (result != TRI_ERROR_NO_ERROR) {
-      res = result;
+    if (! status.ok()) {
+      res = TRI_ERROR_INTERNAL;
     }
 
     TRI_index_element_t::freeElement(elements[i]);
@@ -310,43 +395,20 @@ int SkiplistIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief Checks if the interval is valid. It is declared invalid if
-///        one border is nullptr or the right is lower than left.
-////////////////////////////////////////////////////////////////////////////////
-
-bool SkiplistIndex::intervalValid(Node* left, Node* right) const {
-  if (left == nullptr) {
-    return false;
-  }
-  if (right == nullptr) {
-    return false;
-  }
-  if (left == right) {
-    // Exactly one result. Improve speed on unique indexes
-    return true;
-  }
-  if (CmpElmElm(left->document(), right->document(),
-                arangodb::basics::SKIPLIST_CMP_TOTORDER) > 0) {
-    return false;
-  }
-  return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief attempts to locate an entry in the skip list index
+/// @brief attempts to locate an entry in the index
 ///
 /// Warning: who ever calls this function is responsible for destroying
-/// the SkiplistIterator* results
+/// the RocksDBIterator* results
 ////////////////////////////////////////////////////////////////////////////////
 
-SkiplistIterator* SkiplistIndex::lookup(arangodb::Transaction* trx,
-                                        VPackSlice const searchValues,
-                                        bool reverse) const {
+RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
+                                      VPackSlice const searchValues,
+                                      bool reverse) const {
   TRI_ASSERT(searchValues.isArray());
   TRI_ASSERT(searchValues.length() <= _fields.size());
 
-
   VPackBuilder leftSearch;
+  VPackBuilder rightSearch;
   VPackSlice lastNonEq;
   leftSearch.openArray();
   for (auto const& it : VPackArrayIterator(searchValues)) {
@@ -356,29 +418,23 @@ SkiplistIterator* SkiplistIndex::lookup(arangodb::Transaction* trx,
       lastNonEq = it;
       break;
     }
+std::cout << "FOUND TYPE: " << eq.typeName() << "\n";
     leftSearch.add(eq);
   }
 
-  Node* leftBorder = nullptr;
-  Node* rightBorder = nullptr;
+  VPackSlice leftBorder;
+  VPackSlice rightBorder;
+
   if (lastNonEq.isNone()) {
     // We only have equality!
     leftSearch.close();
-    VPackSlice search = leftSearch.slice();
-    rightBorder = _skiplistIndex->rightKeyLookup(&search);
-    if (rightBorder == _skiplistIndex->startNode()) {
-      // No matching elements
-      rightBorder = nullptr;
-      leftBorder = nullptr;
-    } else {
-      leftBorder = _skiplistIndex->leftKeyLookup(&search);
-      leftBorder = leftBorder->nextNode();
-      // NOTE: rightBorder < leftBorder => no Match.
-      // Will be checked by interval valid
-    }
+
+std::cout << "ALL EQ\n";
+    leftBorder = leftSearch.slice();
+    rightBorder = leftSearch.slice();
   } else {
     // Copy rightSearch = leftSearch for right border
-    VPackBuilder rightSearch = leftSearch;
+    rightSearch = leftSearch;
 
     // Define Lower-Bound 
     VPackSlice lastLeft = lastNonEq.get(TRI_SLICE_KEY_GE);
@@ -387,29 +443,33 @@ SkiplistIterator* SkiplistIndex::lookup(arangodb::Transaction* trx,
       leftSearch.add(lastLeft);
       leftSearch.close();
       VPackSlice search = leftSearch.slice();
-      leftBorder = _skiplistIndex->leftKeyLookup(&search);
+      leftBorder = search;
       // leftKeyLookup guarantees that we find the element before search. This
       // should not be in the cursor, but the next one
       // This is also save for the startNode, it should never be contained in the index.
-      leftBorder = leftBorder->nextNode();
+//      leftBorder = leftBorder->nextNode();
+      // TODO: inc by one
     } else {
       lastLeft = lastNonEq.get(TRI_SLICE_KEY_GT);
       if (!lastLeft.isNone()) {
         leftSearch.add(lastLeft);
         leftSearch.close();
         VPackSlice search = leftSearch.slice();
-        leftBorder = _skiplistIndex->rightKeyLookup(&search);
+
+        leftBorder = search;
         // leftBorder is identical or smaller than search, skip it.
         // It is guaranteed that the next element is greater than search
-        leftBorder = leftBorder->nextNode();
+//        leftBorder = leftBorder->nextNode();
+        // TODO: inc by one
       } else {
         // No lower bound set default to (null <= x)
         leftSearch.close();
         VPackSlice search = leftSearch.slice();
-        leftBorder = _skiplistIndex->leftKeyLookup(&search);
-        leftBorder = leftBorder->nextNode();
+        leftBorder = search;
+//        leftBorder = leftBorder->nextNode();
         // Now this is the correct leftBorder.
         // It is either the first equal one, or the first one greater than.
+        // TODO: inc by one
       }
     }
     // NOTE: leftBorder could be nullptr (no element fulfilling condition.)
@@ -423,139 +483,29 @@ SkiplistIterator* SkiplistIndex::lookup(arangodb::Transaction* trx,
       rightSearch.add(lastRight);
       rightSearch.close();
       VPackSlice search = rightSearch.slice();
-      rightBorder = _skiplistIndex->rightKeyLookup(&search);
-      if (rightBorder == _skiplistIndex->startNode()) {
-        // No match make interval invalid
-        rightBorder = nullptr;
-      }
-      // else rightBorder is correct
+      rightBorder = search;
     } else {
       lastRight = lastNonEq.get(TRI_SLICE_KEY_LT);
       if (!lastRight.isNone()) {
         rightSearch.add(lastRight);
         rightSearch.close();
         VPackSlice search = rightSearch.slice();
-        rightBorder = _skiplistIndex->leftKeyLookup(&search);
-        if (rightBorder == _skiplistIndex->startNode()) {
-          // No match make interval invalid
-          rightBorder = nullptr;
-        }
-        // else rightBorder is correct
+        rightBorder = search;
       } else {
         // No upper bound set default to (x <= INFINITY)
         rightSearch.close();
         VPackSlice search = rightSearch.slice();
-        rightBorder = _skiplistIndex->rightKeyLookup(&search);
-        if (rightBorder == _skiplistIndex->startNode()) {
-          // No match make interval invalid
-          rightBorder = nullptr;
-        }
-        // else rightBorder is correct
+        rightBorder = search;
       }
     }
   }
 
-  // Check if the interval is valid and not empty
-  if (intervalValid(leftBorder, rightBorder)) {
-    auto iterator = std::make_unique<SkiplistIterator>(reverse, leftBorder, rightBorder);
-    if (iterator == nullptr) {
-      THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-    }
-    return iterator.release();
-  }
+  auto iterator = std::make_unique<RocksDBIterator>(trx, this, _collection->primaryIndex(), _db, reverse, leftBorder, rightBorder);
 
-  // Creates an empty iterator
-  auto iterator = std::make_unique<SkiplistIterator>(reverse, nullptr, nullptr);
-  if (iterator == nullptr) {
-    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-  }
   return iterator.release();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief compares a key with an element in a skip list, generic callback
-////////////////////////////////////////////////////////////////////////////////
-
-int SkiplistIndex::KeyElementComparator::operator()(
-    VPackSlice const* leftKey,
-    TRI_index_element_t const* rightElement) const {
-  TRI_ASSERT(nullptr != leftKey);
-  TRI_ASSERT(nullptr != rightElement);
-
-  // Note that the key might contain fewer fields than there are indexed
-  // attributes, therefore we only run the following loop to
-  // leftKey->_numFields.
-  TRI_ASSERT(leftKey->isArray());
-  size_t numFields = leftKey->length();
-  for (size_t j = 0; j < numFields; j++) {
-    VPackSlice field = leftKey->at(j);
-    int compareResult =
-        CompareKeyElement(&field, rightElement, j);
-    if (compareResult != 0) {
-      return compareResult;
-    }
-  }
-
-  return 0;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief compares two elements in a skip list, this is the generic callback
-////////////////////////////////////////////////////////////////////////////////
-
-int SkiplistIndex::ElementElementComparator::operator()(
-    TRI_index_element_t const* leftElement,
-    TRI_index_element_t const* rightElement,
-    arangodb::basics::SkipListCmpType cmptype) const {
-  TRI_ASSERT(nullptr != leftElement);
-  TRI_ASSERT(nullptr != rightElement);
-
-  // ..........................................................................
-  // The document could be the same -- so no further comparison is required.
-  // ..........................................................................
-
-  if (leftElement == rightElement ||
-      (!_idx->_skiplistIndex->isArray() &&
-       leftElement->document() == rightElement->document())) {
-    return 0;
-  }
-
-  for (size_t j = 0; j < _idx->numPaths(); j++) {
-    int compareResult =
-        CompareElementElement(leftElement, j, rightElement, j);
-
-    if (compareResult != 0) {
-      return compareResult;
-    }
-  }
-
-  // ...........................................................................
-  // This is where the difference between the preorder and the proper total
-  // order comes into play. Here if the 'keys' are the same,
-  // but the doc ptr is different (which it is since we are here), then
-  // we return 0 if we use the preorder and look at the _key attribute
-  // otherwise.
-  // ...........................................................................
-
-  if (arangodb::basics::SKIPLIST_CMP_PREORDER == cmptype) {
-    return 0;
-  }
-
-  // We break this tie in the key comparison by looking at the key:
-  VPackSlice leftKey = VPackSlice(leftElement->document()->vpack()).get(TRI_VOC_ATTRIBUTE_KEY);
-  VPackSlice rightKey = VPackSlice(rightElement->document()->vpack()).get(TRI_VOC_ATTRIBUTE_KEY);
- 
-  int compareResult = leftKey.compareString(rightKey.copyString());
-
-  if (compareResult < 0) {
-    return -1;
-  } else if (compareResult > 0) {
-    return 1;
-  }
-  return 0;
-}
-
-bool SkiplistIndex::accessFitsIndex(
+bool RocksDBIndex::accessFitsIndex(
     arangodb::aql::AstNode const* access, arangodb::aql::AstNode const* other,
     arangodb::aql::AstNode const* op, arangodb::aql::Variable const* reference,
     std::unordered_map<size_t, std::vector<arangodb::aql::AstNode const*>>&
@@ -641,7 +591,7 @@ bool SkiplistIndex::accessFitsIndex(
       } else {
         (*it).second.emplace_back(op);
       }
-      TRI_IF_FAILURE("SkiplistIndex::accessFitsIndex") {
+      TRI_IF_FAILURE("RocksDBIndex::accessFitsIndex") {
         THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
       }
 
@@ -652,7 +602,7 @@ bool SkiplistIndex::accessFitsIndex(
   return false;
 }
 
-void SkiplistIndex::matchAttributes(
+void RocksDBIndex::matchAttributes(
     arangodb::aql::AstNode const* node,
     arangodb::aql::Variable const* reference,
     std::unordered_map<size_t, std::vector<arangodb::aql::AstNode const*>>&
@@ -692,7 +642,7 @@ void SkiplistIndex::matchAttributes(
   }
 }
 
-bool SkiplistIndex::supportsFilterCondition(
+bool RocksDBIndex::supportsFilterCondition(
     arangodb::aql::AstNode const* node,
     arangodb::aql::Variable const* reference, size_t itemsInIndex,
     size_t& estimatedItems, double& estimatedCost) const {
@@ -791,7 +741,7 @@ bool SkiplistIndex::supportsFilterCondition(
   return false;
 }
 
-bool SkiplistIndex::supportsSortCondition(
+bool RocksDBIndex::supportsSortCondition(
     arangodb::aql::SortCondition const* sortCondition,
     arangodb::aql::Variable const* reference, size_t itemsInIndex,
     double& estimatedCost, size_t& coveredAttributes) const {
@@ -825,7 +775,7 @@ bool SkiplistIndex::supportsSortCondition(
   return false;
 }
 
-IndexIterator* SkiplistIndex::iteratorForCondition(
+IndexIterator* RocksDBIndex::iteratorForCondition(
     arangodb::Transaction* trx, IndexIteratorContext* context,
     arangodb::aql::Ast* ast, arangodb::aql::AstNode const* node,
     arangodb::aql::Variable const* reference, bool reverse) const {
@@ -836,7 +786,7 @@ IndexIterator* SkiplistIndex::iteratorForCondition(
     // We only use this index for sort. Empty searchValue
     VPackArrayBuilder guard(&searchValues);
 
-    TRI_IF_FAILURE("SkiplistIndex::noSortIterator") {
+    TRI_IF_FAILURE("RocksDBIndex::noSortIterator") {
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
     }
   } else {
@@ -896,14 +846,14 @@ IndexIterator* SkiplistIndex::iteratorForCondition(
       if (comp->type == arangodb::aql::NODE_TYPE_OPERATOR_BINARY_EQ) {
         searchValues.openObject();
         searchValues.add(VPackValue(TRI_SLICE_KEY_EQUAL));
-        TRI_IF_FAILURE("SkiplistIndex::permutationEQ") {
+        TRI_IF_FAILURE("RocksDBIndex::permutationEQ") {
           THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
         }
       } else if (comp->type == arangodb::aql::NODE_TYPE_OPERATOR_BINARY_IN) {
         if (isAttributeExpanded(usedFields)) {
           searchValues.openObject();
           searchValues.add(VPackValue(TRI_SLICE_KEY_EQUAL));
-          TRI_IF_FAILURE("SkiplistIndex::permutationArrayIN") {
+          TRI_IF_FAILURE("RocksDBIndex::permutationArrayIN") {
             THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
           }
         } else {
@@ -975,7 +925,7 @@ IndexIterator* SkiplistIndex::iteratorForCondition(
   }
   searchValues.close();
 
-  TRI_IF_FAILURE("SkiplistIndex::noIterator") {
+  TRI_IF_FAILURE("RocksDBIndex::noIterator") {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
 
@@ -1011,7 +961,7 @@ IndexIterator* SkiplistIndex::iteratorForCondition(
 /// @brief specializes the condition for use with the index
 ////////////////////////////////////////////////////////////////////////////////
 
-arangodb::aql::AstNode* SkiplistIndex::specializeCondition(
+arangodb::aql::AstNode* RocksDBIndex::specializeCondition(
     arangodb::aql::AstNode* node,
     arangodb::aql::Variable const* reference) const {
   std::unordered_map<size_t, std::vector<arangodb::aql::AstNode const*>> found;
@@ -1072,7 +1022,7 @@ arangodb::aql::AstNode* SkiplistIndex::specializeCondition(
   return node;
 }
 
-bool SkiplistIndex::isDuplicateOperator(
+bool RocksDBIndex::isDuplicateOperator(
     arangodb::aql::AstNode const* node,
     std::unordered_set<int> const& operatorsFound) const {
   auto type = node->type;

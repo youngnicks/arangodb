@@ -60,6 +60,7 @@
 #include "HttpServer/ApplicationEndpointServer.h"
 #include "HttpServer/AsyncJobManager.h"
 #include "HttpServer/HttpHandlerFactory.h"
+#include "Indexes/RocksDBFeature.h"
 #include "Rest/InitializeRest.h"
 #include "Rest/OperationMode.h"
 #include "Rest/Version.h"
@@ -378,6 +379,7 @@ ArangoServer::ArangoServer(int argc, char** argv)
       _applicationAgency(nullptr),
       _jobManager(nullptr),
       _applicationV8(nullptr),
+      _rocksdb(nullptr),
       _authenticateSystemOnly(false),
       _disableAuthentication(false),
       _disableAuthenticationUnixSockets(false),
@@ -425,6 +427,7 @@ ArangoServer::ArangoServer(int argc, char** argv)
 
 ArangoServer::~ArangoServer() {
   delete _indexPool;
+  delete _rocksdb;
   delete _jobManager;
   delete _server;
 
@@ -1123,6 +1126,12 @@ void ArangoServer::buildApplicationServer() {
 
   _applicationAgency = new ApplicationAgency(_server, _applicationEndpointServer, _applicationV8, _queryRegistry);
   _applicationServer->addFeature(_applicationAgency);
+  
+  // .............................................................................
+  // rocksdb
+  // .............................................................................
+
+  _rocksdb = RocksDBFeature::instance();
 
   // .............................................................................
   // parse the command line options - exit if there is a parse error
@@ -1357,6 +1366,13 @@ int ArangoServer::startupServer() {
 
   if (_applicationServer->programOptions().has("no-upgrade")) {
     skipUpgrade = true;
+  }
+  
+  int res = _rocksdb->initialize(_databasePath);
+
+  if (res != TRI_ERROR_NO_ERROR) {
+    LOG(FATAL) << "unable to start rocksdb instance";
+    FATAL_ERROR_EXIT();
   }
 
   // special treatment for the write-ahead log
@@ -1670,7 +1686,7 @@ int ArangoServer::startupServer() {
   LOG(INFO) << "ArangoDB (version " << ARANGODB_VERSION_FULL
             << ") is ready for business. Have fun!";
 
-  int res;
+  res = TRI_ERROR_NO_ERROR;
 
   if (mode == OperationMode::MODE_CONSOLE) {
     res = runConsole(vocbase);
@@ -1697,6 +1713,10 @@ int ArangoServer::startupServer() {
   _pairForJobHandler = nullptr;
 
   closeDatabases();
+
+  _rocksdb->shutdown();
+  delete _rocksdb;
+  _rocksdb = nullptr;
 
   if (mode == OperationMode::MODE_CONSOLE) {
     std::cout << std::endl << TRI_BYE_MESSAGE << std::endl;
@@ -1815,6 +1835,7 @@ void ArangoServer::waitForHeartbeat() {
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief runs the server
 ////////////////////////////////////////////////////////////////////////////////
+
 int ArangoServer::runServer(TRI_vocbase_t* vocbase) {
   // disabled maintenance mode
   waitForHeartbeat();

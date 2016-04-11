@@ -526,6 +526,23 @@ arangodb::Index* TRI_EnsureSkiplistIndexDocumentCollection(
     std::vector<std::string> const&, bool, bool, bool&);
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief finds a RocksDB index
+///
+/// Note that the caller must hold at least a read-lock.
+////////////////////////////////////////////////////////////////////////////////
+
+arangodb::Index* TRI_LookupRocksDBIndexDocumentCollection(
+    TRI_document_collection_t*, std::vector<std::string> const&, int, bool);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief ensures that a RocksDB index exists
+////////////////////////////////////////////////////////////////////////////////
+
+arangodb::Index* TRI_EnsureRocksDBIndexDocumentCollection(
+    arangodb::Transaction* trx, TRI_document_collection_t*, TRI_idx_iid_t,
+    std::vector<std::string> const&, bool, bool, bool&);
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief finds a fulltext index
 ///
 /// Note that the caller must hold at least a read-lock.

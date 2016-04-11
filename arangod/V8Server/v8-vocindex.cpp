@@ -33,6 +33,7 @@
 #include "Indexes/HashIndex.h"
 #include "Indexes/Index.h"
 #include "Indexes/PrimaryIndex.h"
+#include "Indexes/RocksDBIndex.h"
 #include "Indexes/SkiplistIndex.h"
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/V8TransactionContext.h"
@@ -290,6 +291,19 @@ static int EnhanceJsonIndexSkiplist(v8::Isolate* isolate,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief enhances the json of a RocksDB index
+////////////////////////////////////////////////////////////////////////////////
+
+static int EnhanceJsonIndexRocksDB(v8::Isolate* isolate,
+                                   v8::Handle<v8::Object> const obj,
+                                   VPackBuilder& builder, bool create) {
+  int res = ProcessIndexFields(isolate, obj, builder, 0, create);
+  ProcessIndexSparseFlag(isolate, obj, builder, create);
+  ProcessIndexUniqueFlag(isolate, obj, builder);
+  return res;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief enhances the json of a fulltext index
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -412,6 +426,10 @@ static int EnhanceIndexJson(v8::FunctionCallbackInfo<v8::Value> const& args,
       case arangodb::Index::TRI_IDX_TYPE_SKIPLIST_INDEX:
         res = EnhanceJsonIndexSkiplist(isolate, obj, builder, create);
         break;
+      
+      case arangodb::Index::TRI_IDX_TYPE_ROCKSDB_INDEX:
+        res = EnhanceJsonIndexRocksDB(isolate, obj, builder, create);
+        break;
 
       case arangodb::Index::TRI_IDX_TYPE_FULLTEXT_INDEX:
         res = EnhanceJsonIndexFulltext(isolate, obj, builder, create);
@@ -525,7 +543,8 @@ static void EnsureIndexLocal(v8::FunctionCallbackInfo<v8::Value> const& args,
 
         if (val.find("[*]") != std::string::npos) {
           if (type != arangodb::Index::TRI_IDX_TYPE_HASH_INDEX &&
-              type != arangodb::Index::TRI_IDX_TYPE_SKIPLIST_INDEX) {
+              type != arangodb::Index::TRI_IDX_TYPE_SKIPLIST_INDEX &&
+              type != arangodb::Index::TRI_IDX_TYPE_ROCKSDB_INDEX) {
             // expansion used in index type that does not support it
             TRI_V8_THROW_EXCEPTION_MESSAGE(
                 TRI_ERROR_BAD_PARAMETER,
@@ -658,6 +677,23 @@ static void EnsureIndexLocal(v8::FunctionCallbackInfo<v8::Value> const& args,
         idx = static_cast<arangodb::SkiplistIndex*>(
             TRI_LookupSkiplistIndexDocumentCollection(document, attributes,
                                                       sparsity, unique));
+      }
+      break;
+    }
+    
+    case arangodb::Index::TRI_IDX_TYPE_ROCKSDB_INDEX: {
+      if (attributes.empty()) {
+        TRI_V8_THROW_EXCEPTION(TRI_ERROR_INTERNAL);
+      }
+
+      if (create) {
+        idx = static_cast<arangodb::RocksDBIndex*>(
+            TRI_EnsureRocksDBIndexDocumentCollection(
+                &trx, document, iid, attributes, sparse, unique, created));
+      } else {
+        idx = static_cast<arangodb::RocksDBIndex*>(
+            TRI_LookupRocksDBIndexDocumentCollection(document, attributes,
+                                                     sparsity, unique));
       }
       break;
     }

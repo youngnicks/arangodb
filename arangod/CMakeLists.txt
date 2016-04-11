@@ -179,6 +179,9 @@ add_executable(${BIN_ARANGOD}
   Indexes/IndexIterator.cpp
   Indexes/PathBasedIndex.cpp
   Indexes/PrimaryIndex.cpp
+  Indexes/RocksDBFeature.cpp
+  Indexes/RocksDBIndex.cpp
+  Indexes/RocksDBKeyComparator.cpp
   Indexes/SimpleAttributeEqualityMatcher.cpp
   Indexes/SkiplistIndex.cpp
   Replication/ContinuousSyncer.cpp

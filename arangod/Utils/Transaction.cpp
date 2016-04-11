@@ -35,6 +35,7 @@
 #include "Indexes/PrimaryIndex.h"
 #include "Indexes/EdgeIndex.h"
 #include "Indexes/HashIndex.h"
+#include "Indexes/RocksDBIndex.h"
 #include "Indexes/SkiplistIndex.h"
 #include "Utils/CollectionNameResolver.h"
 #include "Utils/OperationCursor.h"
@@ -2538,6 +2539,8 @@ std::shared_ptr<Index> Transaction::indexForCollectionCoordinator(
           idx.reset(new arangodb::HashIndex(v));
         } else if (indexType  == arangodb::Index::TRI_IDX_TYPE_SKIPLIST_INDEX) {
           idx.reset(new arangodb::SkiplistIndex(v));
+        } else if (indexType  == arangodb::Index::TRI_IDX_TYPE_ROCKSDB_INDEX) {
+          idx.reset(new arangodb::RocksDBIndex(v));
         }
         return idx;
       }
