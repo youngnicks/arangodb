@@ -59,9 +59,6 @@ id_t Agent::id() const {
 
 //  Shutdown
 Agent::~Agent () {
-  if (_vocbase != nullptr) {
-    TRI_ReleaseDatabaseServer(_server, _vocbase);
-  }
   shutdown();
 }
 
@@ -228,8 +225,9 @@ bool Agent::recvAppendEntriesRPC (term_t term, id_t leaderId, index_t prevIndex,
   
   // appendEntries 5. If leaderCommit > commitIndex, set commitIndex =
   //min(leaderCommit, index of last new entry)
-  if (leaderCommitIndex > last_commit_index)
-  _last_commit_index = std::min(leaderCommitIndex,last_commit_index);
+  if (leaderCommitIndex > last_commit_index) {
+    _last_commit_index = (std::min)(leaderCommitIndex,last_commit_index);
+  }
 
   return true;
 
@@ -383,16 +381,20 @@ void Agent::beginShutdown() {
 
   // Personal hygiene
   Thread::beginShutdown();
-
+  
   // Stop constituent and key value stores
   _constituent.beginShutdown();
   _spearhead.beginShutdown();
   _read_db.beginShutdown();
-
+  
   // Wake up all waiting REST handler (waitFor)
   CONDITION_LOCKER(guard, _cv);
   guard.broadcast();
-
+  
+  if (_vocbase != nullptr) {
+    TRI_ReleaseDatabaseServer(_server, _vocbase);
+  }
+  
 }
 
 // Becoming leader 
