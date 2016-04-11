@@ -294,6 +294,8 @@ target_link_libraries(${BIN_ARANGOD}
   ${LINENOISE_LIBS}
   ${MSVC_LIBS}
   ${V8_LIBS}
+  ${ROCKSDB_LIBS}
+  ${SNAPPY_STATIC_LIB}
   ${SYSTEM_LIBRARIES}
 )
 
