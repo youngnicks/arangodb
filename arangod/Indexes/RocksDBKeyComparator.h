@@ -36,11 +36,6 @@ class RocksDBKeyComparator : public rocksdb::Comparator {
   RocksDBKeyComparator() = default;
   ~RocksDBKeyComparator() = default;
 
-static void Dump(rocksdb::Slice const&);
-static void Dump(arangodb::velocypack::Slice const&);
-static void Dump(std::string const&);
-static void DumpData(char const*, size_t);
-
   arangodb::velocypack::Slice extractKeySlice(rocksdb::Slice const& slice) const;
   
   int Compare(rocksdb::Slice const& lhs, rocksdb::Slice const& rhs) const;
@@ -50,9 +45,6 @@ static void DumpData(char const*, size_t);
   void FindShortestSeparator(std::string*, 
                              rocksdb::Slice const&) const {}
   void FindShortSuccessor(std::string*) const {}
-
- private:
-
 };
 
 }

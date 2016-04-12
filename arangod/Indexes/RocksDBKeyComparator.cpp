@@ -28,33 +28,8 @@
 
 #include <rocksdb/db.h>
 #include <rocksdb/comparator.h>
-#include <iostream>
 
 using namespace arangodb;
-
-void RocksDBKeyComparator::Dump(rocksdb::Slice const& s) {
-  std::cout << "SLICE: size: " << s.size() << ", data: ";
-  DumpData(s.data(), s.size());
-}
-
-void RocksDBKeyComparator::Dump(arangodb::velocypack::Slice const& s) {
-  std::cout << "SLICE: size: " << s.byteSize() << ", data: ";
-  DumpData(s.startAs<char const>(), s.byteSize());
-}
-
-void RocksDBKeyComparator::Dump(std::string const& s) {
-  std::cout << "SLICE: size: " << s.size() << ", data: ";
-  DumpData(s.c_str(), s.size());
-}
-
-void RocksDBKeyComparator::DumpData(char const* data, size_t length) {
-  for (size_t i = 0; i < length; ++i) {
-    uint8_t c = (uint8_t) data[i];
-    std::cout << (unsigned long) c;
-    std::cout << " ";
-  }
-  std::cout << "\n";
-}
 
 VPackSlice RocksDBKeyComparator::extractKeySlice(rocksdb::Slice const& slice) const {
   return VPackSlice(slice.data() + sizeof(TRI_idx_iid_t));
@@ -71,12 +46,6 @@ int RocksDBKeyComparator::Compare(rocksdb::Slice const& lhs, rocksdb::Slice cons
     return res;
   }
   
-  std::cout << "COMPARE.\n";
-  std::cout << "LHS = ";
-  Dump(lhs);
-  std::cout << "RHS = ";
-  Dump(rhs);
-
   VPackSlice const lSlice = extractKeySlice(lhs);
   TRI_ASSERT(lSlice.isArray());
   VPackSlice const rSlice = extractKeySlice(rhs);
@@ -87,8 +56,6 @@ int RocksDBKeyComparator::Compare(rocksdb::Slice const& lhs, rocksdb::Slice cons
   size_t const n = lLength < rLength ? lLength : rLength;
 
   for (size_t i = 0; i < n; ++i) {
-//    std::cout << "LEFT SLICE: " << lSlice.typeName() << ", " << lSlice.toJson() << "\n";
-//    std::cout << "RIGHT SLICE: " << rSlice.typeName() << ", " << rSlice.toJson() << "\n";
     int res = arangodb::basics::VelocyPackHelper::compare(
       (i < lLength ? lSlice[i] : VPackSlice::noneSlice()), 
       (i < rLength ? rSlice[i] : VPackSlice::noneSlice()), 

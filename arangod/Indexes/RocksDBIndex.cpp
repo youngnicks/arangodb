@@ -32,7 +32,6 @@
 #include "Indexes/RocksDBKeyComparator.h"
 #include "VocBase/document-collection.h"
 
-#include <iostream>
 #include <velocypack/Iterator.h>
 #include <velocypack/velocypack-aliases.h>
 
@@ -126,35 +125,26 @@ TRI_doc_mptr_t* RocksDBIterator::next() {
   auto comparator = RocksDBFeature::instance()->comparator();
 
   while (true) {
-    std::cout << "COMPARE ITERATION\n";
     if (!_cursor->Valid()) {
       // We are exhausted already, sorry
-  std::cout << "- CURSOR EXHAUSTED\n"; 
       return nullptr;
     }
   
-  rocksdb::Slice key = _cursor->key();
-  std::cout << "CURSOR KEY: ";
-  RocksDBKeyComparator::Dump(key);
+    rocksdb::Slice key = _cursor->key();
   
     int res = comparator->Compare(key, rocksdb::Slice(_leftEndpoint->data(), _leftEndpoint->size()));
-  std::cout << "- COMPARED AGAINST LOWER. RES: " << res;
 
     if (res < 0) {
       if (_reverse) {
-        std::cout << "LEFT < RIGHT. GOING BACKWARDS\n";
         _cursor->Prev();
       } else {
-        std::cout << "LEFT < RIGHT. GOING FORWARD\n";
         _cursor->Next();
       }
       continue;
     }
   
     res = comparator->Compare(key, rocksdb::Slice(_rightEndpoint->data(), _rightEndpoint->size()));
-  std::cout << "- COMPARED AGAINST UPPER. RES: " << res << "\n";
     if (res > 0) {
-  std::cout << "RIGHT > LEFT. ABORTING\n";
       return nullptr;
     }
 
@@ -166,8 +156,6 @@ TRI_doc_mptr_t* RocksDBIterator::next() {
 
     _cursor->Next();
   
-    std::cout << "- MATCH!\n"; // VALUE: " << VPackSlice(value.data()).toJson() << "\n";
-
     // use primary index to lookup the document
     return _primaryIndex->lookupKey(_trx, keySlice[n - 1]);
   }
@@ -288,9 +276,6 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     }
 
     if (res == TRI_ERROR_NO_ERROR) {
-  std::cout << "INSERTING: "; 
-  RocksDBKeyComparator::Dump(values[i]);
-      
       auto status = _db->Put(writeOptions, values[i], std::string());
       if (! status.ok()) {
         res = TRI_ERROR_INTERNAL;
