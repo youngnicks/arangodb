@@ -27,6 +27,7 @@
 #include "Basics/Common.h"
 
 #include <rocksdb/comparator.h>
+#include <velocypack/Slice.h>
 
 namespace arangodb {
 
@@ -35,6 +36,13 @@ class RocksDBKeyComparator : public rocksdb::Comparator {
   RocksDBKeyComparator() = default;
   ~RocksDBKeyComparator() = default;
 
+static void Dump(rocksdb::Slice const&);
+static void Dump(arangodb::velocypack::Slice const&);
+static void Dump(std::string const&);
+static void DumpData(char const*, size_t);
+
+  arangodb::velocypack::Slice extractKeySlice(rocksdb::Slice const& slice) const;
+  
   int Compare(rocksdb::Slice const& lhs, rocksdb::Slice const& rhs) const;
 
   char const* Name() const { return "ArangoComparator"; }

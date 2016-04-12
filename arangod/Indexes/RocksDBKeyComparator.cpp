@@ -32,35 +32,54 @@
 
 using namespace arangodb;
 
+void RocksDBKeyComparator::Dump(rocksdb::Slice const& s) {
+  std::cout << "SLICE: size: " << s.size() << ", data: ";
+  DumpData(s.data(), s.size());
+}
+
+void RocksDBKeyComparator::Dump(arangodb::velocypack::Slice const& s) {
+  std::cout << "SLICE: size: " << s.byteSize() << ", data: ";
+  DumpData(s.startAs<char const>(), s.byteSize());
+}
+
+void RocksDBKeyComparator::Dump(std::string const& s) {
+  std::cout << "SLICE: size: " << s.size() << ", data: ";
+  DumpData(s.c_str(), s.size());
+}
+
+void RocksDBKeyComparator::DumpData(char const* data, size_t length) {
+  for (size_t i = 0; i < length; ++i) {
+    uint8_t c = (uint8_t) data[i];
+    std::cout << (unsigned long) c;
+    std::cout << " ";
+  }
+  std::cout << "\n";
+}
+
+VPackSlice RocksDBKeyComparator::extractKeySlice(rocksdb::Slice const& slice) const {
+  return VPackSlice(slice.data() + sizeof(TRI_idx_iid_t));
+}
+
 int RocksDBKeyComparator::Compare(rocksdb::Slice const& lhs, rocksdb::Slice const& rhs) const {
-  std::cout << "COMPARE. LHS SIZE: " << lhs.size() << ", RHS SIZE: " << rhs.size() << "\n";
-  //TRI_ASSERT(lhs.size() > 8);
-  //TRI_ASSERT(rhs.size() > 8);
+  TRI_ASSERT(lhs.size() > 8);
+  TRI_ASSERT(rhs.size() > 8);
 
   // compare by index id first
   int res = memcmp(lhs.data(), rhs.data(), sizeof(TRI_idx_iid_t));
 
   if (res != 0) {
-    std::cout << "LEFT INDEX != RIGHT INDEX (" << std::to_string(*reinterpret_cast<uint64_t const*>(lhs.data())) << ", " << std::to_string(*reinterpret_cast<uint64_t const*>(rhs.data())) << ")\n";
     return res;
   }
-
-  std::cout << "LEFT: (" << lhs.size() << ")\n";
-  for (size_t i = 0; i < lhs.size(); ++i) {
-    std::cout << std::hex << (int) lhs.data()[i] << " ";
-  }
-  std::cout << "\n";
   
-  std::cout << "RIGHT: (" << rhs.size() << ")\n";
-  for (size_t i = 0; i < rhs.size(); ++i) {
-    std::cout << std::hex << (int) rhs.data()[i] << " ";
-  }
-  std::cout << "\n";
+  std::cout << "COMPARE.\n";
+  std::cout << "LHS = ";
+  Dump(lhs);
+  std::cout << "RHS = ";
+  Dump(rhs);
 
-  VPackSlice const lSlice = VPackSlice(lhs.data() + sizeof(TRI_idx_iid_t));
-  VPackSlice const rSlice = VPackSlice(rhs.data() + sizeof(TRI_idx_iid_t));
-
+  VPackSlice const lSlice = extractKeySlice(lhs);
   TRI_ASSERT(lSlice.isArray());
+  VPackSlice const rSlice = extractKeySlice(rhs);
   TRI_ASSERT(rSlice.isArray());
 
   size_t const lLength = lSlice.length();
@@ -68,21 +87,23 @@ int RocksDBKeyComparator::Compare(rocksdb::Slice const& lhs, rocksdb::Slice cons
   size_t const n = lLength < rLength ? lLength : rLength;
 
   for (size_t i = 0; i < n; ++i) {
-    std::cout << "LEFT SLICE: " << lSlice.typeName() << ", " << lSlice.toJson() << "\n";
-    std::cout << "RIGHT SLICE: " << rSlice.typeName() << ", " << rSlice.toJson() << "\n";
-    int res = arangodb::basics::VelocyPackHelper::compare(lSlice, rSlice, true);
+//    std::cout << "LEFT SLICE: " << lSlice.typeName() << ", " << lSlice.toJson() << "\n";
+//    std::cout << "RIGHT SLICE: " << rSlice.typeName() << ", " << rSlice.toJson() << "\n";
+    int res = arangodb::basics::VelocyPackHelper::compare(
+      (i < lLength ? lSlice[i] : VPackSlice::noneSlice()), 
+      (i < rLength ? rSlice[i] : VPackSlice::noneSlice()), 
+      true
+    );
 
     if (res != 0) {
-      std::cout << "COMPARE RESULT: " << res << "\n";
       return res;
     }
   }
 
   if (lLength != rLength) {
-    std::cout << "COMPARE RESULT BECAUSE OF LENGTH: " << (lLength < rLength ? -1 : 1) << "\n";
     return lLength < rLength ? -1 : 1;
   }
-  std::cout << "COMPARE RESULT: 0!!!\n";
+
   return 0;
 }
 

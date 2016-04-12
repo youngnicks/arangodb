@@ -28,6 +28,7 @@
 #include "Basics/debugging.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Indexes/PrimaryIndex.h"
+#include "Indexes/RocksDBFeature.h"
 #include "Indexes/RocksDBKeyComparator.h"
 #include "VocBase/document-collection.h"
 
@@ -79,39 +80,26 @@ RocksDBIterator::RocksDBIterator(arangodb::Transaction* trx,
                                  arangodb::RocksDBIndex const* index,
                                  arangodb::PrimaryIndex* primaryIndex,
                                  rocksdb::DB* db,
-                                 bool reverse, arangodb::velocypack::Slice const& left,
+                                 bool reverse, 
+                                 arangodb::velocypack::Slice const& left,
                                  arangodb::velocypack::Slice const& right)
     : _trx(trx),
       _primaryIndex(primaryIndex),
       _db(db),
-      _leftEndpoint(nullptr),
-      _rightEndpoint(nullptr),
       _reverse(reverse) {
 
   TRI_idx_iid_t const id = index->id();
 
-  _leftEndpoint = new arangodb::velocypack::Buffer<char>();
+  _leftEndpoint.reset(new arangodb::velocypack::Buffer<char>());
+  _leftEndpoint->reserve(sizeof(TRI_idx_iid_t) + left.byteSize());
   _leftEndpoint->append(reinterpret_cast<char const*>(&id), sizeof(TRI_idx_iid_t));
   _leftEndpoint->append(left.startAs<char const>(), left.byteSize());
- 
-  std::cout << "LOOKUP\n"; 
-  std::cout << "SEARCHING. LEFT: (" << std::to_string(_leftEndpoint->size()) << ")\n";
-  for (size_t j = 0; j < _leftEndpoint->size(); ++j) {
-    std::cout << std::hex << (int) _leftEndpoint->data()[j] << " ";
-  }
-  std::cout << "\n";
-   
-  _rightEndpoint = new arangodb::velocypack::Buffer<char>();
+  
+  _rightEndpoint.reset(new arangodb::velocypack::Buffer<char>());
+  _rightEndpoint->reserve(sizeof(TRI_idx_iid_t) + right.byteSize());
   _rightEndpoint->append(reinterpret_cast<char const*>(&id), sizeof(TRI_idx_iid_t));
   _rightEndpoint->append(right.startAs<char const>(), right.byteSize());
-  
-  std::cout << "SEARCHING. RIGHT: (" << std::to_string(_rightEndpoint->size()) << ")\n";
-  for (size_t j = 0; j < _rightEndpoint->size(); ++j) {
-    std::cout << std::hex << (int) _rightEndpoint->data()[j] << " ";
-  }
-  std::cout << "\n";
-
-  std::cout << "CREATING CURSOR\n";
+    
   _cursor.reset(_db->NewIterator(rocksdb::ReadOptions()));
 
   reset();
@@ -135,58 +123,54 @@ void RocksDBIterator::reset() {
 
 TRI_doc_mptr_t* RocksDBIterator::next() {
   // TODO: append document key to make entries unambiguous
-  auto comparator = _db->GetOptions().comparator;
+  auto comparator = RocksDBFeature::instance()->comparator();
 
   while (true) {
     std::cout << "COMPARE ITERATION\n";
     if (!_cursor->Valid()) {
       // We are exhausted already, sorry
-  std::cout << "- CURSOR INVALID\n"; 
+  std::cout << "- CURSOR EXHAUSTED\n"; 
       return nullptr;
     }
   
   rocksdb::Slice key = _cursor->key();
-  std::cout << "KEY: (" << key.size() << ")\n";
-  for (size_t j = 0; j < key.size(); ++j) {
-    std::cout << std::hex << (int) key[j] << " ";
-  }
-  std::cout << "\n";
+  std::cout << "CURSOR KEY: ";
+  RocksDBKeyComparator::Dump(key);
   
-  std::cout << "- FIRST COMP. KEY SIZE: " << key.size() << ", LEP SIZE: " << _leftEndpoint->size() << "\n";
     int res = comparator->Compare(key, rocksdb::Slice(_leftEndpoint->data(), _leftEndpoint->size()));
-  std::cout << "- FIRST COMP DONE. RES: " << res << "\n";
+  std::cout << "- COMPARED AGAINST LOWER. RES: " << res;
 
     if (res < 0) {
-  std::cout << "- FIRST COMP DONE. LEFT < RIGHT\n";
       if (_reverse) {
+        std::cout << "LEFT < RIGHT. GOING BACKWARDS\n";
         _cursor->Prev();
       } else {
+        std::cout << "LEFT < RIGHT. GOING FORWARD\n";
         _cursor->Next();
       }
       continue;
     }
-  std::cout << "- FIRST COMP DONE. LEFT <= RIGHT\n";
   
-    int res2 = comparator->Compare(key, rocksdb::Slice(_rightEndpoint->data(), _rightEndpoint->size()));
-  std::cout << "- SECOND COMP DONE. RES: " << res2 << "\n";
-    if (res2 > 0) {
-  std::cout << "- SECOND COMP DONE. RIGHT > LEFT\n";
+    res = comparator->Compare(key, rocksdb::Slice(_rightEndpoint->data(), _rightEndpoint->size()));
+  std::cout << "- COMPARED AGAINST UPPER. RES: " << res << "\n";
+    if (res > 0) {
+  std::cout << "RIGHT > LEFT. ABORTING\n";
       return nullptr;
     }
-  std::cout << "SECOND COMP DONE. RIGHT <= LEFT\n";
 
-    break;
-  }
+    // get the value for _key, which is the last entry in the key array
+    VPackSlice const keySlice = comparator->extractKeySlice(key);
+    TRI_ASSERT(keySlice.isArray());
+    VPackValueLength const n = keySlice.length();
+    TRI_ASSERT(n > 1); // one value + _key
 
-  std::cout << "- FOUND A MATCH\n";
-
-  rocksdb::Slice value = _cursor->value();
-  _cursor->Next();
+    _cursor->Next();
   
-  std::cout << "MATCH VALUE: " << VPackSlice(value.data()).toJson() << "\n";
+    std::cout << "- MATCH!\n"; // VALUE: " << VPackSlice(value.data()).toJson() << "\n";
 
-  // use primary index to lookup the document
-  return _primaryIndex->lookupKey(_trx, VPackSlice(value.data()));
+    // use primary index to lookup the document
+    return _primaryIndex->lookupKey(_trx, keySlice[n - 1]);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -266,6 +250,8 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
 
     return res;
   }
+  
+  VPackSlice const key = VPackSlice(doc->vpack()).get(TRI_VOC_ATTRIBUTE_KEY);
 
   VPackBuilder builder;
   std::vector<std::string> values;
@@ -275,15 +261,14 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     for (size_t i = 0; i < _fields.size(); ++i) {
       builder.add(it->subObjects()[i].slice(doc));
     }
+    builder.add(key); // always append _key value to the end of the array
     builder.close();
+
     VPackSlice const s = builder.slice();
     std::string value(reinterpret_cast<char const*>(&_iid), sizeof(TRI_idx_iid_t));
     value.append(s.startAs<char const>(), s.byteSize());
     values.emplace_back(std::move(value));
   }
-
-  VPackSlice const key = VPackSlice(doc->vpack()).get(TRI_VOC_ATTRIBUTE_KEY);
-  std::string const keyString(key.startAs<char const>(), key.byteSize());
 
   rocksdb::ReadOptions readOptions;
   rocksdb::WriteOptions writeOptions;
@@ -303,13 +288,10 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     }
 
     if (res == TRI_ERROR_NO_ERROR) {
-  std::cout << "INSERTING: (" << std::to_string(values[i].size()) << ")\n";
-  for (size_t j = 0; j < values[i].size(); ++j) {
-    std::cout << std::hex << (int) values[i][j] << " ";
-  }
-
-  std::cout << "\n";
-      auto status = _db->Put(writeOptions, values[i], keyString);
+  std::cout << "INSERTING: "; 
+  RocksDBKeyComparator::Dump(values[i]);
+      
+      auto status = _db->Put(writeOptions, values[i], std::string());
       if (! status.ok()) {
         res = TRI_ERROR_INTERNAL;
       }
@@ -359,6 +341,8 @@ int RocksDBIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     return res;
   }
   
+  VPackSlice const key = VPackSlice(doc->vpack()).get(TRI_VOC_ATTRIBUTE_KEY);
+  
   VPackBuilder builder;
   std::vector<std::string> values;
   for (auto& it : elements) {
@@ -367,15 +351,14 @@ int RocksDBIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     for (size_t i = 0; i < _fields.size(); ++i) {
       builder.add(it->subObjects()[i].slice(doc));
     }
+    builder.add(key); // always append _key value to the end of the array
     builder.close();
+
     VPackSlice const s = builder.slice();
     std::string value(reinterpret_cast<char const*>(&_iid), sizeof(TRI_idx_iid_t));
     value.append(s.startAs<char const>(), s.byteSize());
     values.emplace_back(std::move(value));
   }
-
-  VPackSlice const key = VPackSlice(doc->vpack()).get(TRI_VOC_ATTRIBUTE_KEY);
-  std::string const keyString(key.startAs<char const>(), key.byteSize());
 
   size_t const count = elements.size();
 
@@ -409,6 +392,7 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
 
   VPackBuilder leftSearch;
   VPackBuilder rightSearch;
+
   VPackSlice lastNonEq;
   leftSearch.openArray();
   for (auto const& it : VPackArrayIterator(searchValues)) {
@@ -418,7 +402,6 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
       lastNonEq = it;
       break;
     }
-std::cout << "FOUND TYPE: " << eq.typeName() << "\n";
     leftSearch.add(eq);
   }
 
@@ -427,11 +410,16 @@ std::cout << "FOUND TYPE: " << eq.typeName() << "\n";
 
   if (lastNonEq.isNone()) {
     // We only have equality!
-    leftSearch.close();
+    rightSearch = leftSearch;
 
-std::cout << "ALL EQ\n";
+    leftSearch.add(VPackSlice::minKeySlice());
+    leftSearch.close();
+    
+    rightSearch.add(VPackSlice::maxKeySlice());
+    rightSearch.close();
+
     leftBorder = leftSearch.slice();
-    rightBorder = leftSearch.slice();
+    rightBorder = rightSearch.slice();
   } else {
     // Copy rightSearch = leftSearch for right border
     rightSearch = leftSearch;
@@ -441,39 +429,26 @@ std::cout << "ALL EQ\n";
     if (!lastLeft.isNone()) {
       TRI_ASSERT(!lastNonEq.hasKey(TRI_SLICE_KEY_GT));
       leftSearch.add(lastLeft);
+      leftSearch.add(VPackSlice::minKeySlice());
       leftSearch.close();
       VPackSlice search = leftSearch.slice();
       leftBorder = search;
-      // leftKeyLookup guarantees that we find the element before search. This
-      // should not be in the cursor, but the next one
-      // This is also save for the startNode, it should never be contained in the index.
-//      leftBorder = leftBorder->nextNode();
-      // TODO: inc by one
     } else {
       lastLeft = lastNonEq.get(TRI_SLICE_KEY_GT);
       if (!lastLeft.isNone()) {
         leftSearch.add(lastLeft);
+        leftSearch.add(VPackSlice::maxKeySlice());
         leftSearch.close();
         VPackSlice search = leftSearch.slice();
-
         leftBorder = search;
-        // leftBorder is identical or smaller than search, skip it.
-        // It is guaranteed that the next element is greater than search
-//        leftBorder = leftBorder->nextNode();
-        // TODO: inc by one
       } else {
         // No lower bound set default to (null <= x)
+        leftSearch.add(VPackSlice::minKeySlice());
         leftSearch.close();
         VPackSlice search = leftSearch.slice();
         leftBorder = search;
-//        leftBorder = leftBorder->nextNode();
-        // Now this is the correct leftBorder.
-        // It is either the first equal one, or the first one greater than.
-        // TODO: inc by one
       }
     }
-    // NOTE: leftBorder could be nullptr (no element fulfilling condition.)
-    // This is checked later
 
     // Define upper-bound
 
@@ -481,6 +456,7 @@ std::cout << "ALL EQ\n";
     if (!lastRight.isNone()) {
       TRI_ASSERT(!lastNonEq.hasKey(TRI_SLICE_KEY_LT));
       rightSearch.add(lastRight);
+      rightSearch.add(VPackSlice::maxKeySlice());
       rightSearch.close();
       VPackSlice search = rightSearch.slice();
       rightBorder = search;
@@ -488,11 +464,13 @@ std::cout << "ALL EQ\n";
       lastRight = lastNonEq.get(TRI_SLICE_KEY_LT);
       if (!lastRight.isNone()) {
         rightSearch.add(lastRight);
+        rightSearch.add(VPackSlice::minKeySlice());
         rightSearch.close();
         VPackSlice search = rightSearch.slice();
         rightBorder = search;
       } else {
         // No upper bound set default to (x <= INFINITY)
+        rightSearch.add(VPackSlice::maxKeySlice());
         rightSearch.close();
         VPackSlice search = rightSearch.slice();
         rightBorder = search;
@@ -937,7 +915,13 @@ IndexIterator* RocksDBIndex::iteratorForCondition(
     try {
       for (auto const& val : VPackArrayIterator(expandedSlice)) {
         auto iterator = lookup(trx, val, reverse);
-        iterators.push_back(iterator);
+        try {
+          iterators.push_back(iterator);
+        } catch (...) {
+          // avoid leak
+          delete iterator;
+          throw;
+        }
       }
       if (reverse) {
         std::reverse(iterators.begin(), iterators.end());
@@ -951,6 +935,7 @@ IndexIterator* RocksDBIndex::iteratorForCondition(
     }
     return new MultiIndexIterator(iterators);
   }
+
   VPackSlice searchSlice = searchValues.slice();
   TRI_ASSERT(searchSlice.length() == 1);
   searchSlice = searchSlice.at(0);

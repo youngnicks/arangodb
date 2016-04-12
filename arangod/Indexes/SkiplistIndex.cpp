@@ -987,7 +987,13 @@ IndexIterator* SkiplistIndex::iteratorForCondition(
     try {
       for (auto const& val : VPackArrayIterator(expandedSlice)) {
         auto iterator = lookup(trx, val, reverse);
-        iterators.push_back(iterator);
+        try {
+          iterators.push_back(iterator);
+        } catch (...) {
+          // avoid leak
+          delete iterator;
+          throw;
+        }
       }
       if (reverse) {
         std::reverse(iterators.begin(), iterators.end());

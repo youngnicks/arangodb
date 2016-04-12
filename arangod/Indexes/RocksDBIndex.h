@@ -63,22 +63,20 @@ class RocksDBIterator : public IndexIterator {
   arangodb::PrimaryIndex* _primaryIndex;
   rocksdb::DB* _db;
   std::unique_ptr<rocksdb::Iterator> _cursor;
-  arangodb::velocypack::Buffer<char>* _leftEndpoint;   // Interval left border
-  arangodb::velocypack::Buffer<char>* _rightEndpoint;  // Interval right border
-  bool _reverse;
+  std::unique_ptr<arangodb::velocypack::Buffer<char>> _leftEndpoint;   // Interval left border
+  std::unique_ptr<arangodb::velocypack::Buffer<char>> _rightEndpoint;  // Interval right border
+  bool const _reverse;
 
  public:
   RocksDBIterator(arangodb::Transaction* trx, 
                   arangodb::RocksDBIndex const* index,
                   arangodb::PrimaryIndex* primaryIndex,
                   rocksdb::DB* db,
-                  bool reverse, arangodb::velocypack::Slice const& left,
+                  bool reverse, 
+                  arangodb::velocypack::Slice const& left,
                   arangodb::velocypack::Slice const& right);
 
-  ~RocksDBIterator() {
-    delete _leftEndpoint;
-    delete _rightEndpoint;
-  }
+  ~RocksDBIterator() = default;
 
  public:
 
