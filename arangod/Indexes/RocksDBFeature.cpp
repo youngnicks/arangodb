@@ -27,6 +27,9 @@
 #include "Logger/Logger.h"
 
 #include <rocksdb/db.h>
+#include <rocksdb/filter_policy.h>
+#include <rocksdb/options.h>
+#include <rocksdb/table.h>
 
 using namespace arangodb;
 
@@ -59,15 +62,18 @@ int RocksDBFeature::initialize(std::string const& path) {
   }
 
   _comparator = new RocksDBKeyComparator();
+  
+  rocksdb::BlockBasedTableOptions tableOptions;
+  tableOptions.cache_index_and_filter_blocks = true;
+  tableOptions.filter_policy.reset(rocksdb::NewBloomFilterPolicy(12));
 
-  rocksdb::Options options;
-  options.create_if_missing = true;
-  options.max_open_files = -1;
-  options.comparator = _comparator;
+  _options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(tableOptions));
+  _options.create_if_missing = true;
+  _options.max_open_files = -1;
+  _options.comparator = _comparator;
   
   //options.block_cache = rocksdb::NewLRUCache(100 * 1048576); // 100MB uncompressed cache
   //options.block_cache_compressed = rocksdb::NewLRUCache(100 * 1048576); // 100MB compressed cache
-  //options.filter_policy = NewBloomFilter(10);
   //options.compression = rocksdb::kLZ4Compression;
   //options.write_buffer_size = 32 << 20;
   //options.max_write_buffer_number = 2;
@@ -78,7 +84,7 @@ int RocksDBFeature::initialize(std::string const& path) {
   //options.env->SetBackgroundThreads(num_threads, Env::Priority::HIGH);
   //options.env->SetBackgroundThreads(num_threads, Env::Priority::LOW);
 
-  rocksdb::Status status = rocksdb::DB::Open(options, _path, &_db);
+  rocksdb::Status status = rocksdb::DB::Open(_options, _path, &_db);
   
   if (! status.ok()) {
     return TRI_ERROR_INTERNAL;
@@ -89,6 +95,21 @@ int RocksDBFeature::initialize(std::string const& path) {
 
 int RocksDBFeature::shutdown() {
   LOG(INFO) << "shutting down rocksdb";
+
+  // flush
+  rocksdb::FlushOptions options;
+  options.wait = true;
+  rocksdb::Status status = _db->Flush(options);
+  
+  if (! status.ok()) {
+    LOG(ERR) << "error flushing rocksdb: " << status.ToString();
+  }
+
+  status = _db->SyncWAL();
+  if (! status.ok()) {
+    LOG(ERR) << "error syncing rocksdb WAL: " << status.ToString();
+  }
+
   return TRI_ERROR_NO_ERROR;
 }
 

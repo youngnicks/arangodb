@@ -66,6 +66,7 @@ class RocksDBIterator : public IndexIterator {
   std::unique_ptr<arangodb::velocypack::Buffer<char>> _leftEndpoint;   // Interval left border
   std::unique_ptr<arangodb::velocypack::Buffer<char>> _rightEndpoint;  // Interval right border
   bool const _reverse;
+  bool _probe;
 
  public:
   RocksDBIterator(arangodb::Transaction* trx, 

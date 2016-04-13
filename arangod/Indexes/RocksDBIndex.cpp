@@ -80,12 +80,13 @@ RocksDBIterator::RocksDBIterator(arangodb::Transaction* trx,
                                  arangodb::PrimaryIndex* primaryIndex,
                                  rocksdb::DB* db,
                                  bool reverse, 
-                                 arangodb::velocypack::Slice const& left,
-                                 arangodb::velocypack::Slice const& right)
+                                 VPackSlice const& left,
+                                 VPackSlice const& right)
     : _trx(trx),
       _primaryIndex(primaryIndex),
       _db(db),
-      _reverse(reverse) {
+      _reverse(reverse),
+      _probe(false) {
 
   TRI_idx_iid_t const id = index->id();
 
@@ -99,6 +100,9 @@ RocksDBIterator::RocksDBIterator(arangodb::Transaction* trx,
   _rightEndpoint->append(reinterpret_cast<char const*>(&id), sizeof(TRI_idx_iid_t));
   _rightEndpoint->append(right.startAs<char const>(), right.byteSize());
     
+  LOG(ERR) << "LEFT KEY: " << left.toJson();
+  LOG(ERR) << "RIGHT KEY: " << right.toJson();
+    
   _cursor.reset(_db->NewIterator(rocksdb::ReadOptions()));
 
   reset();
@@ -110,7 +114,11 @@ RocksDBIterator::RocksDBIterator(arangodb::Transaction* trx,
 
 void RocksDBIterator::reset() {
   if (_reverse) {
+    _probe = true;
     _cursor->Seek(rocksdb::Slice(_rightEndpoint->data(), _rightEndpoint->size()));
+    if (!_cursor->Valid()) {
+      _cursor->SeekToLast();
+    }
   } else {
     _cursor->Seek(rocksdb::Slice(_leftEndpoint->data(), _leftEndpoint->size()));
   }
@@ -121,7 +129,6 @@ void RocksDBIterator::reset() {
 ////////////////////////////////////////////////////////////////////////////////
 
 TRI_doc_mptr_t* RocksDBIterator::next() {
-  // TODO: append document key to make entries unambiguous
   auto comparator = RocksDBFeature::instance()->comparator();
 
   while (true) {
@@ -131,21 +138,36 @@ TRI_doc_mptr_t* RocksDBIterator::next() {
     }
   
     rocksdb::Slice key = _cursor->key();
+    LOG(ERR) << "CURSOR KEY: " << VPackSlice(key.data() + sizeof(TRI_idx_iid_t)).toJson();
   
     int res = comparator->Compare(key, rocksdb::Slice(_leftEndpoint->data(), _leftEndpoint->size()));
+    LOG(ERR) << "COMPARING: " << VPackSlice(key.data() + sizeof(TRI_idx_iid_t)).toJson() << " AND " << VPackSlice((char const*) _leftEndpoint->data() + sizeof(TRI_idx_iid_t)).toJson() << " - RES: " << res;
 
     if (res < 0) {
       if (_reverse) {
+        return nullptr;
         _cursor->Prev();
       } else {
         _cursor->Next();
       }
       continue;
-    }
+    } 
   
     res = comparator->Compare(key, rocksdb::Slice(_rightEndpoint->data(), _rightEndpoint->size()));
+    LOG(ERR) << "COMPARING: " << VPackSlice(key.data() + sizeof(TRI_idx_iid_t)).toJson() << " AND " << VPackSlice((char const*) _rightEndpoint->data() + sizeof(TRI_idx_iid_t)).toJson() << " - RES: " << res;
+    
+    if (_reverse) {
+      _cursor->Prev();
+    } else {
+      _cursor->Next();
+    }
+    
     if (res > 0) {
-      return nullptr;
+      if (!_probe) {
+        return nullptr;
+      }
+      _probe = false;
+      continue;
     }
 
     // get the value for _key, which is the last entry in the key array
@@ -154,8 +176,6 @@ TRI_doc_mptr_t* RocksDBIterator::next() {
     VPackValueLength const n = keySlice.length();
     TRI_ASSERT(n > 1); // one value + _key
 
-    _cursor->Next();
-  
     // use primary index to lookup the document
     return _primaryIndex->lookupKey(_trx, keySlice[n - 1]);
   }
@@ -220,7 +240,6 @@ void RocksDBIndex::toVelocyPackFigures(VPackBuilder& builder) const {
 
 int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
                          bool) {
-  // TODO: append document key to make entries unambiguous
   std::vector<TRI_index_element_t*> elements;
 
   int res;
@@ -307,7 +326,6 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
 
 int RocksDBIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
                          bool) {
-  // TODO: append document key to make entries unambiguous
   std::vector<TRI_index_element_t*> elements;
 
   int res;
@@ -395,6 +413,7 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
 
   if (lastNonEq.isNone()) {
     // We only have equality!
+    LOG(ERR) << "ONLY EQ";
     rightSearch = leftSearch;
 
     leftSearch.add(VPackSlice::minKeySlice());
@@ -412,6 +431,7 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
     // Define Lower-Bound 
     VPackSlice lastLeft = lastNonEq.get(TRI_SLICE_KEY_GE);
     if (!lastLeft.isNone()) {
+    LOG(ERR) << ">=";
       TRI_ASSERT(!lastNonEq.hasKey(TRI_SLICE_KEY_GT));
       leftSearch.add(lastLeft);
       leftSearch.add(VPackSlice::minKeySlice());
@@ -420,6 +440,7 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
       leftBorder = search;
     } else {
       lastLeft = lastNonEq.get(TRI_SLICE_KEY_GT);
+    LOG(ERR) << ">";
       if (!lastLeft.isNone()) {
         leftSearch.add(lastLeft);
         leftSearch.add(VPackSlice::maxKeySlice());
@@ -428,6 +449,7 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
         leftBorder = search;
       } else {
         // No lower bound set default to (null <= x)
+    LOG(ERR) << "NULL";
         leftSearch.add(VPackSlice::minKeySlice());
         leftSearch.close();
         VPackSlice search = leftSearch.slice();
@@ -436,9 +458,9 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
     }
 
     // Define upper-bound
-
     VPackSlice lastRight = lastNonEq.get(TRI_SLICE_KEY_LE);
     if (!lastRight.isNone()) {
+    LOG(ERR) << "<=";
       TRI_ASSERT(!lastNonEq.hasKey(TRI_SLICE_KEY_LT));
       rightSearch.add(lastRight);
       rightSearch.add(VPackSlice::maxKeySlice());
@@ -448,12 +470,14 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
     } else {
       lastRight = lastNonEq.get(TRI_SLICE_KEY_LT);
       if (!lastRight.isNone()) {
+    LOG(ERR) << "<";
         rightSearch.add(lastRight);
         rightSearch.add(VPackSlice::minKeySlice());
         rightSearch.close();
         VPackSlice search = rightSearch.slice();
         rightBorder = search;
       } else {
+    LOG(ERR) << "NULL";
         // No upper bound set default to (x <= INFINITY)
         rightSearch.add(VPackSlice::maxKeySlice());
         rightSearch.close();

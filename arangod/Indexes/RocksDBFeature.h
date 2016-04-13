@@ -26,6 +26,8 @@
 
 #include "Basics/Common.h"
 
+#include <rocksdb/options.h>
+
 namespace rocksdb {
 class DB;
 }
@@ -49,6 +51,7 @@ class RocksDBFeature {
  private:
 
    rocksdb::DB* _db;
+   rocksdb::Options _options;
    RocksDBKeyComparator* _comparator;
    std::string _path;
 
