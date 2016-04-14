@@ -52,12 +52,7 @@ using namespace arangodb;
 
 using arangodb::basics::JsonHelper;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief single instance of ClusterInfo - will live as long as the server is
-/// running
-////////////////////////////////////////////////////////////////////////////////
-
-static ClusterInfo Instance;
+static std::unique_ptr<ClusterInfo> _instance;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief a local helper to report errors and messages
@@ -268,16 +263,25 @@ void CollectionInfoCurrent::copyAllJsons() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief create the clusterinfo instance
+////////////////////////////////////////////////////////////////////////////////
+
+void ClusterInfo::createInstance(AgencyCallbackRegistry* agencyCallbackRegistry) {
+  _instance.reset(new ClusterInfo(agencyCallbackRegistry));
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief returns an instance of the cluster info class
 ////////////////////////////////////////////////////////////////////////////////
 
-ClusterInfo* ClusterInfo::instance() { return &Instance; }
+ClusterInfo* ClusterInfo::instance() { return _instance.get(); }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief creates a cluster info object
 ////////////////////////////////////////////////////////////////////////////////
 
-ClusterInfo::ClusterInfo() : _agency(), _uniqid() {
+ClusterInfo::ClusterInfo(AgencyCallbackRegistry* agencyCallbackRegistry)
+  : _agency(), _agencyCallbackRegistry(agencyCallbackRegistry), _uniqid() {
   _uniqid._currentValue = _uniqid._upperValue = 0ULL;
 
   // Actual loading into caches is postponed until necessary
@@ -1060,8 +1064,6 @@ int ClusterInfo::createDatabaseCoordinator(std::string const& name,
     return setErrormsg(TRI_ERROR_CLUSTER_COULD_NOT_READ_CURRENT_VERSION,
                        errorMsg);
   }
-  uint64_t index = res._index;
-
   std::vector<ServerID> DBServers = getCurrentDBServers();
   int count = 0;  // this counts, when we have to reload the DBServers
 
@@ -1101,11 +1103,10 @@ int ClusterInfo::createDatabaseCoordinator(std::string const& name,
         return setErrormsg(TRI_ERROR_NO_ERROR, errorMsg);
       }
     }
-
+     
     res.clear();
-    res = ac.watchValue("Current/Version", index,
-                        getReloadServerListTimeout() / interval, false);
-    index = res._index;
+    _agencyCallbackRegistry->awaitNextChange("Current/Version", getReloadServerListTimeout() / interval);
+
     if (++count >= static_cast<int>(getReloadServerListTimeout() / interval)) {
       // We update the list of DBServers every minute in case one of them
       // was taken away since we last looked. This also helps (slightly)
@@ -1177,7 +1178,6 @@ int ClusterInfo::dropDatabaseCoordinator(std::string const& name,
     return setErrormsg(TRI_ERROR_CLUSTER_COULD_NOT_READ_CURRENT_VERSION,
                        errorMsg);
   }
-  uint64_t index = res._index;
 
   std::string where = "Current/Databases/" + name;
   while (TRI_microtime() <= endTime) {
@@ -1199,8 +1199,7 @@ int ClusterInfo::dropDatabaseCoordinator(std::string const& name,
       }
     }
     res.clear();
-    res = ac.watchValue("Current/Version", index, interval, false);
-    index = res._index;
+    _agencyCallbackRegistry->awaitNextChange("Current/Version", interval);
   }
   return setErrormsg(TRI_ERROR_CLUSTER_TIMEOUT, errorMsg);
 }
@@ -1270,7 +1269,6 @@ int ClusterInfo::createCollectionCoordinator(std::string const& databaseName,
     return setErrormsg(TRI_ERROR_CLUSTER_COULD_NOT_READ_CURRENT_VERSION,
                        errorMsg);
   }
-  uint64_t index = res._index;
 
   std::string const where =
       "Current/Collections/" + databaseName + "/" + collectionID;
@@ -1310,8 +1308,7 @@ int ClusterInfo::createCollectionCoordinator(std::string const& databaseName,
     }
 
     res.clear();
-    res = ac.watchValue("Current/Version", index, interval, false);
-    index = res._index;
+    _agencyCallbackRegistry->awaitNextChange("Current/Version", interval);
   }
 
   // LOG(ERR) << "GOT TIMEOUT. NUMBEROFSHARDS: " << numberOfShards;
@@ -1360,15 +1357,6 @@ int ClusterInfo::dropCollectionCoordinator(std::string const& databaseName,
   // Update our own cache:
   loadPlannedCollections();
 
-  // Now wait for it to appear and be complete:
-  res.clear();
-  res = ac.getValues("Current/Version", false);
-  if (!res.successful()) {
-    return setErrormsg(TRI_ERROR_CLUSTER_COULD_NOT_READ_CURRENT_VERSION,
-                       errorMsg);
-  }
-  uint64_t index = res._index;
-
   // monitor the entry for the collection
   std::string const where =
       "Current/Collections/" + databaseName + "/" + collectionID;
@@ -1397,8 +1385,7 @@ int ClusterInfo::dropCollectionCoordinator(std::string const& databaseName,
     }
 
     res.clear();
-    res = ac.watchValue("Current/Version", index, interval, false);
-    index = res._index;
+    _agencyCallbackRegistry->awaitNextChange("Current/Version", interval);
   }
   return setErrormsg(TRI_ERROR_CLUSTER_TIMEOUT, errorMsg);
 }
@@ -1741,7 +1728,6 @@ int ClusterInfo::ensureIndexCoordinator(
     return setErrormsg(TRI_ERROR_CLUSTER_COULD_NOT_READ_CURRENT_VERSION,
                        errorMsg);
   }
-  uint64_t index = res._index;
 
   std::string where =
       "Current/Collections/" + databaseName + "/" + collectionID;
@@ -1813,8 +1799,7 @@ int ClusterInfo::ensureIndexCoordinator(
       }
     }
     res.clear();
-    res = ac.watchValue("Current/Version", index, interval, false);
-    index = res._index;
+    _agencyCallbackRegistry->awaitNextChange("Current/Version", interval);
   }
 
   return setErrormsg(TRI_ERROR_CLUSTER_TIMEOUT, errorMsg);
@@ -1959,7 +1944,6 @@ int ClusterInfo::dropIndexCoordinator(std::string const& databaseName,
     return setErrormsg(TRI_ERROR_CLUSTER_COULD_NOT_READ_CURRENT_VERSION,
                        errorMsg);
   }
-  uint64_t index = res._index;
 
   std::string where =
       "Current/Collections/" + databaseName + "/" + collectionID;
@@ -2001,8 +1985,7 @@ int ClusterInfo::dropIndexCoordinator(std::string const& databaseName,
     }
 
     res.clear();
-    res = ac.watchValue("Current/Version", index, interval, false);
-    index = res._index;
+    _agencyCallbackRegistry->awaitNextChange("Current/Version", interval);
   }
 
   return setErrormsg(TRI_ERROR_CLUSTER_TIMEOUT, errorMsg);

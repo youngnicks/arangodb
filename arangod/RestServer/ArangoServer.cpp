@@ -54,6 +54,7 @@
 #include "Cluster/ApplicationCluster.h"
 #include "Cluster/ClusterComm.h"
 #include "Cluster/HeartbeatThread.h"
+#include "Cluster/RestAgencyCallbacksHandler.h"
 #include "Cluster/RestShardHandler.h"
 #include "Dispatcher/ApplicationDispatcher.h"
 #include "Dispatcher/Dispatcher.h"
@@ -376,6 +377,7 @@ ArangoServer::ArangoServer(int argc, char** argv)
       _applicationDispatcher(nullptr),
       _applicationEndpointServer(nullptr),
       _applicationCluster(nullptr),
+      _agencyCallbackRegistry(nullptr),
       _applicationAgency(nullptr),
       _jobManager(nullptr),
       _applicationV8(nullptr),
@@ -434,6 +436,7 @@ ArangoServer::~ArangoServer() {
   Nonce::destroy();
 
   delete _applicationServer;
+  delete _agencyCallbackRegistry;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -793,6 +796,12 @@ void ArangoServer::defineHandlers(HttpHandlerFactory* factory) {
       "/_api/shard-comm",
       RestHandlerCreator<RestShardHandler>::createData<Dispatcher*>,
       _applicationDispatcher->dispatcher());
+  
+  // add "/agency-callbacks" handler
+  factory->addPrefixHandler(
+      getAgencyCallbacksPath(),
+      RestHandlerCreator<RestAgencyCallbacksHandler>::createData<AgencyCallbackRegistry*>,
+      _agencyCallbackRegistry);
 
   // add "/aql" handler
   factory->addPrefixHandler(
@@ -1055,9 +1064,13 @@ void ArangoServer::buildApplicationServer() {
   // .............................................................................
   // cluster options
   // .............................................................................
+  _agencyCallbackRegistry = new AgencyCallbackRegistry(
+      getAgencyCallbacksPath()
+  );
 
   _applicationCluster =
-      new ApplicationCluster(_server, _applicationDispatcher, _applicationV8);
+      new ApplicationCluster(_server, _applicationDispatcher, _applicationV8,
+          _agencyCallbackRegistry);
   _applicationServer->addFeature(_applicationCluster);
 
   // .............................................................................
