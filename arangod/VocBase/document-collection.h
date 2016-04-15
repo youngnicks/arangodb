@@ -145,7 +145,6 @@ struct TRI_document_collection_t : public TRI_collection_t {
   void useSecondaryIndexes(bool value) { _useSecondaryIndexes = value; }
 
   void addIndex(arangodb::Index*);
-  arangodb::Index* removeIndex(TRI_idx_iid_t);
   std::vector<arangodb::Index*> const& allIndexes() const;
   arangodb::Index* lookupIndex(TRI_idx_iid_t) const;
   arangodb::PrimaryIndex* primaryIndex();
@@ -206,6 +205,8 @@ struct TRI_document_collection_t : public TRI_collection_t {
 
   int rollbackOperation(arangodb::Transaction*, TRI_voc_document_operation_e, 
                         TRI_doc_mptr_t*, TRI_doc_mptr_t const*);
+  
+  arangodb::Index* removeIndex(TRI_idx_iid_t);
 
  private:
   arangodb::wal::Marker* createVPackInsertMarker(

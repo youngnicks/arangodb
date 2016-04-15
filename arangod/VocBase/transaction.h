@@ -28,6 +28,10 @@
 #include "Basics/vector.h"
 #include "VocBase/voc-types.h"
 
+namespace rocksdb {
+class Transaction;
+}
+
 namespace arangodb {
 class DocumentDitch;
 
@@ -112,6 +116,7 @@ struct TRI_transaction_t {
   TRI_transaction_type_e _type;       // access type (read|write)
   TRI_transaction_status_e _status;   // current status
   TRI_vector_pointer_t _collections;  // list of participating collections
+  rocksdb::Transaction* _rocksTransaction;
   TRI_transaction_hint_t _hints;      // hints;
   int _nestingLevel;
   bool _hasOperations;

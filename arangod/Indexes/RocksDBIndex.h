@@ -33,11 +33,13 @@
 #include "VocBase/voc-types.h"
 
 #include <rocksdb/db.h>
+#include <rocksdb/utilities/optimistic_transaction_db.h>
+
 #include <velocypack/Buffer.h>
 #include <velocypack/Slice.h>
 
 namespace rocksdb {
-class DB;
+class OptimisticTransactionDB;
 }
 
 namespace arangodb {
@@ -61,7 +63,7 @@ class RocksDBIterator : public IndexIterator {
  private:
   arangodb::Transaction* _trx;
   arangodb::PrimaryIndex* _primaryIndex;
-  rocksdb::DB* _db;
+  rocksdb::OptimisticTransactionDB* _db;
   std::unique_ptr<rocksdb::Iterator> _cursor;
   std::unique_ptr<arangodb::velocypack::Buffer<char>> _leftEndpoint;   // Interval left border
   std::unique_ptr<arangodb::velocypack::Buffer<char>> _rightEndpoint;  // Interval right border
@@ -72,7 +74,7 @@ class RocksDBIterator : public IndexIterator {
   RocksDBIterator(arangodb::Transaction* trx, 
                   arangodb::RocksDBIndex const* index,
                   arangodb::PrimaryIndex* primaryIndex,
-                  rocksdb::DB* db,
+                  rocksdb::OptimisticTransactionDB* db,
                   bool reverse, 
                   arangodb::velocypack::Slice const& left,
                   arangodb::velocypack::Slice const& right);
@@ -113,6 +115,8 @@ class RocksDBIndex final : public PathBasedIndex {
   IndexType type() const override final {
     return Index::TRI_IDX_TYPE_ROCKSDB_INDEX;
   }
+  
+  bool canBeDropped() const override final { return true; }
 
   bool isSorted() const override final { return true; }
 
@@ -122,12 +126,44 @@ class RocksDBIndex final : public PathBasedIndex {
 
   void toVelocyPack(VPackBuilder&, bool) const override final;
   void toVelocyPackFigures(VPackBuilder&) const override final;
+  
+  static constexpr size_t minimalPrefixSize() {
+    return sizeof(TRI_voc_tick_t);
+  }
+
+  static constexpr size_t keyPrefixSize() {
+    return sizeof(TRI_voc_tick_t) + sizeof(TRI_voc_cid_t) + sizeof(TRI_idx_iid_t);
+  }
+  
+  static std::string buildPrefix(TRI_voc_tick_t databaseId) {
+    std::string value;
+    value.append(reinterpret_cast<char const*>(&databaseId), sizeof(TRI_voc_tick_t));
+    return value;
+  }
+  
+  static std::string buildPrefix(TRI_voc_tick_t databaseId, TRI_voc_cid_t collectionId) {
+    std::string value;
+    value.append(reinterpret_cast<char const*>(&databaseId), sizeof(TRI_voc_tick_t));
+    value.append(reinterpret_cast<char const*>(&collectionId), sizeof(TRI_voc_cid_t));
+    return value;
+  }
+
+  static std::string buildPrefix(TRI_voc_tick_t databaseId, TRI_voc_cid_t collectionId, TRI_idx_iid_t indexId) {
+    std::string value;
+    value.reserve(keyPrefixSize());
+    value.append(reinterpret_cast<char const*>(&databaseId), sizeof(TRI_voc_tick_t));
+    value.append(reinterpret_cast<char const*>(&collectionId), sizeof(TRI_voc_cid_t));
+    value.append(reinterpret_cast<char const*>(&indexId), sizeof(TRI_idx_iid_t));
+    return value;
+  }
 
   int insert(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
              bool) override final;
 
   int remove(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
              bool) override final;
+
+  int drop() override final;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief attempts to locate an entry in the index
@@ -178,7 +214,7 @@ class RocksDBIndex final : public PathBasedIndex {
   /// @brief the RocksDB instance
   //////////////////////////////////////////////////////////////////////////////
 
-  rocksdb::DB* _db;
+  rocksdb::OptimisticTransactionDB* _db;
 
 };
 }

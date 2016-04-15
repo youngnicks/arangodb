@@ -550,15 +550,16 @@ arangodb::Index* TRI_document_collection_t::removeIndex(TRI_idx_iid_t iid) {
   size_t const n = _indexes.size();
 
   for (size_t i = 0; i < n; ++i) {
-    auto idx = _indexes[i];
+    auto& idx = _indexes[i];
 
-    if (idx->type() == arangodb::Index::TRI_IDX_TYPE_PRIMARY_INDEX ||
-        idx->type() == arangodb::Index::TRI_IDX_TYPE_EDGE_INDEX) {
+    if (!idx->canBeDropped()) {
       continue;
     }
 
     if (idx->id() == iid) {
       // found!
+      idx->drop();
+
       _indexes.erase(_indexes.begin() + i);
 
       if (idx->type() == arangodb::Index::TRI_IDX_TYPE_FULLTEXT_INDEX) {

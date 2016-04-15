@@ -37,6 +37,7 @@
 #include "Basics/FileUtils.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Basics/WriteLocker.h"
+#include "Indexes/RocksDBFeature.h"
 #include "Utils/CollectionKeysRepository.h"
 #include "Utils/CursorRepository.h"
 #include "VocBase/auth.h"
@@ -56,6 +57,7 @@
 #include <velocypack/Parser.h>
 #include <velocypack/velocypack-aliases.h>
 
+using namespace arangodb;
 using namespace arangodb::basics;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -314,8 +316,14 @@ static bool DropCollectionCallback(TRI_collection_t* col, void* data) {
     }
 
     // we need to clean up the pointers later so we insert it into this vector
-    vocbase->_deadCollections.emplace_back(collection);
+    try {
+      vocbase->_deadCollections.emplace_back(collection);
+    } catch (...) {
+    }
   }
+  
+  // delete persistent indexes    
+  RocksDBFeature::dropCollection(vocbase->_id, collection->cid());
 
   // .............................................................................
   // rename collection directory
@@ -1025,11 +1033,11 @@ static int DropCollection(TRI_vocbase_t* vocbase, TRI_vocbase_col_t* collection,
 
     collection->_status = TRI_VOC_COL_STATUS_DELETED;
     UnregisterCollection(vocbase, collection);
+    TRI_WRITE_UNLOCK_STATUS_VOCBASE_COL(collection);
+
     if (writeMarker) {
       WriteDropCollectionMarker(vocbase, collection->_cid, collection->name());
     }
-
-    TRI_WRITE_UNLOCK_STATUS_VOCBASE_COL(collection);
 
     DropCollectionCallback(nullptr, collection);
 
@@ -1073,11 +1081,11 @@ static int DropCollection(TRI_vocbase_t* vocbase, TRI_vocbase_col_t* collection,
     collection->_status = TRI_VOC_COL_STATUS_DELETED;
 
     UnregisterCollection(vocbase, collection);
+    TRI_WRITE_UNLOCK_STATUS_VOCBASE_COL(collection);
+
     if (writeMarker) {
       WriteDropCollectionMarker(vocbase, collection->_cid, collection->name());
     }
-
-    TRI_WRITE_UNLOCK_STATUS_VOCBASE_COL(collection);
 
     state = DROP_PERFORM;
     return TRI_ERROR_NO_ERROR;

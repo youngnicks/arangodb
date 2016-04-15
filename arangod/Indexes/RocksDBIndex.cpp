@@ -30,7 +30,11 @@
 #include "Indexes/PrimaryIndex.h"
 #include "Indexes/RocksDBFeature.h"
 #include "Indexes/RocksDBKeyComparator.h"
+#include "Utils/Transaction.h"
 #include "VocBase/document-collection.h"
+
+#include <rocksdb/utilities/optimistic_transaction_db.h>
+#include <rocksdb/utilities/transaction.h>
 
 #include <velocypack/Iterator.h>
 #include <velocypack/velocypack-aliases.h>
@@ -78,7 +82,7 @@ static size_t sortWeight(arangodb::aql::AstNode const* node) {
 RocksDBIterator::RocksDBIterator(arangodb::Transaction* trx, 
                                  arangodb::RocksDBIndex const* index,
                                  arangodb::PrimaryIndex* primaryIndex,
-                                 rocksdb::DB* db,
+                                 rocksdb::OptimisticTransactionDB* db,
                                  bool reverse, 
                                  VPackSlice const& left,
                                  VPackSlice const& right)
@@ -87,23 +91,24 @@ RocksDBIterator::RocksDBIterator(arangodb::Transaction* trx,
       _db(db),
       _reverse(reverse),
       _probe(false) {
-
+  
   TRI_idx_iid_t const id = index->id();
+  std::string const prefix = RocksDBIndex::buildPrefix(trx->vocbase()->_id, _primaryIndex->collection()->_info.id(), id);
 
   _leftEndpoint.reset(new arangodb::velocypack::Buffer<char>());
-  _leftEndpoint->reserve(sizeof(TRI_idx_iid_t) + left.byteSize());
-  _leftEndpoint->append(reinterpret_cast<char const*>(&id), sizeof(TRI_idx_iid_t));
+  _leftEndpoint->reserve(RocksDBIndex::keyPrefixSize() + left.byteSize());
+  _leftEndpoint->append(prefix.c_str(), prefix.size());
   _leftEndpoint->append(left.startAs<char const>(), left.byteSize());
   
   _rightEndpoint.reset(new arangodb::velocypack::Buffer<char>());
-  _rightEndpoint->reserve(sizeof(TRI_idx_iid_t) + right.byteSize());
-  _rightEndpoint->append(reinterpret_cast<char const*>(&id), sizeof(TRI_idx_iid_t));
+  _rightEndpoint->reserve(RocksDBIndex::keyPrefixSize() + right.byteSize());
+  _rightEndpoint->append(prefix.c_str(), prefix.size());
   _rightEndpoint->append(right.startAs<char const>(), right.byteSize());
     
-  LOG(ERR) << "LEFT KEY: " << left.toJson();
-  LOG(ERR) << "RIGHT KEY: " << right.toJson();
+  // LOG(TRACE) << "iterator left key: " << left.toJson();
+  // LOG(TRACE) << "iterator right key: " << right.toJson();
     
-  _cursor.reset(_db->NewIterator(rocksdb::ReadOptions()));
+  _cursor.reset(_db->GetBaseDB()->NewIterator(rocksdb::ReadOptions()));
 
   reset();
 }
@@ -138,10 +143,10 @@ TRI_doc_mptr_t* RocksDBIterator::next() {
     }
   
     rocksdb::Slice key = _cursor->key();
-    LOG(ERR) << "CURSOR KEY: " << VPackSlice(key.data() + sizeof(TRI_idx_iid_t)).toJson();
+    // LOG(TRACE) << "cursor key: " << VPackSlice(key.data() + RocksDBIndex::keyPrefixSize()).toJson();
   
     int res = comparator->Compare(key, rocksdb::Slice(_leftEndpoint->data(), _leftEndpoint->size()));
-    LOG(ERR) << "COMPARING: " << VPackSlice(key.data() + sizeof(TRI_idx_iid_t)).toJson() << " AND " << VPackSlice((char const*) _leftEndpoint->data() + sizeof(TRI_idx_iid_t)).toJson() << " - RES: " << res;
+    // LOG(TRACE) << "comparing: " << VPackSlice(key.data() + RocksDBIndex::keyPrefixSize()).toJson() << " with " << VPackSlice((char const*) _leftEndpoint->data() + RocksDBIndex::keyPrefixSize()).toJson() << " - res: " << res;
 
     if (res < 0) {
       if (_reverse) {
@@ -154,7 +159,7 @@ TRI_doc_mptr_t* RocksDBIterator::next() {
     } 
   
     res = comparator->Compare(key, rocksdb::Slice(_rightEndpoint->data(), _rightEndpoint->size()));
-    LOG(ERR) << "COMPARING: " << VPackSlice(key.data() + sizeof(TRI_idx_iid_t)).toJson() << " AND " << VPackSlice((char const*) _rightEndpoint->data() + sizeof(TRI_idx_iid_t)).toJson() << " - RES: " << res;
+    // LOG(TRACE) << "comparing: " << VPackSlice(key.data() + RocksDBIndex::keyPrefixSize()).toJson() << " with " << VPackSlice((char const*) _rightEndpoint->data() + RocksDBIndex::keyPrefixSize()).toJson() << " - res: " << res;
     
     if (_reverse) {
       _cursor->Prev();
@@ -238,7 +243,7 @@ void RocksDBIndex::toVelocyPackFigures(VPackBuilder& builder) const {
 /// @brief inserts a document into the index
 ////////////////////////////////////////////////////////////////////////////////
 
-int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
+int RocksDBIndex::insert(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
                          bool) {
   std::vector<TRI_index_element_t*> elements;
 
@@ -249,12 +254,16 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     res = TRI_ERROR_OUT_OF_MEMORY;
   }
 
-  if (res != TRI_ERROR_NO_ERROR) {
+  // make sure we clean up before we leave this method
+  auto cleanup = [&elements] {
     for (auto& it : elements) {
-      // free all elements to prevent leak
       TRI_index_element_t::freeElement(it);
     }
+  };
 
+  TRI_DEFER(cleanup());
+  
+  if (res != TRI_ERROR_NO_ERROR) {
     return res;
   }
   
@@ -272,21 +281,23 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     builder.close();
 
     VPackSlice const s = builder.slice();
-    std::string value(reinterpret_cast<char const*>(&_iid), sizeof(TRI_idx_iid_t));
+    std::string value;
+    value.reserve(keyPrefixSize() + s.byteSize());
+    value += buildPrefix(trx->vocbase()->_id, _collection->_info.id(), _iid);
     value.append(s.startAs<char const>(), s.byteSize());
     values.emplace_back(std::move(value));
   }
+      
+  auto rocksTransaction = trx->rocksTransaction();
+  TRI_ASSERT(rocksTransaction != nullptr);
 
   rocksdb::ReadOptions readOptions;
-  rocksdb::WriteOptions writeOptions;
-  writeOptions.sync = false;
 
   size_t const count = elements.size();
-
   for (size_t i = 0; i < count; ++i) {
     if (_unique) {
       std::string existing;
-      auto status = _db->Get(readOptions, values[i], &existing); 
+      auto status = rocksTransaction->Get(readOptions, values[i], &existing); 
 
       if (status.ok()) {
         // duplicate key
@@ -295,7 +306,7 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     }
 
     if (res == TRI_ERROR_NO_ERROR) {
-      auto status = _db->Put(writeOptions, values[i], std::string());
+      auto status = rocksTransaction->Put(values[i], std::string());
       if (! status.ok()) {
         res = TRI_ERROR_INTERNAL;
       }
@@ -303,7 +314,7 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
 
     if (res != TRI_ERROR_NO_ERROR) {
       for (size_t j = 0; j < i; ++j) {
-        _db->Delete(writeOptions, values[i]);
+        rocksTransaction->Delete(values[i]);
       }
     
       if (res == TRI_ERROR_ARANGO_UNIQUE_CONSTRAINT_VIOLATED && !_unique) {
@@ -314,9 +325,6 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     }
   }
       
-  for (size_t i = 0; i < count; ++i) {
-    TRI_index_element_t::freeElement(elements[i]);
-  }
   return res;
 }
 
@@ -324,7 +332,7 @@ int RocksDBIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
 /// @brief removes a document from the index
 ////////////////////////////////////////////////////////////////////////////////
 
-int RocksDBIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
+int RocksDBIndex::remove(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
                          bool) {
   std::vector<TRI_index_element_t*> elements;
 
@@ -334,13 +342,17 @@ int RocksDBIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
   } catch (...) {
     res = TRI_ERROR_OUT_OF_MEMORY;
   }
-
-  if (res != TRI_ERROR_NO_ERROR) {
+  
+  // make sure we clean up before we leave this method
+  auto cleanup = [&elements] {
     for (auto& it : elements) {
-      // free all elements to prevent leak
       TRI_index_element_t::freeElement(it);
     }
+  };
 
+  TRI_DEFER(cleanup());
+
+  if (res != TRI_ERROR_NO_ERROR) {
     return res;
   }
   
@@ -358,26 +370,38 @@ int RocksDBIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     builder.close();
 
     VPackSlice const s = builder.slice();
-    std::string value(reinterpret_cast<char const*>(&_iid), sizeof(TRI_idx_iid_t));
+    std::string value;
+    value.reserve(keyPrefixSize() + s.byteSize());
+    value.append(buildPrefix(trx->vocbase()->_id, _collection->_info.id(), _iid));
     value.append(s.startAs<char const>(), s.byteSize());
     values.emplace_back(std::move(value));
   }
+  
+  auto rocksTransaction = trx->rocksTransaction();
+  TRI_ASSERT(rocksTransaction != nullptr);
 
   size_t const count = elements.size();
 
   for (size_t i = 0; i < count; ++i) {
-    auto status = _db->Delete(rocksdb::WriteOptions(), values[i]);
+    // LOG(TRACE) << "removing key: " << VPackSlice(values[i].c_str() + keyPrefixSize()).toJson();
+    auto status = rocksTransaction->Delete(values[i]);
 
     // we may be looping through this multiple times, and if an error
     // occurs, we want to keep it
     if (! status.ok()) {
       res = TRI_ERROR_INTERNAL;
     }
-
-    TRI_index_element_t::freeElement(elements[i]);
   }
 
   return res;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief called when the index is dropped
+////////////////////////////////////////////////////////////////////////////////
+
+int RocksDBIndex::drop() {
+  return RocksDBFeature::instance()->dropIndex(_collection->_vocbase->_id, _collection->_info.id(), _iid);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -413,7 +437,6 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
 
   if (lastNonEq.isNone()) {
     // We only have equality!
-    LOG(ERR) << "ONLY EQ";
     rightSearch = leftSearch;
 
     leftSearch.add(VPackSlice::minKeySlice());
@@ -431,7 +454,6 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
     // Define Lower-Bound 
     VPackSlice lastLeft = lastNonEq.get(TRI_SLICE_KEY_GE);
     if (!lastLeft.isNone()) {
-    LOG(ERR) << ">=";
       TRI_ASSERT(!lastNonEq.hasKey(TRI_SLICE_KEY_GT));
       leftSearch.add(lastLeft);
       leftSearch.add(VPackSlice::minKeySlice());
@@ -440,7 +462,6 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
       leftBorder = search;
     } else {
       lastLeft = lastNonEq.get(TRI_SLICE_KEY_GT);
-    LOG(ERR) << ">";
       if (!lastLeft.isNone()) {
         leftSearch.add(lastLeft);
         leftSearch.add(VPackSlice::maxKeySlice());
@@ -449,7 +470,6 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
         leftBorder = search;
       } else {
         // No lower bound set default to (null <= x)
-    LOG(ERR) << "NULL";
         leftSearch.add(VPackSlice::minKeySlice());
         leftSearch.close();
         VPackSlice search = leftSearch.slice();
@@ -460,7 +480,6 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
     // Define upper-bound
     VPackSlice lastRight = lastNonEq.get(TRI_SLICE_KEY_LE);
     if (!lastRight.isNone()) {
-    LOG(ERR) << "<=";
       TRI_ASSERT(!lastNonEq.hasKey(TRI_SLICE_KEY_LT));
       rightSearch.add(lastRight);
       rightSearch.add(VPackSlice::maxKeySlice());
@@ -470,14 +489,12 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
     } else {
       lastRight = lastNonEq.get(TRI_SLICE_KEY_LT);
       if (!lastRight.isNone()) {
-    LOG(ERR) << "<";
         rightSearch.add(lastRight);
         rightSearch.add(VPackSlice::minKeySlice());
         rightSearch.close();
         VPackSlice search = rightSearch.slice();
         rightBorder = search;
       } else {
-    LOG(ERR) << "NULL";
         // No upper bound set default to (x <= INFINITY)
         rightSearch.add(VPackSlice::maxKeySlice());
         rightSearch.close();

@@ -25,11 +25,12 @@
 #define ARANGOD_INDEXES_ROCKS_DB_FEATURE_H 1
 
 #include "Basics/Common.h"
+#include "VocBase/voc-types.h"
 
 #include <rocksdb/options.h>
 
 namespace rocksdb {
-class DB;
+class OptimisticTransactionDB;
 }
 
 namespace arangodb {
@@ -40,7 +41,7 @@ class RocksDBFeature {
   RocksDBFeature();
   ~RocksDBFeature();
 
-  inline rocksdb::DB* db() const { return _db; }
+  inline rocksdb::OptimisticTransactionDB* db() const { return _db; }
   inline RocksDBKeyComparator* comparator() const { return _comparator; }
 
   int initialize(std::string const&);
@@ -48,13 +49,21 @@ class RocksDBFeature {
 
   static RocksDBFeature* instance();
 
+  static int syncWal();
+  static int dropDatabase(TRI_voc_tick_t);
+  static int dropCollection(TRI_voc_tick_t, TRI_voc_cid_t);
+  static int dropIndex(TRI_voc_tick_t, TRI_voc_cid_t, TRI_idx_iid_t);
+
  private:
 
-   rocksdb::DB* _db;
-   rocksdb::Options _options;
-   RocksDBKeyComparator* _comparator;
-   std::string _path;
+  int dropPrefix(std::string const& prefix);
 
+ private:
+
+  rocksdb::OptimisticTransactionDB* _db;
+  rocksdb::Options _options;
+  RocksDBKeyComparator* _comparator;
+  std::string _path;
 };
 
 }

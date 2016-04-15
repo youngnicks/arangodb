@@ -1238,28 +1238,15 @@ static void JS_DropIndexVocbaseCol(
   auto idx = TRI_LookupIndexByHandle(isolate, trx.resolver(), collection,
                                      args[0], true);
 
-  if (idx == nullptr) {
-    return;
-  }
-
-  if (idx->id() == 0) {
+  if (idx == nullptr || idx->id() == 0) {
     TRI_V8_RETURN_FALSE();
   }
 
-  if (idx->type() == arangodb::Index::TRI_IDX_TYPE_PRIMARY_INDEX ||
-      idx->type() == arangodb::Index::TRI_IDX_TYPE_EDGE_INDEX) {
+  if (!idx->canBeDropped()) {
     TRI_V8_THROW_EXCEPTION(TRI_ERROR_FORBIDDEN);
   }
 
-  // .............................................................................
-  // inside a write transaction, write-lock is acquired by TRI_DropIndex...
-  // .............................................................................
-
   bool ok = TRI_DropIndexDocumentCollection(document, idx->id(), true);
-
-  // .............................................................................
-  // outside a write transaction
-  // .............................................................................
 
   if (ok) {
     TRI_V8_RETURN_TRUE();

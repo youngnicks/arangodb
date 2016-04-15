@@ -25,8 +25,11 @@
 #define ARANGOD_INDEXES_ROCKS_DB_KEY_COMPARATOR_H 1
 
 #include "Basics/Common.h"
+#include "Indexes/RocksDBIndex.h"
 
 #include <rocksdb/comparator.h>
+#include <rocksdb/slice.h>
+
 #include <velocypack/Slice.h>
 
 namespace arangodb {
@@ -36,7 +39,9 @@ class RocksDBKeyComparator : public rocksdb::Comparator {
   RocksDBKeyComparator() = default;
   ~RocksDBKeyComparator() = default;
 
-  arangodb::velocypack::Slice extractKeySlice(rocksdb::Slice const& slice) const;
+  static inline arangodb::velocypack::Slice extractKeySlice(rocksdb::Slice const& slice) {
+    return arangodb::velocypack::Slice(slice.data() + RocksDBIndex::keyPrefixSize());
+  }
   
   int Compare(rocksdb::Slice const& lhs, rocksdb::Slice const& rhs) const;
 

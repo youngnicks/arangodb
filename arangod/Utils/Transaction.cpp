@@ -33,9 +33,9 @@
 #include "Cluster/ClusterComm.h"
 #include "Cluster/ClusterMethods.h"
 #include "Cluster/ServerState.h"
-#include "Indexes/PrimaryIndex.h"
 #include "Indexes/EdgeIndex.h"
 #include "Indexes/HashIndex.h"
+#include "Indexes/PrimaryIndex.h"
 #include "Indexes/RocksDBIndex.h"
 #include "Indexes/SkiplistIndex.h"
 #include "Logger/Logger.h"
@@ -48,6 +48,9 @@
 #include "VocBase/KeyGenerator.h"
 #include "VocBase/MasterPointers.h"
 #include "VocBase/server.h"
+
+#include <rocksdb/utilities/optimistic_transaction_db.h>
+#include <rocksdb/utilities/transaction.h>
 
 #include <velocypack/Builder.h>
 #include <velocypack/Collection.h>
@@ -599,6 +602,17 @@ DocumentDitch* Transaction::orderDitch(TRI_voc_cid_t cid) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
   }
   return ditch;
+}
+  
+//////////////////////////////////////////////////////////////////////////////
+/// @brief get (or create) a rocksdb WriteTransaction
+//////////////////////////////////////////////////////////////////////////////
+
+rocksdb::Transaction* Transaction::rocksTransaction() {
+  if (_trx->_rocksTransaction == nullptr) {
+    _trx->_rocksTransaction = RocksDBFeature::instance()->db()->BeginTransaction(rocksdb::WriteOptions(), rocksdb::OptimisticTransactionOptions());
+  }
+  return _trx->_rocksTransaction;
 }
   
 ////////////////////////////////////////////////////////////////////////////////

@@ -24,6 +24,7 @@
 #include "RocksDBKeyComparator.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Indexes/Index.h"
+#include "Indexes/RocksDBIndex.h"
 #include "Logger/Logger.h"
 
 #include <rocksdb/db.h>
@@ -31,16 +32,12 @@
 
 using namespace arangodb;
 
-VPackSlice RocksDBKeyComparator::extractKeySlice(rocksdb::Slice const& slice) const {
-  return VPackSlice(slice.data() + sizeof(TRI_idx_iid_t));
-}
-
 int RocksDBKeyComparator::Compare(rocksdb::Slice const& lhs, rocksdb::Slice const& rhs) const {
   TRI_ASSERT(lhs.size() > 8);
   TRI_ASSERT(rhs.size() > 8);
 
   // compare by index id first
-  int res = memcmp(lhs.data(), rhs.data(), sizeof(TRI_idx_iid_t));
+  int res = memcmp(lhs.data(), rhs.data(), RocksDBIndex::keyPrefixSize());
 
   if (res != 0) {
     return res;

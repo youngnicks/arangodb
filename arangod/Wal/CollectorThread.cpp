@@ -31,6 +31,7 @@
 #include "Basics/ReadLocker.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Indexes/PrimaryIndex.h"
+#include "Indexes/RocksDBIndex.h"
 #include "Utils/CollectionGuard.h"
 #include "Utils/DatabaseGuard.h"
 #include "Utils/SingleCollectionTransaction.h"
@@ -428,6 +429,7 @@ int CollectorThread::collectLogfiles(bool& worked) {
         _collectorResult = TRI_ERROR_NO_ERROR;
       }
 
+      RocksDBFeature::instance()->syncWal();
       _logfileManager->setCollectionDone(logfile);
     } else {
       // return the logfile to the logfile manager in case of errors

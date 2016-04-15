@@ -22,14 +22,24 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "RocksDBFeature.h"
+#include "Basics/Exceptions.h"
 #include "Basics/FileUtils.h"
 #include "Indexes/RocksDBKeyComparator.h"
 #include "Logger/Logger.h"
 
 #include <rocksdb/db.h>
+#include <rocksdb/convenience.h>
 #include <rocksdb/filter_policy.h>
+#include <rocksdb/iterator.h>
 #include <rocksdb/options.h>
+#include <rocksdb/slice_transform.h>
 #include <rocksdb/table.h>
+#include <rocksdb/utilities/optimistic_transaction_db.h>
+#include <rocksdb/write_batch.h>
+
+#include <velocypack/Builder.h>
+#include <velocypack/Slice.h>
+#include <velocypack/velocypack-aliases.h>
 
 using namespace arangodb;
 
@@ -47,6 +57,7 @@ int RocksDBFeature::initialize(std::string const& path) {
   LOG(INFO) << "initializing rocksdb";
     
   _path = arangodb::basics::FileUtils::buildFilename(path, "rocksdb");
+
   if (!arangodb::basics::FileUtils::isDirectory(_path)) {
     std::string systemErrorStr;
     long errorNo;
@@ -65,8 +76,9 @@ int RocksDBFeature::initialize(std::string const& path) {
   
   rocksdb::BlockBasedTableOptions tableOptions;
   tableOptions.cache_index_and_filter_blocks = true;
-  tableOptions.filter_policy.reset(rocksdb::NewBloomFilterPolicy(12));
+  tableOptions.filter_policy.reset(rocksdb::NewBloomFilterPolicy(12, false));
 
+  _options.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(RocksDBIndex::minimalPrefixSize()));
   _options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(tableOptions));
   _options.create_if_missing = true;
   _options.max_open_files = -1;
@@ -84,7 +96,7 @@ int RocksDBFeature::initialize(std::string const& path) {
   //options.env->SetBackgroundThreads(num_threads, Env::Priority::HIGH);
   //options.env->SetBackgroundThreads(num_threads, Env::Priority::LOW);
 
-  rocksdb::Status status = rocksdb::DB::Open(_options, _path, &_db);
+  rocksdb::Status status = rocksdb::OptimisticTransactionDB::Open(_options, _path, &_db);
   
   if (! status.ok()) {
     return TRI_ERROR_INTERNAL;
@@ -94,23 +106,18 @@ int RocksDBFeature::initialize(std::string const& path) {
 }
 
 int RocksDBFeature::shutdown() {
-  LOG(INFO) << "shutting down rocksdb";
+  LOG(TRACE) << "shutting down rocksdb";
 
   // flush
   rocksdb::FlushOptions options;
   options.wait = true;
-  rocksdb::Status status = _db->Flush(options);
+  rocksdb::Status status = _db->GetBaseDB()->Flush(options);
   
   if (! status.ok()) {
     LOG(ERR) << "error flushing rocksdb: " << status.ToString();
   }
 
-  status = _db->SyncWAL();
-  if (! status.ok()) {
-    LOG(ERR) << "error syncing rocksdb WAL: " << status.ToString();
-  }
-
-  return TRI_ERROR_NO_ERROR;
+  return syncWal();
 }
 
 RocksDBFeature* RocksDBFeature::instance() {
@@ -118,5 +125,109 @@ RocksDBFeature* RocksDBFeature::instance() {
     Instance = new RocksDBFeature();
   }
   return Instance;
+}
+
+int RocksDBFeature::syncWal() {
+  LOG(TRACE) << "syncing rocksdb WAL";
+
+  rocksdb::Status status = instance()->db()->GetBaseDB()->SyncWAL();
+
+  if (! status.ok()) {
+    LOG(ERR) << "error syncing rocksdb WAL: " << status.ToString();
+    return TRI_ERROR_INTERNAL;
+  }
+
+  return TRI_ERROR_NO_ERROR;
+}
+
+int RocksDBFeature::dropDatabase(TRI_voc_tick_t databaseId) {
+  return instance()->dropPrefix(RocksDBIndex::buildPrefix(databaseId));
+}
+
+int RocksDBFeature::dropCollection(TRI_voc_tick_t databaseId, TRI_voc_cid_t collectionId) {
+  return instance()->dropPrefix(RocksDBIndex::buildPrefix(databaseId, collectionId));
+}
+
+int RocksDBFeature::dropIndex(TRI_voc_tick_t databaseId, TRI_voc_cid_t collectionId, TRI_idx_iid_t indexId) {
+  return instance()->dropPrefix(RocksDBIndex::buildPrefix(databaseId, collectionId, indexId));
+}
+
+int RocksDBFeature::dropPrefix(std::string const& prefix) {
+  try {
+    VPackBuilder builder;
+
+    // create lower and upper bound for deletion
+    builder.openArray();
+    builder.add(VPackSlice::minKeySlice());
+    builder.close();  
+
+    std::string l;
+    l.reserve(prefix.size() + builder.slice().byteSize());
+    l.append(prefix);
+    l.append(builder.slice().startAs<char const>(), builder.slice().byteSize());
+    
+    builder.clear();
+    builder.openArray();
+    builder.add(VPackSlice::maxKeySlice());
+    builder.close();  
+    
+    std::string u;
+    u.reserve(prefix.size() + builder.slice().byteSize());
+    u.append(prefix);
+    u.append(builder.slice().startAs<char const>(), builder.slice().byteSize());
+ 
+#if 0 
+    for (size_t i = 0; i < prefix.size(); i += sizeof(TRI_idx_iid_t)) {
+      char const* x = prefix.c_str() + i;
+      LOG(TRACE) << "prefix part: " << std::to_string(*reinterpret_cast<uint64_t const*>(x));
+    }
+#endif
+
+    LOG(TRACE) << "dropping range: " << VPackSlice(l.c_str() + prefix.size()).toJson() << " - " << VPackSlice(u.c_str() + prefix.size()).toJson();
+
+    rocksdb::Slice lower(l.c_str(), l.size());
+    rocksdb::Slice upper(u.c_str(), u.size());
+    
+    rocksdb::Status status = rocksdb::DeleteFilesInRange(_db->GetBaseDB(), _db->GetBaseDB()->DefaultColumnFamily(), &lower, &upper);
+
+    if (!status.ok()) {
+      // if file deletion failed, we will still iterate over the remaining keys, so we
+      // don't need to abort and raise an error here
+      LOG(WARN) << "rocksdb file deletion failed";
+    }
+
+    // go on and delete the remaining keys (delete files in range does not necessarily
+    // find them all, just complete files
+    
+    rocksdb::DB* db = _db->GetBaseDB();
+
+    rocksdb::WriteBatch batch;
+    
+    std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(rocksdb::ReadOptions()));
+
+    while (it->Valid()) {
+      batch.Delete(it->key());
+      it->Next();
+    }
+    
+    // now apply deletion batch
+    status = db->Write(rocksdb::WriteOptions(), &batch);
+
+    if (!status.ok()) {
+      LOG(WARN) << "rocksdb key deletion failed";
+      return TRI_ERROR_INTERNAL;
+    }
+
+    return TRI_ERROR_NO_ERROR;
+  } catch (arangodb::basics::Exception const& ex) {
+    LOG(ERR) << "caught exception during prefix deletion: " << ex.what();
+    return ex.code();
+  } catch (std::exception const& ex) {
+    LOG(ERR) << "caught exception during prefix deletion: " << ex.what();
+    return TRI_ERROR_INTERNAL;
+  } catch (...) {
+    LOG(ERR) << "caught unknown exception during prefix deletion";
+    return TRI_ERROR_INTERNAL;
+  }
 }
 
