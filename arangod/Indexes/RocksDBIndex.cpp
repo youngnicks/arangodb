@@ -94,6 +94,7 @@ RocksDBIterator::RocksDBIterator(arangodb::Transaction* trx,
   
   TRI_idx_iid_t const id = index->id();
   std::string const prefix = RocksDBIndex::buildPrefix(trx->vocbase()->_id, _primaryIndex->collection()->_info.id(), id);
+  TRI_ASSERT(prefix.size() == RocksDBIndex::keyPrefixSize());
 
   _leftEndpoint.reset(new arangodb::velocypack::Buffer<char>());
   _leftEndpoint->reserve(RocksDBIndex::keyPrefixSize() + left.byteSize());
@@ -104,6 +105,9 @@ RocksDBIterator::RocksDBIterator(arangodb::Transaction* trx,
   _rightEndpoint->reserve(RocksDBIndex::keyPrefixSize() + right.byteSize());
   _rightEndpoint->append(prefix.c_str(), prefix.size());
   _rightEndpoint->append(right.startAs<char const>(), right.byteSize());
+
+  TRI_ASSERT(_leftEndpoint->size() > 8);
+  TRI_ASSERT(_rightEndpoint->size() > 8);
     
   // LOG(TRACE) << "iterator left key: " << left.toJson();
   // LOG(TRACE) << "iterator right key: " << right.toJson();

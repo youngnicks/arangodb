@@ -77,9 +77,12 @@ int RocksDBFeature::initialize(std::string const& path) {
   rocksdb::BlockBasedTableOptions tableOptions;
   tableOptions.cache_index_and_filter_blocks = true;
   tableOptions.filter_policy.reset(rocksdb::NewBloomFilterPolicy(12, false));
-
-  _options.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(RocksDBIndex::minimalPrefixSize()));
-  _options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(tableOptions));
+  
+  // TODO: using the prefix extractor will lead to the comparator being
+  // called with just the key prefix (which the comparator currently cannot handle)
+  // _options.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(RocksDBIndex::minimalPrefixSize()));
+  // _options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(tableOptions));
+  
   _options.create_if_missing = true;
   _options.max_open_files = -1;
   _options.comparator = _comparator;
@@ -199,14 +202,23 @@ int RocksDBFeature::dropPrefix(std::string const& prefix) {
     // go on and delete the remaining keys (delete files in range does not necessarily
     // find them all, just complete files
     
+    auto comparator = RocksDBFeature::instance()->comparator();
     rocksdb::DB* db = _db->GetBaseDB();
 
     rocksdb::WriteBatch batch;
     
     std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(rocksdb::ReadOptions()));
 
+    it->Seek(lower);
     while (it->Valid()) {
       batch.Delete(it->key());
+      
+      int res = comparator->Compare(it->key(), upper);
+
+      if (res >= 0) {
+        break;
+      }
+
       it->Next();
     }
     
