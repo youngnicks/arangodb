@@ -165,7 +165,7 @@ void WorkMonitor::vpackHandler(VPackBuilder* b, WorkDescription* desc) {
 void WorkMonitor::sendWorkOverview(uint64_t taskId, std::string const& data) {
   auto response = std::make_unique<HttpResponse>(GeneralResponse::ResponseCode::OK);
 
-  response->setContentType(StaticStrings::MimeTypeJson);
+  response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair(StaticStrings::MimeTypeJson));
   TRI_AppendString2StringBuffer(response->body().stringBuffer(), data.c_str(),
                                 data.length());
 

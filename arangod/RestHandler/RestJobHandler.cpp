@@ -107,8 +107,7 @@ void RestJobHandler::putJob() {
   _response = response;
 
   // plus a new header
-  static std::string const xArango = "x-arango-async-id";
-  _response->setHeaderNC(xArango, value);
+  _response->setHeaderNC(CharLengthPair(StaticStrings::AsyncId), value);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

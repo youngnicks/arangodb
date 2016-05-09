@@ -34,7 +34,7 @@ bool RestPleaseUpgradeHandler::isDirect() const { return true; }
 
 HttpHandler::status_t RestPleaseUpgradeHandler::execute() {
   createResponse(GeneralResponse::ResponseCode::OK);
-  _response->setContentType("text/plain; charset=utf-8");
+  _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair(StaticStrings::MimeTypeText));
 
   auto& buffer = _response->body();
   buffer.appendText("Database: ");

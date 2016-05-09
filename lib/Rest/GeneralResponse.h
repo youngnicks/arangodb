@@ -26,7 +26,10 @@
 
 #include "Basics/Common.h"
 
+#include "Basics/CharLengthPair.h"
 #include "Basics/StaticStrings.h"
+#include "Basics/StringHeap.h"
+#include "Basics/StringUtils.h"
 
 namespace arangodb {
 class GeneralResponse {
@@ -109,30 +112,39 @@ class GeneralResponse {
     _responseCode = responseCode;
   }
 
-  void setContentType(std::string const& contentType) {
-    _headers[arangodb::StaticStrings::ContentTypeHeader] = contentType;
+  std::unordered_map<std::string, std::string> headers() const;
+
+  /// @brief the header field name will be copied, trimmed and lower-cased
+  /// this is more expensive than setHeaderNC
+  void setHeader(std::string const& key, std::string const& value) {
+    setHeaderNC(basics::StringUtils::tolower(key), value);
   }
 
-  // Returns the value of a header field with given name. If no header field
-  // with the given name was specified by the client, the empty string is
-  // returned.
-  std::string const& header(std::string const& field) const;
-  std::string const& header(std::string const&, bool& found) const;
-  std::unordered_map<std::string, std::string> headers() const { return _headers; }
+  /// @brief the header field name will be copied, trimmed and lower-cased
+  /// this is more expensive than setHeaderNC
+  void setHeader(std::string&& key, std::string const& value) {
+    basics::StringUtils::tolowerInPlace(&key);
+    setHeaderNC(key, value);
+  }
 
-  void setHeader(std::string const& key, std::string const& value);
-
-  // the header field name must already be trimmed and lower-cased
+  /// @brief the header field name must already be trimmed and lower-cased
+  /// both key and value will be copied!
   void setHeaderNC(std::string const& key, std::string const& value);
-  void setHeaderNC(std::string const& key, std::string&& value);
 
- private:
-  // checks for special headers
-  virtual void checkHeader(std::string const& key, std::string const& value) {}
+  /// @brief the header field name must already be trimmed and lower-cased
+  /// value will be copied - the caller must ensure the data for key
+  /// remains valid all the time
+  void setHeaderNC(CharLengthPair const& key, std::string const& value);
+
+  /// @brief the header field name must already be trimmed and lower-cased
+  /// no data will be copied - the caller must ensure the data for key
+  /// and value remains valid all the time
+  void setHeaderNC(CharLengthPair const& key, CharLengthPair const& value);
 
  protected:
   ResponseCode _responseCode;
-  std::unordered_map<std::string, std::string> _headers;
+  StringHeap _strings;
+  std::unordered_map<CharLengthPair, CharLengthPair> _headers;
 };
 }
 

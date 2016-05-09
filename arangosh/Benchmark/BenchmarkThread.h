@@ -29,11 +29,12 @@
 #include "Basics/ConditionLocker.h"
 #include "Basics/ConditionVariable.h"
 #include "Basics/Exceptions.h"
-#include "Logger/Logger.h"
+#include "Basics/StaticStrings.h"
 #include "Basics/Thread.h"
 #include "Basics/hashes.h"
 #include "Benchmark/BenchmarkCounter.h"
 #include "Benchmark/BenchmarkOperation.h"
+#include "Logger/Logger.h"
 #include "Rest/HttpResponse.h"
 #include "SimpleHttpClient/GeneralClientConnection.h"
 #include "SimpleHttpClient/SimpleHttpClient.h"
@@ -70,8 +71,7 @@ class BenchmarkThread : public arangodb::Thread {
         _counter(0),
         _time(0.0),
         _verbose(verbose) {
-    _errorHeader =
-        basics::StringUtils::tolower(HttpResponse::BATCH_ERROR_HEADER);
+    _errorHeader = StaticStrings::Errors;
   }
 
   ~BenchmarkThread() { shutdown(); }

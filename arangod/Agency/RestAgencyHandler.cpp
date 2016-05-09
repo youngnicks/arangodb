@@ -74,7 +74,7 @@ void RestAgencyHandler::redirectRequest(arangodb::consensus::id_t leaderId) {
     std::string url = Endpoint::uriForm(
       _agent->config().endpoints.at(leaderId)) + _request->requestPath();
     createResponse(GeneralResponse::ResponseCode::TEMPORARY_REDIRECT);
-    _response->setHeaderNC(StaticStrings::Location, url);
+    _response->setHeaderNC(CharLengthPair(StaticStrings::Location), url);
   } catch (std::exception const& e) {
     LOG_TOPIC(WARN, Logger::AGENCY) << e.what();
     generateError(GeneralResponse::ResponseCode::SERVER_ERROR,

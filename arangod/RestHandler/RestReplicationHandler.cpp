@@ -797,7 +797,7 @@ void RestReplicationHandler::handleTrampolineCoordinator() {
   bool dummy;
   createResponse(static_cast<GeneralResponse::ResponseCode>(
       res->result->getHttpReturnCode()));
-  _response->setContentType(res->result->getHeaderField("content-type", dummy));
+  _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), res->result->getHeaderField("content-type", dummy));
   _response->body().swap(&(res->result->getBody()));
 
   auto const& resultHeaders = res->result->getHeaderFields();
@@ -943,22 +943,22 @@ void RestReplicationHandler::handleCommandLoggerFollow() {
         createResponse(GeneralResponse::ResponseCode::OK);
       }
 
-      _response->setContentType("application/x-arango-dump; charset=utf-8");
+      _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair("application/x-arango-dump; charset=utf-8"));
 
       // set headers
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_CHECKMORE,
-                             checkMore ? "true" : "false");
+      _response->setHeaderNC(CharLengthPair(TRI_REPLICATION_HEADER_CHECKMORE),
+                             CharLengthPair(checkMore ? "true" : "false"));
 
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_LASTINCLUDED,
+      _response->setHeaderNC(CharLengthPair(TRI_REPLICATION_HEADER_LASTINCLUDED),
                              StringUtils::itoa(dump._lastFoundTick));
 
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_LASTTICK,
+      _response->setHeaderNC(CharLengthPair(TRI_REPLICATION_HEADER_LASTTICK),
                              StringUtils::itoa(state.lastCommittedTick));
 
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_ACTIVE, "true");
+      _response->setHeaderNC(CharLengthPair(TRI_REPLICATION_HEADER_ACTIVE), CharLengthPair("true"));
 
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_FROMPRESENT,
-                             dump._fromTickIncluded ? "true" : "false");
+      _response->setHeaderNC(CharLengthPair(TRI_REPLICATION_HEADER_FROMPRESENT),
+                             CharLengthPair(dump._fromTickIncluded ? "true" : "false"));
 
       if (length > 0) {
         // transfer ownership of the buffer contents
@@ -1037,12 +1037,12 @@ void RestReplicationHandler::handleCommandDetermineOpenTransactions() {
         createResponse(GeneralResponse::ResponseCode::OK);
       }
 
-      _response->setContentType("application/x-arango-dump; charset=utf-8");
+      _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair("application/x-arango-dump; charset=utf-8"));
 
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_FROMPRESENT,
-                             dump._fromTickIncluded ? "true" : "false");
+      _response->setHeaderNC(CharLengthPair(TRI_REPLICATION_HEADER_FROMPRESENT),
+                             CharLengthPair(dump._fromTickIncluded ? "true" : "false"));
 
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_LASTTICK,
+      _response->setHeaderNC(CharLengthPair(TRI_REPLICATION_HEADER_LASTTICK),
                              StringUtils::itoa(dump._lastFoundTick));
 
       if (length > 0) {
@@ -2921,14 +2921,14 @@ void RestReplicationHandler::handleCommandDump() {
       createResponse(GeneralResponse::ResponseCode::OK);
     }
 
-    _response->setContentType("application/x-arango-dump; charset=utf-8");
+    _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair("application/x-arango-dump; charset=utf-8"));
 
     // set headers
     _response->setHeaderNC(
-        TRI_REPLICATION_HEADER_CHECKMORE,
-        ((dump._hasMore || dump._bufferFull) ? "true" : "false"));
+        CharLengthPair(TRI_REPLICATION_HEADER_CHECKMORE),
+        CharLengthPair((dump._hasMore || dump._bufferFull) ? "true" : "false"));
 
-    _response->setHeaderNC(TRI_REPLICATION_HEADER_LASTINCLUDED,
+    _response->setHeaderNC(CharLengthPair(TRI_REPLICATION_HEADER_LASTINCLUDED),
                            StringUtils::itoa(dump._lastFoundTick));
 
     // transfer ownership of the buffer contents

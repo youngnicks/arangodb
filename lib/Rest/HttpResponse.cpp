@@ -31,7 +31,6 @@
 using namespace arangodb;
 using namespace arangodb::basics;
 
-std::string const HttpResponse::BATCH_ERROR_HEADER = "x-arango-errors";
 bool HttpResponse::HIDE_PRODUCT_HEADER = false;
 
 HttpResponse::HttpResponse(ResponseCode code)
@@ -41,11 +40,11 @@ HttpResponse::HttpResponse(ResponseCode code)
       _body(TRI_UNKNOWN_MEM_ZONE, false),
       _bodySize(0) {
   if (!HIDE_PRODUCT_HEADER) {
-    _headers[StaticStrings::Server] = "ArangoDB";
+    setHeaderNC(CharLengthPair(StaticStrings::Server), CharLengthPair("ArangoDB"));
   }
 
-  _headers[StaticStrings::Connection] = StaticStrings::KeepAlive;
-  _headers[StaticStrings::ContentTypeHeader] = StaticStrings::MimeTypeText;
+  // setHeaderNC(CharLengthPair(StaticStrings::Connection), CharLengthPair(StaticStrings::KeepAlive));
+  // setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair(StaticStrings::MimeTypeText));
 }
 
 void HttpResponse::setCookie(std::string const& name, std::string const& value,
@@ -128,36 +127,38 @@ void HttpResponse::writeHeader(StringBuffer* output) {
   std::string transferEncoding;
 
   for (auto const& it : _headers) {
-    std::string const& key = it.first;
-    size_t const keyLength = key.size();
+    CharLengthPair const& key = it.first;
+    size_t const keyLength = key.length;
 
     // ignore content-length
-    if (keyLength == 14 && key[0] == 'c' &&
-        memcmp(key.c_str(), "content-length", keyLength) == 0) {
+    if (keyLength == 14 && key.data[0] == 'c' &&
+        memcmp(key.data, "content-length", keyLength) == 0) {
       continue;
     }
 
     // save transfer encoding
-    if (keyLength == 17 && key[0] == 't' &&
-        memcmp(key.c_str(), "transfer-encoding", keyLength) == 0) {
+    if (keyLength == 17 && key.data[0] == 't' &&
+        memcmp(key.data, "transfer-encoding", keyLength) == 0) {
       seenTransferEncoding = true;
-      transferEncoding = it.second;
+      transferEncoding = std::string(it.second.data, it.second.length);
       continue;
     }
 
     if (capitalizeHeaders) {
-      char const* p = key.c_str();
+      char const* p = key.data;
       char const* end = p + keyLength;
       int capState = 1;
+
+      output->reserve(keyLength);
 
       while (p < end) {
         if (capState == 1) {
           // upper case
-          output->appendChar(::toupper(*p));
+          output->appendCharUnsafe(::toupper(*p));
           capState = 0;
         } else if (capState == 0) {
           // normal case
-          output->appendChar(::tolower(*p));
+          output->appendCharUnsafe(::tolower(*p));
           if (*p == '-') {
             capState = 1;
           } else if (*p == ':') {
@@ -165,16 +166,16 @@ void HttpResponse::writeHeader(StringBuffer* output) {
           }
         } else {
           // output as is
-          output->appendChar(*p);
+          output->appendCharUnsafe(*p);
         }
         ++p;
       }
     } else {
-      output->appendText(key);
+      output->appendText(key.data, key.length);
     }
 
     output->appendText(TRI_CHAR_LENGTH_PAIR(": "));
-    output->appendText(it.second);
+    output->appendText(it.second.data, it.second.length);
     output->appendText(TRI_CHAR_LENGTH_PAIR("\r\n"));
   }
 
@@ -236,13 +237,3 @@ void HttpResponse::writeHeader(StringBuffer* output) {
   // end of header, body to follow
 }
 
-void HttpResponse::checkHeader(std::string const& key,
-                               std::string const& value) {
-  if (key[0] == 't' && key == "transfer-encoding") {
-    if (TRI_CaseEqualString(value.c_str(), "chunked")) {
-      _isChunked = true;
-    } else {
-      _isChunked = false;
-    }
-  }
-}

@@ -79,9 +79,8 @@ HttpHandler::status_t PathHandler::execute() {
 
     createResponse(GeneralResponse::ResponseCode::MOVED_PERMANENTLY);
 
-    static std::string const location = "location";
-    _response->setHeaderNC(location, url);
-    _response->setContentType("text/html");
+    _response->setHeaderNC(CharLengthPair(StaticStrings::Location), url);
+    _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair("text/html"));
 
     _response->body().appendText(
         "<html><head><title>Moved</title></head><body><h1>Moved</h1><p>This "
@@ -171,8 +170,7 @@ HttpHandler::status_t PathHandler::execute() {
   if (cacheMaxAge > 0 &&
       _request->requestType() == GeneralRequest::RequestType::GET) {
     // yes, then set a pro-caching header
-    static std::string const cacheControl = "cache-control";
-    _response->setHeaderNC(cacheControl, maxAgeHeader);
+    _response->setHeaderNC(CharLengthPair(StaticStrings::CacheControl), maxAgeHeader);
   }
 
   std::string::size_type d = last.find_last_of('.');
@@ -185,7 +183,7 @@ HttpHandler::status_t PathHandler::execute() {
       char const* mimetype = TRI_GetMimetype(suffix.c_str());
 
       if (mimetype != nullptr) {
-        _response->setContentType(mimetype);
+        _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair(mimetype));
 
         return status_t(HANDLER_DONE);
       }
@@ -196,7 +194,7 @@ HttpHandler::status_t PathHandler::execute() {
     }
   }
 
-  _response->setContentType(contentType);
+  _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), contentType);
 
   return status_t(HANDLER_DONE);
 }

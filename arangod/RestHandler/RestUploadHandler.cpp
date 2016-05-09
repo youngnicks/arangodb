@@ -105,7 +105,7 @@ HttpHandler::status_t RestUploadHandler::execute() {
 
   // create the response
   createResponse(GeneralResponse::ResponseCode::CREATED);
-  _response->setContentType(StaticStrings::MimeTypeJson);
+  _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair(StaticStrings::MimeTypeJson));
 
   // TODO: use RestBaseHandler
   VPackBuilder b;

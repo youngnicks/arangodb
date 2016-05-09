@@ -23,6 +23,7 @@
 
 #include "RestVersionHandler.h"
 #include "ApplicationFeatures/ApplicationServer.h"
+#include "Basics/StaticStrings.h"
 #include "Rest/HttpRequest.h"
 #include "Rest/Version.h"
 #include "RestServer/ServerFeature.h"
@@ -46,9 +47,9 @@ bool RestVersionHandler::isDirect() const { return true; }
 HttpHandler::status_t RestVersionHandler::execute() {
   try {
     VPackBuilder result;
-    result.add(VPackValue(VPackValueType::Object));
-    result.add("server", VPackValue("arango"));
-    result.add("version", VPackValue(ARANGODB_VERSION));
+    result.openObject();
+    result.add("server", VPackValue(StaticStrings::Arango));
+    result.add("version", VPackValue(StaticStrings::VersionValue));
 
     bool found;
     std::string const& detailsStr = _request->value("details", found);

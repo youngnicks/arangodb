@@ -23,6 +23,7 @@
 
 #include "RestBatchHandler.h"
 
+#include "Basics/CharLengthPair.h"
 #include "Basics/StaticStrings.h"
 #include "Basics/StringUtils.h"
 #include "Logger/Logger.h"
@@ -73,7 +74,7 @@ HttpHandler::status_t RestBatchHandler::execute() {
 
   // create the response
   createResponse(GeneralResponse::ResponseCode::OK);
-  _response->setContentType(_request->header(StaticStrings::ContentTypeHeader));
+  _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), _request->header(StaticStrings::ContentTypeHeader));
 
   // setup some auxiliary structures to parse the multipart message
   std::string const& bodyStr = _request->body();
@@ -213,12 +214,8 @@ HttpHandler::status_t RestBatchHandler::execute() {
       _response->body().appendText(TRI_CHAR_LENGTH_PAIR("\r\n\r\n"));
 
       // remove some headers we don't need
-      static std::string const connection = "connection";
-      static std::string const server = "server";
-      static std::string const empty = "";
-
-      partResponse->setHeaderNC(connection, empty);
-      partResponse->setHeaderNC(server, empty);
+      partResponse->setHeaderNC(CharLengthPair(StaticStrings::Connection), CharLengthPair(StaticStrings::Empty));
+      partResponse->setHeaderNC(CharLengthPair(StaticStrings::Server), CharLengthPair(StaticStrings::Empty));
 
       // append the part response header
       partResponse->writeHeader(&_response->body());
@@ -238,7 +235,7 @@ HttpHandler::status_t RestBatchHandler::execute() {
   _response->body().appendText(boundary + "--");
 
   if (errors > 0) {
-    _response->setHeaderNC(HttpResponse::BATCH_ERROR_HEADER,
+    _response->setHeaderNC(CharLengthPair(StaticStrings::Errors),
                            StringUtils::itoa(errors));
   }
 

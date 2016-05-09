@@ -25,6 +25,7 @@
 
 #include "Basics/StaticStrings.h"
 #include "Basics/StringUtils.h"
+#include "Basics/VelocyPackDumper.h"
 #include "Basics/VPackStringBufferAdapter.h"
 #include "Rest/HttpRequest.h"
 #include "Rest/HttpResponse.h"
@@ -133,9 +134,11 @@ void RestBaseHandler::generateCanceled() {
 void RestBaseHandler::dumpResponse(VPackSlice const& slice,
                                    VPackOptions const* options) {
   VPackStringBufferAdapter buffer(_response->body().stringBuffer());
-
   VPackDumper dumper(&buffer, options);
+
   try {
+    //arangodb::basics::VelocyPackDumper dumper(&(_response->body()), options);
+    //dumper.dumpValue(slice);
     dumper.dump(slice);
   } catch (std::exception const& ex) {
     generateError(GeneralResponse::ResponseCode::SERVER_ERROR, TRI_ERROR_INTERNAL, ex.what());
@@ -151,6 +154,9 @@ void RestBaseHandler::dumpResponse(VPackSlice const& slice,
 
 bool RestBaseHandler::returnVelocypack() const {
   std::string const& result = _request->header(StaticStrings::Accept);
+  if (result.empty()) {
+    return false;
+  }
   return (std::string::npos != result.find(StaticStrings::MimeTypeVPack));
 }
 
@@ -161,10 +167,10 @@ bool RestBaseHandler::returnVelocypack() const {
 void RestBaseHandler::writeResult(arangodb::velocypack::Slice const& slice, 
                                   VPackOptions const& options) {
   if (returnVelocypack()) {
-    _response->setContentType(StaticStrings::MimeTypeVPack);
+    _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair(StaticStrings::MimeTypeVPack));
     _response->body().appendText(slice.startAs<const char>(), slice.byteSize());
   } else {
-    _response->setContentType(StaticStrings::MimeTypeJson);
+    _response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair(StaticStrings::MimeTypeJson));
     dumpResponse(slice, &options);
   }
 }

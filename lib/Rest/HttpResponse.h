@@ -33,7 +33,6 @@ namespace arangodb {
 class HttpResponse : public GeneralResponse {
  public:
   static bool HIDE_PRODUCT_HEADER;
-  static std::string const BATCH_ERROR_HEADER;
 
  public:
   explicit HttpResponse(ResponseCode code);
@@ -67,9 +66,6 @@ class HttpResponse : public GeneralResponse {
  private:
   // the body must already be set. deflate is then run on the existing body
   int deflate(size_t = 16384);
-
-  // checks for special headers
-  void checkHeader(std::string const& key, std::string const& value) override final;
 
  private:
   bool _isHeadResponse;

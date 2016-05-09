@@ -511,7 +511,7 @@ static HttpResponse* ResponseV8ToCpp(v8::Isolate* isolate,
 
   TRI_GET_GLOBAL_STRING(ContentTypeKey);
   if (res->Has(ContentTypeKey)) {
-    response->setContentType(TRI_ObjectToString(res->Get(ContentTypeKey)));
+    response->setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), TRI_ObjectToString(res->Get(ContentTypeKey)));
   }
 
   // .........................................................................
@@ -549,14 +549,12 @@ static HttpResponse* ResponseV8ToCpp(v8::Isolate* isolate,
           // base64-encode the result
           out = StringUtils::encodeBase64(out);
           // set the correct content-encoding header
-          static std::string const base64 = "base64";
-          response->setHeaderNC(contentEncoding, base64);
+          response->setHeaderNC(CharLengthPair(StaticStrings::ContentEncoding), CharLengthPair(StaticStrings::Base64));
         } else if (name == "base64decode") {
           // base64-decode the result
           out = StringUtils::decodeBase64(out);
           // set the correct content-encoding header
-          static std::string const binary = "binary";
-          response->setHeaderNC(contentEncoding, binary);
+          response->setHeaderNC(CharLengthPair(StaticStrings::ContentEncoding), CharLengthPair(StaticStrings::Binary));
         }
       }
 

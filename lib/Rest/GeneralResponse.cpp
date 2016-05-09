@@ -25,6 +25,7 @@
 #include "GeneralResponse.h"
 
 #include "Basics/StringUtils.h"
+#include "Logger/Logger.h"
 
 using namespace arangodb;
 using namespace arangodb::basics;
@@ -416,45 +417,44 @@ GeneralResponse::ResponseCode GeneralResponse::responseCode(int code) {
 }
 
 GeneralResponse::GeneralResponse(ResponseCode responseCode)
-    : _responseCode(responseCode) {}
-
-std::string const& GeneralResponse::header(std::string const& key) const {
-  std::string k = StringUtils::tolower(key);
-  auto it = _headers.find(k);
-
-  if (it == _headers.end()) {
-    return EMPTY_STR;
+    : _responseCode(responseCode), _strings(512) {}
+  
+std::unordered_map<std::string, std::string> GeneralResponse::headers() const {
+  std::unordered_map<std::string, std::string> result;
+  result.reserve(_headers.size());
+  
+  for (auto const& it : _headers) {
+    result[std::string(it.first.data, it.first.length)] = std::string(it.second.data, it.second.length);
   }
-
-  return it->second;
+  return result;
 }
 
-std::string const& GeneralResponse::header(std::string const& key,
-                                           bool& found) const {
-  std::string k = StringUtils::tolower(key);
-  auto it = _headers.find(k);
-
-  if (it == _headers.end()) {
-    found = false;
-    return EMPTY_STR;
-  }
-
-  found = true;
-  return it->second;
-}
-
-void GeneralResponse::setHeader(std::string const& key,
-                                std::string const& value) {
-  _headers[StringUtils::tolower(key)] = value;
-}
-
+/// @brief the header field name must already be trimmed and lower-cased
+/// both key and value will be copied!
 void GeneralResponse::setHeaderNC(std::string const& key,
                                   std::string const& value) {
-  _headers[key] = value;
+  CharLengthPair k = _strings.registerString(key.c_str(), key.size());
+  CharLengthPair v = _strings.registerString(value.c_str(), value.size());
+  setHeaderNC(k, v);
 }
 
-void GeneralResponse::setHeaderNC(std::string const& key,
-                                  std::string&& value) {
-  _headers[key] = std::move(value);
+/// @brief the header field name must already be trimmed and lower-cased
+/// value will be copied!
+void GeneralResponse::setHeaderNC(CharLengthPair const& key,
+                                  std::string const& value) {
+  CharLengthPair v = _strings.registerString(value.c_str(), value.size());
+  setHeaderNC(key, v);
+}
+
+/// @brief the header field name must already be trimmed and lower-cased
+/// no data will be copied
+void GeneralResponse::setHeaderNC(CharLengthPair const& key,
+                                  CharLengthPair const& value) {
+  auto result = _headers.emplace(key, value);
+  if (!result.second) {
+    LOG(ERR) << "duplicate header " << key.data;
+    _headers.erase(key);
+    _headers.emplace(key, value);
+  }
 }
 

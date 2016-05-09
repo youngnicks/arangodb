@@ -500,7 +500,7 @@ bool HttpCommTask::processRead() {
   // not found
   else if (authResult == GeneralResponse::ResponseCode::NOT_FOUND) {
     HttpResponse response(authResult);
-    response.setContentType(StaticStrings::MimeTypeJson);
+    response.setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair(StaticStrings::MimeTypeJson));
 
     response.body()
         .appendText(TRI_CHAR_LENGTH_PAIR("{\"error\":true,\"errorMessage\":\""))
@@ -518,7 +518,7 @@ bool HttpCommTask::processRead() {
   // forbidden
   else if (authResult == GeneralResponse::ResponseCode::FORBIDDEN) {
     HttpResponse response(authResult);
-    response.setContentType(StaticStrings::MimeTypeJson);
+    response.setHeaderNC(CharLengthPair(StaticStrings::ContentTypeHeader), CharLengthPair(StaticStrings::MimeTypeJson));
 
     response.body()
         .appendText(TRI_CHAR_LENGTH_PAIR(
@@ -540,7 +540,7 @@ bool HttpCommTask::processRead() {
           "basic realm=\"" +
           _server->handlerFactory()->authenticationRealm(_request) + "\"";
 
-      response.setHeaderNC(StaticStrings::WwwAuthenticate, std::move(realm));
+      response.setHeaderNC(CharLengthPair(StaticStrings::WwwAuthenticate), realm);
     }
 
     clearRequest();
@@ -606,23 +606,23 @@ void HttpCommTask::addResponse(HttpResponse* response) {
     // access-control-allow-origin header now
     LOG(TRACE) << "handling CORS response";
 
-    response->setHeaderNC(StaticStrings::AccessControlExposeHeaders,
-                          StaticStrings::ExposedCorsHeaders);
+    response->setHeaderNC(CharLengthPair(StaticStrings::AccessControlExposeHeaders),
+                          CharLengthPair(StaticStrings::ExposedCorsHeaders));
 
     // send back original value of "Origin" header
-    response->setHeaderNC(StaticStrings::AccessControlAllowOrigin, _origin);
+    response->setHeaderNC(CharLengthPair(StaticStrings::AccessControlAllowOrigin), _origin);
 
     // send back "Access-Control-Allow-Credentials" header
-    response->setHeaderNC(StaticStrings::AccessControlAllowCredentials,
-                          (_denyCredentials ? "false" : "true"));
+    response->setHeaderNC(CharLengthPair(StaticStrings::AccessControlAllowCredentials),
+                          CharLengthPair(_denyCredentials ? "false" : "true"));
   }
   // CORS request handling EOF
 
   // set "connection" header
   // keep-alive is the default
   response->setHeaderNC(
-      StaticStrings::Connection,
-      (_closeRequested ? StaticStrings::Close : StaticStrings::KeepAlive));
+      CharLengthPair(StaticStrings::Connection),
+      CharLengthPair(_closeRequested ? StaticStrings::Close : StaticStrings::KeepAlive));
 
   size_t const responseBodyLength = response->bodySize();
 
@@ -771,7 +771,7 @@ void HttpCommTask::fillWriteBuffer() {
 void HttpCommTask::processCorsOptions() {
   HttpResponse response(GeneralResponse::ResponseCode::OK);
 
-  response.setHeaderNC(StaticStrings::Allow, StaticStrings::CorsMethods);
+  response.setHeaderNC(CharLengthPair(StaticStrings::Allow), CharLengthPair(StaticStrings::CorsMethods));
 
   if (!_origin.empty()) {
     LOG(TRACE) << "got CORS preflight request";
@@ -780,14 +780,14 @@ void HttpCommTask::processCorsOptions() {
 
     // send back which HTTP methods are allowed for the resource
     // we'll allow all
-    response.setHeaderNC(StaticStrings::AccessControlAllowMethods, StaticStrings::CorsMethods);
+    response.setHeaderNC(CharLengthPair(StaticStrings::AccessControlAllowMethods), CharLengthPair(StaticStrings::CorsMethods));
 
     if (!allowHeaders.empty()) {
       // allow all extra headers the client requested
       // we don't verify them here. the worst that can happen is that the client
       // sends some broken headers and then later cannot access the data on the
       // server. that's a client problem.
-      response.setHeaderNC(StaticStrings::AccessControlAllowHeaders,
+      response.setHeaderNC(CharLengthPair(StaticStrings::AccessControlAllowHeaders),
                            allowHeaders);
 
       LOG(TRACE) << "client requested validation of the following headers: "
@@ -795,7 +795,7 @@ void HttpCommTask::processCorsOptions() {
     }
 
     // set caching time (hard-coded value)
-    response.setHeaderNC(StaticStrings::AccessControlMaxAge, StaticStrings::N1800);
+    response.setHeaderNC(CharLengthPair(StaticStrings::AccessControlMaxAge), CharLengthPair(StaticStrings::N1800));
   }
 
   clearRequest();
@@ -878,7 +878,7 @@ void HttpCommTask::processRequest() {
 
       if (jobId > 0) {
         // return the job id we just created
-        response.setHeaderNC(StaticStrings::AsyncId, StringUtils::itoa(jobId));
+        response.setHeaderNC(CharLengthPair(StaticStrings::AsyncId), StringUtils::itoa(jobId));
       }
 
       handleResponse(&response);
