@@ -2756,10 +2756,8 @@ std::pair<bool, bool> Transaction::getIndexForSortCondition(
 
 std::shared_ptr<OperationCursor> Transaction::indexScanForCondition(
     std::string const& collectionName, IndexHandle const& indexId,
-    arangodb::aql::Ast* ast, arangodb::aql::AstNode const* condition,
-    arangodb::aql::Variable const* var, uint64_t limit, uint64_t batchSize,
-    bool reverse) {
-
+    arangodb::aql::AstNode const* condition, arangodb::aql::Variable const* var,
+    uint64_t limit, uint64_t batchSize, bool reverse) {
   if (ServerState::isCoordinator(_serverRole)) {
     // The index scan is only available on DBServers and Single Server.
     THROW_ARANGO_EXCEPTION(TRI_ERROR_CLUSTER_ONLY_ON_DBSERVER);
@@ -2779,7 +2777,7 @@ std::shared_ptr<OperationCursor> Transaction::indexScanForCondition(
                                    "The index id cannot be empty.");
   }
 
-  std::unique_ptr<IndexIterator> iterator(idx->iteratorForCondition(this, &ctxt, ast, condition, var, reverse));
+  std::unique_ptr<IndexIterator> iterator(idx->iteratorForCondition(this, &ctxt, condition, var, reverse));
 
   if (iterator == nullptr) {
     // We could not create an ITERATOR and it did not throw an error itself

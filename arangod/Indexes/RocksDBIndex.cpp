@@ -794,7 +794,7 @@ bool RocksDBIndex::supportsSortCondition(
 
 IndexIterator* RocksDBIndex::iteratorForCondition(
     arangodb::Transaction* trx, IndexIteratorContext* context,
-    arangodb::aql::Ast* ast, arangodb::aql::AstNode const* node,
+    arangodb::aql::Ast*, arangodb::aql::AstNode const* node,
     arangodb::aql::Variable const* reference, bool reverse) const {
   VPackBuilder searchValues;
   searchValues.openArray();

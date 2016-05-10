@@ -330,9 +330,8 @@ std::shared_ptr<arangodb::OperationCursor> IndexBlock::createCursor() {
   TRI_ASSERT(_indexes.size() > _currentIndex);
 
   return ast->query()->trx()->indexScanForCondition(
-          _collection->getName(), _indexes[_currentIndex], ast,
-          conditionNode, outVariable, UINT64_MAX,
-          Transaction::defaultBatchSize(), node->_reverse);
+      _collection->getName(), _indexes[_currentIndex], conditionNode,
+      outVariable, UINT64_MAX, Transaction::defaultBatchSize(), node->_reverse);
   DEBUG_END_BLOCK();
 }
 

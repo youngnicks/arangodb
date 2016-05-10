@@ -762,7 +762,7 @@ bool HashIndex::supportsFilterCondition(
 
 IndexIterator* HashIndex::iteratorForCondition(
     arangodb::Transaction* trx, IndexIteratorContext*,
-    arangodb::aql::Ast*, arangodb::aql::AstNode const* node,
+    arangodb::aql::AstNode const* node,
     arangodb::aql::Variable const* reference, bool) const {
   TRI_ASSERT(node->type == aql::NODE_TYPE_OPERATOR_NARY_AND);
   SimpleAttributeEqualityMatcher matcher(fields());

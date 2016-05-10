@@ -102,7 +102,6 @@ bool arangodb::traverser::TraverserOptions::getCollection(
   }
   name = _collections.at(index);
 
-  // arangodb::EdgeIndex::buildSearchValue(direction, eColName, _builder);
   return true;
 }
 
