@@ -144,8 +144,6 @@ struct Functions {
                          VPackFunctionParameters const&);
   static AqlValue Document(arangodb::aql::Query*, arangodb::AqlTransaction*,
                             VPackFunctionParameters const&);
-  static AqlValue Edges(arangodb::aql::Query*, arangodb::AqlTransaction*,
-                         VPackFunctionParameters const&);
   static AqlValue Round(arangodb::aql::Query*, arangodb::AqlTransaction*,
                          VPackFunctionParameters const&);
   static AqlValue Abs(arangodb::aql::Query*, arangodb::AqlTransaction*,
