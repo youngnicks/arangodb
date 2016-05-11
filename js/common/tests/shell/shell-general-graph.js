@@ -784,7 +784,6 @@ function GeneralGraphCreationSuite() {
   };
 }
 
-
 function GeneralGraphAQLQueriesSuite() {
   'use strict';
   // Definition of names
@@ -1989,6 +1988,16 @@ function EdgesAndVerticesSuite() {
     return ids;
   };
 
+  var pickStartByName = function (name) {
+    var exampleFilter = `FILTER x.first_name == "${name}" RETURN x`;
+    return `FOR start IN UNION(
+       (FOR x IN ${vc1} ${exampleFilter}),
+       (FOR x IN ${vc2} ${exampleFilter}),
+       (FOR x IN ${vc3} ${exampleFilter}),
+       (FOR x IN ${vc4} ${exampleFilter}))`;
+
+  };
+
   return {
 
     setUp : function() {
@@ -2013,37 +2022,36 @@ function EdgesAndVerticesSuite() {
 
     test_connectingEdges : function () {
       fillCollections();
-      var res = g._getConnectingEdges({first_name: "Tam"}, {first_name: "Tem"}, {});
+      var query = `${pickStartByName("Tam")} FOR v, e IN ANY start GRAPH "${unitTestGraphName}" FILTER v.first_name == "Tem" RETURN e`;
+      var res = db._query(query).toArray();
       assertEqual(res.length, 3);
     },
 
     test_connectingEdgesWithEdgeCollectionRestriction : function () {
       fillCollections();
-      var res = g._getConnectingEdges({first_name: "Tam"}, null, {});
+      var query = `${pickStartByName("Tam")} FOR v, e IN ANY start GRAPH "${unitTestGraphName}" RETURN DISTINCT e`;
+      var res = db._query(query).toArray();
       assertEqual(res.length, 13);
-      res = g._getConnectingEdges({first_name: "Tam"},
-                                  null,
-                                  {edgeCollectionRestriction : "unitTestEdgeCollection2"});
+
+      query = `${pickStartByName("Tam")} FOR v, e IN ANY start ${ec2} RETURN DISTINCT e`;
+      res = db._query(query).toArray();
       assertEqual(res.length, 5);
     },
 
     test_connectingEdgesWithVertexCollectionRestriction : function () {
       fillCollections();
-      var res = g._getConnectingEdges(null, null, {});
+      var query = `FOR start IN ${vc1} FOR v, e IN ANY start GRAPH "${unitTestGraphName}" RETURN DISTINCT e`;
+      var res = db._query(query).toArray();
       assertEqual(res.length, 13);
-      res = g._getConnectingEdges(null, null,
-                                      {vertex1CollectionRestriction : "unitTestVertexCollection1"});
-      assertEqual(res.length, 13);
-      res = g._getConnectingEdges(null, null, {
-        vertex1CollectionRestriction : "unitTestVertexCollection1",
-        vertex2CollectionRestriction : "unitTestVertexCollection3"
-      });
+      query = `FOR start IN ${vc1} FOR v, e IN ANY start GRAPH "${unitTestGraphName}" FILTER IS_SAME_COLLECTION("${vc3}", v) RETURN DISTINCT e`;
+      res = db._query(query).toArray();
       assertEqual(res.length, 5);
     },
 
     test_connectingEdgesWithIds : function () {
       var ids = fillCollections();
-      var res = g._getConnectingEdges(ids.vId11, ids.vId13, {});
+      var query = `FOR v, e IN ANY "${ids.vId11}" GRAPH "${unitTestGraphName}" FILTER v._id == "${ids.vId13}" RETURN e`;
+      var res = db._query(query).toArray();
       assertEqual(res.length, 2);
     },
 
@@ -3123,11 +3131,13 @@ function MeasurementsSuite() {
 /// @brief executes the test suites
 ////////////////////////////////////////////////////////////////////////////////
 
+// OBSOLETE!
+// jsunity.run(GeneralGraphAQLQueriesSuite);
+// jsunity.run(ChainedFluentAQLResultsSuite);
+
 jsunity.run(EdgesAndVerticesSuite);
 jsunity.run(GeneralGraphCommonNeighborsSuite);
-jsunity.run(GeneralGraphAQLQueriesSuite);
 jsunity.run(GeneralGraphCreationSuite);
-jsunity.run(ChainedFluentAQLResultsSuite);
 jsunity.run(OrphanCollectionSuite);
 jsunity.run(MeasurementsSuite);
 
