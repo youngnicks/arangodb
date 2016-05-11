@@ -36,7 +36,7 @@ var getQueryResults = helper.getQueryResults;
 var getRawQueryResults = helper.getRawQueryResults;
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief test suite for GRAPH_EDGES() function
+/// @brief test suite for traversals using GRAPHS
 ////////////////////////////////////////////////////////////////////////////////
 
 function ahuacatlQueryGeneralEdgesTestSuite() {
@@ -51,8 +51,14 @@ function ahuacatlQueryGeneralEdgesTestSuite() {
   var or = "UnitTestsAhuacatlOrphan";
 
   var AQL_VERTICES = "FOR v IN GRAPH_VERTICES(@name, @example, @options) SORT v RETURN v";
-  var AQL_EDGES = "FOR e IN GRAPH_EDGES(@name, @example, @options) SORT e.what RETURN e.what";
   var AQL_NEIGHBORS = "FOR v IN GRAPH_NEIGHBORS(@name, @example, @options) SORT v RETURN v";
+  var exampleFilter = "FILTER x.hugo == true OR x.heinz == 1 RETURN x";
+  var AQL_PICK_START_EXAMPLE = `FOR start IN UNION (
+        (FOR x IN ${v1} ${exampleFilter}),
+        (FOR x IN ${v2} ${exampleFilter}),
+        (FOR x IN ${v3} ${exampleFilter}),
+        (FOR x IN ${v4} ${exampleFilter})
+      )`
 
   var startExample = [{hugo : true}, {heinz : 1}];
   var vertexExample = {_key: "v1"};
@@ -268,49 +274,40 @@ function ahuacatlQueryGeneralEdgesTestSuite() {
     },
 
     ////////////////////////////////////////////////////////////////////////////////
-    /// @brief checks GRAPH_EDGES()
+    /// @brief checks edges with a GRAPH
     ////////////////////////////////////////////////////////////////////////////////
 
     ////////////////////////////////////////////////////////////////////////////////
     /// Section any direction
     ////////////////////////////////////////////////////////////////////////////////
     testEdgesAny: function () {
+      var query = `FOR v, e IN ANY @start GRAPH @name SORT e.what RETURN e.what`;
+      
       var bindVars = {
         name: gN,
-        example: v1 + "/v1",
-        options: {
-          direction : 'any',
-          includeData: true
-        }
+        start: v1 + "/v1"
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual, [ "v1->v2", "v1->v5", "v2->v1" ]);
     },
 
     testEdgesAnyRestricted: function () {
+      var query = `FOR v, e IN ANY @start @@collection SORT e.what RETURN e.what`;
       var bindVars = {
-        name: gN,
-        example: v1 + "/v1",
-        options: {
-          direction : 'any',
-          edgeCollectionRestriction: [e1],
-          includeData: true
-        }
+        start: v1 + "/v1",
+        "@collection": e1
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual, [ "v1->v2", "v2->v1" ]);
     },
 
     testEdgesAnyStartExample: function () {
+      var query = `${AQL_PICK_START_EXAMPLE}
+        FOR v, e IN ANY start GRAPH @name COLLECT what = e.what RETURN what`;
       var bindVars = {
-        name: gN,
-        example: startExample,
-        options: {
-          direction : 'any',
-          includeData: true
-        }
+        name: gN
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual, [
         "v1->v2",
         "v1->v5",
@@ -323,43 +320,33 @@ function ahuacatlQueryGeneralEdgesTestSuite() {
     },
 
     testEdgesAnyStartExampleEdgeExample: function () {
+      var query = `FOR v, e IN ANY @start GRAPH @name FILTER e.what == "v2->v1" SORT e.what RETURN e.what`;
       var bindVars = {
         name: gN,
-        example: v1 + "/v1",
-        options: {
-          direction : 'any',
-          includeData: true,
-          edgeExamples: [{what: 'v2->v1'}]
-        }
+        start: v1 + "/v1"
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual.length, 1);
       assertEqual(actual[0], "v2->v1");
     },
 
     testEdgesInbound: function() {
+      var query = `FOR v, e IN INBOUND @start GRAPH @name SORT e.what RETURN e.what`;
       var bindVars = {
         name: gN,
-        example: v1 + "/v1",
-        options: {
-          includeData: true,
-          direction : 'inbound'
-        }
+        start: v1 + "/v1"
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual, [ "v2->v1"]);
     },
 
     testEdgesInboundStartExample: function() {
+      var query = `${AQL_PICK_START_EXAMPLE}
+        FOR v, e IN INBOUND start GRAPH @name SORT e.what RETURN e.what`;
       var bindVars = {
-        name: gN,
-        example: startExample,
-        options: {
-          includeData: true,
-          direction : 'inbound'
-        }
+        name: gN
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual.length, 3);
       assertEqual(actual[0], "v1->v2");
       assertEqual(actual[1], "v2->v1");
@@ -367,59 +354,45 @@ function ahuacatlQueryGeneralEdgesTestSuite() {
     },
 
     testEdgesInboundStartExampleRestricted: function() {
+      var query = `${AQL_PICK_START_EXAMPLE}
+                   FOR v, e IN INBOUND start @@collection SORT e.what RETURN e.what`;
       var bindVars = {
-        name: gN,
-        example: startExample,
-        options: {
-          includeData: true,
-          direction : 'inbound',
-          edgeCollectionRestriction: [e2]
-        }
+        "@collection": e2
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual.length, 1);
       assertEqual(actual[0], "v3->v8");
     },
 
     testEdgesInboundStartExampleEdgeExample: function() {
+      var query = `${AQL_PICK_START_EXAMPLE}
+                   FOR v, e IN INBOUND start GRAPH @name FILTER e.what == 'v3->v8' SORT e.what RETURN e.what`;
       var bindVars = {
-        name: gN,
-        example: startExample,
-        options: {
-          includeData: true,
-          direction : 'inbound',
-          edgeExamples: [{'what' : 'v3->v8'}]
-        }
+        name: gN
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual.length, 1);
       assertEqual(actual[0], "v3->v8");
     },
 
     testEdgesOutbound: function() {
+      var query = `FOR v, e IN OUTBOUND @start GRAPH @name SORT e.what RETURN e.what`;
       var bindVars = {
         name: gN,
-        example: v1 + "/v1",
-        options: {
-          includeData: true,
-          direction : 'outbound'
-        }
+        start: v1 + "/v1"
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual[0], "v1->v2");
       assertEqual(actual[1], "v1->v5");
     },
 
     testEdgesOutboundStartExample: function() {
+      var query = `${AQL_PICK_START_EXAMPLE}
+        FOR v, e IN OUTBOUND start GRAPH @name SORT e.what RETURN e.what`;
       var bindVars = {
-        name: gN,
-        example: startExample,
-        options: {
-          direction : 'outbound',
-          includeData: true
-        }
+        name: gN
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual.length, 7);
       assertEqual(actual[0], "v1->v2");
       assertEqual(actual[1], "v1->v5");
@@ -431,16 +404,12 @@ function ahuacatlQueryGeneralEdgesTestSuite() {
     },
 
     testEdgesOutboundStartExampleRestricted: function() {
+      var query = `${AQL_PICK_START_EXAMPLE}
+                   FOR v, e IN OUTBOUND start @@collection SORT e.what RETURN e.what`;
       var bindVars = {
-        name: gN,
-        example: startExample,
-        options: {
-          direction : 'outbound',
-          includeData: true,
-          edgeCollectionRestriction: [e2]
-        }
+        "@collection": e2
       };
-      var actual = getRawQueryResults(AQL_EDGES, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
       assertEqual(actual.length, 5);
       assertEqual(actual[0], "v1->v5");
       assertEqual(actual[1], "v2->v5");
@@ -450,43 +419,30 @@ function ahuacatlQueryGeneralEdgesTestSuite() {
     },
 
     testEdgesOutboundStartExampleRestrictedModify: function() {
+      var query = `${AQL_PICK_START_EXAMPLE}
+                    FOR v, e IN 1..2 OUTBOUND start @@collection SORT e.what
+                    UPDATE e WITH {WasHere: True, When: DATE_NOW()} IN @@collection
+                    RETURN e.what
+                  `;
       var bindVars = {
-        name: gN,
-        '@edgeCol': e2,
-        example: startExample,
-        options: {
-          direction : 'outbound',
-          includeData: true,
-          maxDepth: 2, 
-          minDepth: 1, 
-          edgeCollectionRestriction: [e2]
-        }
+        "@collection": e2
       };
-      var AQL_EDGES_MODIFY = "FOR e IN GRAPH_EDGES(@name, @example, @options) SORT e.what UPDATE e WITH {WasHere: True, When: DATE_NOW()} in @@edgeCol RETURN e.what";
-      var actual = getRawQueryResults(AQL_EDGES_MODIFY, bindVars);
-      actual = getRawQueryResults("FOR x IN UnitTestsAhuacatlEdge2 FILTER x.WasHere == True return x", {});
+      var actual = getRawQueryResults(query, bindVars);
+      actual = getRawQueryResults("FOR x IN @@collection FILTER x.WasHere == True return x", bindVars);
       assertEqual(actual.length, 5);
     },
 
-
     testEdgesOutboundStartExampleRestrictedLoadVertextByDocument: function() {
+      var query = `
+        ${AQL_PICK_START_EXAMPLE}
+        FOR v, edge IN 1..2 OUTBOUND start @@collection SORT edge.what
+          LET fromVertex = DOCUMENT(edge._from)
+          LET toVertex = DOCUMENT(edge._to)
+            RETURN {edge, fromVertex, toVertex}`;
       var bindVars = {
-        name: gN,
-        example: startExample,
-        options: {
-          direction : 'outbound',
-          includeData: true,
-          maxDepth: 2, 
-          minDepth: 1, 
-          edgeCollectionRestriction: [e2]
-        }
+        "@collection": e2
       };
-      var AQL_EDGES_MODIFY =
-          "FOR e IN GRAPH_EDGES(@name, @example, @options) " +
-          "  LET fromVertex = DOCUMENT(e._from) " +
-          "  LET toVertex = DOCUMENT(e._to) " +
-          "    RETURN {edge: e, fromVertex: fromVertex, toVertex: toVertex}";
-      var actual = getRawQueryResults(AQL_EDGES_MODIFY, bindVars);
+      var actual = getRawQueryResults(query, bindVars);
 
       actual.forEach(function (oneEdgeSet) {
         assertEqual(oneEdgeSet.edge._from, oneEdgeSet.fromVertex._id );
