@@ -39,7 +39,7 @@ var getRawQueryResults = helper.getRawQueryResults;
 var assertQueryError = helper.assertQueryError;
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief test suite for EDGES() function
+/// @brief test suite for graph features
 ////////////////////////////////////////////////////////////////////////////////
 
 function ahuacatlQueryEdgesTestSuite () {
@@ -92,371 +92,309 @@ function ahuacatlQueryEdgesTestSuite () {
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks EDGES()
+/// @brief checks edges ANY
 ////////////////////////////////////////////////////////////////////////////////
 
     testEdgesAny : function () {
-      var queries = [
-        "FOR e IN EDGES('UnitTestsAhuacatlEdge', @start, 'any') SORT e.what RETURN e.what",
-        "FOR e IN EDGES(UnitTestsAhuacatlEdge, @start, 'any') SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(EDGES(UnitTestsAhuacatlEdge, @start, 'any')) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(EDGES('UnitTestsAhuacatlEdge', @start, 'any')) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(V8(EDGES(UnitTestsAhuacatlEdge, @start, 'any'))) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(V8(EDGES('UnitTestsAhuacatlEdge', @start, 'any'))) SORT e.what RETURN e.what"
-      ];
-     
-      queries.forEach(function (q) {
-        var actual;
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v1"});
-        assertEqual(actual, [ "v1->v2", "v1->v3" ]);
+      var q = "FOR v, e IN ANY @start UnitTestsAhuacatlEdge SORT e.what RETURN e.what";
 
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v2"});
-        assertEqual(actual, [ "v1->v2", "v2->v3", "v4->v2" ]);
-        
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3"});
-        assertEqual(actual, [ "v1->v3", "v2->v3", "v3->v4", "v3->v6", "v3->v7", "v6->v3", "v7->v3" ]);
-        
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v8"});
-        assertEqual(actual, [ ]);
-        
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/thefox"});
-        assertEqual(actual, [ ]);
-       
-        actual = getQueryResults(q, {start: "thefox/thefox"});
-        assertEqual(actual, [ ]);
-      });
+      var actual;
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v1"});
+      assertEqual(actual, [ "v1->v2", "v1->v3" ]);
+
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v2"});
+      assertEqual(actual, [ "v1->v2", "v2->v3", "v4->v2" ]);
+      
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3"});
+      assertEqual(actual, [ "v1->v3", "v2->v3", "v3->v4", "v3->v6", "v3->v7", "v6->v3", "v7->v3" ]);
+      
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v8"});
+      assertEqual(actual, [ ]);
+      
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/thefox"});
+      assertEqual(actual, [ ]);
+     
+      actual = getQueryResults(q, {start: "thefox/thefox"});
+      assertEqual(actual, [ ]);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks EDGES()
+/// @brief checks edges INBOUND
 ////////////////////////////////////////////////////////////////////////////////
 
     testEdgesIn : function () {
-      var queries = [
-        "FOR e IN EDGES(UnitTestsAhuacatlEdge, @start, 'inbound') SORT e.what RETURN e.what",
-        "FOR e IN EDGES('UnitTestsAhuacatlEdge', @start, 'inbound') SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(EDGES(UnitTestsAhuacatlEdge, @start, 'inbound')) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(EDGES('UnitTestsAhuacatlEdge', @start, 'inbound')) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(V8(EDGES(UnitTestsAhuacatlEdge, @start, 'inbound'))) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(V8(EDGES('UnitTestsAhuacatlEdge', @start, 'inbound'))) SORT e.what RETURN e.what"
-      ];
+      var q = "FOR v, e IN INBOUND @start UnitTestsAhuacatlEdge SORT e.what RETURN e.what";
      
-      queries.forEach(function (q) {
-        var actual;
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v1"});
-        assertEqual(actual, [ ]);
+      var actual;
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v1"});
+      assertEqual(actual, [ ]);
 
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v2"});
-        assertEqual(actual, [ "v1->v2", "v4->v2" ]);
-        
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3"});
-        assertEqual(actual, [ "v1->v3", "v2->v3", "v6->v3", "v7->v3" ]);
-        
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v8"});
-        assertEqual(actual, [ ]);
-        
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/thefox"});
-        assertEqual(actual, [ ]);
-       
-        actual = getQueryResults(q, {start: "thefox/thefox"});
-        assertEqual(actual, [ ]);
-      });
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v2"});
+      assertEqual(actual, [ "v1->v2", "v4->v2" ]);
+      
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3"});
+      assertEqual(actual, [ "v1->v3", "v2->v3", "v6->v3", "v7->v3" ]);
+      
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v8"});
+      assertEqual(actual, [ ]);
+      
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/thefox"});
+      assertEqual(actual, [ ]);
+     
+      actual = getQueryResults(q, {start: "thefox/thefox"});
+      assertEqual(actual, [ ]);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks EDGES()
+/// @brief checks edges OUTBOUND
 ////////////////////////////////////////////////////////////////////////////////
 
     testEdgesOut : function () {
-      var queries = [
-        "FOR e IN EDGES(UnitTestsAhuacatlEdge, @start, 'outbound') SORT e.what RETURN e.what",
-        "FOR e IN EDGES('UnitTestsAhuacatlEdge', @start, 'outbound') SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(EDGES(UnitTestsAhuacatlEdge, @start, 'outbound')) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(EDGES('UnitTestsAhuacatlEdge', @start, 'outbound')) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(V8(EDGES(UnitTestsAhuacatlEdge, @start, 'outbound'))) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(V8(EDGES('UnitTestsAhuacatlEdge', @start, 'outbound'))) SORT e.what RETURN e.what"
-      ];
-     
-      queries.forEach(function (q) {
-        var actual;
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v1"});
-        assertEqual(actual, [ "v1->v2", "v1->v3" ]);
+      var q = "FOR v, e IN OUTBOUND @start UnitTestsAhuacatlEdge SORT e.what RETURN e.what";
+      var actual;
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v1"});
+      assertEqual(actual, [ "v1->v2", "v1->v3" ]);
 
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v2"});
-        assertEqual(actual, [ "v2->v3" ]);
-        
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3"});
-        assertEqual(actual, [ "v3->v4", "v3->v6", "v3->v7" ]);
-        
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v8"});
-        assertEqual(actual, [ ]);
-        
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/thefox"});
-        assertEqual(actual, [ ]);
-       
-        actual = getQueryResults(q, {start: "thefox/thefox"});
-        assertEqual(actual, [ ]);
-      });
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v2"});
+      assertEqual(actual, [ "v2->v3" ]);
+      
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3"});
+      assertEqual(actual, [ "v3->v4", "v3->v6", "v3->v7" ]);
+      
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v8"});
+      assertEqual(actual, [ ]);
+      
+      actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/thefox"});
+      assertEqual(actual, [ ]);
+     
+      actual = getQueryResults(q, {start: "thefox/thefox"});
+      assertEqual(actual, [ ]);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks EDGES() with includeVertices
+/// @brief checks edges / vertex combination
 ////////////////////////////////////////////////////////////////////////////////
 
     testEdgesAnyInclVertices : function () {
       "use strict";
       let actual;
-      const queries = [
-        "FOR e IN EDGES(@@col, @start, @dir, null, {includeVertices: true}) SORT e.edge.what RETURN e.vertex._key",
-        "FOR e IN NOOPT(EDGES(@@col, @start, @dir, null, {includeVertices: true})) SORT e.edge.what RETURN e.vertex._key",
-        "FOR e IN NOOPT(V8(EDGES(@@col, @start, @dir, null, {includeVertices: true}))) SORT e.edge.what RETURN e.vertex._key"
-      ];
+      var query = "FOR v, e IN ANY @start @@col SORT e.what RETURN v._key";
 
-      queries.forEach(function (query) {
-        let bindVars = {
-          "@col": "UnitTestsAhuacatlEdge",
-          "dir": "any"
-        };
+      let bindVars = {
+        "@col": "UnitTestsAhuacatlEdge"
+      };
 
-        bindVars.start = "UnitTestsAhuacatlVertex/v1";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, ["v2", "v3"]);
+      bindVars.start = "UnitTestsAhuacatlVertex/v1";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, ["v2", "v3"]);
 
-        bindVars.start = "UnitTestsAhuacatlVertex/v2";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, ["v1", "v3", "v4"]);
-        
-        bindVars.start = "UnitTestsAhuacatlVertex/v3";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, ["v1", "v2", "v4", "v6", "v7", "v6", "v7"]);
+      bindVars.start = "UnitTestsAhuacatlVertex/v2";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, ["v1", "v3", "v4"]);
+      
+      bindVars.start = "UnitTestsAhuacatlVertex/v3";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, ["v1", "v2", "v4", "v6", "v7", "v6", "v7"]);
 
-        bindVars.start = "UnitTestsAhuacatlVertex/v8";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, [ ]);
+      bindVars.start = "UnitTestsAhuacatlVertex/v8";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, [ ]);
 
-        bindVars.start = "UnitTestsAhuacatlVertex/thefox";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, [ ]);
-       
-        bindVars.start = "thefox/thefox";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, [ ]);
-      });
+      bindVars.start = "UnitTestsAhuacatlVertex/thefox";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, [ ]);
+     
+      bindVars.start = "thefox/thefox";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, [ ]);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks EDGES() with includeVertices
+/// @brief checks edges / vertex combination
 ////////////////////////////////////////////////////////////////////////////////
 
     testEdgesInInclVertices : function () {
       "use strict";
       let actual;
-      const queries = [
-        "FOR e IN EDGES(@@col, @start, @dir, null, {includeVertices: true}) SORT e.edge.what RETURN e.vertex._key",
-        "FOR e IN NOOPT(EDGES(@@col, @start, @dir, null, {includeVertices: true})) SORT e.edge.what RETURN e.vertex._key",
-        "FOR e IN NOOPT(V8(EDGES(@@col, @start, @dir, null, {includeVertices: true}))) SORT e.edge.what RETURN e.vertex._key"
-      ];
+      let query = "FOR v, e IN INBOUND @start @@col SORT e.what RETURN v._key";
 
-      queries.forEach(function (query) {
-        let bindVars = {
-          "@col": "UnitTestsAhuacatlEdge",
-          "dir": "inbound"
-        };
+      let bindVars = {
+        "@col": "UnitTestsAhuacatlEdge",
+      };
 
-        bindVars.start = "UnitTestsAhuacatlVertex/v1";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, []);
+      bindVars.start = "UnitTestsAhuacatlVertex/v1";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, []);
 
-        bindVars.start = "UnitTestsAhuacatlVertex/v2";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, ["v1", "v4"]);
+      bindVars.start = "UnitTestsAhuacatlVertex/v2";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, ["v1", "v4"]);
 
-        bindVars.start = "UnitTestsAhuacatlVertex/v3";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, ["v1", "v2", "v6", "v7"]);
+      bindVars.start = "UnitTestsAhuacatlVertex/v3";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, ["v1", "v2", "v6", "v7"]);
 
-        bindVars.start = "UnitTestsAhuacatlVertex/v8";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, [ ]);
-        
-        bindVars.start = "UnitTestsAhuacatlVertex/thefox";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, [ ]);
-       
-        bindVars.start = "thefox/thefox";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, [ ]);
-      });
+      bindVars.start = "UnitTestsAhuacatlVertex/v8";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, [ ]);
+      
+      bindVars.start = "UnitTestsAhuacatlVertex/thefox";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, [ ]);
+     
+      bindVars.start = "thefox/thefox";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, [ ]);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks EDGES() with includeVertices
+/// @brief checks edges / vertex combination
 ////////////////////////////////////////////////////////////////////////////////
 
     testEdgesOutInclVertices : function () {
       "use strict";
       let actual;
-      const queries = [
-        "FOR e IN EDGES(@@col, @start, @dir, null, {includeVertices: true}) SORT e.edge.what RETURN e.vertex._key",
-        "FOR e IN NOOPT(EDGES(@@col, @start, @dir, null, {includeVertices: true})) SORT e.edge.what RETURN e.vertex._key",
-        "FOR e IN NOOPT(V8(EDGES(@@col, @start, @dir, null, {includeVertices: true}))) SORT e.edge.what RETURN e.vertex._key"
-      ];
+      let query = "FOR v, e IN OUTBOUND @start @@col SORT e.what RETURN v._key";
 
-      queries.forEach(function (query) {
-        let bindVars = {
-          "@col": "UnitTestsAhuacatlEdge",
-          "dir": "outbound"
-        };
-       
-        bindVars.start = "UnitTestsAhuacatlVertex/v1";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, ["v2", "v3"]);
+      let bindVars = {
+        "@col": "UnitTestsAhuacatlEdge",
+      };
+     
+      bindVars.start = "UnitTestsAhuacatlVertex/v1";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, ["v2", "v3"]);
 
-        bindVars.start = "UnitTestsAhuacatlVertex/v2";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, ["v3"]);
+      bindVars.start = "UnitTestsAhuacatlVertex/v2";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, ["v3"]);
 
-        bindVars.start = "UnitTestsAhuacatlVertex/v3";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, ["v4", "v6", "v7"]);
-        
-        bindVars.start = "UnitTestsAhuacatlVertex/v8";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, [ ]);
+      bindVars.start = "UnitTestsAhuacatlVertex/v3";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, ["v4", "v6", "v7"]);
+      
+      bindVars.start = "UnitTestsAhuacatlVertex/v8";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, [ ]);
 
-        bindVars.start = "UnitTestsAhuacatlVertex/v5";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, [ ]);
-        
-        bindVars.start = "UnitTestsAhuacatlVertex/thefox";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, [ ]);
-        
-        bindVars.start = "thefox/thefox";
-        actual = getQueryResults(query, bindVars);
-        assertEqual(actual, [ ]);
-      });
+      bindVars.start = "UnitTestsAhuacatlVertex/v5";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, [ ]);
+      
+      bindVars.start = "UnitTestsAhuacatlVertex/thefox";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, [ ]);
+      
+      bindVars.start = "thefox/thefox";
+      actual = getQueryResults(query, bindVars);
+      assertEqual(actual, [ ]);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks EDGES()
+/// @brief checks edges with filter
 ////////////////////////////////////////////////////////////////////////////////
 
     testEdgesFilterExample : function () {
-      var queries = [
-        "FOR e IN EDGES(UnitTestsAhuacatlEdge, @start, 'any', @examples) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(EDGES(UnitTestsAhuacatlEdge, @start, 'any', @examples)) SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(V8(EDGES(UnitTestsAhuacatlEdge, @start, 'any', @examples))) SORT e.what RETURN e.what"
-      ];
-     
-      queries.forEach(function (q) {
-        var actual;
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3", examples: {what: "v1->v3"} });
-        assertEqual(actual, [ "v1->v3" ]);
+      var q;
+      var bindVars = {start: "UnitTestsAhuacatlVertex/v3"};
+      var actual;
+      q = `FOR v, e IN ANY @start UnitTestsAhuacatlEdge 
+        FILTER e.what == "v1->v3"
+        SORT e.what RETURN e.what`;
+      actual = getQueryResults(q, bindVars);
+      assertEqual(actual, [ "v1->v3" ]);
 
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3", examples: [{what: "v1->v3"}, {what: "v3->v6"}] });
-        assertEqual(actual, [ "v1->v3", "v3->v6"]);
+      q = `FOR v, e IN ANY @start UnitTestsAhuacatlEdge 
+        FILTER e.what == "v1->v3" OR e.what == "v3->v6"
+        SORT e.what RETURN e.what`;
+      actual = getQueryResults(q, bindVars);
+      assertEqual(actual, [ "v1->v3", "v3->v6"]);
 
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3", examples: [] });
-        assertEqual(actual, [ "v1->v3", "v2->v3", "v3->v4", "v3->v6", "v3->v7", "v6->v3", "v7->v3" ]);
+      q = `FOR v, e IN ANY @start UnitTestsAhuacatlEdge 
+        SORT e.what RETURN e.what`;
+      actual = getQueryResults(q, bindVars);
+      assertEqual(actual, [ "v1->v3", "v2->v3", "v3->v4", "v3->v6", "v3->v7", "v6->v3", "v7->v3" ]);
 
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3", examples: null });
-        assertEqual(actual, [ "v1->v3", "v2->v3", "v3->v4", "v3->v6", "v3->v7", "v6->v3", "v7->v3" ]);
+      q = `FOR v, e IN ANY @start UnitTestsAhuacatlEdge 
+        FILTER e.non == "matchable"
+        SORT e.what RETURN e.what`;
+      actual = getQueryResults(q, bindVars);
+      assertEqual(actual, [ ]);
 
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3", examples: {non: "matchable"} });
-        assertEqual(actual, [ ]);
+      q = `FOR v, e IN ANY @start UnitTestsAhuacatlEdge 
+        FILTER e.what == "v1->v3" OR e.non == "matchable"
+        SORT e.what RETURN e.what`;
+      actual = getQueryResults(q, bindVars);
+      assertEqual(actual, [ "v1->v3" ]);
 
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3", examples: [{what: "v1->v3"}, {non: "matchable"}] });
-        assertEqual(actual, [ "v1->v3" ]);
-
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3", examples: [{what: "v1->v3"}, {non: "matchable"}] });
-        assertEqual(actual, [ "v1->v3" ]);
-
-        actual = getQueryResults(q, {start: "UnitTestsAhuacatlVertex/v3", examples: ["UnitTestsAhuacatlEdge/v1v3", {what: "v3->v6" } ] });
-        assertEqual(actual, [ "v3->v6" ]);
-      });
+      q = `FOR v, e IN ANY @start UnitTestsAhuacatlEdge 
+        FILTER e.what == "v3->v6"
+        SORT e.what RETURN e.what`;
+      actual = getQueryResults(q, bindVars);
+      assertEqual(actual, [ "v3->v6" ]);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks EDGES()
+/// @brief checks edges when starting with an array
 ////////////////////////////////////////////////////////////////////////////////
 
     testEdgesStartVertexArray : function () {
-      var queries = [
-        "FOR e IN NOOPT(V8(EDGES(UnitTestsAhuacatlEdge, @start, 'outbound'))) SORT e.what RETURN e.what",
-        "FOR e IN EDGES(UnitTestsAhuacatlEdge, @start, 'outbound') SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(EDGES(UnitTestsAhuacatlEdge, @start, 'outbound')) SORT e.what RETURN e.what"
-      ];
+      var q = "FOR s IN @start FOR v, e IN OUTBOUND s UnitTestsAhuacatlEdge SORT e.what RETURN e.what";
      
-      queries.forEach(function (q) {
-        var actual;
-        actual = getQueryResults(q, {start: [ "UnitTestsAhuacatlVertex/v1", "UnitTestsAhuacatlVertex/v2" ]});
-        assertEqual(actual, [ "v1->v2", "v1->v3", "v2->v3" ]);
+      var actual;
+      actual = getQueryResults(q, {start: [ "UnitTestsAhuacatlVertex/v1", "UnitTestsAhuacatlVertex/v2" ]});
+      assertEqual(actual, [ "v1->v2", "v1->v3", "v2->v3" ]);
 
-        actual = getQueryResults(q, {start: [ {_id: "UnitTestsAhuacatlVertex/v1"}, {_id: "UnitTestsAhuacatlVertex/v2"} ]});
-        assertEqual(actual, [ "v1->v2", "v1->v3", "v2->v3" ]);
-      });
+      actual = getQueryResults(q, {start: [ {_id: "UnitTestsAhuacatlVertex/v1"}, {_id: "UnitTestsAhuacatlVertex/v2"} ]});
+      assertEqual(actual, [ "v1->v2", "v1->v3", "v2->v3" ]);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks EDGES()
+/// @brief checks edges when starting on an object
 ////////////////////////////////////////////////////////////////////////////////
 
     testEdgesStartVertexObject : function () {
-      var queries = [
-        "FOR e IN NOOPT(V8(EDGES(UnitTestsAhuacatlEdge, @start, 'outbound'))) SORT e.what RETURN e.what",
-        "FOR e IN EDGES(UnitTestsAhuacatlEdge, @start, 'outbound') SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(EDGES(UnitTestsAhuacatlEdge, @start, 'outbound')) SORT e.what RETURN e.what"
-      ];
-     
-      queries.forEach(function (q) {
-        var actual;
-        actual = getQueryResults(q, {start: { _id: "UnitTestsAhuacatlVertex/v1" }});
-        assertEqual(actual, [ "v1->v2", "v1->v3" ]);
-      });
+      var q = "FOR v, e IN OUTBOUND @start UnitTestsAhuacatlEdge SORT e.what RETURN e.what";
+
+      var actual;
+      actual = getQueryResults(q, {start: { _id: "UnitTestsAhuacatlVertex/v1" }});
+      assertEqual(actual, [ "v1->v2", "v1->v3" ]);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks EDGES()
+/// @brief checks edges with illegal start
 ////////////////////////////////////////////////////////////////////////////////
 
     testEdgesStartVertexIllegal : function () {
-      var queries = [
-        "FOR e IN NOOPT(V8(EDGES(UnitTestsAhuacatlEdge, @start, 'outbound'))) SORT e.what RETURN e.what",
-        "FOR e IN EDGES(UnitTestsAhuacatlEdge, @start, 'outbound') SORT e.what RETURN e.what",
-        "FOR e IN NOOPT(EDGES(UnitTestsAhuacatlEdge, @start, 'outbound')) SORT e.what RETURN e.what"
-      ];
-     
-      queries.forEach(function (q) {
-        var actual;
+      var q = "FOR v, e IN OUTBOUND @start UnitTestsAhuacatlEdge SORT e.what RETURN e.what";
+      var qArray = "FOR s IN @start FOR v, e IN OUTBOUND s UnitTestsAhuacatlEdge SORT e.what RETURN e.what";
+      var actual;
 
-        var bindVars = {start: {_id: "v1"}}; // No collection
-        actual = getQueryResults(q, bindVars);
-        assertEqual(actual, [ ]);
+      var bindVars = {start: {_id: "v1"}}; // No collection
+      actual = getQueryResults(q, bindVars);
+      assertEqual(actual, [ ]);
 
-        bindVars = {start: "UnitTestTheFuxx/v1"}; // Non existing collection
-        actual = getQueryResults(q, bindVars);
-        assertEqual(actual, [ ]);
+      bindVars = {start: "UnitTestTheFuxx/v1"}; // Non existing collection
+      actual = getQueryResults(q, bindVars);
+      assertEqual(actual, [ ]);
 
-        bindVars = {start: { id: "UnitTestTheFuxx/v1"}};  // No _id attribute
-        actual = getQueryResults(q, bindVars);
-        assertEqual(actual, [ ]);
+      bindVars = {start: { id: "UnitTestTheFuxx/v1"}};  // No _id attribute
+      actual = getQueryResults(q, bindVars);
+      assertEqual(actual, [ ]);
 
-        bindVars = {start: [{ id: "UnitTestTheFuxx/v1" }] }; // Error in Array
-        actual = getQueryResults(q, bindVars);
-        // No Error thrown here
-        assertEqual(actual, [ ]);
+      bindVars = {start: [{ id: "UnitTestTheFuxx/v1" }] }; // Error in Array
+      actual = getQueryResults(qArray, bindVars);
+      // No Error thrown here
+      assertEqual(actual, [ ]);
 
-        bindVars = {start: ["UnitTestTheFuxx/v1"] }; // Error in Array
-        actual = getQueryResults(q, bindVars);
-        // No Error thrown here
-        assertEqual(actual, [ ]);
+      bindVars = {start: ["UnitTestTheFuxx/v1"] }; // Error in Array
+      actual = getQueryResults(qArray, bindVars);
+      // No Error thrown here
+      assertEqual(actual, [ ]);
 
-        bindVars = {start: ["v1"] }; // Error in Array
-        actual = getQueryResults(q, bindVars);
-        // No Error thrown here
-        assertEqual(actual, [ ]);
-      });
+      bindVars = {start: ["v1"] }; // Error in Array
+      actual = getQueryResults(qArray, bindVars);
+      // No Error thrown here
+      assertEqual(actual, [ ]);
     }
   };
 }

@@ -36,7 +36,7 @@ var getQueryResults = helper.getQueryResults;
 var getRawQueryResults = helper.getRawQueryResults;
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief test suite for EDGES() function
+/// @brief test suite for GRAPH_EDGES() function
 ////////////////////////////////////////////////////////////////////////////////
 
 function ahuacatlQueryGeneralEdgesTestSuite() {
