@@ -219,6 +219,14 @@ void ClusterTraverser::setStartVertex(std::string const& id) {
   _done = false;
   auto it = _vertices.find(id);
   if (it == _vertices.end()) {
+    size_t firstSlash = id.find("/");
+    if (firstSlash == std::string::npos ||
+        id.find("/", firstSlash + 1) != std::string::npos) {
+      // We can stop here. The start vertex is not a valid _id
+      ++_filteredPaths;
+      _done = true;
+      return;
+    }
     std::unordered_set<std::string> vertexToFetch;
     vertexToFetch.emplace(id);
     fetchVertices(vertexToFetch, 0); // this inserts the vertex
@@ -250,7 +258,7 @@ void ClusterTraverser::fetchVertices(std::unordered_set<std::string>& verticesTo
 
   int res = getFilteredDocumentsOnCoordinator(_dbname, expVertices,
                                               verticesToFetch, _vertices);
-  if (res != TRI_ERROR_NO_ERROR) {
+  if (res != TRI_ERROR_NO_ERROR && res != TRI_ERROR_ARANGO_COLLECTION_NOT_FOUND) {
     THROW_ARANGO_EXCEPTION(res);
   }
 

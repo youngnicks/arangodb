@@ -1487,7 +1487,10 @@ int getFilteredDocumentsOnCoordinator(
 
   std::unordered_map<ShardID, std::vector<std::string>> shardRequestMap;
   for (auto const& doc : documentIds) {
-    insertIntoShardMap(ci, dbname, doc, shardRequestMap);
+    try {
+      insertIntoShardMap(ci, dbname, doc, shardRequestMap);
+    } catch (...) {
+    }
   }
 
   // Now start the request.
@@ -1540,12 +1543,8 @@ int getFilteredDocumentsOnCoordinator(
       bool isError = arangodb::basics::VelocyPackHelper::getBooleanValue(
           resSlice, "error", false);
       if (isError) {
-        int errorNum = arangodb::basics::VelocyPackHelper::getNumericValue<int>(
+        return arangodb::basics::VelocyPackHelper::getNumericValue<int>(
             resSlice, "errorNum", TRI_ERROR_INTERNAL);
-        std::string message =
-            arangodb::basics::VelocyPackHelper::getStringValue(
-                resSlice, "errorMessage", "");
-        THROW_ARANGO_EXCEPTION_MESSAGE(errorNum, message);
       }
       VPackSlice documents = resSlice.get("documents");
       if (!documents.isArray()) {
