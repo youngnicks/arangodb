@@ -7449,100 +7449,6 @@ function AQL_GRAPH_NEIGHBORS (graphName,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_edges
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_EDGES (graphName,
-                          vertexExample,
-                          options) {
-  'use strict';
-  options = CLONE(options) || {};
-  if (! options.hasOwnProperty("direction")) {
-    options.direction =  'any';
-  }
-  var params = {};
-
-  // JS Fallback for features not yet included in CPP Neighbor version
-  options.fromVertexExample = vertexExample;
-
-  if (options.hasOwnProperty("neighborExamples") && typeof options.neighborExamples === "string") {
-    options.neighborExamples = {_id : options.neighborExamples};
-  }
-  var edges = [],
-    factory = TRAVERSAL.generalGraphDatasourceFactory(graphName);
-  params = TRAVERSAL_PARAMS();
-  params.paths = true;
-  params.uniqueness = {
-    vertices: "none",
-    edges: "global"
-  };
-  params.minDepth = 1; // Make sure we exclude from depth 1
-  params.maxDepth = options.maxDepth === undefined ? 1 : options.maxDepth;
-  params.maxIterations = options.maxIterations;
-  // add user-defined visitor, if specified
-  // (NOT SUPPORTED RIGHT NOW, return format will break)
-  /*
-  if (typeof options.visitor === "string") {
-    params.visitor = GET_VISITOR(options.visitor, options);
-    params.visitorReturnsResults = options.visitorReturnsResults || false;
-  }
-  else {
-  */
- // Injecting additional options into the Visitor
-  var visitorConfig = {
-    minDepth: options.minDepth === undefined ? 1 : options.minDepth
-  };
-  if (options.hasOwnProperty("neighborExamples")) {
-    visitorConfig.neighborExamples = options.neighborExamples;
-  }
-  params.visitor = TRAVERSAL_EDGE_VISITOR.bind(visitorConfig);
-  
-  var fromVertices = RESOLVE_GRAPH_TO_FROM_VERTICES(graphName, options, "GRAPH_EDGES");
-  if (options.edgeExamples) {
-    params.followEdges = options.edgeExamples;
-  }
-  if (options.edgeCollectionRestriction) {
-    params.edgeCollectionRestriction = options.edgeCollectionRestriction;
-  }
-  if (options.vertexCollectionRestriction) {
-    params.filterVertexCollections = options.vertexCollectionRestriction;
-  }
-  if (options.endVertexCollectionRestriction) {
-    params.filterVertexCollections = options.endVertexCollectionRestriction;
-  }
-  // merge other options
-  Object.keys(options).forEach(function (att) {
-    if (! params.hasOwnProperty(att)) {
-      params[att] = options[att];
-    }
-  });
-  fromVertices.forEach(function (v) {
-    var e = TRAVERSAL_FUNC("GRAPH_EDGES",
-      factory,
-      v._id,
-      undefined,
-      options.direction,
-      params);
-
-    edges = edges.concat(e);
-  });
-  var result = [];
-  let uniqueIds = new Set();
-  edges.forEach(function (n) {
-    if (!uniqueIds.has(n._id)) {
-      uniqueIds.add(n._id);
-      if (options.includeData) {
-        result.push(n);
-      } else {
-        result.push(n._id);
-      }
-    }
-  });
-  uniqueIds.clear();
-  return result;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief was docuBlock JSF_aql_general_graph_vertices
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -8205,7 +8111,6 @@ exports.AQL_TRAVERSAL_TREE = AQL_TRAVERSAL_TREE;
 exports.AQL_NEIGHBORS = AQL_NEIGHBORS;
 exports.AQL_GRAPH_TRAVERSAL = AQL_GRAPH_TRAVERSAL;
 exports.AQL_GRAPH_TRAVERSAL_TREE = AQL_GRAPH_TRAVERSAL_TREE;
-exports.AQL_GRAPH_EDGES = AQL_GRAPH_EDGES;
 exports.AQL_GRAPH_VERTICES = AQL_GRAPH_VERTICES;
 exports.AQL_GRAPH_PATHS = AQL_GRAPH_PATHS;
 exports.AQL_GRAPH_SHORTEST_PATH = AQL_GRAPH_SHORTEST_PATH;
