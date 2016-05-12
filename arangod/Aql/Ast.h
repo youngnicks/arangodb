@@ -324,16 +324,17 @@ class Ast {
 
   /// @brief create an AST traversal node with only vertex variable
   AstNode* createNodeTraversal(char const*, size_t, AstNode const*,
-                               AstNode const*, AstNode const*);
+                               AstNode const*, AstNode const*, AstNode const*);
 
   /// @brief create an AST traversal node with vertex and edge variable
   AstNode* createNodeTraversal(char const*, size_t, char const*, size_t,
-                               AstNode const*, AstNode const*, AstNode const*);
+                               AstNode const*, AstNode const*, AstNode const*,
+                               AstNode const*);
 
   /// @brief create an AST traversal node with vertex, edge and path variable
   AstNode* createNodeTraversal(char const*, size_t, char const*, size_t,
                                char const*, size_t, AstNode const*,
-                               AstNode const*, AstNode const*);
+                               AstNode const*, AstNode const*, AstNode const*);
 
   /// @brief create an AST function call node
   AstNode* createNodeFunctionCall(char const*, AstNode const*);

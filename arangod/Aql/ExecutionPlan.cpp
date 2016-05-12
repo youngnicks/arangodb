@@ -35,6 +35,7 @@
 #include "Aql/Query.h"
 #include "Aql/SortNode.h"
 #include "Aql/TraversalNode.h"
+#include "Aql/TraversalOptions.h"
 #include "Aql/Variable.h"
 #include "Aql/WalkerWorker.h"
 #include "Basics/Exceptions.h"
@@ -50,6 +51,45 @@ using namespace arangodb::aql;
 using namespace arangodb::basics;
 
 using JsonHelper = arangodb::basics::JsonHelper;
+
+static TraversalOptions CreateTraversalOptions(AstNode const* node) {
+  TraversalOptions options;
+
+  if (node != nullptr && node->type != NODE_TYPE_OBJECT) {
+    size_t n = node->numMembers();
+
+    for (size_t i = 0; i < n; ++i) {
+      auto member = node->getMember(i);
+
+      if (member != nullptr && member->type == NODE_TYPE_OBJECT_ELEMENT) {
+        std::string const name = member->getString();
+        auto value = member->getMember(0);
+
+        TRI_ASSERT(value->isConstant());
+
+        if (name == "bfs") {
+          options.useBreathFirst = value->isTrue();
+        } else if (name == "vertexUniqueness" && value->isStringValue()) {
+          if (value->stringEquals("path", true)) {
+            options.vertexUniqueness = TraversalOptions::UniquenessLevel::PATH;
+          } else if (value->stringEquals("global", true)) {
+            options.vertexUniqueness = TraversalOptions::UniquenessLevel::GLOBAL;
+          }
+        } else if (name == "edgeUniqueness" && value->isStringValue()) {
+          if (value->stringEquals("none", true)) {
+            options.vertexUniqueness = TraversalOptions::UniquenessLevel::NONE;
+          } else if (value->stringEquals("global", true)) {
+            options.vertexUniqueness = TraversalOptions::UniquenessLevel::GLOBAL;
+          }
+        }
+      }
+
+    }
+  }
+
+  return options;
+}
+
 
 /// @brief create the plan
 ExecutionPlan::ExecutionPlan(Ast* ast)
@@ -609,8 +649,8 @@ ExecutionNode* ExecutionPlan::fromNodeFor(ExecutionNode* previous,
 ExecutionNode* ExecutionPlan::fromNodeTraversal(ExecutionNode* previous,
                                                 AstNode const* node) {
   TRI_ASSERT(node != nullptr && node->type == NODE_TYPE_TRAVERSAL);
-  TRI_ASSERT(node->numMembers() >= 4);
-  TRI_ASSERT(node->numMembers() <= 6);
+  TRI_ASSERT(node->numMembers() >= 5);
+  TRI_ASSERT(node->numMembers() <= 7);
 
   // the first 3 members are used by traversal internally.
   // The members 4-6, where 5 and 6 are optional, are used
@@ -637,26 +677,29 @@ ExecutionNode* ExecutionPlan::fromNodeTraversal(ExecutionNode* previous,
     start = _ast->createNodeReference(getOutVariable(calc));
     previous = calc;
   }
+
+  TraversalOptions options = CreateTraversalOptions(node->getMember(3));
+
   // First create the node
   auto travNode = new TraversalNode(this, nextId(), _ast->query()->vocbase(),
-                                    direction, start, graph);
+                                    direction, start, graph, options);
 
-  auto variable = node->getMember(3);
+  auto variable = node->getMember(4);
   TRI_ASSERT(variable->type == NODE_TYPE_VARIABLE);
   auto v = static_cast<Variable*>(variable->getData());
   TRI_ASSERT(v != nullptr);
   travNode->setVertexOutput(v);
 
-  if (node->numMembers() > 4) {
+  if (node->numMembers() > 5) {
     // return the edge as well
-    variable = node->getMember(4);
+    variable = node->getMember(5);
     TRI_ASSERT(variable->type == NODE_TYPE_VARIABLE);
     v = static_cast<Variable*>(variable->getData());
     TRI_ASSERT(v != nullptr);
     travNode->setEdgeOutput(v);
-    if (node->numMembers() > 5) {
+    if (node->numMembers() > 6) {
       // return the path as well
-      variable = node->getMember(5);
+      variable = node->getMember(6);
       TRI_ASSERT(variable->type == NODE_TYPE_VARIABLE);
       v = static_cast<Variable*>(variable->getData());
       TRI_ASSERT(v != nullptr);

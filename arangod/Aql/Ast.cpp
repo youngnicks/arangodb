@@ -1035,21 +1035,28 @@ AstNode* Ast::createNodeCollectionDirection(uint64_t direction, AstNode const* c
 AstNode* Ast::createNodeTraversal(char const* vertexVarName,
                                   size_t vertexVarLength,
                                   AstNode const* direction,
-                                  AstNode const* start, AstNode const* graph) {
+                                  AstNode const* start, AstNode const* graph,
+                                  AstNode const* options) {
   if (vertexVarName == nullptr) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
   }
   AstNode* node = createNode(NODE_TYPE_TRAVERSAL);
 
+  if (options == nullptr) {
+    // no options given. now use default options
+    options = &NopNode;
+  }
+
   node->addMember(direction);
   node->addMember(start);
   node->addMember(graph);
+  node->addMember(options);
 
   AstNode* vertexVar =
       createNodeVariable(vertexVarName, vertexVarLength, false);
   node->addMember(vertexVar);
 
-  TRI_ASSERT(node->numMembers() == 4);
+  TRI_ASSERT(node->numMembers() == 5);
 
   _containsTraversal = true;
 
@@ -1061,12 +1068,13 @@ AstNode* Ast::createNodeTraversal(char const* vertexVarName,
                                   size_t vertexVarLength,
                                   char const* edgeVarName, size_t edgeVarLength,
                                   AstNode const* direction,
-                                  AstNode const* start, AstNode const* graph) {
+                                  AstNode const* start, AstNode const* graph,
+                                  AstNode const* options) {
   if (edgeVarName == nullptr) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
   }
   AstNode* node = createNodeTraversal(vertexVarName, vertexVarLength, direction,
-                                      start, graph);
+                                      start, graph, options);
 
   AstNode* edgeVar = createNodeVariable(edgeVarName, edgeVarLength, false);
   node->addMember(edgeVar);
@@ -1084,13 +1092,14 @@ AstNode* Ast::createNodeTraversal(char const* vertexVarName,
                                   char const* edgeVarName, size_t edgeVarLength,
                                   char const* pathVarName, size_t pathVarLength,
                                   AstNode const* direction,
-                                  AstNode const* start, AstNode const* graph) {
+                                  AstNode const* start, AstNode const* graph,
+                                  AstNode const* options) {
   if (pathVarName == nullptr) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
   }
   AstNode* node =
       createNodeTraversal(vertexVarName, vertexVarLength, edgeVarName,
-                          edgeVarLength, direction, start, graph);
+                          edgeVarLength, direction, start, graph, options);
 
   AstNode* pathVar = createNodeVariable(pathVarName, pathVarLength, false);
   node->addMember(pathVar);

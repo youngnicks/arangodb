@@ -471,19 +471,23 @@ for_statement:
       auto node = parser->ast()->createNodeFor($2.value, $2.length, $4, true);
       parser->ast()->addOperation(node);
     }
-    | T_FOR variable_name T_IN graph_direction_steps expression graph_subject {
+    | T_FOR traversal_statement
+  ;
+
+traversal_statement:
+    | variable_name T_IN graph_direction_steps expression graph_subject options {
       parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
-      auto node = parser->ast()->createNodeTraversal($2.value, $2.length, $4, $5, $6);
+      auto node = parser->ast()->createNodeTraversal($1.value, $1.length, $3, $4, $5, $6);
       parser->ast()->addOperation(node);
     }
-    | T_FOR variable_name T_COMMA variable_name T_IN graph_direction_steps expression graph_subject {
+    | variable_name T_COMMA variable_name T_IN graph_direction_steps expression graph_subject options {
       parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
-      auto node = parser->ast()->createNodeTraversal($2.value, $2.length, $4.value, $4.length, $6, $7, $8);
+      auto node = parser->ast()->createNodeTraversal($1.value, $1.length, $3.value, $3.length, $5, $6, $7, $8);
       parser->ast()->addOperation(node);
     }
-    | T_FOR variable_name T_COMMA variable_name T_COMMA variable_name T_IN graph_direction_steps expression graph_subject {
+    | variable_name T_COMMA variable_name T_COMMA variable_name T_IN graph_direction_steps expression graph_subject options{
       parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
-      auto node = parser->ast()->createNodeTraversal($2.value, $2.length, $4.value, $4.length, $6.value, $6.length, $8, $9, $10);
+      auto node = parser->ast()->createNodeTraversal($1.value, $1.length, $3.value, $3.length, $5.value, $5.length, $7, $8, $9, $10);
       parser->ast()->addOperation(node);
     }
   ;
