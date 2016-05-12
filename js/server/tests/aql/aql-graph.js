@@ -502,7 +502,7 @@ function ahuacatlQueryNeighborsTestSuite () {
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks NEIGHBORS()
+/// @brief checks neighbors inbound
 ////////////////////////////////////////////////////////////////////////////////
 
     testNeighborsIn : function () {
@@ -516,9 +516,10 @@ function ahuacatlQueryNeighborsTestSuite () {
       var v7 = "UnitTestsAhuacatlVertex/v7";
       var v8 = "UnitTestsAhuacatlVertex/v8";
       var theFox = "UnitTestsAhuacatlVertex/thefox";
-      var queryStart = "FOR n IN NEIGHBORS(UnitTestsAhuacatlVertex, UnitTestsAhuacatlEdge, '";
-      var queryEnd = "', 'inbound') SORT n RETURN n";
-      var queryEndData = "', 'inbound', [], {includeData: true}) SORT n RETURN n";
+
+      var queryStart = `FOR n IN INBOUND "`
+      var queryEnd = `" UnitTestsAhuacatlEdge OPTIONS {bfs: true, uniqueVertices: "global"} SORT n._id RETURN n._id`;
+      var queryEndData = `" UnitTestsAhuacatlEdge OPTIONS {bfs: true, uniqueVertices: "global"} SORT n RETURN n`;
       
       actual = getQueryResults(queryStart + v1 + queryEnd);
       assertEqual(actual, [ ]);
@@ -553,7 +554,7 @@ function ahuacatlQueryNeighborsTestSuite () {
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks NEIGHBORS()
+/// @brief checks outbound neighbors
 ////////////////////////////////////////////////////////////////////////////////
 
     testNeighborsOut : function () {
@@ -567,9 +568,9 @@ function ahuacatlQueryNeighborsTestSuite () {
       var v7 = "UnitTestsAhuacatlVertex/v7";
       var v8 = "UnitTestsAhuacatlVertex/v8";
       var theFox = "UnitTestsAhuacatlVertex/thefox";
-      var queryStart = "FOR n IN NEIGHBORS(UnitTestsAhuacatlVertex, UnitTestsAhuacatlEdge, '";
-      var queryEnd = "', 'outbound') SORT n RETURN n";
-      var queryEndData = "', 'outbound', [], {includeData: true}) SORT n RETURN n";
+      var queryStart = `FOR n IN OUTBOUND "`
+      var queryEnd = `" UnitTestsAhuacatlEdge OPTIONS {bfs: true, uniqueVertices: "global"} SORT n._id RETURN n._id`;
+      var queryEndData = `" UnitTestsAhuacatlEdge OPTIONS {bfs: true, uniqueVertices: "global"} SORT n RETURN n`;
       
       actual = getQueryResults(queryStart + v1 + queryEnd);
       assertEqual(actual, [ v2, v3 ]);
@@ -609,35 +610,33 @@ function ahuacatlQueryNeighborsTestSuite () {
       var v4 = "UnitTestsAhuacatlVertex/v4";
       var v6 = "UnitTestsAhuacatlVertex/v6";
       var v7 = "UnitTestsAhuacatlVertex/v7";
-      var query = "FOR n IN NEIGHBORS(UnitTestsAhuacatlVertex, UnitTestsAhuacatlEdge, @startId"
-                + ", 'outbound', @examples) SORT n RETURN n";
+      var createQuery = function (start, filter) {
+        return `FOR n, e IN OUTBOUND "${start}" UnitTestsAhuacatlEdge ${filter} SORT n._id RETURN n._id`;
+      };
 
-      // An empty array should let all edges through
-      actual = getQueryResults(query, {startId: v3, examples: []});
+      // An empty filter should let all edges through
+      actual = getQueryResults(createQuery(v3));
+
       assertEqual(actual, [ v4, v6, v7 ]);
 
       // Should be able to handle exactly one object
-      actual = getQueryResults(query, {startId: v3, examples: {what: "v3->v4"}});
-      assertEqual(actual, [ v4 ]);
-
-      // Should be able to handle a list of a single object
-      actual = getQueryResults(query, {startId: v3, examples: [{what: "v3->v4"}]});
+      actual = getQueryResults(createQuery(v3, 'FILTER e.what == "v3->v4"'));
       assertEqual(actual, [ v4 ]);
 
       // Should be able to handle a list of objects
-      actual = getQueryResults(query, {startId: v3, examples: [{what: "v3->v4"}, {what: "v3->v6"}]});
+      actual = getQueryResults(createQuery(v3, 'FILTER e.what == "v3->v4" OR e.what == "v3->v6"'));
       assertEqual(actual, [ v4, v6 ]);
 
       // Should be able to handle an id as string
-      actual = getQueryResults(query, {startId: v3, examples: "UnitTestsAhuacatlEdge/v3_v6"});
+      actual = getQueryResults(createQuery(v3, 'FILTER e._to == "UnitTestsAhuacatlEdge/v3_v6"'));
       assertEqual(actual, [ v6 ]);
 
       // Should be able to handle a mix of id and objects
-      actual = getQueryResults(query, {startId: v3, examples: ["UnitTestsAhuacatlEdge/v3_v6", {what: "v3->v4"}]});
+      actual = getQueryResults(createQuery(v3, 'FILTER e._to == "UnitTestsAhuacatlEdge/v3_v6" OR FILTER e.what == "v3->v4"'));
       assertEqual(actual, [ v4, v6 ]);
 
       // Should be able to handle internal attributes
-      actual = getQueryResults(query, {startId: v3, examples: {_to: v4}});
+      actual = getQueryResults(createQuery(v3, 'FILTER e._to == "${v4}"'));
       assertEqual(actual, [ v4 ]);
     }
 
@@ -2011,7 +2010,7 @@ function ahuacatlQueryNeighborsErrorsSuite () {
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks error handling in NEIGHBORS()
+/// @brief checks error handling for neighbors
 ////////////////////////////////////////////////////////////////////////////////
 
     testNeighborsDitchesOOM : function () {
@@ -2019,8 +2018,8 @@ function ahuacatlQueryNeighborsErrorsSuite () {
       var v2 = vn + "/B";
       var v3 = vn + "/D";
 
-      var queryStart = "FOR n IN NEIGHBORS(" + vn + " , " + en + ", '";
-      var queryEnd = "', 'outbound') SORT n RETURN n";
+      var queryStart = `FOR n IN OUTBOUND "`;
+      var queryEnd = `" ${en} SORT n._id RETURN n._id`;
 
       var actual = getQueryResults(queryStart + v1 + queryEnd);
       // Positive Check
