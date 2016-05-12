@@ -56,8 +56,6 @@ function neighborSuite() {
         try {
           // Drop the graph if it exsits
           graph = new Graph(graph_name);
-          require("internal").print("FOUND: ");
-          require("internal").printObject(graph);
           graph.drop();
         } catch (err1) {
         }

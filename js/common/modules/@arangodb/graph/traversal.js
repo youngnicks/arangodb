@@ -278,64 +278,6 @@ function generalGraphDatasourceFactory (graph) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief default Graph datasource
-///
-/// This is a datasource that operates on the specified graph. The vertices
-/// are from type Vertex, the edges from type Edge.
-////////////////////////////////////////////////////////////////////////////////
-
-function graphDatasourceFactory (name) {
-  return {
-    graph: new graph.Graph(name),
-
-    getVertexId: function (vertex) {
-      return vertex.getId();
-    },
-
-    getPeerVertex: function (edge, vertex) {
-      return edge.getPeerVertex(vertex);
-    },
-
-    getInVertex: function (edge) {
-      return edge.getInVertex();
-    },
-
-    getOutVertex: function (edge) {
-      return edge.getOutVertex();
-    },
-
-    getEdgeId: function (edge) {
-      return edge.getId();
-    },
-
-    getEdgeFrom: function (edge) {
-      return edge._properties._from;
-    },
-
-    getEdgeTo: function (edge) {
-      return edge._properties._to;
-    },
-
-    getLabel: function (edge) {
-      return edge.getLabel();
-    },
-
-    getAllEdges: function (vertex) {
-      return vertex.edges();
-    },
-
-    getInEdges: function (vertex) {
-      return vertex.inbound();
-    },
-
-    getOutEdges: function (vertex) {
-      return vertex.outbound();
-    }
-  };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief default outbound expander function
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -1839,7 +1781,6 @@ ArangoTraverser.EXCLUDE              = 'exclude';
 
 exports.collectionDatasourceFactory     = collectionDatasourceFactory;
 exports.generalGraphDatasourceFactory   = generalGraphDatasourceFactory;
-exports.graphDatasourceFactory          = graphDatasourceFactory;
 
 exports.outboundExpander                = outboundExpander;
 exports.inboundExpander                 = inboundExpander;
