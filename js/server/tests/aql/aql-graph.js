@@ -449,7 +449,7 @@ function ahuacatlQueryNeighborsTestSuite () {
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks NEIGHBORS()
+/// @brief checks NEIGHBORS
 ////////////////////////////////////////////////////////////////////////////////
 
     testNeighborsAny : function () {
@@ -463,9 +463,9 @@ function ahuacatlQueryNeighborsTestSuite () {
       var v7 = "UnitTestsAhuacatlVertex/v7";
       var v8 = "UnitTestsAhuacatlVertex/v8";
       var theFox = "UnitTestsAhuacatlVertex/thefox";
-      var queryStart = "FOR n IN NEIGHBORS(UnitTestsAhuacatlVertex, UnitTestsAhuacatlEdge, '";
-      var queryEnd = "', 'any') SORT n RETURN n";
-      var queryEndData = "', 'any', [], {includeData: true}) SORT n RETURN n";
+      var queryStart = `FOR n IN ANY "`
+      var queryEnd = `" UnitTestsAhuacatlEdge OPTIONS {bfs: true, uniqueVertices: "global"} SORT n._id RETURN n._id`;
+      var queryEndData = `" UnitTestsAhuacatlEdge OPTIONS {bfs: true, uniqueVertices: "global"} SORT n RETURN n`;
       
       actual = getQueryResults(queryStart + v1 + queryEnd);
       assertEqual(actual, [ v2, v3 ]);
