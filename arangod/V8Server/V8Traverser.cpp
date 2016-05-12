@@ -1176,13 +1176,15 @@ void DepthFirstTraverser::EdgeGetter::nextEdge(
       continue;
     }
     std::string id = _trx->extractIdString(edge);
-    // test if edge is already on this path
-    auto found = std::find(edges.begin(), edges.end(), id);
-    if (found != edges.end()) {
-      // This edge is already on the path, next
-      TRI_ASSERT(last != nullptr);
-      (*last)++;
-      continue;
+    if (_opts.edgeUniqueness == TraverserOptions::UniquenessLevel::PATH) {
+      // test if edge is already on this path
+      auto found = std::find(edges.begin(), edges.end(), id);
+      if (found != edges.end()) {
+        // This edge is already on the path, next
+        TRI_ASSERT(last != nullptr);
+        (*last)++;
+        continue;
+      }
     }
 
     VPackBuilder tmpBuilder = VPackBuilder::clone(edge);

@@ -174,6 +174,13 @@ class TraversalPath {
 };
 
 struct TraverserOptions {
+
+  enum UniquenessLevel {
+    NONE,
+    PATH,
+    GLOBAL
+  };
+
  private:
   arangodb::Transaction* _trx;
   std::vector<std::string> _collections;
@@ -185,6 +192,12 @@ struct TraverserOptions {
   uint64_t minDepth;
 
   uint64_t maxDepth;
+
+  bool useBreathFirst;
+
+  UniquenessLevel vertexUniqueness;
+
+  UniquenessLevel edgeUniqueness;
 
   explicit TraverserOptions(arangodb::Transaction* trx) : _trx(trx), minDepth(1), maxDepth(1) {}
 

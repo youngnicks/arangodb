@@ -628,6 +628,9 @@ void TraversalNode::fillTraversalOptions(
   opts.minDepth = _minDepth;
   opts.maxDepth = _maxDepth;
   opts.setCollections(_edgeColls, _directions);
+  opts.useBreathFirst = _options.useBreathFirst;
+  opts.vertexUniqueness = _options.vertexUniqueness;
+  opts.edgeUniqueness = _options.edgeUniqueness;
 }
 
 /// @brief remember the condition to execute for early traversal abortion.

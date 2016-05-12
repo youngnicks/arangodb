@@ -1079,7 +1079,7 @@ AstNode* Ast::createNodeTraversal(char const* vertexVarName,
   AstNode* edgeVar = createNodeVariable(edgeVarName, edgeVarLength, false);
   node->addMember(edgeVar);
 
-  TRI_ASSERT(node->numMembers() == 5);
+  TRI_ASSERT(node->numMembers() == 6);
 
   _containsTraversal = true;
 
@@ -1104,7 +1104,7 @@ AstNode* Ast::createNodeTraversal(char const* vertexVarName,
   AstNode* pathVar = createNodeVariable(pathVarName, pathVarLength, false);
   node->addMember(pathVar);
 
-  TRI_ASSERT(node->numMembers() == 6);
+  TRI_ASSERT(node->numMembers() == 7);
 
   _containsTraversal = true;
 

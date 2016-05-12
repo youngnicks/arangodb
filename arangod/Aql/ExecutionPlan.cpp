@@ -55,7 +55,7 @@ using JsonHelper = arangodb::basics::JsonHelper;
 static TraversalOptions CreateTraversalOptions(AstNode const* node) {
   TraversalOptions options;
 
-  if (node != nullptr && node->type != NODE_TYPE_OBJECT) {
+  if (node != nullptr && node->type == NODE_TYPE_OBJECT) {
     size_t n = node->numMembers();
 
     for (size_t i = 0; i < n; ++i) {
@@ -71,15 +71,19 @@ static TraversalOptions CreateTraversalOptions(AstNode const* node) {
           options.useBreathFirst = value->isTrue();
         } else if (name == "vertexUniqueness" && value->isStringValue()) {
           if (value->stringEquals("path", true)) {
-            options.vertexUniqueness = TraversalOptions::UniquenessLevel::PATH;
+            options.vertexUniqueness =
+                arangodb::traverser::TraverserOptions::UniquenessLevel::PATH;
           } else if (value->stringEquals("global", true)) {
-            options.vertexUniqueness = TraversalOptions::UniquenessLevel::GLOBAL;
+            options.vertexUniqueness =
+                arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL;
           }
         } else if (name == "edgeUniqueness" && value->isStringValue()) {
           if (value->stringEquals("none", true)) {
-            options.vertexUniqueness = TraversalOptions::UniquenessLevel::NONE;
+            options.edgeUniqueness =
+                arangodb::traverser::TraverserOptions::UniquenessLevel::NONE;
           } else if (value->stringEquals("global", true)) {
-            options.vertexUniqueness = TraversalOptions::UniquenessLevel::GLOBAL;
+            options.edgeUniqueness =
+                arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL;
           }
         }
       }

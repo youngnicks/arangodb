@@ -178,12 +178,14 @@ void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
     stack.pop();
     last = &_continueConst;
     _traverser->_iteratorCache.emplace(stack);
-    auto search = std::find(result.begin(), result.end(), next);
-    if (search != result.end()) {
-      // result.push_back(next);
-      // The edge is now included twice. Go on with the next
-      operator()(startVertex, result, last, eColIdx, unused);
-      return;
+    if (_traverser->_opts.edgeUniqueness == TraverserOptions::UniquenessLevel::PATH) {
+      auto search = std::find(result.begin(), result.end(), next);
+      if (search != result.end()) {
+        // result.push_back(next);
+        // The edge is now included twice. Go on with the next
+        operator()(startVertex, result, last, eColIdx, unused);
+        return;
+      }
     }
     result.push_back(next);
   } else {
@@ -201,11 +203,13 @@ void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
     } else {
       std::string const next = tmp.top();
       tmp.pop();
-      auto search = std::find(result.begin(), result.end(), next);
-      if (search != result.end()) {
-        // The edge would be included twice. Go on with the next
-        operator()(startVertex, result, last, eColIdx, unused);
-        return;
+      if (_traverser->_opts.edgeUniqueness == TraverserOptions::UniquenessLevel::PATH) {
+        auto search = std::find(result.begin(), result.end(), next);
+        if (search != result.end()) {
+          // The edge would be included twice. Go on with the next
+          operator()(startVertex, result, last, eColIdx, unused);
+          return;
+        }
       }
       result.push_back(next);
     }

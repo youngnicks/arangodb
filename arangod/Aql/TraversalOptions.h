@@ -25,6 +25,7 @@
 
 #include "Basics/Common.h"
 #include "Basics/JsonHelper.h"
+#include "VocBase/Traverser.h"
 
 namespace arangodb {
 namespace aql {
@@ -32,26 +33,22 @@ namespace aql {
 /// @brief TraversalOptions
 struct TraversalOptions {
 
-  enum UniquenessLevel {
-    NONE,
-    PATH,
-    GLOBAL
-  };
-
   /// @brief constructor, using JSON
   TraversalOptions(arangodb::basics::Json const&);
 
   /// @brief constructor, using default values
   TraversalOptions()
-      : useBreathFirst(false), vertexUniqueness(NONE), edgeUniqueness(PATH) {}
+      : useBreathFirst(false),
+        vertexUniqueness(traverser::TraverserOptions::UniquenessLevel::NONE),
+        edgeUniqueness(traverser::TraverserOptions::UniquenessLevel::PATH) {}
 
   void toJson(arangodb::basics::Json&, TRI_memory_zone_t*) const;
 
   void toVelocyPack(arangodb::velocypack::Builder&) const;
 
   bool useBreathFirst;
-  UniquenessLevel vertexUniqueness;
-  UniquenessLevel edgeUniqueness;
+  traverser::TraverserOptions::UniquenessLevel vertexUniqueness;
+  traverser::TraverserOptions::UniquenessLevel edgeUniqueness;
 };
 
 }  // namespace arangodb::aql
