@@ -22,35 +22,36 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "Functions.h"
+
+#include <velocypack/Collection.h>
+#include <velocypack/Dumper.h>
+#include <velocypack/Iterator.h>
+#include <velocypack/velocypack-aliases.h>
+
 #include "Aql/Function.h"
 #include "Aql/Query.h"
 #include "Basics/Exceptions.h"
-#include "Basics/fpconv.h"
 #include "Basics/ScopeGuard.h"
 #include "Basics/StringBuffer.h"
-#include "Basics/tri-strings.h"
 #include "Basics/Utf8Helper.h"
-#include "Basics/VelocyPackHelper.h"
 #include "Basics/VPackStringBufferAdapter.h"
+#include "Basics/VelocyPackHelper.h"
+#include "Basics/fpconv.h"
+#include "Basics/tri-strings.h"
 #include "FulltextIndex/fulltext-index.h"
-#include "FulltextIndex/fulltext-result.h"
 #include "FulltextIndex/fulltext-query.h"
-#include "Indexes/Index.h"
+#include "FulltextIndex/fulltext-result.h"
 #include "Indexes/EdgeIndex.h"
 #include "Indexes/FulltextIndex.h"
 #include "Indexes/GeoIndex2.h"
-#include "Rest/SslInterface.h"
+#include "Indexes/Index.h"
+#include "Ssl/SslInterface.h"
 #include "Utils/OperationCursor.h"
 #include "Utils/OperationOptions.h"
 #include "Utils/OperationResult.h"
 #include "Utils/Transaction.h"
 #include "V8Server/V8Traverser.h"
 #include "VocBase/KeyGenerator.h"
-
-#include <velocypack/Collection.h>
-#include <velocypack/Dumper.h>
-#include <velocypack/Iterator.h>
-#include <velocypack/velocypack-aliases.h>
 
 using namespace arangodb;
 using namespace arangodb::aql;
@@ -381,7 +382,7 @@ static bool ListContainsElement(arangodb::AqlTransaction* trx,
   VPackArrayIterator it(slice, true);
   while (it.valid()) {
     if (arangodb::basics::VelocyPackHelper::compare(testeeSlice, it.value(), false, options) == 0) {
-      index = it.index();
+      index = static_cast<size_t>(it.index());
       return true;
     }
     it.next();
@@ -776,7 +777,7 @@ AqlValue Functions::IsNull(arangodb::aql::Query* query,
                            arangodb::AqlTransaction* trx,
                            VPackFunctionParameters const& parameters) {
   AqlValue a = ExtractFunctionParameterValue(trx, parameters, 0);
-  return AqlValue(arangodb::basics::VelocyPackHelper::BooleanValue(a.isNull(true)));
+  return AqlValue(a.isNull(true));
 }
 
 /// @brief function IS_BOOL
@@ -784,7 +785,7 @@ AqlValue Functions::IsBool(arangodb::aql::Query* query,
                            arangodb::AqlTransaction* trx,
                            VPackFunctionParameters const& parameters) {
   AqlValue a = ExtractFunctionParameterValue(trx, parameters, 0);
-  return AqlValue(arangodb::basics::VelocyPackHelper::BooleanValue(a.isBoolean()));
+  return AqlValue(a.isBoolean());
 }
 
 /// @brief function IS_NUMBER
@@ -792,7 +793,7 @@ AqlValue Functions::IsNumber(arangodb::aql::Query* query,
                              arangodb::AqlTransaction* trx,
                              VPackFunctionParameters const& parameters) {
   AqlValue a = ExtractFunctionParameterValue(trx, parameters, 0);
-  return AqlValue(arangodb::basics::VelocyPackHelper::BooleanValue(a.isNumber()));
+  return AqlValue(a.isNumber());
 }
 
 /// @brief function IS_STRING
@@ -800,7 +801,7 @@ AqlValue Functions::IsString(arangodb::aql::Query* query,
                              arangodb::AqlTransaction* trx,
                              VPackFunctionParameters const& parameters) {
   AqlValue a = ExtractFunctionParameterValue(trx, parameters, 0);
-  return AqlValue(arangodb::basics::VelocyPackHelper::BooleanValue(a.isString()));
+  return AqlValue(a.isString());
 }
 
 /// @brief function IS_ARRAY
@@ -808,7 +809,7 @@ AqlValue Functions::IsArray(arangodb::aql::Query* query,
                             arangodb::AqlTransaction* trx,
                             VPackFunctionParameters const& parameters) {
   AqlValue a = ExtractFunctionParameterValue(trx, parameters, 0);
-  return AqlValue(arangodb::basics::VelocyPackHelper::BooleanValue(a.isArray()));
+  return AqlValue(a.isArray());
 }
 
 /// @brief function IS_OBJECT
@@ -816,7 +817,31 @@ AqlValue Functions::IsObject(arangodb::aql::Query* query,
                              arangodb::AqlTransaction* trx,
                              VPackFunctionParameters const& parameters) {
   AqlValue a = ExtractFunctionParameterValue(trx, parameters, 0);
-  return AqlValue(arangodb::basics::VelocyPackHelper::BooleanValue(a.isObject()));
+  return AqlValue(a.isObject());
+}
+
+/// @brief function TYPENAME
+AqlValue Functions::Typename(arangodb::aql::Query* query,
+                             arangodb::AqlTransaction* trx,
+                             VPackFunctionParameters const& parameters) {
+  AqlValue value = ExtractFunctionParameterValue(trx, parameters, 0);
+
+  if (value.isObject()) {
+    return AqlValue(TRI_CHAR_LENGTH_PAIR("object"));
+  }
+  if (value.isArray()) {
+    return AqlValue(TRI_CHAR_LENGTH_PAIR("array"));
+  }
+  if (value.isString()) {
+    return AqlValue(TRI_CHAR_LENGTH_PAIR("string"));
+  }
+  if (value.isNumber()) {
+    return AqlValue(TRI_CHAR_LENGTH_PAIR("number"));
+  }
+  if (value.isBoolean()) {
+    return AqlValue(TRI_CHAR_LENGTH_PAIR("bool"));
+  }
+  return AqlValue(TRI_CHAR_LENGTH_PAIR("null"));
 }
 
 /// @brief function TO_NUMBER
@@ -860,7 +885,7 @@ AqlValue Functions::ToBool(arangodb::aql::Query* query,
                            arangodb::AqlTransaction* trx,
                            VPackFunctionParameters const& parameters) {
   AqlValue a = ExtractFunctionParameterValue(trx, parameters, 0);
-  return AqlValue(arangodb::basics::VelocyPackHelper::BooleanValue(a.toBoolean()));
+  return AqlValue(a.toBoolean());
 }
 
 /// @brief function TO_ARRAY
@@ -1531,9 +1556,7 @@ AqlValue Functions::Md5(arangodb::aql::Query* query,
 
   arangodb::rest::SslInterface::sslHEX(hash, 16, p, length);
 
-  TransactionBuilderLeaser builder(trx);
-  builder->add(VPackValue(std::string(hex, 32)));
-  return AqlValue(builder.get());
+  return AqlValue(std::string(hex, 32));
 }
 
 /// @brief function SHA1
@@ -1561,8 +1584,21 @@ AqlValue Functions::Sha1(arangodb::aql::Query* query,
 
   arangodb::rest::SslInterface::sslHEX(hash, 20, p, length);
 
+  return AqlValue(std::string(hex, 40));
+}
+
+/// @brief function HASH
+AqlValue Functions::Hash(arangodb::aql::Query* query,
+                         arangodb::AqlTransaction* trx,
+                         VPackFunctionParameters const& parameters) {
+  AqlValue value = ExtractFunctionParameterValue(trx, parameters, 0);
+
+  // throw away the top bytes so the hash value can safely be used
+  // without precision loss when storing in JavaScript etc.
+  uint64_t hash = value.hash(trx) & 0x0007ffffffffffffULL;
+
   TransactionBuilderLeaser builder(trx);
-  builder->add(VPackValue(std::string(hex, 40)));
+  builder->add(VPackValue(hash));
   return AqlValue(builder.get());
 }
 
@@ -1863,12 +1899,12 @@ AqlValue Functions::Neighbors(arangodb::aql::Query* query,
       splitCollection = true;
     }
   } else if (vertexInfo.isObject()) {
-    if (!vertexInfo.hasKey(trx, TRI_VOC_ATTRIBUTE_ID)) {
+    if (!vertexInfo.hasKey(trx, StaticStrings::IdString)) {
       THROW_ARANGO_EXCEPTION_PARAMS(
           TRI_ERROR_QUERY_FUNCTION_ARGUMENT_TYPE_MISMATCH, "NEIGHBORS");
     }
     bool localMustDestroy;
-    AqlValue id = vertexInfo.get(trx, TRI_VOC_ATTRIBUTE_ID, localMustDestroy, false);
+    AqlValue id = vertexInfo.get(trx, StaticStrings::IdString, localMustDestroy, false);
     AqlValueGuard guard(id, localMustDestroy);
 
     if (!id.isString()) {
@@ -2059,7 +2095,7 @@ AqlValue Functions::Near(arangodb::aql::Query* query,
   TRI_ASSERT(index != nullptr);
 
   GeoCoordinates* cors = static_cast<arangodb::GeoIndex2*>(index)->nearQuery(
-      trx, latitude.toDouble(), longitude.toDouble(), limitValue);
+      trx, latitude.toDouble(), longitude.toDouble(), static_cast<size_t>(limitValue));
 
   return buildGeoResult(trx, query, cors, cid, attributeName);
 }
@@ -2203,9 +2239,9 @@ AqlValue Functions::ParseIdentifier(
 
   AqlValue value = ExtractFunctionParameterValue(trx, parameters, 0);
   std::string identifier;
-  if (value.isObject() && value.hasKey(trx, TRI_VOC_ATTRIBUTE_ID)) {
+  if (value.isObject() && value.hasKey(trx, StaticStrings::IdString)) {
     bool localMustDestroy;
-    AqlValue s = value.get(trx, TRI_VOC_ATTRIBUTE_ID, localMustDestroy, false);
+    AqlValue s = value.get(trx, StaticStrings::IdString, localMustDestroy, false);
     AqlValueGuard guard(s, localMustDestroy);
 
     if (s.isString()) {
@@ -2652,7 +2688,7 @@ AqlValue Functions::Append(arangodb::aql::Query* query,
     VPackSlice slice = materializer.slice(toAppend, false);
     if (unique) {
       std::unordered_set<VPackSlice> added;
-      added.reserve(slice.length());
+      added.reserve(static_cast<size_t>(slice.length()));
       for (auto const& it : VPackArrayIterator(slice, true)) {
         if (added.find(it) == added.end() &&
             !ListContainsElement(&options, l, it)) {
@@ -3448,9 +3484,9 @@ AqlValue Functions::IsSameCollection(
   AqlValue value = ExtractFunctionParameterValue(trx, parameters, 1);
   std::string identifier;
 
-  if (value.isObject() && value.hasKey(trx, TRI_VOC_ATTRIBUTE_ID)) {
+  if (value.isObject() && value.hasKey(trx, StaticStrings::IdString)) {
     bool localMustDestroy;
-    value = value.get(trx, TRI_VOC_ATTRIBUTE_ID, localMustDestroy, false);
+    value = value.get(trx, StaticStrings::IdString, localMustDestroy, false);
     AqlValueGuard guard(value, localMustDestroy);
 
     if (value.isString()) {
