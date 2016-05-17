@@ -195,9 +195,9 @@ struct TraverserOptions {
 
   bool useBreathFirst;
 
-  UniquenessLevel vertexUniqueness;
+  UniquenessLevel uniqueVertices;
 
-  UniquenessLevel edgeUniqueness;
+  UniquenessLevel uniqueEdges;
 
   explicit TraverserOptions(arangodb::Transaction* trx) : _trx(trx), minDepth(1), maxDepth(1) {}
 

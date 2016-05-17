@@ -1017,7 +1017,7 @@ void DepthFirstTraverser::_defInternalFunctions() {
     if (result == vertex) {
       result = Transaction::extractToFromDocument(v).copyString();
     }
-    if (_opts.vertexUniqueness == TraverserOptions::UniquenessLevel::GLOBAL &&
+    if (_opts.uniqueVertices == TraverserOptions::UniquenessLevel::GLOBAL &&
         _vertices.find(result) != _vertices.end()) {
       return false;
     }
@@ -1080,7 +1080,7 @@ TraversalPath* DepthFirstTraverser::next() {
     // Done traversing
     return nullptr;
   }
-  if (_opts.vertexUniqueness == TraverserOptions::UniquenessLevel::PATH) {
+  if (_opts.uniqueVertices == TraverserOptions::UniquenessLevel::PATH) {
     // it is sufficient to check if any of the vertices on the path is equal to the end.
     // Then we prune and any intermediate equality cannot happen.
     auto last = path.vertices.back();
@@ -1190,7 +1190,7 @@ void DepthFirstTraverser::EdgeGetter::nextEdge(
       continue;
     }
     std::string id = _trx->extractIdString(edge);
-    if (_opts.edgeUniqueness == TraverserOptions::UniquenessLevel::PATH) {
+    if (_opts.uniqueEdges == TraverserOptions::UniquenessLevel::PATH) {
       // test if edge is already on this path
       auto found = std::find(edges.begin(), edges.end(), id);
       if (found != edges.end()) {
@@ -1199,7 +1199,7 @@ void DepthFirstTraverser::EdgeGetter::nextEdge(
         (*last)++;
         continue;
       }
-    } else if (_opts.edgeUniqueness == TraverserOptions::UniquenessLevel::GLOBAL) {
+    } else if (_opts.uniqueEdges == TraverserOptions::UniquenessLevel::GLOBAL) {
       if (_traverser->_edges.find(id) != _traverser->_edges.end()) {
         // This edge is already on the path, next
         TRI_ASSERT(last != nullptr);

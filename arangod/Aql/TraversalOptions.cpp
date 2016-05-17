@@ -31,27 +31,27 @@ using JsonHelper = arangodb::basics::JsonHelper;
 TraversalOptions::TraversalOptions(Json const& json) {
   Json obj = json.get("traversalFlags");
   useBreathFirst = JsonHelper::getBooleanValue(obj.json(), "bfs", false);
-  std::string tmp = JsonHelper::getStringValue(obj.json(), "vertexUniqueness", "");
+  std::string tmp = JsonHelper::getStringValue(obj.json(), "uniqueVertices", "");
   if (tmp == "path") {
-    vertexUniqueness =
+    uniqueVertices =
         arangodb::traverser::TraverserOptions::UniquenessLevel::PATH;
   } else if (tmp == "global") {
-    vertexUniqueness =
+    uniqueVertices =
         arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL;
   } else {
-    vertexUniqueness =
+    uniqueVertices =
         arangodb::traverser::TraverserOptions::UniquenessLevel::NONE;
   }
 
-  tmp = JsonHelper::getStringValue(obj.json(), "edgeUniqueness", "");
+  tmp = JsonHelper::getStringValue(obj.json(), "uniqueEdges", "");
   if (tmp == "none") {
-    edgeUniqueness =
+    uniqueEdges =
         arangodb::traverser::TraverserOptions::UniquenessLevel::NONE;
   } else if (tmp == "global") {
-    edgeUniqueness =
+    uniqueEdges =
         arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL;
   } else {
-    edgeUniqueness =
+    uniqueEdges =
         arangodb::traverser::TraverserOptions::UniquenessLevel::PATH;
   }
 }
@@ -63,27 +63,27 @@ void TraversalOptions::toJson(arangodb::basics::Json& json,
   flags = Json(Json::Object, 3);
   flags("bfs", Json(useBreathFirst));
 
-  switch (vertexUniqueness) {
+  switch (uniqueVertices) {
     case arangodb::traverser::TraverserOptions::UniquenessLevel::NONE:
-      flags("vertexUniqueness", Json("none"));
+      flags("uniqueVertices", Json("none"));
       break;
     case arangodb::traverser::TraverserOptions::UniquenessLevel::PATH:
-      flags("vertexUniqueness", Json("path"));
+      flags("uniqueVertices", Json("path"));
       break;
     case arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL:
-      flags("vertexUniqueness", Json("global"));
+      flags("uniqueVertices", Json("global"));
       break;
   }
 
-  switch (edgeUniqueness) {
+  switch (uniqueEdges) {
     case arangodb::traverser::TraverserOptions::UniquenessLevel::NONE:
-      flags("edgeUniqueness", Json("none"));
+      flags("uniqueEdges", Json("none"));
       break;
     case arangodb::traverser::TraverserOptions::UniquenessLevel::PATH:
-      flags("edgeUniqueness", Json("path"));
+      flags("uniqueEdges", Json("path"));
       break;
     case arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL:
-      flags("edgeUniqueness", Json("global"));
+      flags("uniqueEdges", Json("global"));
       break;
   }
 
@@ -95,27 +95,27 @@ void TraversalOptions::toVelocyPack(VPackBuilder& builder) const {
 
   builder.add("bfs", VPackValue(useBreathFirst));
 
-  switch (vertexUniqueness) {
+  switch (uniqueVertices) {
     case arangodb::traverser::TraverserOptions::UniquenessLevel::NONE:
-      builder.add("vertexUniqueness", VPackValue("none"));
+      builder.add("uniqueVertices", VPackValue("none"));
       break;
     case arangodb::traverser::TraverserOptions::UniquenessLevel::PATH:
-      builder.add("vertexUniqueness", VPackValue("path"));
+      builder.add("uniqueVertices", VPackValue("path"));
       break;
     case arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL:
-      builder.add("vertexUniqueness", VPackValue("global"));
+      builder.add("uniqueVertices", VPackValue("global"));
       break;
   }
 
-  switch (edgeUniqueness) {
+  switch (uniqueEdges) {
     case arangodb::traverser::TraverserOptions::UniquenessLevel::NONE:
-      builder.add("edgeUniqueness", VPackValue("none"));
+      builder.add("uniqueEdges", VPackValue("none"));
       break;
     case arangodb::traverser::TraverserOptions::UniquenessLevel::PATH:
-      builder.add("edgeUniqueness", VPackValue("path"));
+      builder.add("uniqueEdges", VPackValue("path"));
       break;
     case arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL:
-      builder.add("edgeUniqueness", VPackValue("global"));
+      builder.add("uniqueEdges", VPackValue("global"));
       break;
   }
 }

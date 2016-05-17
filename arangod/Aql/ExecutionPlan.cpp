@@ -69,20 +69,20 @@ static TraversalOptions CreateTraversalOptions(AstNode const* node) {
 
         if (name == "bfs") {
           options.useBreathFirst = value->isTrue();
-        } else if (name == "vertexUniqueness" && value->isStringValue()) {
+        } else if (name == "uniqueVertices" && value->isStringValue()) {
           if (value->stringEquals("path", true)) {
-            options.vertexUniqueness =
+            options.uniqueVertices =
                 arangodb::traverser::TraverserOptions::UniquenessLevel::PATH;
           } else if (value->stringEquals("global", true)) {
-            options.vertexUniqueness =
+            options.uniqueVertices =
                 arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL;
           }
-        } else if (name == "edgeUniqueness" && value->isStringValue()) {
+        } else if (name == "uniqueEdges" && value->isStringValue()) {
           if (value->stringEquals("none", true)) {
-            options.edgeUniqueness =
+            options.uniqueEdges =
                 arangodb::traverser::TraverserOptions::UniquenessLevel::NONE;
           } else if (value->stringEquals("global", true)) {
-            options.edgeUniqueness =
+            options.uniqueEdges =
                 arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL;
           }
         }

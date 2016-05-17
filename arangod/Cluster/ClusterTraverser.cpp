@@ -156,7 +156,7 @@ void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
     for (auto const& edge : VPackArrayIterator(edgesSlice)) {
       std::string edgeId = arangodb::basics::VelocyPackHelper::getStringValue(
           edge, StaticStrings::IdString.c_str(), "");
-      if (_traverser->_opts.edgeUniqueness == TraverserOptions::UniquenessLevel::GLOBAL) {
+      if (_traverser->_opts.uniqueEdges == TraverserOptions::UniquenessLevel::GLOBAL) {
         if (_traverser->_edges.find(edgeId) != _traverser->_edges.end()) {
           // This edge is already known continue with the next.
           operator()(startVertex, result, last, eColIdx, unused);
@@ -185,7 +185,7 @@ void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
     stack.pop();
     last = &_continueConst;
     _traverser->_iteratorCache.emplace(stack);
-    if (_traverser->_opts.edgeUniqueness == TraverserOptions::UniquenessLevel::PATH) {
+    if (_traverser->_opts.uniqueEdges == TraverserOptions::UniquenessLevel::PATH) {
       auto search = std::find(result.begin(), result.end(), next);
       if (search != result.end()) {
         // The edge is now included twice. Go on with the next
@@ -209,7 +209,7 @@ void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
     } else {
       std::string const next = tmp.top();
       tmp.pop();
-      if (_traverser->_opts.edgeUniqueness == TraverserOptions::UniquenessLevel::PATH) {
+      if (_traverser->_opts.uniqueEdges == TraverserOptions::UniquenessLevel::PATH) {
         auto search = std::find(result.begin(), result.end(), next);
         if (search != result.end()) {
           // The edge would be included twice. Go on with the next

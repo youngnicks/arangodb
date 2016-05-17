@@ -2309,7 +2309,7 @@ function optionsSuite() {
       ec.save(c, a, {});
       ec.save(a, d, {});
       var cursor = db._query(
-        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {edgeUniqueness: "path"}
+        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {uniqueEdges: "path"}
         SORT v._key
         RETURN v`
       ).toArray();
@@ -2338,7 +2338,7 @@ function optionsSuite() {
       ec.save(c, a, {});
       ec.save(a, d, {});
       var cursor = db._query(
-        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {edgeUniqueness: "global"}
+        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {uniqueEdges: "global"}
         SORT v._key
         RETURN v`
       ).toArray();
@@ -2367,7 +2367,7 @@ function optionsSuite() {
       ec.save(c, a, {});
       ec.save(a, d, {});
       var cursor = db._query(
-        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {edgeUniqueness: "none"}
+        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {uniqueEdges: "none"}
         SORT v._key
         RETURN v`
       ).toArray();
@@ -2403,7 +2403,7 @@ function optionsSuite() {
       ec.save(c, a, {});
       ec.save(a, d, {});
       var cursor = db._query(
-        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {vertexUniqueness: "none"}
+        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {uniqueVertices: "none"}
         SORT v._key
         RETURN v`
       ).toArray();
@@ -2434,7 +2434,7 @@ function optionsSuite() {
       ec.save(c, a, {});
       ec.save(a, d, {});
       var cursor = db._query(
-        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {vertexUniqueness: "global"}
+        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {uniqueVertices: "global"}
         SORT v._key
         RETURN v`
       ).toArray();
@@ -2461,7 +2461,7 @@ function optionsSuite() {
       ec.save(b, a, {});
       ec.save(c, a, {});
       var cursor = db._query(
-        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {vertexUniqueness: "path"}
+        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {uniqueVertices: "path"}
         SORT v._key
         RETURN v`
       ).toArray();

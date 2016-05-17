@@ -39,16 +39,16 @@ struct TraversalOptions {
   /// @brief constructor, using default values
   TraversalOptions()
       : useBreathFirst(false),
-        vertexUniqueness(traverser::TraverserOptions::UniquenessLevel::NONE),
-        edgeUniqueness(traverser::TraverserOptions::UniquenessLevel::PATH) {}
+        uniqueVertices(traverser::TraverserOptions::UniquenessLevel::NONE),
+        uniqueEdges(traverser::TraverserOptions::UniquenessLevel::PATH) {}
 
   void toJson(arangodb::basics::Json&, TRI_memory_zone_t*) const;
 
   void toVelocyPack(arangodb::velocypack::Builder&) const;
 
   bool useBreathFirst;
-  traverser::TraverserOptions::UniquenessLevel vertexUniqueness;
-  traverser::TraverserOptions::UniquenessLevel edgeUniqueness;
+  traverser::TraverserOptions::UniquenessLevel uniqueVertices;
+  traverser::TraverserOptions::UniquenessLevel uniqueEdges;
 };
 
 }  // namespace arangodb::aql

@@ -486,7 +486,8 @@ function ahuacatlQueryNeighborsTestSuite () {
       actual = getQueryResults(queryStart + theFox + queryEnd);
       assertEqual(actual, [ ]);
       
-      assertQueryError(errors.ERROR_GRAPH_INVALID_PARAMETER.code, queryStart + "thefox/thefox" + queryEnd);
+      actual = getQueryResults(queryStart + "thefox/thefox" + queryEnd);
+      assertEqual(actual, [ ]);
 
       // Including Data
       actual = getRawQueryResults(queryStart + v3 + queryEndData);
@@ -539,7 +540,8 @@ function ahuacatlQueryNeighborsTestSuite () {
       actual = getQueryResults(queryStart + theFox + queryEnd);
       assertEqual(actual, [ ]);
       
-      assertQueryError(errors.ERROR_GRAPH_INVALID_PARAMETER.code, queryStart + "thefox/thefox" + queryEnd);
+      actual = getQueryResults(queryStart + "thefox/thefox" + queryEnd);
+      assertEqual(actual, [ ]);
 
       // Inclunding Data
       actual = getRawQueryResults(queryStart + v3 + queryEndData);
@@ -590,7 +592,8 @@ function ahuacatlQueryNeighborsTestSuite () {
       actual = getQueryResults(queryStart + theFox + queryEnd);
       assertEqual(actual, [ ]);
 
-      assertQueryError(errors.ERROR_GRAPH_INVALID_PARAMETER.code, queryStart + "thefox/thefox" + queryEnd);
+      actual = getQueryResults(queryStart + "thefox/thefox" + queryEnd);
+      assertEqual(actual, [ ]);
 
       // Inclunding Data
       actual = getRawQueryResults(queryStart + v3 + queryEndData);
@@ -611,11 +614,12 @@ function ahuacatlQueryNeighborsTestSuite () {
       var v6 = "UnitTestsAhuacatlVertex/v6";
       var v7 = "UnitTestsAhuacatlVertex/v7";
       var createQuery = function (start, filter) {
+        require("internal").print(`FOR n, e IN OUTBOUND "${start}" UnitTestsAhuacatlEdge ${filter} SORT n._id RETURN n._id`);
         return `FOR n, e IN OUTBOUND "${start}" UnitTestsAhuacatlEdge ${filter} SORT n._id RETURN n._id`;
       };
 
       // An empty filter should let all edges through
-      actual = getQueryResults(createQuery(v3));
+      actual = getQueryResults(createQuery(v3, ""));
 
       assertEqual(actual, [ v4, v6, v7 ]);
 
@@ -628,15 +632,15 @@ function ahuacatlQueryNeighborsTestSuite () {
       assertEqual(actual, [ v4, v6 ]);
 
       // Should be able to handle an id as string
-      actual = getQueryResults(createQuery(v3, 'FILTER e._to == "UnitTestsAhuacatlEdge/v3_v6"'));
+      actual = getQueryResults(createQuery(v3, 'FILTER e._id == "UnitTestsAhuacatlEdge/v3_v6"'));
       assertEqual(actual, [ v6 ]);
 
       // Should be able to handle a mix of id and objects
-      actual = getQueryResults(createQuery(v3, 'FILTER e._to == "UnitTestsAhuacatlEdge/v3_v6" OR FILTER e.what == "v3->v4"'));
+      actual = getQueryResults(createQuery(v3, 'FILTER e._id == "UnitTestsAhuacatlEdge/v3_v6" OR e.what == "v3->v4"'));
       assertEqual(actual, [ v4, v6 ]);
 
       // Should be able to handle internal attributes
-      actual = getQueryResults(createQuery(v3, 'FILTER e._to == "${v4}"'));
+      actual = getQueryResults(createQuery(v3, `FILTER e._to == "${v4}"`));
       assertEqual(actual, [ v4 ]);
     }
 
@@ -2013,6 +2017,7 @@ function ahuacatlQueryNeighborsErrorsSuite () {
 /// @brief checks error handling for neighbors
 ////////////////////////////////////////////////////////////////////////////////
 
+/* CodePath does not exist any more
     testNeighborsDitchesOOM : function () {
       var v1 = vn + "/A";
       var v2 = vn + "/B";
@@ -2048,6 +2053,7 @@ function ahuacatlQueryNeighborsErrorsSuite () {
       }
       internal.debugClearFailAt();
     }
+*/
   };
 }
 
