@@ -2319,11 +2319,11 @@ function optionsSuite() {
       // And not to continue at a again
       assertEqual(cursor.length, 6);
       assertEqual(cursor[0]._id, a); // We start with a
-      assertEqual(cursor[0]._id, a); // We somehow return to a
-      assertEqual(cursor[0]._id, a)
-      assertEqual(cursor[0]._id, a)
-      assertEqual(cursor[0]._id, a)
-
+      assertEqual(cursor[1]._id, a); // We somehow return to a
+      assertEqual(cursor[2]._id, b); // We once find b
+      assertEqual(cursor[3]._id, c); // And once c
+      assertEqual(cursor[4]._id, d); // We once find d on short path
+      assertEqual(cursor[5]._id, d); // And find d on long path
     }
   };
 }
