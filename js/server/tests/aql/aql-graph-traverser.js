@@ -2270,7 +2270,63 @@ function subQuerySuite () {
   };
 }
 
+function optionsSuite() {
+  const gn = "UnitTestGraph";
 
+  return {
+
+    setUp: function () {
+      cleanup();
+      vc = db._create(vn, {numberOfShards: 4});
+      ec = db._createEdgeCollection(en, {numberOfShards: 4});
+      try {
+        gm._drop(gn);
+      } catch (e) {
+        // It is expected that this graph does not exist.
+      }
+
+      gm._create(gn, [gm._relation(en, vn, vn)]);
+    },
+
+    tearDown: function () {
+      try {
+        gm._drop(gn);
+      } catch (e) {
+        // It is expected that this graph does not exist.
+      }
+      cleanup();
+    },
+
+    testEdgeUniquenessPath: function () {
+      var start = vc.save({_key: "s"})._id;
+      var a = vc.save({_key: "a"})._id;
+      var b = vc.save({_key: "b"})._id;
+      var c = vc.save({_key: "c"})._id;
+      var d = vc.save({_key: "d"})._id;
+      ec.save(start, a, {});
+      ec.save(a, b, {});
+      ec.save(b, c, {});
+      ec.save(c, a, {});
+      ec.save(a, d, {});
+      var cursor = db._query(
+        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {edgeUniqueness: "path"}
+        SORT v._key
+        RETURN v`
+      ).toArray();
+      // We expect to get s->a->b->c->a->d
+      // and s->a->d
+      // But not s->a->b->c->a->b->*
+      // And not to continue at a again
+      assertEqual(cursor.length, 6);
+      assertEqual(cursor[0]._id, a); // We start with a
+      assertEqual(cursor[0]._id, a); // We somehow return to a
+      assertEqual(cursor[0]._id, a)
+      assertEqual(cursor[0]._id, a)
+      assertEqual(cursor[0]._id, a)
+
+    }
+  };
+}
 
 jsunity.run(namedGraphSuite);
 jsunity.run(multiCollectionGraphSuite);
@@ -2282,5 +2338,7 @@ jsunity.run(complexFilteringSuite);
 jsunity.run(brokenGraphSuite);
 jsunity.run(multiEdgeDirectionSuite);
 jsunity.run(subQuerySuite);
+
+jsunity.run(optionsSuite);
 
 return jsunity.done();
