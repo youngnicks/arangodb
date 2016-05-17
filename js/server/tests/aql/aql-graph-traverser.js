@@ -2324,6 +2324,71 @@ function optionsSuite() {
       assertEqual(cursor[3]._id, c); // And once c
       assertEqual(cursor[4]._id, d); // We once find d on short path
       assertEqual(cursor[5]._id, d); // And find d on long path
+    },
+
+    testEdgeUniquenessGlobal: function () {
+      var start = vc.save({_key: "s"})._id;
+      var a = vc.save({_key: "a"})._id;
+      var b = vc.save({_key: "b"})._id;
+      var c = vc.save({_key: "c"})._id;
+      var d = vc.save({_key: "d"})._id;
+      ec.save(start, a, {});
+      ec.save(a, b, {});
+      ec.save(b, c, {});
+      ec.save(c, a, {});
+      ec.save(a, d, {});
+      var cursor = db._query(
+        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {edgeUniqueness: "global"}
+        SORT v._key
+        RETURN v`
+      ).toArray();
+      // We expect to get s->a->b->c->a
+      // and s->a->d
+      // But not s->a->b->c->a->b->*
+      // And not s->a->b->c->a->d
+      // And not to continue at a again
+      assertEqual(cursor.length, 5);
+      assertEqual(cursor[0]._id, a); // We start with a
+      assertEqual(cursor[1]._id, a); // We somehow return to a
+      assertEqual(cursor[2]._id, b); // We once find b
+      assertEqual(cursor[3]._id, c); // And once c
+      assertEqual(cursor[4]._id, d); // We once find d on long or short path
+    },
+
+    testEdgeUniquenessNone: function () {
+      var start = vc.save({_key: "s"})._id;
+      var a = vc.save({_key: "a"})._id;
+      var b = vc.save({_key: "b"})._id;
+      var c = vc.save({_key: "c"})._id;
+      var d = vc.save({_key: "d"})._id;
+      ec.save(start, a, {});
+      ec.save(a, b, {});
+      ec.save(b, c, {});
+      ec.save(c, a, {});
+      ec.save(a, d, {});
+      var cursor = db._query(
+        `FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {edgeUniqueness: "none"}
+        SORT v._key
+        RETURN v`
+      ).toArray();
+      // We expect to get s->a->d
+      // We expect to get s->a->b->c->a->d
+      // We expect to get s->a->b->c->a->b->c->a->d
+      // We expect to get s->a->b->c->a->b->c->a->b->c->a
+      assertEqual(cursor.length, 13);
+      assertEqual(cursor[0]._id, a); // We start with a
+      assertEqual(cursor[1]._id, a); // We somehow return to a
+      assertEqual(cursor[2]._id, a); // We somehow return to a again
+      assertEqual(cursor[3]._id, a); // We somehow return to a again
+      assertEqual(cursor[4]._id, b); // We once find b
+      assertEqual(cursor[5]._id, b); // We find b again
+      assertEqual(cursor[6]._id, b); // And b again
+      assertEqual(cursor[7]._id, c); // And once c
+      assertEqual(cursor[8]._id, c); // We find c again
+      assertEqual(cursor[9]._id, c); // And c again
+      assertEqual(cursor[10]._id, d); // Short Path d
+      assertEqual(cursor[11]._id, d); // One Loop d
+      assertEqual(cursor[12]._id, d); // Second Loop d
     }
   };
 }
@@ -2338,7 +2403,6 @@ jsunity.run(complexFilteringSuite);
 jsunity.run(brokenGraphSuite);
 jsunity.run(multiEdgeDirectionSuite);
 jsunity.run(subQuerySuite);
-
 jsunity.run(optionsSuite);
 
 return jsunity.done();

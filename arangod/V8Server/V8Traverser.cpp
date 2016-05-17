@@ -1185,6 +1185,13 @@ void DepthFirstTraverser::EdgeGetter::nextEdge(
         (*last)++;
         continue;
       }
+    } else if (_opts.edgeUniqueness == TraverserOptions::UniquenessLevel::GLOBAL) {
+      if (_traverser->_edges.find(id) != _traverser->_edges.end()) {
+        // This edge is already on the path, next
+        TRI_ASSERT(last != nullptr);
+        (*last)++;
+        continue;
+      }
     }
 
     VPackBuilder tmpBuilder = VPackBuilder::clone(edge);
