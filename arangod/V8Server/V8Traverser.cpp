@@ -1014,10 +1014,12 @@ void DepthFirstTraverser::_defInternalFunctions() {
     VPackSlice v(it->second->data());
     // NOTE: We assume that we only have valid edges.
     result = Transaction::extractFromFromDocument(v).copyString();
-    // result = v.get(StaticStrings::FromString).copyString();
     if (result == vertex) {
       result = Transaction::extractToFromDocument(v).copyString();
-      // result = v.get(StaticStrings::ToString).copyString();
+    }
+    if (_opts.vertexUniqueness == TraverserOptions::UniquenessLevel::GLOBAL &&
+        _vertices.find(result) != _vertices.end()) {
+      return false;
     }
     return true;
   };
@@ -1077,6 +1079,18 @@ TraversalPath* DepthFirstTraverser::next() {
     _done = true;
     // Done traversing
     return nullptr;
+  }
+  if (_opts.vertexUniqueness == TraverserOptions::UniquenessLevel::PATH) {
+    // it is sufficient to check if any of the vertices on the path is equal to the end.
+    // Then we prune and any intermediate equality cannot happen.
+    auto last = path.vertices.back();
+    auto found = std::find(path.vertices.begin(), path.vertices.end(), last);
+    TRI_ASSERT(found != path.vertices.end()); // We have to find it once, it is at least the last!
+    if ((++found) != path.vertices.end()) {
+      // Test if we found the last element. That is ok.
+      _pruneNext = true;
+      return next();
+    }
   }
   size_t countEdges = path.edges.size();
 
