@@ -264,7 +264,6 @@ bool State::loadCollections(TRI_vocbase_t* vocbase, bool waitForSync) {
   return loadPersisted ();
 }
 
-#include <iostream>
 bool State::loadPersisted() {
   
   TRI_ASSERT(_vocbase != nullptr);
@@ -280,13 +279,13 @@ bool State::loadPersisted() {
 }
 
 bool State::loadCompacted () {
-
   auto bindVars = std::make_shared<VPackBuilder>();
   bindVars->openObject();
   bindVars->close();
   
   std::string const aql(
     std::string("FOR c IN compact SORT c._key DESC LIMIT 1 RETURN c"));
+
   arangodb::aql::Query query(
     false, _vocbase, aql.c_str(), aql.size(), bindVars, nullptr,
     arangodb::aql::PART_MAIN);
@@ -297,22 +296,14 @@ bool State::loadCompacted () {
     THROW_ARANGO_EXCEPTION_MESSAGE(queryResult.code, queryResult.details);
   }
   
-  auto result = queryResult.result->slice();
+  VPackSlice result = queryResult.result->slice();
 
-  LOG(WARN) << result.toJson();
-  
   if (result.isArray()) {
     for (auto const& i : VPackArrayIterator(result)) {
       buffer_t tmp =
         std::make_shared<arangodb::velocypack::Buffer<uint8_t>>();
-      auto req = i.get("request");
-      tmp->append(req.startAs<char const>(), req.byteSize());
-      _log.push_back(
-        log_t(
-          std::stoi(i.get(StaticStrings::KeyString).copyString()),
-          static_cast<term_t>(i.get("term").getUInt()),
-          static_cast<arangodb::consensus::id_t>(i.get("leader").getUInt()),
-          tmp));
+      (*_agent) = i.get("readDB");
+      _cur = std::stoul(i.get("_key").copyString());
     }
   }
   
@@ -340,6 +331,7 @@ bool State::loadRemaining () {
   auto result = queryResult.result->slice();
   
   if (result.isArray()) {
+    _log.clear();
     for (auto const& i : VPackArrayIterator(result)) {
       buffer_t tmp =
         std::make_shared<arangodb::velocypack::Buffer<uint8_t>>();
@@ -353,7 +345,7 @@ bool State::loadRemaining () {
           tmp));
     }
   }
-  
+
   return true;
 
 }
@@ -389,9 +381,9 @@ bool State::compact (arangodb::consensus::index_t cind) {
 }
 
 bool State::compactVolatile (arangodb::consensus::index_t cind) {
-  if (!_log.empty() && cind-_cur > 0) {
+  if (!_log.empty() && cind > _cur && cind-_cur < _log.size()) {
     MUTEX_LOCKER(mutexLocker, _logLock);
-    _log.erase(_log.begin(), _log.begin()+cind-_cur);
+    _log.erase(_log.begin(), _log.begin()+(cind-_cur));
     _cur = _log.begin()->index;
   }
   return true;
