@@ -135,7 +135,6 @@ function ahuacatlFunctionsBruteTestSuite () {
     "WITHIN_RECTANGLE",
     "IS_IN_POLYGON",
     "FULLTEXT",
-    "PATHS",
     "SHORTEST_PATH",
     "GRAPH_SHORTEST_PATH",
     "GRAPH_DISTANCE_TO",
