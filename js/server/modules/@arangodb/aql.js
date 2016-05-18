@@ -7512,100 +7512,6 @@ function AQL_GRAPH_VERTICES (graphName,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_common_neighbors
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_COMMON_NEIGHBORS (graphName,
-                                     vertex1Examples,
-                                     vertex2Examples,
-                                     options1,
-                                     options2) {
-  'use strict';
-
-  options1 = options1 || {};
-  options2 = options2 || {};
-  if (options1.includeData) {
-    options2.includeData = true;
-  }
-  else if (options2.includeData) {
-    options1.includeData = true;
-  }
-
-  let graph = graphModule._graph(graphName);
-  let vertexCollections = graph._vertexCollections().map(function (c) { return c.name();});
-  let vertices1 = DOCUMENT_IDS_BY_EXAMPLE("GRAPH_COMMON_NEIGHBORS", vertexCollections, vertex1Examples);
-  let vertices2;
-  if (vertex1Examples === vertex2Examples) {
-    vertices2 = vertices1;
-  } 
-  else {
-    vertices2 = DOCUMENT_IDS_BY_EXAMPLE("GRAPH_COMMON_NEIGHBORS", vertexCollections, vertex2Examples);
-  }
-  // Use ES6 Map. Higher performance then Object.
-  let tmpNeighborsLeft = new Map();
-  let tmpNeighborsRight = new Map();
-  let result = [];
-
-  // Iterate over left side vertex list as left.
-  // Calculate its neighbors as ln
-  // For each entry iterate over right side vertex list as right.
-  // Calculate their neighbors as rn
-  // For each store one entry in result {left: left, right: right, neighbors: intersection(ln, rn)}
-  // All Neighbors are cached in tmpNeighborsLeft and tmpNeighborsRight resp.
-  for (let i = 0; i < vertices1.length; ++i) {
-    let left = vertices1[i];
-    let itemNeighbors;
-    if(tmpNeighborsLeft.has(left)) {
-      itemNeighbors = tmpNeighborsLeft.get(left);
-    } 
-    else {
-      itemNeighbors = AQL_GRAPH_NEIGHBORS(graphName, left, options1);
-      tmpNeighborsLeft.set(left, itemNeighbors);
-    }
-    for (let j = 0; j < vertices2.length; ++j) {
-      let right = vertices2[j];
-      if (left === right) {
-        continue;
-      }
-      let rNeighbors;
-      if(tmpNeighborsRight.has(right)) {
-        rNeighbors = tmpNeighborsRight.get(right);
-      } 
-      else {
-        rNeighbors = AQL_GRAPH_NEIGHBORS(graphName, right, options2);
-        tmpNeighborsRight.set(right, rNeighbors);
-      }
-      let neighbors;
-      if (! options1.includeData) {
-        neighbors = underscore.intersection(itemNeighbors, rNeighbors);
-      }
-      else {
-        // create a quick lookup table for left hand side
-        let lKeys = { };
-        for (let i = 0; i < itemNeighbors.length; ++i) {
-          lKeys[itemNeighbors[i]._id] = true;
-        }
-        // check which elements of the right-hand side are also present in the left hand side lookup  map
-        neighbors = [];
-        for (let i = 0; i < rNeighbors.length; ++i) {
-          if (lKeys.hasOwnProperty(rNeighbors[i]._id)) {
-            neighbors.push(rNeighbors[i]);
-          }
-        }
-      }
-      if (neighbors.length > 0) {
-        result.push({left, right, neighbors});
-      }
-    }
-  }
-  // Legacy Format
-  // result.push(tmpRes);
-  tmpNeighborsLeft.clear();
-  tmpNeighborsRight.clear();
-  return result;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief was docuBlock JSF_aql_general_graph_common_properties
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -8150,7 +8056,6 @@ exports.AQL_GRAPH_VERTICES = AQL_GRAPH_VERTICES;
 exports.AQL_GRAPH_PATHS = AQL_GRAPH_PATHS;
 exports.AQL_GRAPH_SHORTEST_PATH = AQL_GRAPH_SHORTEST_PATH;
 exports.AQL_GRAPH_DISTANCE_TO = AQL_GRAPH_DISTANCE_TO;
-exports.AQL_GRAPH_COMMON_NEIGHBORS = AQL_GRAPH_COMMON_NEIGHBORS;
 exports.AQL_GRAPH_COMMON_PROPERTIES = AQL_GRAPH_COMMON_PROPERTIES;
 exports.AQL_GRAPH_ECCENTRICITY = AQL_GRAPH_ECCENTRICITY;
 exports.AQL_GRAPH_BETWEENNESS = AQL_GRAPH_BETWEENNESS;
