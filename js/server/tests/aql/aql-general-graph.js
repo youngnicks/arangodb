@@ -706,6 +706,7 @@ function ahuacatlQueryGeneralEdgesTestSuite() {
         name: gN
       };
       var actual = getRawQueryResults(query, bindVars);
+      require("internal").print(actual);
       assertEqual(actual.length, 1);
       assertEqual(actual[0], v1 + "/v1");
     },

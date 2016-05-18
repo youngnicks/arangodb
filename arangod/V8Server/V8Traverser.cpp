@@ -1007,22 +1007,40 @@ std::shared_ptr<VPackBuffer<uint8_t>> DepthFirstTraverser::fetchVertexData(
 }
 
 void DepthFirstTraverser::_defInternalFunctions() {
-  _getVertex = [this](std::string const& edge, std::string const& vertex, size_t depth,
-                  std::string& result) -> bool {
-    auto const& it = _edges.find(edge);
-    TRI_ASSERT(it != _edges.end());
-    VPackSlice v(it->second->data());
-    // NOTE: We assume that we only have valid edges.
-    result = Transaction::extractFromFromDocument(v).copyString();
-    if (result == vertex) {
-      result = Transaction::extractToFromDocument(v).copyString();
-    }
-    if (_opts.uniqueVertices == TraverserOptions::UniquenessLevel::GLOBAL &&
-        _vertices.find(result) != _vertices.end()) {
-      return false;
-    }
-    return true;
-  };
+  if (_opts.uniqueVertices == TraverserOptions::UniquenessLevel::GLOBAL) {
+    _getVertex = [this](std::string const& edge, std::string const& vertex, size_t depth,
+                    std::string& result) -> bool {
+      auto const& it = _edges.find(edge);
+      TRI_ASSERT(it != _edges.end());
+      VPackSlice v(it->second->data());
+      // NOTE: We assume that we only have valid edges.
+      VPackSlice from = Transaction::extractFromFromDocument(v);
+      if (from.isEqualString(vertex)) {
+        result = Transaction::extractToFromDocument(v).copyString();
+      } else {
+        result = from.copyString();
+      }
+      if (_returnedVertices.find(result) != _returnedVertices.end()) {
+        return false;
+      }
+      return true;
+    };
+  } else {
+    _getVertex = [this](std::string const& edge, std::string const& vertex, size_t depth,
+                    std::string& result) -> bool {
+      auto const& it = _edges.find(edge);
+      TRI_ASSERT(it != _edges.end());
+      VPackSlice v(it->second->data());
+      // NOTE: We assume that we only have valid edges.
+      VPackSlice from = Transaction::extractFromFromDocument(v);
+      if (from.isEqualString(vertex)) {
+        result = Transaction::extractToFromDocument(v).copyString();
+      } else {
+        result = from.copyString();
+      }
+      return true;
+    };
+  }
 }
 
 void DepthFirstTraverser::setStartVertex(std::string const& v) {
@@ -1062,6 +1080,11 @@ void DepthFirstTraverser::setStartVertex(std::string const& v) {
       }
     }
   }
+
+  if (_opts.uniqueVertices == TraverserOptions::UniquenessLevel::GLOBAL) {
+    _returnedVertices.clear();
+  }
+
   _enumerator.reset(new PathEnumerator<std::string, std::string, VPackValueLength>(
       _edgeGetter, _getVertex, v));
   _done = false;
@@ -1097,6 +1120,15 @@ TraversalPath* DepthFirstTraverser::next() {
   auto p = std::make_unique<SingleServerTraversalPath>(path, this);
   if (countEdges >= _opts.maxDepth) {
     _pruneNext = true;
+  }
+  // If we get here the vertex has to be counted as visited
+  if (_opts.uniqueVertices == TraverserOptions::UniquenessLevel::GLOBAL) {
+    auto last = path.vertices.back();
+    if (_returnedVertices.find(last) != _returnedVertices.end()) {
+      // This one is not unique, continue
+      return next();
+    }
+    _returnedVertices.emplace(last);
   }
   if (countEdges < _opts.minDepth) {
     return next();
