@@ -102,7 +102,6 @@ var aqlFuncs = {
   "IS_IN_POLYGON":"l,ln|nb",
   "FULLTEXT":"hs,s,s|n",
   "PATHS":"c,h|s,ba",
-  "GRAPH_PATHS":"s|a",
   "GRAPH_SHORTEST_PATH":"s,als,als|a",
   "GRAPH_DISTANCE_TO":"s,als,als|a",
   "TRAVERSAL":"hs,hs,s,s|a",

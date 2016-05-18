@@ -339,8 +339,6 @@ std::unordered_map<std::string, Function const> const Executor::FunctionNames{
     // graph functions
     {"PATHS", Function("PATHS", "AQL_PATHS", "c,h|s,ba", true, false, true,
                        false, false)},
-    {"GRAPH_PATHS", Function("GRAPH_PATHS", "AQL_GRAPH_PATHS", "s|a", false,
-                             false, true, false, false)},
     {"SHORTEST_PATH", Function("SHORTEST_PATH", "AQL_SHORTEST_PATH",
                                "h,h,s,s,s|a", true, false, true, false, false)},
     {"GRAPH_SHORTEST_PATH",

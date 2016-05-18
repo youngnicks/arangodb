@@ -5632,106 +5632,6 @@ function AQL_PATHS (vertices, edgeCollection, direction, options) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_paths
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_PATHS (graphName, options) {
-  'use strict';
-
-  var searchDirection;
-  if (! options) {
-    options = {};
-  }
-  var direction      = options.direction || "outbound";
-  var followCycles   = options.followCycles || false;
-  var minLength      = options.minLength || 0;
-  var maxLength      = options.maxLength || 10;
-
-  // check graph exists and load edgeDefintions
-  var graph = DOCUMENT_HANDLE("_graphs/" + graphName);
-  if (! graph) {
-    THROW("GRAPH_PATHS", INTERNAL.errors.ERROR_GRAPH_INVALID_GRAPH, "GRAPH_PATHS");
-  }
-
-  var startCollections = [], edgeCollections = [];
-
-  // validate direction and create edgeCollection array.
-  graph.edgeDefinitions.forEach(function (def) {
-    if (direction === "outbound") {
-      searchDirection = 1;
-      def.from.forEach(function (s) {
-        if (startCollections.indexOf(s) === -1) {
-          startCollections.push(s);
-        }
-      });
-    }
-    else if (direction === "inbound") {
-      searchDirection = 2;
-      def.to.forEach(function (s) {
-        if (startCollections.indexOf(s) === -1) {
-          startCollections.push(s);
-        }
-      });
-    }
-    else if (direction === "any") {
-      def.from.forEach(function (s) {
-        searchDirection = 3;
-        if (startCollections.indexOf(s) === -1) {
-          startCollections.push(s);
-        }
-      });
-      def.to.forEach(function (s) {
-        if (startCollections.indexOf(s) === -1) {
-          startCollections.push(s);
-        }
-      });
-    }
-    else {
-      WARN("GRAPH_PATHS", INTERNAL.errors.ERROR_QUERY_FUNCTION_ARGUMENT_TYPE_MISMATCH);
-      return null;
-    }
-    if (edgeCollections.indexOf(def.collection) === -1) {
-      edgeCollections.push(COLLECTION(def.collection, "GRAPH_PATHS"));
-    }
-
-  });
-
-  if (minLength < 0 || maxLength < 0 || minLength > maxLength) {
-    WARN("GRAPH_PATHS", INTERNAL.errors.ERROR_QUERY_FUNCTION_ARGUMENT_TYPE_MISMATCH);
-    return null;
-  }
-
-  var result = [ ];
-  startCollections.forEach(function (startCollection) {
-
-    var searchAttributes = {
-      edgeCollection : edgeCollections,
-      minLength : minLength,
-      maxLength : maxLength,
-      direction : searchDirection,
-      followCycles : followCycles
-    };
-
-    var vertices = GET_DOCUMENTS(startCollection, "GRAPH_PATHS");
-    var n = vertices.length, i, j;
-    for (i = 0; i < n; ++i) {
-      var vertex = vertices[i];
-      var visited = { };
-
-      visited[vertex._id] = true;
-      var connected = SUBNODES(searchAttributes, vertex._id, visited, [ ], [ vertex ], 0);
-      for (j = 0; j < connected.length; ++j) {
-        result.push(connected[j]);
-      }
-    }
-
-  });
-
-  return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief visitor callback function for traversal
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -8053,7 +7953,6 @@ exports.AQL_NEIGHBORS = AQL_NEIGHBORS;
 exports.AQL_GRAPH_TRAVERSAL = AQL_GRAPH_TRAVERSAL;
 exports.AQL_GRAPH_TRAVERSAL_TREE = AQL_GRAPH_TRAVERSAL_TREE;
 exports.AQL_GRAPH_VERTICES = AQL_GRAPH_VERTICES;
-exports.AQL_GRAPH_PATHS = AQL_GRAPH_PATHS;
 exports.AQL_GRAPH_SHORTEST_PATH = AQL_GRAPH_SHORTEST_PATH;
 exports.AQL_GRAPH_DISTANCE_TO = AQL_GRAPH_DISTANCE_TO;
 exports.AQL_GRAPH_COMMON_PROPERTIES = AQL_GRAPH_COMMON_PROPERTIES;
