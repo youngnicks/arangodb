@@ -3134,9 +3134,9 @@ function MeasurementsSuite() {
 // OBSOLETE!
 // jsunity.run(GeneralGraphAQLQueriesSuite);
 // jsunity.run(ChainedFluentAQLResultsSuite);
+// jsunity.run(GeneralGraphCommonNeighborsSuite);
 
 jsunity.run(EdgesAndVerticesSuite);
-jsunity.run(GeneralGraphCommonNeighborsSuite);
 jsunity.run(GeneralGraphCreationSuite);
 jsunity.run(OrphanCollectionSuite);
 jsunity.run(MeasurementsSuite);

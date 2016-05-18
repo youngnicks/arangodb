@@ -787,6 +787,11 @@ function ahuacatlQueryGeneralCommonTestSuite() {
 
   var vertexIds = {};
 
+  var AQL_START_EVERYWHERE = `UNION((FOR x IN UnitTestsAhuacatlVertex1 RETURN x), (FOR x IN UnitTestsAhuacatlVertex2 RETURN x))`
+  var startWithFilter = function (filter) {
+    return `UNION((FOR x IN UnitTestsAhuacatlVertex1 ${filter} RETURN x), (FOR x IN UnitTestsAhuacatlVertex2 ${filter} RETURN x))`;
+  }
+
   return {
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -865,27 +870,40 @@ function ahuacatlQueryGeneralCommonTestSuite() {
     },
 
     ////////////////////////////////////////////////////////////////////////////////
-    /// @brief checks GRAPH_COMMON_NEIGHBORS() and GRAPH_COMMON_PROPERTIES()
+    /// @brief checks common neighbors
     ////////////////////////////////////////////////////////////////////////////////
 
     testCommonNeighbors: function () {
-      var actual = getQueryResults("FOR v IN GRAPH_COMMON_NEIGHBORS('bla3', 'UnitTestsAhuacatlVertex1/v3' , 'UnitTestsAhuacatlVertex2/v6',  {direction : 'any'}) SORT v.left  RETURN v");
+      var query = `
+        LET n1 = (FOR n IN ANY 'UnitTestsAhuacatlVertex1/v3' GRAPH 'bla3' OPTIONS {bfs: true, uniqueVertices: "global"} RETURN n._id)
+        LET n2 = (FOR n IN ANY 'UnitTestsAhuacatlVertex2/v6' GRAPH 'bla3' OPTIONS {bfs: true, uniqueVertices: "global"} RETURN n._id)
+        LET common = INTERSECTION(n1, n2)
+        RETURN {left: 'UnitTestsAhuacatlVertex1/v3', right: 'UnitTestsAhuacatlVertex2/v6', neighbors: common}
+      `;
+      var actual = getQueryResults(query);
       assertEqual(actual.length, 1);
       assertEqual(actual[0].left, vertexIds.v3);
       assertEqual(actual[0].right, vertexIds.v6);
       assertEqual(actual[0].neighbors.sort(), [vertexIds.v2, vertexIds.v7].sort());
-      /* Legacy
-      assertEqual(actual[0]["UnitTestsAhuacatlVertex1/v3"]["UnitTestsAhuacatlVertex2/v6"][0]._id, "UnitTestsAhuacatlVertex1/v2");
-      assertEqual(actual[0]["UnitTestsAhuacatlVertex1/v3"]["UnitTestsAhuacatlVertex2/v6"][1]._id, "UnitTestsAhuacatlVertex2/v7");
-      */
-
     },
     ////////////////////////////////////////////////////////////////////////////////
-    /// @brief checks GRAPH_COMMON_NEIGHBORS()
+    /// @brief checks common neighbors
     ////////////////////////////////////////////////////////////////////////////////
 
     testCommonNeighborsIn: function () {
-      var actual = getQueryResults("FOR v IN GRAPH_COMMON_NEIGHBORS('bla3', {} , {},  {direction : 'inbound'}, {direction : 'inbound'}) SORT v.left, v.right RETURN v");
+      var query = `
+        FOR left IN ${AQL_START_EVERYWHERE}
+          LET n1 = (FOR n IN INBOUND left GRAPH 'bla3' OPTIONS {bfs: true, uniqueVertices: "global"} RETURN n._id)
+          FOR right IN ${AQL_START_EVERYWHERE}
+            FILTER left != right
+            LET n2 = (FOR n IN INBOUND right GRAPH 'bla3' OPTIONS {bfs: true, uniqueVertices: "global"} RETURN n._id)
+            LET neighbors = INTERSECTION(n1, n2)
+            FILTER LENGTH(neighbors) > 0
+            SORT left._id, right._id
+            RETURN {left: left._id, right: right._id, neighbors: neighbors}
+      `;
+
+      var actual = getQueryResults(query);
       assertEqual(actual.length, 8, "We expect one entry for each pair of vertices having at least one common neighbor");
 
       assertEqual(actual[0].left, vertexIds.v3);
@@ -919,30 +937,25 @@ function ahuacatlQueryGeneralCommonTestSuite() {
       assertEqual(actual[7].left, vertexIds.v8);
       assertEqual(actual[7].right, vertexIds.v7);
       assertEqual(actual[7].neighbors.sort(), [vertexIds.v3].sort());
-
-      /* Legacy
-      assertEqual(actual[0]["UnitTestsAhuacatlVertex1/v3"]["UnitTestsAhuacatlVertex2/v6"][0]._id, "UnitTestsAhuacatlVertex1/v2");
-      assertEqual(actual[1]["UnitTestsAhuacatlVertex2/v5"]["UnitTestsAhuacatlVertex2/v8"][0]._id, "UnitTestsAhuacatlVertex1/v3");
-      assertEqual(actual[1]["UnitTestsAhuacatlVertex2/v5"]["UnitTestsAhuacatlVertex2/v7"][0]._id, "UnitTestsAhuacatlVertex1/v3");
-
-
-      assertEqual(actual[2]["UnitTestsAhuacatlVertex2/v6"]["UnitTestsAhuacatlVertex1/v3"][0]._id, "UnitTestsAhuacatlVertex1/v2");
-      assertEqual(actual[3]["UnitTestsAhuacatlVertex2/v7"]["UnitTestsAhuacatlVertex2/v5"][0]._id, "UnitTestsAhuacatlVertex1/v3");
-      assertEqual(actual[3]["UnitTestsAhuacatlVertex2/v7"]["UnitTestsAhuacatlVertex2/v8"][0]._id, "UnitTestsAhuacatlVertex1/v3");
-
-      assertEqual(actual[4]["UnitTestsAhuacatlVertex2/v8"]["UnitTestsAhuacatlVertex2/v5"][0]._id, "UnitTestsAhuacatlVertex1/v3");
-      assertEqual(actual[4]["UnitTestsAhuacatlVertex2/v8"]["UnitTestsAhuacatlVertex2/v7"][0]._id, "UnitTestsAhuacatlVertex1/v3");
-      */
     },
 
     ////////////////////////////////////////////////////////////////////////////////
-    /// @brief checks GRAPH_COMMON_NEIGHBORS()
+    /// @brief checks common neighbors
     ////////////////////////////////////////////////////////////////////////////////
 
     testCommonNeighborsOut: function () {
-      var actual = getQueryResults("FOR v IN GRAPH_COMMON_NEIGHBORS('bla3', { hugo : true } , {heinz : 1}, " +
-        " {direction : 'outbound', minDepth : 1, maxDepth : 3}, {direction : 'outbound', minDepth : 1, maxDepth : 3}) SORT v.left, v.right RETURN v");
+      var query =  `
+        FOR left IN ${startWithFilter("FILTER x.hugo == true")}
+          LET n1 = (FOR n IN 1..3 OUTBOUND left GRAPH 'bla3' RETURN n._id)
+          FOR right IN ${startWithFilter("FILTER x.heinz == 1")}
+            FILTER left != right
+            LET n2 = (FOR n IN 1..3 OUTBOUND right GRAPH 'bla3' RETURN n._id)
+            LET neighbors = INTERSECTION(n1, n2)
+            FILTER LENGTH(neighbors) > 0
+            SORT left._id, right._id
+            RETURN {left: left._id, right: right._id, neighbors: neighbors}`;
 
+      var actual = getQueryResults(query);
       assertEqual(actual.length, 4, "Expect one result for each pair of vertices sharing neighbors");
 
       assertEqual(actual[0].left, vertexIds.v1);
@@ -960,38 +973,45 @@ function ahuacatlQueryGeneralCommonTestSuite() {
       assertEqual(actual[3].left, vertexIds.v2);
       assertEqual(actual[3].right, vertexIds.v8);
       assertEqual(actual[3].neighbors.sort(), [vertexIds.v1, vertexIds.v6, vertexIds.v3].sort());
-
-      /* Legacy
-      assertEqual(Object.keys(actual[0])[0], "UnitTestsAhuacatlVertex1/v2");
-      assertEqual(Object.keys(actual[0][Object.keys(actual[0])[0]]), ["UnitTestsAhuacatlVertex2/v8", "UnitTestsAhuacatlVertex1/v3"]);
-
-      assertEqual(actual[0][Object.keys(actual[0])[0]]["UnitTestsAhuacatlVertex2/v8"].length, 3);
-      assertEqual(actual[0][Object.keys(actual[0])[0]]["UnitTestsAhuacatlVertex1/v3"].length, 4);
-
-      assertEqual(Object.keys(actual[1])[0], "UnitTestsAhuacatlVertex1/v1");
-      assertEqual(Object.keys(actual[1][Object.keys(actual[1])[0]]), ["UnitTestsAhuacatlVertex2/v8", "UnitTestsAhuacatlVertex1/v3"]);
-
-      assertEqual(actual[1][Object.keys(actual[1])[0]]["UnitTestsAhuacatlVertex1/v3"].length, 4);
-      assertEqual(actual[1][Object.keys(actual[1])[0]]["UnitTestsAhuacatlVertex2/v8"].length, 3);
-      */
-
     },
 
     ////////////////////////////////////////////////////////////////////////////////
-    /// @brief checks GRAPH_COMMON_NEIGHBORS()
+    /// @brief checks common neighbors
     ////////////////////////////////////////////////////////////////////////////////
 
     testCommonNeighborsMixedOptionsDistinctFilters: function () {
-      var actual = getQueryResults("FOR v IN GRAPH_COMMON_NEIGHBORS('bla3', {} , {},  " +
-        "{direction : 'outbound', vertexCollectionRestriction : 'UnitTestsAhuacatlVertex1'}, " +
-        "{direction : 'inbound', minDepth : 1, maxDepth : 2, vertexCollectionRestriction : 'UnitTestsAhuacatlVertex2'}) SORT v.left, v.right RETURN v");
+      var query = `
+      FOR left IN ${AQL_START_EVERYWHERE}
+      LET n1 = (FOR v IN OUTBOUND left GRAPH 'bla3' OPTIONS {bfs: true, uniqueVertices: "global"}
+        FILTER IS_SAME_COLLECTION(UnitTestsAhuacatlVertex1, v) RETURN v._id)
+        FOR right IN ${AQL_START_EVERYWHERE}
+          FILTER left != right
+          LET n2 = (FOR v IN 1..2 INBOUND right GRAPH 'bla3' OPTIONS {bfs: true, uniqueVertices: "global"}
+            FILTER IS_SAME_COLLECTION(UnitTestsAhuacatlVertex2, v) RETURN v._id)
+          LET neighbors = INTERSECTION(n1, n2)
+          FILTER LENGTH(neighbors) > 0
+          SORT left._id, right._id
+          RETURN {left: left._id, right: right._id, neighbors: neighbors}
+      `;
+      var actual = getQueryResults(query);
       assertEqual(actual.length, 0, "Expect one result for each pair of vertices sharing neighbors");
     },
 
     testCommonNeighborsMixedOptionsFilterBasedOnOneCollectionOnly: function () {
-      var actual = getQueryResults("FOR v IN GRAPH_COMMON_NEIGHBORS('bla3', {} , {},  " +
-        "{direction : 'outbound', vertexCollectionRestriction : 'UnitTestsAhuacatlVertex2'}, " +
-        "{direction : 'inbound', minDepth : 1, maxDepth : 2, vertexCollectionRestriction : 'UnitTestsAhuacatlVertex2'}) SORT v.left, v.right RETURN v");
+      var query = `
+        FOR left IN ${AQL_START_EVERYWHERE}
+        LET n1 = (FOR v IN OUTBOUND left GRAPH 'bla3' OPTIONS {bfs: true, uniqueVertices: "global"}
+          FILTER IS_SAME_COLLECTION(UnitTestsAhuacatlVertex2, v) RETURN v._id)
+          FOR right IN ${AQL_START_EVERYWHERE}
+            FILTER left != right
+            LET n2 = (FOR v IN 1..2 INBOUND right GRAPH 'bla3' OPTIONS {bfs: true, uniqueVertices: "global"}
+              FILTER IS_SAME_COLLECTION(UnitTestsAhuacatlVertex2, v) RETURN v._id)
+            LET neighbors = INTERSECTION(n1, n2)
+            FILTER LENGTH(neighbors) > 0
+            SORT left._id, right._id
+            RETURN {left: left._id, right: right._id, neighbors: neighbors}
+        `;
+      var actual = getQueryResults(query);
 
       assertEqual(actual.length, 3, "Expect one result for each pair of vertices sharing neighbors");
       assertEqual(actual[0].left, vertexIds.v2);
@@ -1005,20 +1025,6 @@ function ahuacatlQueryGeneralCommonTestSuite() {
       assertEqual(actual[2].left, vertexIds.v3);
       assertEqual(actual[2].right, vertexIds.v2);
       assertEqual(actual[2].neighbors.sort(), [vertexIds.v8].sort());
-
-      /* Legacy
-      assertEqual(Object.keys(actual[0])[0], "UnitTestsAhuacatlVertex1/v3");
-      assertEqual(Object.keys(actual[0][Object.keys(actual[0])[0]]).sort(), ["UnitTestsAhuacatlVertex1/v1", "UnitTestsAhuacatlVertex1/v2"]);
-
-      assertEqual(actual[0][Object.keys(actual[0])[0]]["UnitTestsAhuacatlVertex1/v1"].length, 1);
-      assertEqual(actual[0][Object.keys(actual[0])[0]]["UnitTestsAhuacatlVertex1/v2"].length, 1);
-
-      assertEqual(Object.keys(actual[1])[0], "UnitTestsAhuacatlVertex1/v2");
-      assertEqual(Object.keys(actual[1][Object.keys(actual[1])[0]]).sort(), ["UnitTestsAhuacatlVertex2/v7"]);
-
-      assertEqual(actual[1][Object.keys(actual[1])[0]]["UnitTestsAhuacatlVertex2/v7"].length, 1);
-      */
-
     },
 
     ////////////////////////////////////////////////////////////////////////////////
