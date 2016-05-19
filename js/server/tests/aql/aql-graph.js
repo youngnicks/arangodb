@@ -614,7 +614,6 @@ function ahuacatlQueryNeighborsTestSuite () {
       var v6 = "UnitTestsAhuacatlVertex/v6";
       var v7 = "UnitTestsAhuacatlVertex/v7";
       var createQuery = function (start, filter) {
-        require("internal").print(`FOR n, e IN OUTBOUND "${start}" UnitTestsAhuacatlEdge ${filter} SORT n._id RETURN n._id`);
         return `FOR n, e IN OUTBOUND "${start}" UnitTestsAhuacatlEdge ${filter} SORT n._id RETURN n._id`;
       };
 
@@ -1742,7 +1741,6 @@ function ahuacatlQueryShortestpathErrorsSuite () {
 
 jsunity.run(ahuacatlQueryEdgesTestSuite);
 jsunity.run(ahuacatlQueryNeighborsTestSuite);
-jsunity.run(ahuacatlQueryPathsTestSuite);
 jsunity.run(ahuacatlQueryShortestPathTestSuite);
 jsunity.run(ahuacatlQueryTraversalFilterTestSuite);
 jsunity.run(ahuacatlQueryTraversalTestSuite);
