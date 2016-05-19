@@ -476,7 +476,7 @@ function ahuacatlQueryGeneralEdgesTestSuite() {
     },
 
     testNeighborsAnyEdgeExample: function () {
-      var query = `FOR v, e IN ANY @start GRAPH @name OPTIONS {uniqueVertices: "global", bfs: true}
+      var query = `FOR v, e IN ANY @start GRAPH @name
                    FILTER e.what == "v2->v1"
                    COLLECT id = v._id
                    SORT id RETURN id`;
@@ -955,10 +955,10 @@ function ahuacatlQueryGeneralCommonTestSuite() {
     testCommonNeighborsOut: function () {
       var query =  `
         FOR left IN ${startWithFilter("FILTER x.hugo == true")}
-          LET n1 = (FOR n IN 1..3 OUTBOUND left GRAPH 'bla3' RETURN n._id)
+          LET n1 = (FOR n IN 1..3 OUTBOUND left GRAPH 'bla3' RETURN DISTINCT n._id)
           FOR right IN ${startWithFilter("FILTER x.heinz == 1")}
             FILTER left != right
-            LET n2 = (FOR n IN 1..3 OUTBOUND right GRAPH 'bla3' RETURN n._id)
+            LET n2 = (FOR n IN 1..3 OUTBOUND right GRAPH 'bla3' RETURN DISTINCT n._id)
             LET neighbors = INTERSECTION(n1, n2)
             FILTER LENGTH(neighbors) > 0
             SORT left._id, right._id
