@@ -7274,89 +7274,6 @@ function AQL_GRAPH_VERTICES (graphName,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_common_properties
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_COMMON_PROPERTIES (graphName,
-                                      vertex1Examples,
-                                      vertex2Examples,
-                                      options) {
-  'use strict';
-
-  options = CLONE(options) || {};
-  options.fromVertexExample = vertex1Examples;
-  options.toVertexExample = vertex2Examples;
-  options.direction =  'any';
-  options.ignoreProperties = TO_LIST(options.ignoreProperties, true);
-  options.startVertexCollectionRestriction = options.vertex1CollectionRestriction;
-  options.endVertexCollectionRestriction = options.vertex2CollectionRestriction;
-
-  var g = RESOLVE_GRAPH_TO_FROM_VERTICES(graphName, options, "GRAPH_COMMON_PROPERTIES");
-  var g2 = RESOLVE_GRAPH_TO_TO_VERTICES(graphName, options, "GRAPH_COMMON_PROPERTIES");
-  var res = [];
-  var t = {};
-  g.forEach(function (n1) {
-    Object.keys(n1).forEach(function (key) {
-      if (key.indexOf("_") === 0 || options.ignoreProperties.indexOf(key) !== -1) {
-        return;
-      }
-      if (!t[JSON.stringify({key : key , value : n1[key]})]) {
-        t[JSON.stringify({key : key , value : n1[key]})] = {from : [], to : []};
-      }
-      t[JSON.stringify({key : key , value : n1[key]})].from.push(n1);
-    });
-  });
-
-  g2.forEach(function (n1) {
-    Object.keys(n1).forEach(function (key) {
-      if (key.indexOf("_") === 0) {
-        return;
-      }
-      if (!t[JSON.stringify({key : key , value : n1[key]})]) {
-        return;
-      }
-      t[JSON.stringify({key : key , value : n1[key]})].to.push(n1);
-    });
-  });
-
-  var tmp = {};
-  Object.keys(t).forEach(function (r) {
-    t[r].from.forEach(function (f) {
-      if (!tmp[f._id]) {
-        tmp[f._id] = [];
-        tmp[f._id + "|keys"] = [];
-      }
-      t[r].to.forEach(function (t) {
-        if (t._id === f._id) {
-          return;
-        }
-        if (tmp[f._id + "|keys"].indexOf(t._id) === -1) {
-          tmp[f._id + "|keys"].push(t._id);
-          var obj = {_id : t._id};
-          Object.keys(f).forEach(function (fromDoc) {
-            if (t[fromDoc] !== undefined && t[fromDoc] === f[fromDoc]) {
-              obj[fromDoc] = t[fromDoc];
-            }
-          });
-          tmp[f._id].push(obj);
-        }
-      });
-    });
-  });
-  Object.keys(tmp).forEach(function (r) {
-    if (tmp[r].length === 0 || r.indexOf("|keys") !== -1) {
-      return;
-    }
-    var a = {};
-    a[r] = tmp[r];
-    res.push(a);
-
-  });
-
-  return res;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief Prepares and executes a dijkstra search with predefined result object
 ///        The result object will be handed over in each traversal step
 ////////////////////////////////////////////////////////////////////////////////
@@ -7816,7 +7733,6 @@ exports.AQL_GRAPH_TRAVERSAL_TREE = AQL_GRAPH_TRAVERSAL_TREE;
 exports.AQL_GRAPH_VERTICES = AQL_GRAPH_VERTICES;
 exports.AQL_GRAPH_SHORTEST_PATH = AQL_GRAPH_SHORTEST_PATH;
 exports.AQL_GRAPH_DISTANCE_TO = AQL_GRAPH_DISTANCE_TO;
-exports.AQL_GRAPH_COMMON_PROPERTIES = AQL_GRAPH_COMMON_PROPERTIES;
 exports.AQL_GRAPH_ECCENTRICITY = AQL_GRAPH_ECCENTRICITY;
 exports.AQL_GRAPH_BETWEENNESS = AQL_GRAPH_BETWEENNESS;
 exports.AQL_GRAPH_CLOSENESS = AQL_GRAPH_CLOSENESS;

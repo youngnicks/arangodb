@@ -1037,11 +1037,22 @@ function ahuacatlQueryGeneralCommonTestSuite() {
     },
 
     ////////////////////////////////////////////////////////////////////////////////
-    /// @brief checks GRAPH_COMMON_PROPERTIES()
+    /// @brief checks common properties
     ////////////////////////////////////////////////////////////////////////////////
 
     testCommonProperties: function () {
-      var actual = getQueryResults("FOR v IN GRAPH_COMMON_PROPERTIES('bla3', { } , {},  {}) SORT  ATTRIBUTES(v)[0] RETURN v");
+      var query = `FOR left IN ${AQL_START_EVERYWHERE}
+                     SORT left._id
+                     RETURN ZIP([left._id], [(FOR right IN ${AQL_START_EVERYWHERE}
+                       FILTER left != right
+                       LET shared = (FOR a IN ATTRIBUTES(left) 
+                                       FILTER a == "_id"
+                                       OR left[a] == right[a]
+                                       RETURN a)
+                       FILTER LENGTH(shared) > 1
+                       RETURN KEEP(right, shared))]
+                     )`;
+      var actual = getQueryResults(query);
       assertEqual(actual[0]["UnitTestsAhuacatlVertex1/v1"].length, 1);
       assertEqual(actual[1]["UnitTestsAhuacatlVertex1/v2"].length, 1);
       assertEqual(actual[2]["UnitTestsAhuacatlVertex1/v3"].length, 1);
@@ -1057,14 +1068,39 @@ function ahuacatlQueryGeneralCommonTestSuite() {
     },
 
     testCommonPropertiesWithFilters: function () {
-      var actual = getQueryResults("FOR v IN GRAPH_COMMON_PROPERTIES('bla3', {ageing : true} , {harald : 'meier'},  {}) SORT  ATTRIBUTES(v)[0]  RETURN v");
+      var query = `FOR left IN ${AQL_START_EVERYWHERE}
+                     FILTER left.ageing == true
+                     SORT left._id
+                     RETURN ZIP([left._id], [(FOR right IN ${AQL_START_EVERYWHERE}
+                       FILTER left != right
+                       FILTER right.harald == "meier"
+                       LET shared = (FOR a IN ATTRIBUTES(left) 
+                                       FILTER a == "_id"
+                                       OR left[a] == right[a]
+                                       RETURN a)
+                       FILTER LENGTH(shared) > 1
+                       RETURN KEEP(right, shared))]
+                     )`;
+      var actual = getQueryResults(query);
       assertEqual(actual[0]["UnitTestsAhuacatlVertex2/v5"].length, 1);
       assertEqual(actual[1]["UnitTestsAhuacatlVertex2/v6"].length, 3);
 
     },
 
     testCommonPropertiesWithFiltersAndIgnoringKeyHarald: function () {
-      var actual = getQueryResults("FOR v IN GRAPH_COMMON_PROPERTIES('bla3', {} , {},  {ignoreProperties : 'harald'}) SORT  ATTRIBUTES(v)[0]  RETURN v");
+      var query = `FOR left IN ${AQL_START_EVERYWHERE}
+                     SORT left._id
+                     LET tmp = (FOR right IN ${AQL_START_EVERYWHERE}
+                       FILTER left != right
+                       LET shared = (FOR a IN ATTRIBUTES(left) 
+                                       FILTER a != "harald"
+                                       AND (a == "_id" OR left[a] == right[a])
+                                       RETURN a)
+                       FILTER LENGTH(shared) > 1
+                       RETURN KEEP(right, shared))
+                     FILTER LENGTH(tmp) > 0
+                     RETURN ZIP([left._id], [tmp])`;
+      var actual = getQueryResults(query);
 
       assertEqual(actual[0]["UnitTestsAhuacatlVertex1/v1"].length, 1);
       assertEqual(actual[1]["UnitTestsAhuacatlVertex1/v2"].length, 1);
@@ -2503,7 +2539,6 @@ function ahuacatlQueryMultiCollectionMadnessTestSuite() {
 jsunity.run(ahuacatlQueryGeneralCommonTestSuite);
 jsunity.run(ahuacatlQueryGeneralCyclesSuite);
 jsunity.run(ahuacatlQueryGeneralTraversalTestSuite);
-jsunity.run(ahuacatlQueryGeneralPathsTestSuite);
 jsunity.run(ahuacatlQueryGeneralEdgesTestSuite);
 jsunity.run(ahuacatlQueryMultiCollectionMadnessTestSuite);
 
