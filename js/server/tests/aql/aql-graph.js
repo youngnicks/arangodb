@@ -712,11 +712,12 @@ function ahuacatlQueryShortestPathTestSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     testShortestPathDijkstraOutbound : function () {
-      var config = {
-        _sort: true
-      };
-
-      var actual = getQueryResults("RETURN SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ")", { "@v" : vn, "@e" : en }); 
+      var query = `LET p = (FOR v, e IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/H" ${en} RETURN {v: v._id, e: e._id})
+                   LET edges = p[*].e
+                   LET vertices = p[*].v
+                   LET distance = LENGTH(edges)
+                   RETURN {edges, vertices, distance}`;
+      var actual = getQueryResults(query);
 
       assertEqual([
         {
@@ -743,13 +744,13 @@ function ahuacatlQueryShortestPathTestSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     testShortestPathDijkstraOutboundIncludeData : function () {
-      var config = {
-        _sort: true,
-        includeData: true
-      };
+      var query = `LET p = (FOR v, e IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/H" ${en} RETURN {v, e})
+                   LET edges = p[*].e
+                   LET vertices = p[*].v
+                   LET distance = LENGTH(edges)
+                   RETURN {edges, vertices, distance}`;
 
-      var actual = getQueryResults("RETURN SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ")", { "@v" : vn, "@e" : en }); 
-
+      var actual = getQueryResults(query);
       assertEqual(actual.length, 1);
       assertTrue(actual[0].hasOwnProperty("vertices"));
       assertTrue(actual[0].hasOwnProperty("edges"));
@@ -772,13 +773,8 @@ function ahuacatlQueryShortestPathTestSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     testShortestPathDijkstraInbound : function () {
-      var config = {
-        _sort: true
-      };
-
-      var actual = getQueryResults("RETURN SHORTEST_PATH(@@v, @@e, '" + vn + "/H', '" + vn + "/A', 'inbound', " + JSON.stringify(config) + ").vertices", { "@v" : vn, "@e" : en }); 
-
-      assertEqual([[ vn + "/H", vn + "/G", vn + "/E", vn + "/D", vn + "/A" ]], actual);
+      var query = `FOR v IN INBOUND SHORTEST_PATH "${vn}/H" TO "${vn}/A" ${en} RETURN v._id`;
+      assertEqual([ vn + "/H", vn + "/G", vn + "/E", vn + "/D", vn + "/A" ], actual);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -786,84 +782,7 @@ function ahuacatlQueryShortestPathTestSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     testShortestPathDijkstraDistance : function () {
-      aqlfunctions.register("UnitTests::distance", function (config, vertex1, vertex2, edge) { 
-        return edge.weight; 
-      }, false);
-
-      var config = {
-        distance: "UnitTests::distance",
-        includeData: true,
-        _sort: true
-      };
-
-      var actual = getQueryResults("LET p = SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ") FOR x IN p.vertices[*]._key RETURN x", { "@v" : vn, "@e" : en }); 
-      // var actual = getQueryResults("FOR p IN SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ") RETURN p.vertex._key", { "@v" : vn, "@e" : en }); 
-
-      assertEqual([ "A", "B", "C", "D", "E", "G", "H" ], actual);
-    },
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief shortest path with vertex filter function
-////////////////////////////////////////////////////////////////////////////////
-
-    testShortestPathDijkstraVertexFilter1 : function () {
-      aqlfunctions.register("UnitTests::distance", function (config, vertex) {
-        if (vertex._key === 'B' || vertex._key === 'C') {
-          return [ 'exclude', 'prune' ];
-        }
-      }, false);
-
-      var config = {
-        filterVertices: "UnitTests::distance",
-        includeData: true,
-        _sort: true
-      };
-
-      var actual = getQueryResults("LET p = SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ") FOR x IN p.vertices[*]._key RETURN x", { "@v" : vn, "@e" : en }); 
-      // var actual = getQueryResults("FOR p IN SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ") RETURN p.vertex._key", { "@v" : vn, "@e" : en }); 
-
-      assertEqual([ "A", "D", "E", "G", "H" ], actual);
-    },
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief shortest path with vertex filter function
-////////////////////////////////////////////////////////////////////////////////
-
-    testShortestPathDijkstraVertexFilter2 : function () {
-      aqlfunctions.register("UnitTests::distance", function () {
-        return [ 'exclude', 'prune' ];
-      }, false);
-
-      var config = {
-        filterVertices: "UnitTests::distance",
-        includeData: true,
-        _sort: true
-      };
-
-      var actual = getQueryResults("LET p = SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ") FOR x IN p.vertices[*]._key RETURN x", { "@v" : vn, "@e" : en }); 
-      // var actual = getQueryResults("FOR p IN SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ") RETURN p.vertex._key", { "@v" : vn, "@e" : en }); 
-
-      assertEqual([ ], actual);
-    },
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief shortest path with edge filter function
-////////////////////////////////////////////////////////////////////////////////
-
-    testShortestPathDijkstraEdgeFilter : function () {
-      aqlfunctions.register("UnitTests::distance", function (config, vertex, edge) {
-        return edge.weight <= 6;
-      }, false);
-
-      var config = {
-        followEdges: "UnitTests::distance",
-        includeData: true,
-        _sort: true
-      };
-
-      var actual = getQueryResults("LET p = SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ") FOR x IN p.vertices[*]._key RETURN x", { "@v" : vn, "@e" : en }); 
-      // var actual = getQueryResults("FOR p IN SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ") RETURN p.vertex._key", { "@v" : vn, "@e" : en }); 
-
+      var query = `FOR v IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/H" ${en} OPTIONS {distance: "weight"} RETURN v._key`;
       assertEqual([ "A", "B", "C", "D", "E", "G", "H" ], actual);
     },
 
@@ -878,29 +797,10 @@ function ahuacatlQueryShortestPathTestSuite () {
         edgeCollection.save(vn + "/" + l, vn + "/" + r, { _key: l + r, what : l + "->" + r });
       });
 
-      var config = {
-        _sort: true
-      };
+      var query = `FOR v IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/H" ${en} RETURN v._key`;
+      var actual = getQueryResults(query);
 
-      var actual = getQueryResults("RETURN SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/H', 'outbound', " + JSON.stringify(config) + ")", { "@v" : vn, "@e" : en }); 
-      assertEqual([
-        {
-          vertices: [
-            vn + "/A",
-            vn + "/D",
-            vn + "/E",
-            vn + "/G",
-            vn + "/H"
-          ],
-          edges: [
-            en + "/AD",
-            en + "/DE",
-            en + "/EG",
-            en + "/GH"
-          ],
-          distance: 4
-        }
-      ], actual);
+      assertEqual(["A","D","E","G","H"], actual);
     },
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -911,13 +811,10 @@ function ahuacatlQueryShortestPathTestSuite () {
       // this item is not connected to any other
       vertexCollection.save({ _key: "J", name: "J" });
 
-      var config = {
-        _sort: true
-      };
+      var query = `FOR v IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/J" ${en} RETURN v`;
+      var actual = getQueryResults(query);
 
-      var actual = getQueryResults("RETURN SHORTEST_PATH(@@v, @@e, '" + vn + "/A', '" + vn + "/J', 'outbound', " + JSON.stringify(config) + ")", { "@v" : vn, "@e" : en }); 
-
-      assertEqual([ null ], actual);
+      assertEqual([ ], actual);
     }
 
   };
@@ -1739,9 +1636,12 @@ function ahuacatlQueryShortestpathErrorsSuite () {
 /// @brief executes the test suite
 ////////////////////////////////////////////////////////////////////////////////
 
+/*
 jsunity.run(ahuacatlQueryEdgesTestSuite);
 jsunity.run(ahuacatlQueryNeighborsTestSuite);
+*/
 jsunity.run(ahuacatlQueryShortestPathTestSuite);
+/*
 jsunity.run(ahuacatlQueryTraversalFilterTestSuite);
 jsunity.run(ahuacatlQueryTraversalTestSuite);
 jsunity.run(ahuacatlQueryTraversalTreeTestSuite);
@@ -1749,5 +1649,6 @@ if (internal.debugCanUseFailAt() && ! cluster.isCluster()) {
   jsunity.run(ahuacatlQueryNeighborsErrorsSuite);
   jsunity.run(ahuacatlQueryShortestpathErrorsSuite);
 }
+*/
 return jsunity.done();
 

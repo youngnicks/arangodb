@@ -1139,6 +1139,27 @@ AstNode* Ast::createNodeTraversal(char const* vertexVarName,
   return node;
 }
 
+/// @brief create an AST shortest path node with only vertex variable
+AstNode* Ast::createNodeShortestPath(char const* vertexVarName,
+                                     size_t vertexVarLength, uint64_t direction,
+                                     AstNode const* start,
+                                     AstNode const* target,
+                                     AstNode const* graph,
+                                     AstNode const* options) {
+  THROW_ARANGO_EXCEPTION(TRI_ERROR_NOT_IMPLEMENTED);
+}
+
+/// @brief create an AST shortest path node with vertex and edge variable
+AstNode* Ast::createNodeShortestPath(
+    char const* vertexVarName, size_t vertexVarLength, char const* edgeVarName,
+    size_t edgeVarLength, uint64_t direction, AstNode const* start,
+    AstNode const* target, AstNode const* graph, AstNode const* options) {
+  THROW_ARANGO_EXCEPTION(TRI_ERROR_NOT_IMPLEMENTED);
+}
+
+
+
+
 /// @brief create an AST function call node
 AstNode* Ast::createNodeFunctionCall(char const* functionName,
                                      AstNode const* arguments) {

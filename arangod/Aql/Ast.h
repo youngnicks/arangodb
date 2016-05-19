@@ -336,6 +336,16 @@ class Ast {
                                char const*, size_t, AstNode const*,
                                AstNode const*, AstNode const*, AstNode const*);
 
+  /// @brief create an AST shortest path node with only vertex variable
+  AstNode* createNodeShortestPath(char const*, size_t, uint64_t, AstNode const*,
+                                  AstNode const*, AstNode const*,
+                                  AstNode const*);
+
+  /// @brief create an AST shortest path node with vertex and edge variable
+  AstNode* createNodeShortestPath(char const*, size_t, char const*, size_t,
+                                  uint64_t, AstNode const*, AstNode const*,
+                                  AstNode const*, AstNode const*);
+
   /// @brief create an AST function call node
   AstNode* createNodeFunctionCall(char const*, AstNode const*);
 
