@@ -3094,11 +3094,6 @@ function MeasurementsSuite() {
       assertEqual(a , 5);
     },
 
-    test_paths : function () {
-      var a = g._paths({maxLength : 2});
-      assertEqual(a[0].length , 28);
-    },
-
     test_shortestPaths : function () {
       var a = g._shortestPath([
         {first_name: 'Tim', age : 24},
