@@ -132,19 +132,14 @@
     },
 
     currentDatabase: function (callback) {
-      $.ajax({
-        type: "GET",
-        cache: false,
-        url: this.databaseUrl("/_api/database/current"),
-        contentType: "application/json",
-        processData: false,
-        success: function(data) {
-          callback(false, data.result.name);
-        },
-        error: function(data) {
-          callback(true, data);
-        }
-      });
+      if (frontendConfig.db) {
+        callback(false, frontendConfig.db);
+      }
+      else {
+        callback(true, undefined);
+      }
+      console.log(frontendConfig.db);
+      return frontendConfig.db;
     },
 
     allHotkeys: {
@@ -501,6 +496,7 @@
             }
           },
           error: function(data) {
+            console.log("error");
             if (callback) {
               callback(true, data);
             }
@@ -677,8 +673,8 @@
 
       if (!databaseName) {
         databaseName = '_system';
-        if (window.App && window.currentDB && window.currentDB.name) {
-          databaseName = window.App.currentDB.name;
+        if (frontendConfig.db) {
+          databaseName = frontendConfig.db;
         }
       }
       return this.backendUrl("/_db/" + encodeURIComponent(databaseName) + url);
