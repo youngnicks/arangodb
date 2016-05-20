@@ -37,9 +37,6 @@ class TraversalBlock : public ExecutionBlock {
 
   ~TraversalBlock();
 
-  /// @brief cleanup, here we clean up all internally generated values
-  void freeCaches();
-
   /// @brief initialize, here we fetch all docs from the database
   int initialize() override;
 
@@ -55,6 +52,10 @@ class TraversalBlock : public ExecutionBlock {
   size_t skipSome(size_t atLeast, size_t atMost) override final;
 
  private:
+
+  /// @brief cleanup, here we clean up all internally generated values
+  void freeCaches();
+
   /// @brief vertices buffer
   std::vector<arangodb::aql::AqlValue> _vertices;
 

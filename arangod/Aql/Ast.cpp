@@ -1068,7 +1068,7 @@ AstNode* Ast::createNodeTraversal(char const* vertexVarName,
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
   }
   AstNode* node = createNode(NODE_TYPE_TRAVERSAL);
-  node->reserve(3);
+  node->reserve(5);
 
   if (options == nullptr) {
     // no options given. now use default options
@@ -1146,7 +1146,31 @@ AstNode* Ast::createNodeShortestPath(char const* vertexVarName,
                                      AstNode const* target,
                                      AstNode const* graph,
                                      AstNode const* options) {
-  THROW_ARANGO_EXCEPTION(TRI_ERROR_NOT_IMPLEMENTED);
+  if (vertexVarName == nullptr) {
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+  }
+  AstNode* node = createNode(NODE_TYPE_SHORTEST_PATH);
+
+  node->reserve(6);
+
+  if (options == nullptr) {
+    // no options given. now use default options
+    options = &NopNode;
+  }
+  AstNode* dir = createNodeValueInt(direction);
+  node->addMember(dir);
+  node->addMember(start);
+  node->addMember(target);
+  node->addMember(graph);
+  node->addMember(options);
+
+  AstNode* vertexVar =
+      createNodeVariable(vertexVarName, vertexVarLength, false);
+  node->addMember(vertexVar);
+
+  TRI_ASSERT(node->numMembers() == 6);
+
+  return node;
 }
 
 /// @brief create an AST shortest path node with vertex and edge variable
@@ -1154,7 +1178,19 @@ AstNode* Ast::createNodeShortestPath(
     char const* vertexVarName, size_t vertexVarLength, char const* edgeVarName,
     size_t edgeVarLength, uint64_t direction, AstNode const* start,
     AstNode const* target, AstNode const* graph, AstNode const* options) {
-  THROW_ARANGO_EXCEPTION(TRI_ERROR_NOT_IMPLEMENTED);
+
+  if (edgeVarName == nullptr) {
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+  }
+
+  AstNode* node = createNodeShortestPath(vertexVarName, vertexVarLength, direction, start, target, graph, options);
+
+  AstNode* edgeVar = createNodeVariable(edgeVarName, edgeVarLength, false);
+  node->addMember(edgeVar);
+
+  TRI_ASSERT(node->numMembers() == 7);
+
+  return node;
 }
 
 

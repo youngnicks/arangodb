@@ -250,7 +250,7 @@ class TraversalNode : public ExecutionNode {
   /// @brief The directions edges are followed
   std::vector<TRI_edge_direction_e> _directions;
 
-  /// @brief the edge collection cid
+  /// @brief the edge collection names
   std::vector<std::string> _edgeColls;
 
   /// @brief our graph...

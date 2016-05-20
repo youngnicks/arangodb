@@ -142,6 +142,8 @@ add_executable(${BIN_ARANGOD}
   Aql/Range.cpp
   Aql/RestAqlHandler.cpp
   Aql/Scopes.cpp
+  Aql/ShortestPathBlock.cpp
+  Aql/ShortestPathNode.cpp
   Aql/ShortStringStorage.cpp
   Aql/SortBlock.cpp
   Aql/SortCondition.cpp

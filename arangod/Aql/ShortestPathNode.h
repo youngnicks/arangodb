@@ -1,0 +1,127 @@
+////////////////////////////////////////////////////////////////////////////////
+/// DISCLAIMER
+///
+/// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
+/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
+///
+/// Licensed under the Apache License, Version 2.0 (the "License");
+/// you may not use this file except in compliance with the License.
+/// You may obtain a copy of the License at
+///
+///     http://www.apache.org/licenses/LICENSE-2.0
+///
+/// Unless required by applicable law or agreed to in writing, software
+/// distributed under the License is distributed on an "AS IS" BASIS,
+/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+/// See the License for the specific language governing permissions and
+/// limitations under the License.
+///
+/// Copyright holder is ArangoDB GmbH, Cologne, Germany
+///
+/// @author Michael Hackstein
+////////////////////////////////////////////////////////////////////////////////
+
+#ifndef ARANGOD_AQL_SHORTEST_PATH_NODE_H
+#define ARANGOD_AQL_SHORTEST_PATH_NODE_H 1
+
+#include "Aql/ExecutionNode.h"
+#include "Aql/Graphs.h"
+#include "Aql/TraversalOptions.h"
+
+namespace arangodb {
+namespace aql {
+
+/// @brief class ShortestPathNode
+class ShortestPathNode : public ExecutionNode {
+  friend class ExecutionBlock;
+
+  /// @brief constructor with a vocbase and a collection name
+ public:
+  ShortestPathNode(ExecutionPlan* plan, size_t id, TRI_vocbase_t* vocbase,
+                uint64_t direction, AstNode const* start, AstNode const* target,
+                AstNode const* graph, TraversalOptions const& options);
+
+  ShortestPathNode(ExecutionPlan* plan, arangodb::basics::Json const& base);
+
+  ~ShortestPathNode() {}
+
+  /// @brief return the type of the node
+  NodeType getType() const override final { return SHORTEST_PATH; }
+
+  /// @brief export to VelocyPack
+  void toVelocyPackHelper(arangodb::velocypack::Builder&,
+                          bool) const override final;
+
+  /// @brief clone ExecutionNode recursively
+  ExecutionNode* clone(ExecutionPlan* plan, bool withDependencies,
+                       bool withProperties) const override final;
+
+  /// @brief the cost of a traversal node
+  double estimateCost(size_t&) const override final;
+
+  /// @brief Test if this node uses an in variable or constant
+  bool usesInVariable() const {
+    return (_inStartVariable != nullptr && _inTargetVariable != nullptr);
+  }
+
+  /// @brief return the vertex out variable
+  Variable const* vertexOutVariable() const { return _vertexOutVariable; }
+
+  /// @brief checks if the vertex out variable is used
+  bool usesVertexOutVariable() const { return _vertexOutVariable != nullptr; }
+
+  /// @brief set the vertex out variable
+  void setVertexOutput(Variable const* outVar) { _vertexOutVariable = outVar; }
+
+  /// @brief return the edge out variable
+  Variable const* edgeOutVariable() const { return _edgeOutVariable; }
+
+  /// @brief checks if the edge out variable is used
+  bool usesEdgeOutVariable() const { return _edgeOutVariable != nullptr; }
+
+  /// @brief set the edge out variable
+  void setEdgeOutput(Variable const* outVar) { _edgeOutVariable = outVar; }
+
+ private:
+
+  /// @brief the database
+  TRI_vocbase_t* _vocbase;
+
+  /// @brief vertex output variable
+  Variable const* _vertexOutVariable;
+
+  /// @brief vertex output variable
+  Variable const* _edgeOutVariable;
+
+  /// @brief input variable only used if _vertexId is unused
+  Variable* _inStartVariable;
+
+  /// @brief input vertexId only used if _inVariable is unused
+  std::string _startVertexId;
+
+  /// @brief input variable only used if _vertexId is unused
+  Variable* _inTargetVariable;
+
+  /// @brief input vertexId only used if _inVariable is unused
+  std::string _targetVertexId;
+
+  /// @brief input graphJson only used for serialisation & info
+  arangodb::basics::Json _graphJson;
+
+  /// @brief The directions edges are followed
+  std::vector<TRI_edge_direction_e> _directions;
+
+  /// @brief the edge collection names
+  std::vector<std::string> _edgeColls;
+
+  /// @brief our graph...
+  Graph const* _graphObj;
+
+  /// @brief Options for traversals
+  TraversalOptions _options;
+};
+
+} // namespace arangodb::aql
+} // namespace arangodb
+
+#endif

@@ -33,6 +33,7 @@
 #include "Aql/NodeFinder.h"
 #include "Aql/Optimizer.h"
 #include "Aql/Query.h"
+#include "Aql/ShortestPathNode.h"
 #include "Aql/SortNode.h"
 #include "Aql/TraversalNode.h"
 #include "Aql/TraversalOptions.h"
@@ -712,6 +713,74 @@ ExecutionNode* ExecutionPlan::fromNodeTraversal(ExecutionNode* previous,
   }
 
   ExecutionNode* en = registerNode(travNode);
+  TRI_ASSERT(en != nullptr);
+  return addDependency(previous, en);
+}
+
+AstNode const* ExecutionPlan::parseTraversalVertexNode(ExecutionNode* previous,
+                                                       AstNode const* vertex) {
+  if (vertex->type == NODE_TYPE_OBJECT && vertex->isConstant()) {
+    size_t n = vertex->numMembers();
+    for (size_t i = 0; i < n; ++i) {
+      auto member = vertex->getMember(i);
+      if (member->type == NODE_TYPE_OBJECT_ELEMENT &&
+          member->getString() == TRI_VOC_ATTRIBUTE_ID) {
+        vertex = member->getMember(0);
+        break;
+      }
+    }
+  }
+
+  if (vertex->type != NODE_TYPE_REFERENCE && vertex->type != NODE_TYPE_VALUE) {
+    // operand is some misc expression
+    auto calc = createTemporaryCalculation(vertex, previous);
+    vertex = _ast->createNodeReference(getOutVariable(calc));
+    previous = calc;
+  }
+
+  return vertex;
+}
+
+/// @brief create an execution plan element from an AST for SHORTEST_PATH node
+ExecutionNode* ExecutionPlan::fromNodeShortestPath(ExecutionNode* previous,
+                                                   AstNode const* node) {
+  TRI_ASSERT(node != nullptr && node->type == NODE_TYPE_SHORTEST_PATH);
+  TRI_ASSERT(node->numMembers() >= 6);
+  TRI_ASSERT(node->numMembers() <= 7);
+
+  // the first 4 members are used by shortest_path internally.
+  // The members 5-6, where 6 is optional, are used
+  // as out variables.
+  AstNode const* direction = node->getMember(0);
+  TRI_ASSERT(direction->isIntValue());
+  AstNode const* start = parseTraversalVertexNode(previous, node->getMember(1));
+  AstNode const* target = parseTraversalVertexNode(previous, node->getMember(2));
+  AstNode const* graph = node->getMember(3);
+
+  TraversalOptions options = CreateTraversalOptions(node->getMember(4));
+
+
+  // First create the node
+  auto spNode = new ShortestPathNode(this, nextId(), _ast->query()->vocbase(),
+                                     direction->getIntValue(), start, target,
+                                     graph, options);
+
+  auto variable = node->getMember(5);
+  TRI_ASSERT(variable->type == NODE_TYPE_VARIABLE);
+  auto v = static_cast<Variable*>(variable->getData());
+  TRI_ASSERT(v != nullptr);
+  spNode->setVertexOutput(v);
+
+  if (node->numMembers() > 6) {
+    // return the edge as well
+    variable = node->getMember(6);
+    TRI_ASSERT(variable->type == NODE_TYPE_VARIABLE);
+    v = static_cast<Variable*>(variable->getData());
+    TRI_ASSERT(v != nullptr);
+    spNode->setEdgeOutput(v);
+  }
+
+  ExecutionNode* en = registerNode(spNode);
   TRI_ASSERT(en != nullptr);
   return addDependency(previous, en);
 }
@@ -1454,6 +1523,11 @@ ExecutionNode* ExecutionPlan::fromNode(AstNode const* node) {
 
       case NODE_TYPE_TRAVERSAL: {
         en = fromNodeTraversal(en, member);
+        break;
+      }
+
+      case NODE_TYPE_SHORTEST_PATH: {
+        en = fromNodeShortestPath(en, member);
         break;
       }
 

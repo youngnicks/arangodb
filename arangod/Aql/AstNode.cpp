@@ -596,6 +596,7 @@ AstNode::AstNode(Ast* ast, arangodb::basics::Json const& json)
     case NODE_TYPE_ARRAY_LIMIT:
     case NODE_TYPE_DISTINCT:
     case NODE_TYPE_TRAVERSAL:
+    case NODE_TYPE_SHORTEST_PATH:
     case NODE_TYPE_DIRECTION:
     case NODE_TYPE_COLLECTION_LIST:
     case NODE_TYPE_OPERATOR_NARY_AND:
@@ -719,6 +720,7 @@ AstNode::AstNode(std::function<void(AstNode*)> registerNode,
     case NODE_TYPE_EXAMPLE:
     case NODE_TYPE_DISTINCT:
     case NODE_TYPE_TRAVERSAL:
+    case NODE_TYPE_SHORTEST_PATH:
     case NODE_TYPE_DIRECTION:
     case NODE_TYPE_COLLECTION_LIST:
     case NODE_TYPE_PASSTHRU:
@@ -2589,6 +2591,7 @@ void AstNode::findVariableAccess(
     case NODE_TYPE_PASSTHRU:
     case NODE_TYPE_DISTINCT:
     case NODE_TYPE_TRAVERSAL:
+    case NODE_TYPE_SHORTEST_PATH:
     case NODE_TYPE_COLLECTION_LIST:
     case NODE_TYPE_DIRECTION:
     case NODE_TYPE_WITH:
@@ -2758,6 +2761,7 @@ AstNode const* AstNode::findReference(AstNode const* findme) const {
     case NODE_TYPE_PASSTHRU:
     case NODE_TYPE_DISTINCT:
     case NODE_TYPE_TRAVERSAL:
+    case NODE_TYPE_SHORTEST_PATH:
     case NODE_TYPE_COLLECTION_LIST:
     case NODE_TYPE_DIRECTION:
     case NODE_TYPE_OPERATOR_NARY_AND:
