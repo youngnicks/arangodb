@@ -59,7 +59,7 @@ class ShortestPathBlock : public ExecutionBlock {
   /// SECTION private Functions
 
   /// @brief Compute the next shortest path
-  bool nextPath();
+  bool nextPath(AqlItemBlock const*);
 
   /// @brief Checks if we output the vertex
   bool usesVertexOutput() { return _vertexVar != nullptr; }

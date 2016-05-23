@@ -23,6 +23,7 @@
 
 #include "ShortestPathBlock.h"
 
+#include "Aql/ExecutionEngine.h"
 #include "Aql/ExecutionPlan.h"
 #include "Utils/AqlTransaction.h"
 
@@ -68,6 +69,7 @@ ShortestPathBlock::ShortestPathBlock(ExecutionEngine* engine,
   if (ep->usesEdgeOutVariable()) {
     _edgeVar = ep->edgeOutVariable();
   }
+  _path = std::make_unique<arangodb::traverser::ShortestPath>();
 }
 
 ShortestPathBlock::~ShortestPathBlock() {
@@ -104,8 +106,84 @@ int ShortestPathBlock::initializeCursor(AqlItemBlock* items, size_t pos) {
   return ExecutionBlock::initializeCursor(items, pos);
 }
 
-bool ShortestPathBlock::nextPath() {
-  // First set the starting points.
+bool ShortestPathBlock::nextPath(AqlItemBlock const* items) {
+  if (_usedConstant) {
+    // Both source and target are constant.
+    // Just one path to compute
+    return false;
+  }
+  _path->clear();
+  if (!_useStartRegister && !_useTargetRegister) {
+    // Both are constant, after this computation we are done
+    _usedConstant = true;
+  }
+  if (!_useStartRegister) {
+    auto pos = _startVertexId.find("/");
+    if (pos == std::string::npos) {
+      _engine->getQuery()->registerWarning(TRI_ERROR_BAD_PARAMETER,
+                                           "Invalid input for Shortest Path: "
+                                           "Only id strings or objects with "
+                                           "_id are allowed");
+    } else {
+      _opts.setStart(_startVertexId);
+    }
+  } else {
+    AqlValue const& in = items->getValueReference(_pos, _startReg);
+    if (in.isObject()) {
+      try {
+        std::string idString = _trx->extractIdString(in.slice());
+        _opts.setStart(idString);
+      }
+      catch (...) {
+        // _id or _key not present... ignore this error and fall through
+        // returning no path
+        return false;
+      }
+    } else if (in.isString()) {
+      _startVertexId = in.slice().copyString();
+      _opts.setStart(_startVertexId);
+    } else {
+      _engine->getQuery()->registerWarning(
+          TRI_ERROR_BAD_PARAMETER, "Invalid input for Shortest Path: Only "
+                                       "id strings or objects with _id are "
+                                       "allowed");
+    }
+
+  }
+
+  if (!_useTargetRegister) {
+    auto pos = _targetVertexId.find("/");
+    if (pos == std::string::npos) {
+      _engine->getQuery()->registerWarning(
+          TRI_ERROR_BAD_PARAMETER, "Invalid input for Shortest Path: "
+                                       "Only id strings or objects with "
+                                       "_id are allowed");
+    } else {
+      _opts.setEnd(_targetVertexId);
+    }
+  } else {
+    AqlValue const& in = items->getValueReference(_pos, _targetReg);
+    if (in.isObject()) {
+      try {
+        std::string idString = _trx->extractIdString(in.slice());
+        _opts.setEnd(idString);
+      }
+      catch (...) {
+        // _id or _key not present... ignore this error and fall through
+        // returning no path
+        return false;
+      }
+    } else if (in.isString()) {
+      _targetVertexId = in.slice().copyString();
+      _opts.setEnd(_targetVertexId);
+    } else {
+      _engine->getQuery()->registerWarning(
+          TRI_ERROR_BAD_PARAMETER, "Invalid input for Shortest Path: Only "
+                                       "id strings or objects with _id are "
+                                       "allowed");
+    }
+  }
+
   // Run Shortest Path Computation
   // if there is a path
     // Set Path and Length and posInPath = 0
@@ -113,8 +191,6 @@ bool ShortestPathBlock::nextPath() {
   // else
     // return false; 
 #warning TODO IMPLEMENT
-  // _opts.setStart();
-  // _opts.setEnd();
   bool hasPath = false;
   return hasPath;
 }
@@ -140,7 +216,7 @@ AqlItemBlock* ShortestPathBlock::getSome(size_t, size_t atMost) {
 
   // Collect the next path:
   if (_posInPath >= _pathLength) {
-    if (!nextPath()) {
+    if (!nextPath(cur)) {
       // This input does not have any path. maybe the next one has.
       // we can only return nullptr iff the buffer is empty.
       if (++_pos >= cur->size()) {

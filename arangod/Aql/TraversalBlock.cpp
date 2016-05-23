@@ -328,10 +328,10 @@ void TraversalBlock::initializePaths(AqlItemBlock const* items) {
       _usedConstant = true;
       auto pos = _vertexId.find("/");
       if (pos == std::string::npos) {
-        _engine->getQuery()->registerWarning(TRI_ERROR_BAD_PARAMETER,
-                                             "Invalid input for traversal: "
-                                             "Only id strings or objects with "
-                                             "_id are allowed");
+        _engine->getQuery()->registerWarning(
+            TRI_ERROR_BAD_PARAMETER, "Invalid input for traversal: "
+                                         "Only id strings or objects with "
+                                         "_id are allowed");
       } else {
         _traverser->setStartVertex(_vertexId);
       }
@@ -350,10 +350,10 @@ void TraversalBlock::initializePaths(AqlItemBlock const* items) {
       _vertexId = in.slice().copyString();
       _traverser->setStartVertex(_vertexId);
     } else {
-      _engine->getQuery()->registerWarning(TRI_ERROR_BAD_PARAMETER,
-                                           "Invalid input for traversal: Only "
-                                           "id strings or objects with _id are "
-                                           "allowed");
+      _engine->getQuery()->registerWarning(
+          TRI_ERROR_BAD_PARAMETER, "Invalid input for traversal: Only "
+                                       "id strings or objects with _id are "
+                                       "allowed");
     }
   }
   DEBUG_END_BLOCK();
