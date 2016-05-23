@@ -57,6 +57,31 @@ arangodb::traverser::VertexId arangodb::traverser::IdStringToVertexId(
   return VertexId(cid, const_cast<char*>(str + split + 1));
 }
 
+/// @brief Class Shortest Path
+
+
+/// @brief Clears the path
+void arangodb::traverser::ShortestPath::clear() {
+  _vertices.clear();
+  _edges.clear();
+}
+
+void arangodb::traverser::ShortestPath::edgeToVelocyPack(Transaction* trx, size_t position, VPackBuilder& builder) {
+  TRI_ASSERT(position < length());
+  if (position == 0) {
+    builder.add(basics::VelocyPackHelper::NullValue());
+  } else {
+    TRI_ASSERT(position - 1 < _edges.size());
+    builder.add(_edges[position - 1]);
+  }
+}
+
+void arangodb::traverser::ShortestPath::vertexToVelocyPack(Transaction* trx, size_t position, VPackBuilder& builder) {
+  TRI_ASSERT(position < length());
+#warning Check if we have ID or doc here
+  builder.add(_vertices[position]);
+}
+
 void arangodb::traverser::TraverserOptions::setCollections(
     std::vector<std::string> const& colls, TRI_edge_direction_e dir) {
   // We do not allow to reset the collections.

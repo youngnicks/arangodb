@@ -399,24 +399,9 @@ class PriorityQueue {
   std::vector<Value*> _history;
 };
 
-template <typename VertexId, typename EdgeId, typename EdgeWeight>
+template <typename VertexId, typename EdgeId, typename EdgeWeight, typename Path>
 class PathFinder {
  public:
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief Path, type for the result
-  //////////////////////////////////////////////////////////////////////////////
-
-  // Convention vertices.size() -1 === edges.size()
-  // path is vertices[0] , edges[0], vertices[1] etc.
-  struct Path {
-    std::deque<VertexId> vertices;
-    std::deque<EdgeId> edges;
-    EdgeWeight weight;
-
-    Path(std::deque<VertexId> const& vertices, std::deque<EdgeId> const& edges,
-         EdgeWeight weight)
-        : vertices(vertices), edges(edges), weight(weight) {}
-  };
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief Step, one position with a predecessor and the edge
@@ -807,11 +792,11 @@ class PathFinder {
   //////////////////////////////////////////////////////////////////////////////
 
   // Caller has to free the result
-  // nullptr indicates there is no path
-  Path* shortestPath(VertexId& start, VertexId& target) {
+  // If this returns true there is a path, if this returns false there is no
+  // path
+  bool shortestPath(VertexId& start, VertexId& target, Path& result) {
     // For the result:
-    std::deque<VertexId> r_vertices;
-    std::deque<EdgeId> r_edges;
+    result.clear();
     _highscoreSet = false;
     _highscore = 0;
     _bingo = false;
@@ -849,18 +834,18 @@ class PathFinder {
     }
 
     if (!_bingo || _intermediateSet == false) {
-      return nullptr;
+      return false;
     }
 
     Step* s = forward._pq.find(_intermediate);
-    r_vertices.emplace_back(_intermediate);
+    result._vertices.emplace_back(_intermediate);
 
     // FORWARD Go path back from intermediate -> start.
     // Insert all vertices and edges at front of vector
     // Do NOT! insert the intermediate vertex
     while (!s->_predecessor.isNone()) {
-      r_edges.push_front(s->_edge);
-      r_vertices.push_front(s->_predecessor);
+      result._edges.push_front(s->_edge);
+      result._vertices.push_front(s->_predecessor);
       s = forward._pq.find(s->_predecessor);
     }
 
@@ -869,7 +854,8 @@ class PathFinder {
     // Also insert the intermediate vertex
     s = backward._pq.find(_intermediate);
     while (!s->_predecessor.isNone()) {
-      r_vertices.emplace_back(s->_predecessor);
+      result._edges.emplace_back(s->_edge);
+      result._vertices.emplace_back(s->_predecessor);
       s = backward._pq.find(s->_predecessor);
     }
 
@@ -877,7 +863,7 @@ class PathFinder {
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
     }
 
-    return new Path(r_vertices, r_edges, _highscore);
+    return true;
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -886,12 +872,12 @@ class PathFinder {
   //////////////////////////////////////////////////////////////////////////////
 
   // Caller has to free the result
-  // nullptr indicates there is no path
+  // If this returns true there is a path, if this returns false there is no
+  // path
 
-  Path* shortestPathTwoThreads(VertexId& start, VertexId& target) {
+  bool shortestPathTwoThreads(VertexId& start, VertexId& target, Path& result) {
     // For the result:
-    std::deque<VertexId> r_vertices;
-    std::deque<EdgeId> r_edges;
+    result.clear();
     _highscoreSet = false;
     _highscore = 0;
     _bingo = false;
@@ -937,18 +923,18 @@ class PathFinder {
     }
 
     if (!_bingo || _intermediateSet == false) {
-      return nullptr;
+      return false;
     }
 
     Step* s = forward._pq.find(_intermediate);
-    r_vertices.emplace_back(_intermediate);
+    result._vertices.emplace_back(_intermediate);
 
     // FORWARD Go path back from intermediate -> start.
     // Insert all vertices and edges at front of vector
     // Do NOT! insert the intermediate vertex
     while (!s->_predecessor.isNone()) {
-      r_edges.push_front(s->_edge);
-      r_vertices.push_front(s->_predecessor);
+      result._edges.push_front(s->_edge);
+      result._vertices.push_front(s->_predecessor);
       s = forward._pq.find(s->_predecessor);
     }
 
@@ -957,8 +943,8 @@ class PathFinder {
     // Also insert the intermediate vertex
     s = backward._pq.find(_intermediate);
     while (!s->_predecessor.isNone()) {
-      r_edges.emplace_back(s->_edge);
-      r_vertices.emplace_back(s->_predecessor);
+      result._edges.emplace_back(s->_edge);
+      result._vertices.emplace_back(s->_predecessor);
       s = backward._pq.find(s->_predecessor);
     }
 
@@ -966,7 +952,7 @@ class PathFinder {
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
     }
 
-    return new Path(r_vertices, r_edges, _highscore);
+    return true;
   }
 
   /* Here is a proof for the correctness of this algorithm:
@@ -1228,23 +1214,10 @@ class PathEnumerator {
   }
 };
 
-template <typename VertexId, typename EdgeId, typename HashFuncType, typename EqualFuncType>
+template <typename VertexId, typename EdgeId, typename HashFuncType, typename EqualFuncType, typename Path>
 class ConstDistanceFinder {
  public:
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief Path, type for the result
-  //////////////////////////////////////////////////////////////////////////////
 
-  // Convention vertices.size() -1 === edges.size()
-  // path is vertices[0] , edges[0], vertices[1] etc.
-  // NOTE Do not forget to compute and set weight!
-  struct Path {
-    std::deque<VertexId> vertices;
-    std::deque<EdgeId> edges;
-    size_t weight;
-
-    Path() : weight(0) {}
-  };
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief callback to find neighbors
@@ -1284,12 +1257,12 @@ class ConstDistanceFinder {
     }
   }
 
-  Path* search(VertexId& start, VertexId& end) {
-    auto res = std::make_unique<Path>();
+  bool search(VertexId& start, VertexId& end, Path& result) {
+    result.clear();
     // Init
     if (start == end) {
-      res->vertices.emplace_back(start);
-      return res.release();
+      result._vertices.emplace_back(start);
+      return true;
     }
     _leftFound.emplace(start, nullptr);
     _rightFound.emplace(end, nullptr);
@@ -1316,27 +1289,27 @@ class ConstDistanceFinder {
               auto leftFoundIt = _leftFound.emplace(n, new PathSnippet(v, edges.at(i))).first;
               auto rightFoundIt = _rightFound.find(n);
               if (rightFoundIt != _rightFound.end()) {
-                res->vertices.emplace_back(n);
+                result._vertices.emplace_back(n);
                 auto it = leftFoundIt;
                 VertexId next;
                 while (it->second != nullptr) {
                   next = it->second->_pred;
-                  res->vertices.push_front(next);
-                  res->edges.push_front(it->second->_path);
+                  result._vertices.push_front(next);
+                  result._edges.push_front(it->second->_path);
                   it = _leftFound.find(next);
                 }
                 it = rightFoundIt;
                 while (it->second != nullptr) {
                   next = it->second->_pred;
-                  res->vertices.emplace_back(next);
-                  res->edges.emplace_back(it->second->_path);
+                  result._vertices.emplace_back(next);
+                  result._edges.emplace_back(it->second->_path);
                   it = _rightFound.find(next);
                 }
-                res->weight = res->edges.size();
+
                 TRI_IF_FAILURE("TraversalOOMPath") {
                   THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
                 }
-                return res.release();
+                return true;
               }
               _nextClosure.emplace_back(n);
             }
@@ -1353,28 +1326,27 @@ class ConstDistanceFinder {
               auto rightFoundIt = _rightFound.emplace(n, new PathSnippet(v, edges.at(i))).first;
               auto leftFoundIt = _leftFound.find(n);
               if (leftFoundIt != _leftFound.end()) {
-                res->vertices.emplace_back(n);
+                result._vertices.emplace_back(n);
                 auto it = leftFoundIt;
                 VertexId next;
                 while (it->second != nullptr) {
                   next = it->second->_pred;
-                  res->vertices.push_front(next);
-                  res->edges.push_front(it->second->_path);
+                  result._vertices.push_front(next);
+                  result._edges.push_front(it->second->_path);
                   it = _leftFound.find(next);
                 }
                 it = rightFoundIt;
                 while (it->second != nullptr) {
                   next = it->second->_pred;
-                  res->vertices.emplace_back(next);
-                  res->edges.emplace_back(it->second->_path);
+                  result._vertices.emplace_back(next);
+                  result._edges.emplace_back(it->second->_path);
                   it = _rightFound.find(next);
                 }
-                res->weight = res->edges.size();
 
                 TRI_IF_FAILURE("TraversalOOMPath") {
                   THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
                 }
-                return res.release();
+                return true;
               }
               _nextClosure.emplace_back(n);
             }
@@ -1383,7 +1355,7 @@ class ConstDistanceFinder {
         _rightClosure = _nextClosure;
       }
     }
-    return nullptr;
+    return false;
   }
 };
 }

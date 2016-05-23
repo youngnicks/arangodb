@@ -122,6 +122,67 @@ class TraverserExpression {
   std::vector<std::string*> _stringRegister;
 };
 
+class ShortestPath {
+  friend class basics::PathFinder<arangodb::velocypack::Slice, arangodb::velocypack::Slice, size_t, ShortestPath>;
+  friend class basics::PathFinder<arangodb::velocypack::Slice,
+                                  arangodb::velocypack::Slice, double,
+                                  ShortestPath>;
+  friend class arangodb::basics::ConstDistanceFinder<
+      arangodb::velocypack::Slice, arangodb::velocypack::Slice,
+      arangodb::basics::VelocyPackHelper::VPackStringHash,
+      arangodb::basics::VelocyPackHelper::VPackStringEqual, ShortestPath>;
+
+ public:
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief Constructor. This is an abstract only class.
+  //////////////////////////////////////////////////////////////////////////////
+
+  ShortestPath() : _readDocuments(0) {}
+
+  ~ShortestPath() {
+  }
+
+  /// @brief Clears the path
+  void clear();
+
+  /// @brief Builds only the last edge pointing to the vertex at position as
+  /// VelocyPack
+
+  void edgeToVelocyPack(Transaction*, size_t, arangodb::velocypack::Builder&); 
+
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief Builds only the vertex at position as VelocyPack
+  //////////////////////////////////////////////////////////////////////////////
+
+  void vertexToVelocyPack(Transaction*, size_t, arangodb::velocypack::Builder&);
+
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief Gets the amount of read documents
+  //////////////////////////////////////////////////////////////////////////////
+
+  size_t getReadDocuments() const { return _readDocuments; }
+
+  /// @brief Gets the length of the path. (Number of vertices)
+
+  size_t length() {
+    return _vertices.size();
+  };
+
+ private:
+
+  /// @brief Count how many documents have been read
+  size_t _readDocuments;
+
+  // Convention _vertices.size() -1 === _edges.size()
+  // path is _vertices[0] , _edges[0], _vertices[1] etc.
+
+  /// @brief vertices
+  std::deque<arangodb::velocypack::Slice> _vertices;
+
+  /// @brief edges
+  std::deque<arangodb::velocypack::Slice> _edges;
+};
+
 class TraversalPath {
  public:
   //////////////////////////////////////////////////////////////////////////////

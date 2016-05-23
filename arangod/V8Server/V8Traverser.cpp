@@ -595,8 +595,9 @@ VPackSlice NeighborsOptions::getStart() const {
 /// @brief Wrapper for the shortest path computation
 ////////////////////////////////////////////////////////////////////////////////
 
-std::unique_ptr<ArangoDBPathFinder::Path> TRI_RunShortestPathSearch(
+bool TRI_RunShortestPathSearch(
     std::vector<EdgeCollectionInfo*> const& collectionInfos,
+    arangodb::traverser::ShortestPath& path,
     ShortestPathOptions& opts) {
   TRI_edge_direction_e forward;
   TRI_edge_direction_e backward;
@@ -650,28 +651,25 @@ std::unique_ptr<ArangoDBPathFinder::Path> TRI_RunShortestPathSearch(
 
   ArangoDBPathFinder pathFinder(forwardExpander, backwardExpander,
                                 opts.bidirectional);
-  std::unique_ptr<ArangoDBPathFinder::Path> path;
+
   // New trx api is not thread safe. Two threads only give little performance
   // gain. Maybe reactivate this in the future (MVCC).
   opts.multiThreaded = false;
   VPackSlice start = opts.getStart();
   VPackSlice end = opts.getEnd();
   if (opts.multiThreaded) {
-    path.reset(pathFinder.shortestPathTwoThreads(start, end));
-  } else {
-    path.reset(pathFinder.shortestPath(start, end));
+    return pathFinder.shortestPathTwoThreads(start, end, path);
   }
-  return path;
+  return pathFinder.shortestPath(start, end, path);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Wrapper for the shortest path computation
 ////////////////////////////////////////////////////////////////////////////////
 
-std::unique_ptr<ArangoDBConstDistancePathFinder::Path>
-TRI_RunSimpleShortestPathSearch(
+bool TRI_RunSimpleShortestPathSearch(
     std::vector<EdgeCollectionInfo*> const& collectionInfos,
-    arangodb::Transaction* trx,
+    arangodb::Transaction* trx, arangodb::traverser::ShortestPath& path,
     ShortestPathOptions& opts) {
   TRI_edge_direction_e forward;
   TRI_edge_direction_e backward;
@@ -694,9 +692,7 @@ TRI_RunSimpleShortestPathSearch(
   VPackSlice start = opts.getStart();
   VPackSlice end = opts.getEnd();
 
-  auto path = std::unique_ptr<ArangoDBConstDistancePathFinder::Path>(
-      pathFinder.search(start, end));
-  return path;
+  return pathFinder.search(start, end, path);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

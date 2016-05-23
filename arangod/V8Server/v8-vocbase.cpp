@@ -1765,17 +1765,17 @@ static ExplicitTransaction* BeginTransaction(
 static v8::Handle<v8::Value> PathIdsToV8(v8::Isolate* isolate,
                                          TRI_vocbase_t* vocbase,
                                          arangodb::Transaction* trx,
-                                         ArangoDBPathFinder::Path const& p,
+                                         ShortestPath const& p,
                                          bool& includeData) {
   v8::EscapableHandleScope scope(isolate);
   v8::Handle<v8::Object> result = v8::Object::New(isolate);
+  /*
 
-  uint32_t const vn = static_cast<uint32_t>(p.vertices.size());
+  uint32_t const vn = static_cast<uint32_t>(p.length());
   v8::Handle<v8::Array> vertices =
       v8::Array::New(isolate, static_cast<int>(vn));
 
-  uint32_t const en = static_cast<uint32_t>(p.edges.size());
-  v8::Handle<v8::Array> edges = v8::Array::New(isolate, static_cast<int>(en));
+  v8::Handle<v8::Array> edges = v8::Array::New(isolate, static_cast<int>(vn - 1));
 
   if (includeData) {
     for (uint32_t j = 0; j < vn; ++j) {
@@ -1800,51 +1800,7 @@ static v8::Handle<v8::Value> PathIdsToV8(v8::Isolate* isolate,
   result->Set(TRI_V8_STRING("edges"), edges);
   result->Set(TRI_V8_STRING("distance"),
               v8::Number::New(isolate, static_cast<double>(p.weight)));
-
-  return scope.Escape<v8::Value>(result);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Transforms an ConstDistanceFinder::Path to v8 json values
-////////////////////////////////////////////////////////////////////////////////
-
-static v8::Handle<v8::Value> PathIdsToV8(
-    v8::Isolate* isolate, TRI_vocbase_t* vocbase, arangodb::Transaction* trx,
-    ArangoDBConstDistancePathFinder::Path const& p, bool& includeData) {
-  v8::EscapableHandleScope scope(isolate);
-  v8::Handle<v8::Object> result = v8::Object::New(isolate);
-
-  uint32_t const vn = static_cast<uint32_t>(p.vertices.size());
-  v8::Handle<v8::Array> vertices =
-      v8::Array::New(isolate, static_cast<int>(vn));
-
-  uint32_t const en = static_cast<uint32_t>(p.edges.size());
-  v8::Handle<v8::Array> edges = v8::Array::New(isolate, static_cast<int>(en));
-
-  if (includeData) {
-    for (uint32_t j = 0; j < vn; ++j) {
-      vertices->Set(j, VertexIdToData(isolate, trx, p.vertices[j]));
-    }
-    for (uint32_t j = 0; j < en; ++j) {
-      VPackOptions resultOptions = VPackOptions::Defaults;
-      resultOptions.customTypeHandler =
-          trx->transactionContext()->orderCustomTypeHandler().get();
-      edges->Set(j, TRI_VPackToV8(isolate, p.edges[j], &resultOptions));
-    }
-  } else {
-    for (uint32_t j = 0; j < vn; ++j) {
-      vertices->Set(j, TRI_V8_STD_STRING(p.vertices[j].copyString()));
-    }
-    for (uint32_t j = 0; j < en; ++j) {
-      edges->Set(j, TRI_V8_STD_STRING(trx->extractIdString(p.edges[j])));
-    }
-  }
-
-  result->Set(TRI_V8_STRING("vertices"), vertices);
-  result->Set(TRI_V8_STRING("edges"), edges);
-  result->Set(TRI_V8_STRING("distance"),
-              v8::Number::New(isolate, static_cast<double>(p.weight)));
-
+ */ 
   return scope.Escape<v8::Value>(result);
 }
 
@@ -2113,58 +2069,41 @@ static void JS_QueryShortestPath(
     TRI_V8_THROW_EXCEPTION(e.code());
   }
 
+  ShortestPath path;
+  bool hasPath = false;
   if (opts.useVertexFilter || opts.useEdgeFilter || opts.useWeight) {
     // Compute the path
-    std::unique_ptr<ArangoDBPathFinder::Path> path;
 
     try {
-      path = TRI_RunShortestPathSearch(edgeCollectionInfos, opts);
+      hasPath = TRI_RunShortestPathSearch(edgeCollectionInfos, path, opts);
     } catch (Exception& e) {
       trx->finish(e.code());
       TRI_V8_THROW_EXCEPTION(e.code());
     }
 
-    // Lift the result to v8
-    if (path.get() == nullptr) {
-      v8::EscapableHandleScope scope(isolate);
-      trx->finish(res);
-      TRI_V8_RETURN(scope.Escape<v8::Value>(v8::Null(isolate)));
-    }
-
-    try {
-      auto result =
-          PathIdsToV8(isolate, vocbase, trx.get(), *path, includeData);
-      TRI_V8_RETURN(result);
-    } catch (Exception& e) {
-      TRI_V8_THROW_EXCEPTION(e.code());
-    }
   } else {
     // No Data reading required for this path. Use shortcuts.
     // Compute the path
-    std::unique_ptr<ArangoDBConstDistancePathFinder::Path> path;
-
     try {
-      path =
-          TRI_RunSimpleShortestPathSearch(edgeCollectionInfos, trx.get(), opts);
+      hasPath = TRI_RunSimpleShortestPathSearch(edgeCollectionInfos, trx.get(),
+                                                path, opts);
     } catch (Exception& e) {
       trx->finish(e.code());
       TRI_V8_THROW_EXCEPTION(e.code());
     }
-
-    // Lift the result to v8
-    if (path.get() == nullptr) {
-      v8::EscapableHandleScope scope(isolate);
-      trx->finish(res);
-      TRI_V8_RETURN(scope.Escape<v8::Value>(v8::Null(isolate)));
-    }
-
-    try {
-      auto result =
-          PathIdsToV8(isolate, vocbase, trx.get(), *path, includeData);
-      TRI_V8_RETURN(result);
-    } catch (Exception& e) {
-      TRI_V8_THROW_EXCEPTION(e.code());
-    }
+  }
+  // Lift the result to v8
+  if (!hasPath) {
+    v8::EscapableHandleScope scope(isolate);
+    trx->finish(res);
+    TRI_V8_RETURN(scope.Escape<v8::Value>(v8::Null(isolate)));
+  }
+  try {
+    auto result =
+        PathIdsToV8(isolate, vocbase, trx.get(), path, includeData);
+    TRI_V8_RETURN(result);
+  } catch (Exception& e) {
+    TRI_V8_THROW_EXCEPTION(e.code());
   }
   trx->finish(res);
   TRI_V8_TRY_CATCH_END

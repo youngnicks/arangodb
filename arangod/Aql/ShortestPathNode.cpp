@@ -82,6 +82,7 @@ ShortestPathNode::ShortestPathNode(ExecutionPlan* plan, size_t id,
       _inTargetVariable(nullptr),
       _graphObj(nullptr),
       _options(options) {
+
   TRI_ASSERT(_vocbase != nullptr);
   TRI_ASSERT(start != nullptr);
   TRI_ASSERT(target != nullptr);
@@ -173,6 +174,5 @@ ExecutionNode* ShortestPathNode::clone(ExecutionPlan*, bool, bool) const {
 
 #warning IMPLEMENT
 double ShortestPathNode::estimateCost(size_t&) const {
-  THROW_ARANGO_EXCEPTION(TRI_ERROR_ARANGO_ATTRIBUTE_PARSER_FAILED);
   return 0;
 }

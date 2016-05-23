@@ -263,7 +263,6 @@ ExecutionNode* ExecutionNode::fromJsonFactory(
       return new DistributeNode(plan, oneNode);
     case TRAVERSAL:
       return new TraversalNode(plan, oneNode);
-
     case SHORTEST_PATH:
       return new ShortestPathNode(plan, oneNode);
     case ILLEGAL: {

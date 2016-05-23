@@ -41,14 +41,15 @@ class Slice;
 /// @brief typedef the template instantiation of the PathFinder
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef arangodb::basics::PathFinder<arangodb::velocypack::Slice,
-                                     arangodb::velocypack::Slice,
-                                     double> ArangoDBPathFinder;
+typedef arangodb::basics::PathFinder<
+    arangodb::velocypack::Slice, arangodb::velocypack::Slice, double,
+    arangodb::traverser::ShortestPath> ArangoDBPathFinder;
 
 typedef arangodb::basics::ConstDistanceFinder<arangodb::velocypack::Slice,
                                               arangodb::velocypack::Slice,
                                               arangodb::basics::VelocyPackHelper::VPackStringHash, 
-                                              arangodb::basics::VelocyPackHelper::VPackStringEqual>
+                                              arangodb::basics::VelocyPackHelper::VPackStringEqual,
+                                              arangodb::traverser::ShortestPath>
     ArangoDBConstDistancePathFinder;
 
 namespace arangodb {
@@ -449,14 +450,14 @@ class EdgeCollectionInfo {
 /// @brief Wrapper for the shortest path computation
 ////////////////////////////////////////////////////////////////////////////////
 
-std::unique_ptr<ArangoDBPathFinder::Path> TRI_RunShortestPathSearch(
+bool TRI_RunShortestPathSearch(
     std::vector<EdgeCollectionInfo*> const& collectionInfos,
+    arangodb::traverser::ShortestPath& path,
     arangodb::traverser::ShortestPathOptions& opts);
 
-std::unique_ptr<ArangoDBConstDistancePathFinder::Path>
-TRI_RunSimpleShortestPathSearch(
+bool TRI_RunSimpleShortestPathSearch(
     std::vector<EdgeCollectionInfo*> const& collectionInfos,
-    arangodb::Transaction*,
+    arangodb::Transaction*, arangodb::traverser::ShortestPath& path,
     arangodb::traverser::ShortestPathOptions& opts);
 
 ////////////////////////////////////////////////////////////////////////////////

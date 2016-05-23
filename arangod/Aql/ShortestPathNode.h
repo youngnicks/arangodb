@@ -82,6 +82,20 @@ class ShortestPathNode : public ExecutionNode {
   /// @brief set the edge out variable
   void setEdgeOutput(Variable const* outVar) { _edgeOutVariable = outVar; }
 
+  /// @brief getVariablesSetHere
+  std::vector<Variable const*> getVariablesSetHere() const override final {
+    std::vector<Variable const*> vars;
+    if (_vertexOutVariable != nullptr) {
+      vars.emplace_back(_vertexOutVariable);
+    }
+    if (_edgeOutVariable != nullptr) {
+      vars.emplace_back(_edgeOutVariable);
+    }
+    return vars;
+  }
+
+
+
  private:
 
   /// @brief the database
