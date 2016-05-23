@@ -59,7 +59,7 @@ class ShortestPathBlock : public ExecutionBlock {
   /// SECTION private Functions
 
   /// @brief Compute the next shortest path
-  void nextPath();
+  bool nextPath();
 
   /// @brief Checks if we output the vertex
   bool usesVertexOutput() { return _vertexVar != nullptr; }
@@ -95,6 +95,35 @@ class ShortestPathBlock : public ExecutionBlock {
 
   /// @brief current computed path.
   std::unique_ptr<traverser::ShortestPath> _path;
+
+  /// @brief The information to get the starting point, when a register id is
+  /// used
+  arangodb::aql::RegisterId _startReg;
+
+  /// @brief Keep a copy of the start vertex id-string. Can be freed if this
+  /// start vertex is not in use any more.
+  std::string _startVertexId;
+
+  /// @brief Indicator if we use a register for start input variable.
+  ///        Invariant: _useStartRegister == true <=> _startReg != undefined
+  bool _useStartRegister;
+
+  /// @brief The information to get the starting point, when a register id is
+  /// used
+  arangodb::aql::RegisterId _targetReg;
+
+  /// @brief Keep a copy of the target vertex id-string. Can be freed if this
+  /// start vertex is not in use any more.
+  std::string _targetVertexId;
+
+  /// @brief Indicator if we use a register for target input variable.
+  ///        Invariant: _useTargetRegister == true <=> _targetReg != undefined
+  bool _useTargetRegister;
+
+  /// @brief Indicator if we have used both constant input parameter for
+  /// computation
+  ///        We use it to check if we are done with enumerating.
+  bool _usedConstant;
 
 };
 

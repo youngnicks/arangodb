@@ -42,10 +42,12 @@ TraversalBlock::TraversalBlock(ExecutionEngine* engine, TraversalNode const* ep)
       _posInPaths(0),
       _useRegister(false),
       _usedConstant(false),
+      _vertexVar(nullptr),
+      _edgeVar(nullptr),
+      _pathVar(nullptr),
       _vertexReg(0),
       _edgeReg(0),
       _pathReg(0),
-      _resolver(nullptr),
       _expressions(ep->expressions()),
       _hasV8Expression(false) {
   arangodb::traverser::TraverserOptions opts(_trx);
@@ -82,8 +84,6 @@ TraversalBlock::TraversalBlock(ExecutionEngine* engine, TraversalNode const* ep)
     }
   }
 
-  _resolver = new CollectionNameResolver(_trx->vocbase());
-
   if (arangodb::ServerState::instance()->isCoordinator()) {
     _traverser.reset(new arangodb::traverser::ClusterTraverser(
         ep->edgeColls(), opts,
@@ -101,9 +101,6 @@ TraversalBlock::TraversalBlock(ExecutionEngine* engine, TraversalNode const* ep)
     _reg = it->second.registerId;
     _useRegister = true;
   }
-  _vertexVar = nullptr;
-  _edgeVar = nullptr;
-  _pathVar = nullptr;
   if (ep->usesVertexOutVariable()) {
     _vertexVar = ep->vertexOutVariable();
   }
@@ -118,7 +115,6 @@ TraversalBlock::TraversalBlock(ExecutionEngine* engine, TraversalNode const* ep)
 }
 
 TraversalBlock::~TraversalBlock() {
-  delete _resolver;
   freeCaches();
 }
 

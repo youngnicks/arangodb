@@ -106,9 +106,6 @@ class TraversalBlock : public ExecutionBlock {
   /// @brief Register for the full path output
   RegisterId _pathReg;
 
-  /// @brief A collection name resolver required to identify vertex collections
-  arangodb::CollectionNameResolver* _resolver;
-
   /// @brief reference to the conditions that might be executed locally
   std::unordered_map<
       size_t, std::vector<arangodb::traverser::TraverserExpression*>> const*

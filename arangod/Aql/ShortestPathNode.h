@@ -59,10 +59,25 @@ class ShortestPathNode : public ExecutionNode {
   /// @brief the cost of a traversal node
   double estimateCost(size_t&) const override final;
 
-  /// @brief Test if this node uses an in variable or constant
-  bool usesInVariable() const {
-    return (_inStartVariable != nullptr && _inTargetVariable != nullptr);
+  /// @brief Test if this node uses an in variable or constant for start
+  bool usesStartInVariable() const {
+    return _inStartVariable != nullptr;
   }
+
+  /// @brief return the start variable
+  Variable const* startInVariable() const { return _inStartVariable; }
+
+  std::string const getStartVertex() const { return _startVertexId; }
+
+  /// @brief Test if this node uses an in variable or constant for target
+  bool usesTargetInVariable() const {
+    return _inTargetVariable != nullptr;
+  }
+
+  /// @brief return the target variable
+  Variable const* targetInVariable() const { return _inTargetVariable; }
+
+  std::string const getTargetVertex() const { return _targetVertexId; }
 
   /// @brief return the vertex out variable
   Variable const* vertexOutVariable() const { return _vertexOutVariable; }
