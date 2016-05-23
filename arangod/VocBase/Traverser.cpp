@@ -66,7 +66,7 @@ void arangodb::traverser::ShortestPath::clear() {
   _edges.clear();
 }
 
-void arangodb::traverser::ShortestPath::edgeToVelocyPack(Transaction* trx, size_t position, VPackBuilder& builder) {
+void arangodb::traverser::ShortestPath::edgeToVelocyPack(Transaction*, size_t position, VPackBuilder& builder) {
   TRI_ASSERT(position < length());
   if (position == 0) {
     builder.add(basics::VelocyPackHelper::NullValue());
@@ -78,8 +78,17 @@ void arangodb::traverser::ShortestPath::edgeToVelocyPack(Transaction* trx, size_
 
 void arangodb::traverser::ShortestPath::vertexToVelocyPack(Transaction* trx, size_t position, VPackBuilder& builder) {
   TRI_ASSERT(position < length());
-#warning Check if we have ID or doc here
-  builder.add(_vertices[position]);
+  VPackSlice v = _vertices[position];
+  TRI_ASSERT(v.isString());
+  std::string collection =  v.copyString();
+  size_t p = collection.find("/");
+  TRI_ASSERT(p != std::string::npos);
+  collection = collection.substr(0, p);
+  int res = trx->documentFastPath(collection, v, builder);
+  if (res != TRI_ERROR_NO_ERROR) {
+    builder.clear(); // Just in case...
+    builder.add(basics::VelocyPackHelper::NullValue());
+  }
 }
 
 void arangodb::traverser::TraverserOptions::setCollections(

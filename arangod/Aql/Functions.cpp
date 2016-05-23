@@ -2007,8 +2007,8 @@ AqlValue Functions::Neighbors(arangodb::aql::Query* query,
   // Function to return constant distance
   auto wc = [](VPackSlice) -> double { return 1; };
 
-  auto eci = std::make_unique<EdgeCollectionInfo>(
-      trx, eColName, wc);
+  auto eci =
+      std::make_unique<EdgeCollectionInfo>(trx, eColName, opts.direction, wc);
   TRI_IF_FAILURE("EdgeCollectionInfoOOM1") {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }

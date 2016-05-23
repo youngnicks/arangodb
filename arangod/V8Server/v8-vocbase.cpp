@@ -1939,6 +1939,7 @@ static void JS_QueryShortestPath(
   bool includeData = false;
   v8::Handle<v8::Object> edgeExample;
   v8::Handle<v8::Object> vertexExample;
+  TRI_edge_direction_e direction = TRI_EDGE_OUT;
   if (args.Length() == 5) {
     if (!args[4]->IsObject()) {
       TRI_V8_THROW_TYPE_ERROR("expecting json for <options>");
@@ -1948,9 +1949,14 @@ static void JS_QueryShortestPath(
     // Parse direction
     v8::Local<v8::String> keyDirection = TRI_V8_ASCII_STRING("direction");
     if (options->Has(keyDirection)) {
-      opts.direction = TRI_ObjectToString(options->Get(keyDirection));
-      if (opts.direction != "outbound" && opts.direction != "inbound" &&
-          opts.direction != "any") {
+      std::string dir = TRI_ObjectToString(options->Get(keyDirection));
+      if (dir == "outbound") {
+        direction = TRI_EDGE_OUT;
+      } else if (dir == "inbound") {
+        direction = TRI_EDGE_IN;
+      } else if (dir == "any") {
+        direction = TRI_EDGE_ANY;
+      } else {
         TRI_V8_THROW_TYPE_ERROR(
             "expecting direction to be 'outbound', 'inbound' or 'any'");
       }
@@ -2018,14 +2024,18 @@ static void JS_QueryShortestPath(
 
   if (opts.useWeight) {
     for (auto const& it : edgeCollectionNames) {
-      edgeCollectionInfos.emplace_back(new EdgeCollectionInfo(
-          trx.get(), it,
-          AttributeWeightCalculator(opts.weightAttribute, opts.defaultWeight)));
+      auto info = std::make_unique<EdgeCollectionInfo>(
+          trx.get(), it, direction,
+          AttributeWeightCalculator(opts.weightAttribute, opts.defaultWeight));
+      edgeCollectionInfos.emplace_back(info.get());
+      info.release();
     }
   } else {
     for (auto const& it : edgeCollectionNames) {
-      edgeCollectionInfos.emplace_back(
-          new EdgeCollectionInfo(trx.get(), it, HopWeightCalculator()));
+      auto info = std::make_unique<EdgeCollectionInfo>(
+          trx.get(), it, direction, HopWeightCalculator());
+      edgeCollectionInfos.emplace_back(info.get());
+      info.release();
     }
   }
 
@@ -2287,7 +2297,7 @@ static void JS_QueryNeighbors(v8::FunctionCallbackInfo<v8::Value> const& args) {
 
   for (auto const& it : edgeCollectionNames) {
     edgeCollectionInfos.emplace_back(
-        new EdgeCollectionInfo(trx.get(), it, HopWeightCalculator()));
+        new EdgeCollectionInfo(trx.get(), it, opts.direction, HopWeightCalculator()));
     TRI_IF_FAILURE("EdgeCollectionDitchOOM") {
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
     }

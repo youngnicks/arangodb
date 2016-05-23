@@ -1275,8 +1275,8 @@ int Transaction::documentFastPath(std::string const& collectionName,
                                   VPackSlice const value,
                                   VPackBuilder& result) {
   TRI_ASSERT(getStatus() == TRI_TRANSACTION_RUNNING);
-  if (!value.isObject()) {
-    // must provide a document object
+  if (!value.isObject() && !value.isString()) {
+    // must provide a document object or string
     THROW_ARANGO_EXCEPTION(TRI_ERROR_ARANGO_DOCUMENT_TYPE_INVALID);
   }
 

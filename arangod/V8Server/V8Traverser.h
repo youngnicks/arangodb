@@ -391,6 +391,7 @@ typedef std::function<double(arangodb::velocypack::Slice const)>
 ////////////////////////////////////////////////////////////////////////////////
 
 class EdgeCollectionInfo {
+
  private:
   //////////////////////////////////////////////////////////////////////////////
   /// @brief the underlying transaction
@@ -419,20 +420,28 @@ class EdgeCollectionInfo {
 
   WeightCalculatorFunction _weighter;
 
+  TRI_edge_direction_e _forwardDir;
+
+  TRI_edge_direction_e _backwardDir;
+
  public:
   EdgeCollectionInfo(arangodb::Transaction* trx,
                      std::string const& collectionName,
+                     TRI_edge_direction_e const direction,
                      WeightCalculatorFunction weighter);
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Get edges for the given direction and start vertex.
 ////////////////////////////////////////////////////////////////////////////////
 
-  std::shared_ptr<arangodb::OperationCursor> getEdges(
-      TRI_edge_direction_e direction, std::string const&);
+  std::shared_ptr<arangodb::OperationCursor> getEdges(std::string const&);
 
-  std::shared_ptr<arangodb::OperationCursor> getEdges(
-      TRI_edge_direction_e direction, VPackSlice const&);
+  std::shared_ptr<arangodb::OperationCursor> getEdges(VPackSlice const&);
+
+  std::shared_ptr<arangodb::OperationCursor> getReverseEdges(std::string const&);
+
+  std::shared_ptr<arangodb::OperationCursor> getReverseEdges(VPackSlice const&);
+
 
   double weightEdge(arangodb::velocypack::Slice const);
   

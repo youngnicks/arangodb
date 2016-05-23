@@ -29,6 +29,22 @@
 
 using namespace arangodb::aql;
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Define edge weight by the number of hops.
+///        Respectively 1 for any edge.
+////////////////////////////////////////////////////////////////////////////////
+
+class HopWeightCalculator {
+ public:
+  HopWeightCalculator(){};
+
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief Callable weight calculator for edge
+  //////////////////////////////////////////////////////////////////////////////
+
+  double operator()(VPackSlice const edge) { return 1; }
+};
+
 ShortestPathBlock::ShortestPathBlock(ExecutionEngine* engine,
                                      ShortestPathNode const* ep)
     : ExecutionBlock(engine, ep),
@@ -41,8 +57,20 @@ ShortestPathBlock::ShortestPathBlock(ExecutionEngine* engine,
       _useStartRegister(false),
       _useTargetRegister(false),
       _usedConstant(false) {
-// _opts.direction = ep->direction;
   // TODO COORDINATOR
+
+  size_t count = ep->_edgeColls.size();
+  TRI_ASSERT(ep->_directions.size());
+  _collectionInfos.reserve(count);
+
+  for (size_t j = 0; j < count; ++j) {
+    // TODO Different Weighter
+    auto info =
+        std::make_unique<EdgeCollectionInfo>(
+            _trx, ep->_edgeColls[j], ep->_directions[j], HopWeightCalculator());
+    _collectionInfos.emplace_back(info.get());
+    info.release();
+  }
 
   if (!ep->usesStartInVariable()) {
     _startVertexId = ep->getStartVertex();
@@ -184,14 +212,15 @@ bool ShortestPathBlock::nextPath(AqlItemBlock const* items) {
     }
   }
 
-  // Run Shortest Path Computation
-  // if there is a path
-    // Set Path and Length and posInPath = 0
-    // return true; 
-  // else
-    // return false; 
-#warning TODO IMPLEMENT
-  bool hasPath = false;
+  // TODO use different Path Finders directly, no wrapper
+  bool hasPath =
+      TRI_RunSimpleShortestPathSearch(_collectionInfos, _trx, *_path, _opts);
+
+  if (hasPath) {
+    _posInPath = 0;
+    _pathLength = _path->length();
+  }
+
   return hasPath;
 }
 

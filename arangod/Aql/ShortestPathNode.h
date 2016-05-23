@@ -34,6 +34,7 @@ namespace aql {
 /// @brief class ShortestPathNode
 class ShortestPathNode : public ExecutionNode {
   friend class ExecutionBlock;
+  friend class ShortestPathBlock;
 
   /// @brief constructor with a vocbase and a collection name
  public:
@@ -108,8 +109,6 @@ class ShortestPathNode : public ExecutionNode {
     }
     return vars;
   }
-
-
 
  private:
 

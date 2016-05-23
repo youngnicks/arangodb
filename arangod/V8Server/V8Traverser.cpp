@@ -114,22 +114,27 @@ struct BasicExpander {
  private:
   std::vector<EdgeCollectionInfo*> const _colls;
   arangodb::Transaction* _trx;
-  TRI_edge_direction_e _dir;
+  bool _isReverse;
   std::vector<TRI_doc_mptr_t*> _cursor;
 
  public:
   BasicExpander(std::vector<EdgeCollectionInfo*> const& colls,
-                arangodb::Transaction* trx, TRI_edge_direction_e dir)
+                arangodb::Transaction* trx, bool isReverse)
       : _colls(colls),
         _trx(trx),
-        _dir(dir) {}
+        _isReverse(isReverse) {}
 
   void operator()(VPackSlice const& v, std::vector<VPackSlice>& res_edges,
                   std::vector<VPackSlice>& neighbors) {
     for (auto const& edgeCollection : _colls) {
       _cursor.clear();
       TRI_ASSERT(edgeCollection != nullptr);
-      std::shared_ptr<OperationCursor> edgeCursor = edgeCollection->getEdges(_dir, v);
+      std::shared_ptr<OperationCursor> edgeCursor;
+      if (_isReverse) {
+        edgeCursor = edgeCollection->getReverseEdges(v);
+      } else {
+         edgeCursor = edgeCollection->getEdges(v);
+      }
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(_cursor, UINT64_MAX);
         for (auto const& mptr : _cursor) {
@@ -152,11 +157,26 @@ struct BasicExpander {
   }
 };
 
-
 EdgeCollectionInfo::EdgeCollectionInfo(arangodb::Transaction* trx,
                                        std::string const& collectionName,
+                                       TRI_edge_direction_e const direction,
                                        WeightCalculatorFunction weighter)
-    : _trx(trx), _collectionName(collectionName), _weighter(weighter) {
+    : _trx(trx),
+      _collectionName(collectionName),
+      _weighter(weighter),
+      _forwardDir(direction) {
+
+  switch (direction) {
+    case TRI_EDGE_OUT:
+      _backwardDir = TRI_EDGE_IN;
+      break;
+    case TRI_EDGE_IN:
+      _backwardDir = TRI_EDGE_OUT;
+      break;
+    case TRI_EDGE_ANY:
+      _backwardDir = TRI_EDGE_ANY;
+      break;
+  }
 
   trx->addCollectionAtRuntime(collectionName);
 
@@ -171,24 +191,40 @@ EdgeCollectionInfo::EdgeCollectionInfo(arangodb::Transaction* trx,
 ////////////////////////////////////////////////////////////////////////////////
 
 std::shared_ptr<OperationCursor> EdgeCollectionInfo::getEdges(
-    TRI_edge_direction_e direction, std::string const& vertexId) {
+    std::string const& vertexId) {
   _searchBuilder.clear();
-  EdgeIndex::buildSearchValue(direction, vertexId, _searchBuilder);
+  EdgeIndex::buildSearchValue(_forwardDir, vertexId, _searchBuilder);
   return _trx->indexScan(_collectionName,
                          arangodb::Transaction::CursorType::INDEX, _indexId,
                          _searchBuilder.slice(), 0, UINT64_MAX, 1000, false);
 }
 
 std::shared_ptr<OperationCursor> EdgeCollectionInfo::getEdges(
-    TRI_edge_direction_e direction, VPackSlice const& vertexId) {
+    VPackSlice const& vertexId) {
   _searchBuilder.clear();
-  EdgeIndex::buildSearchValue(direction, vertexId, _searchBuilder);
+  EdgeIndex::buildSearchValue(_forwardDir, vertexId, _searchBuilder);
   return _trx->indexScan(_collectionName,
                          arangodb::Transaction::CursorType::INDEX, _indexId,
                          _searchBuilder.slice(), 0, UINT64_MAX, 1000, false);
 }
 
+std::shared_ptr<OperationCursor> EdgeCollectionInfo::getReverseEdges(
+    std::string const& vertexId) {
+  _searchBuilder.clear();
+  EdgeIndex::buildSearchValue(_backwardDir, vertexId, _searchBuilder);
+  return _trx->indexScan(_collectionName,
+                         arangodb::Transaction::CursorType::INDEX, _indexId,
+                         _searchBuilder.slice(), 0, UINT64_MAX, 1000, false);
+}
 
+std::shared_ptr<OperationCursor> EdgeCollectionInfo::getReverseEdges(
+    VPackSlice const& vertexId) {
+  _searchBuilder.clear();
+  EdgeIndex::buildSearchValue(_backwardDir, vertexId, _searchBuilder);
+  return _trx->indexScan(_collectionName,
+                         arangodb::Transaction::CursorType::INDEX, _indexId,
+                         _searchBuilder.slice(), 0, UINT64_MAX, 1000, false);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Compute the weight of an edge
@@ -213,10 +249,10 @@ std::string const& EdgeCollectionInfo::getName() {
 
 class MultiCollectionEdgeExpander {
   //////////////////////////////////////////////////////////////////////////////
-  /// @brief Edge direction for this expander
+  /// @brief Defines if this expander follows the edges in reverse
   //////////////////////////////////////////////////////////////////////////////
 
-  TRI_edge_direction_e _direction;
+  bool _reverse;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief all info required for edge collection
@@ -238,11 +274,11 @@ class MultiCollectionEdgeExpander {
 
  public:
   MultiCollectionEdgeExpander(
-      TRI_edge_direction_e const& direction,
+      bool reverse,
       std::vector<EdgeCollectionInfo*> const& edgeCollections,
       std::function<bool(VPackSlice const)> isAllowed,
       std::function<bool(VPackSlice const&)> isAllowedVertex)
-      : _direction(direction),
+      : _reverse(reverse),
         _edgeCollections(edgeCollections),
         _isAllowed(isAllowed),
         _isAllowedVertex(isAllowedVertex) {}
@@ -250,10 +286,15 @@ class MultiCollectionEdgeExpander {
   void operator()(VPackSlice const& source,
                   std::vector<ArangoDBPathFinder::Step*>& result) {
     std::vector<TRI_doc_mptr_t*> cursor;
+    std::shared_ptr<OperationCursor> edgeCursor;
     for (auto const& edgeCollection : _edgeCollections) {
       TRI_ASSERT(edgeCollection != nullptr);
 
-      auto edgeCursor = edgeCollection->getEdges(_direction, source);
+      if (_reverse) {
+        edgeCursor = edgeCollection->getReverseEdges(source);
+      } else {
+        edgeCursor = edgeCollection->getEdges(source);
+      }
       std::unordered_map<VPackSlice, size_t> candidates;
 
       auto inserter = [&](VPackSlice const& s, VPackSlice const& t,
@@ -300,10 +341,10 @@ class MultiCollectionEdgeExpander {
 
 class SimpleEdgeExpander {
   //////////////////////////////////////////////////////////////////////////////
-  /// @brief The direction used for edges in this expander
+  /// @briefCheck if the edges in this expander should be followed reverse
   //////////////////////////////////////////////////////////////////////////////
 
-  TRI_edge_direction_e _direction;
+  bool _reverse;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief all info required for edge collection
@@ -314,9 +355,9 @@ class SimpleEdgeExpander {
   std::unordered_map<VPackSlice, size_t> _candidates;
 
  public:
-  SimpleEdgeExpander(TRI_edge_direction_e& direction,
+  SimpleEdgeExpander(bool reverse,
                      EdgeCollectionInfo* edgeCollection)
-      : _direction(direction), _edgeCollection(edgeCollection) {}
+      : _reverse(reverse), _edgeCollection(edgeCollection) {}
 
   void operator()(VPackSlice const& source,
                   std::vector<ArangoDBPathFinder::Step*>& result) {
@@ -341,7 +382,12 @@ class SimpleEdgeExpander {
       }
     };
 
-    auto edgeCursor = _edgeCollection->getEdges(_direction, source);
+    std::shared_ptr<OperationCursor> edgeCursor;
+    if (_reverse) {
+      edgeCursor = _edgeCollection->getReverseEdges(source);
+    } else {
+      edgeCursor = _edgeCollection->getEdges(source);
+    }
     auto opRes = std::make_shared<OperationResult>(TRI_ERROR_NO_ERROR);
     while (edgeCursor->hasMore()) {
       edgeCursor->getMore(opRes, UINT64_MAX, false);
@@ -705,7 +751,6 @@ static void InboundNeighbors(std::vector<EdgeCollectionInfo*> const& collectionI
                              std::unordered_set<VPackSlice, VPackStringHash, VPackStringEqual>& visited,
                              std::vector<VPackSlice>& distinct,
                              uint64_t depth = 1) {
-  TRI_edge_direction_e dir = TRI_EDGE_IN;
   std::vector<VPackSlice> nextDepth;
 
   std::vector<TRI_doc_mptr_t*> cursor;
@@ -714,7 +759,7 @@ static void InboundNeighbors(std::vector<EdgeCollectionInfo*> const& collectionI
 
     for (auto const& start : startVertices) {
       cursor.clear();
-      auto edgeCursor = col->getEdges(dir, start);
+      auto edgeCursor = col->getEdges(start);
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(cursor, UINT64_MAX);
         for (auto const& mptr : cursor) {
@@ -756,7 +801,6 @@ static void OutboundNeighbors(std::vector<EdgeCollectionInfo*> const& collection
                               std::unordered_set<VPackSlice, VPackStringHash, VPackStringEqual>& visited,
                               std::vector<VPackSlice>& distinct,
                               uint64_t depth = 1) {
-  TRI_edge_direction_e dir = TRI_EDGE_OUT;
   std::vector<VPackSlice> nextDepth;
   std::vector<TRI_doc_mptr_t*> cursor;
 
@@ -765,7 +809,7 @@ static void OutboundNeighbors(std::vector<EdgeCollectionInfo*> const& collection
 
     for (auto const& start : startVertices) {
       cursor.clear();
-      auto edgeCursor = col->getEdges(dir, start);
+      auto edgeCursor = col->getEdges(start);
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(cursor, UINT64_MAX);
         for (auto const& mptr : cursor) {
@@ -808,7 +852,6 @@ static void AnyNeighbors(std::vector<EdgeCollectionInfo*> const& collectionInfos
                          std::vector<VPackSlice>& distinct,
                          uint64_t depth = 1) {
 
-  TRI_edge_direction_e dir = TRI_EDGE_ANY;
   std::vector<VPackSlice> nextDepth;
   std::vector<TRI_doc_mptr_t*> cursor;
 
@@ -817,7 +860,7 @@ static void AnyNeighbors(std::vector<EdgeCollectionInfo*> const& collectionInfos
 
     for (auto const& start : startVertices) {
       cursor.clear();
-      auto edgeCursor = col->getEdges(dir, start);
+      auto edgeCursor = col->getEdges(start);
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(cursor, UINT64_MAX);
         for (auto const& mptr : cursor) {
