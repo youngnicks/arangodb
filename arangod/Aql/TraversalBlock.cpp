@@ -34,19 +34,16 @@
 
 using namespace arangodb::aql;
 
-using Json = arangodb::basics::Json;
-using VertexId = arangodb::traverser::VertexId;
-
 TraversalBlock::TraversalBlock(ExecutionEngine* engine, TraversalNode const* ep)
     : ExecutionBlock(engine, ep),
       _posInPaths(0),
       _useRegister(false),
       _usedConstant(false),
       _vertexVar(nullptr),
-      _edgeVar(nullptr),
-      _pathVar(nullptr),
       _vertexReg(0),
+      _edgeVar(nullptr),
       _edgeReg(0),
+      _pathVar(nullptr),
       _pathReg(0),
       _expressions(ep->expressions()),
       _hasV8Expression(false) {
