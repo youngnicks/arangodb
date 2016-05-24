@@ -796,10 +796,10 @@ function ahuacatlQueryGeneralCommonTestSuite() {
 
   var vertexIds = {};
 
-  var AQL_START_EVERYWHERE = `UNION((FOR x IN UnitTestsAhuacatlVertex1 RETURN x), (FOR x IN UnitTestsAhuacatlVertex2 RETURN x))`
+  var AQL_START_EVERYWHERE = `UNION((FOR x IN UnitTestsAhuacatlVertex1 RETURN x), (FOR x IN UnitTestsAhuacatlVertex2 RETURN x))`;
   var startWithFilter = function (filter) {
     return `UNION((FOR x IN UnitTestsAhuacatlVertex1 ${filter} RETURN x), (FOR x IN UnitTestsAhuacatlVertex2 ${filter} RETURN x))`;
-  }
+  };
 
   return {
 
@@ -953,7 +953,7 @@ function ahuacatlQueryGeneralCommonTestSuite() {
     ////////////////////////////////////////////////////////////////////////////////
 
     testCommonNeighborsOut: function () {
-      var query =  `
+      var query =`
         FOR left IN ${startWithFilter("FILTER x.hugo == true")}
           LET n1 = (FOR n IN 1..3 OUTBOUND left GRAPH 'bla3' RETURN DISTINCT n._id)
           FOR right IN ${startWithFilter("FILTER x.heinz == 1")}
@@ -1120,8 +1120,28 @@ function ahuacatlQueryGeneralCommonTestSuite() {
 ////////////////////////////////////////////////////////////////////////////////
 
 function ahuacatlQueryGeneralTraversalTestSuite() {
-
+  const v1 = "UnitTests_Berliner";
+  const v2 = "UnitTests_Hamburger";
+  const v3 = "UnitTests_Frankfurter";
+  const v4 = "UnitTests_Leipziger";
   var vertexIds = {};
+  const graphName = "werKenntWen";
+  const AQL_START_EVERYWHERE = `UNION(
+    (FOR x IN ${v1} RETURN x),
+    (FOR x IN ${v2} RETURN x),
+    (FOR x IN ${v3} RETURN x),
+    (FOR x IN ${v4} RETURN x)
+  )`;
+
+  var startWithFilter = function (filter) {
+    return `UNION(
+      (FOR x IN ${v1} ${filter} RETURN x),
+      (FOR x IN ${v2} ${filter} RETURN x),
+      (FOR x IN ${v3} ${filter} RETURN x),
+      (FOR x IN ${v4} ${filter} RETURN x)
+    )`;
+  };
+
 
   return {
 
@@ -1130,20 +1150,20 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
     ////////////////////////////////////////////////////////////////////////////////
 
     setUp: function () {
-      db._drop("UnitTests_Berliner");
-      db._drop("UnitTests_Hamburger");
-      db._drop("UnitTests_Frankfurter");
-      db._drop("UnitTests_Leipziger");
+      db._drop(v1);
+      db._drop(v2);
+      db._drop(v3);
+      db._drop(v4);
       db._drop("UnitTests_KenntAnderenBerliner");
       db._drop("UnitTests_KenntAnderen");
 
       var KenntAnderenBerliner = "UnitTests_KenntAnderenBerliner";
       var KenntAnderen = "UnitTests_KenntAnderen";
 
-      var Berlin = db._create("UnitTests_Berliner");
-      var Hamburg = db._create("UnitTests_Hamburger");
-      var Frankfurt = db._create("UnitTests_Frankfurter");
-      var Leipzig = db._create("UnitTests_Leipziger");
+      var Berlin = db._create(v1);
+      var Hamburg = db._create(v2);
+      var Frankfurt = db._create(v3);
+      var Leipzig = db._create(v4);
       db._createEdgeCollection(KenntAnderenBerliner);
       db._createEdgeCollection(KenntAnderen);
 
@@ -1164,16 +1184,16 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
       vertexIds.Gerda = Gerda._id;
 
       try {
-        db._collection("_graphs").remove("_graphs/werKenntWen");
+        db._collection("_graphs").remove(graphName);
       } catch (ignore) {
       }
       var g = graph._create(
-        "werKenntWen",
+        graphName,
         graph._edgeDefinitions(
-          graph._relation(KenntAnderenBerliner, "UnitTests_Berliner", "UnitTests_Berliner"),
+          graph._relation(KenntAnderenBerliner, v1, v1),
           graph._relation(KenntAnderen,
-            ["UnitTests_Hamburger", "UnitTests_Frankfurter", "UnitTests_Berliner", "UnitTests_Leipziger"],
-            ["UnitTests_Hamburger", "UnitTests_Frankfurter", "UnitTests_Berliner", "UnitTests_Leipziger"]
+            [v1, v2, v3, v4],
+            [v1, v2, v3, v4]
           )
         )
       );
@@ -1269,13 +1289,17 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
 
     },
 
-    testGRAPH_SHORTEST_PATH: function () {
+    testShortestPathWithGraphName: function () {
+      var query = `LET p = (FOR v, e IN OUTBOUND SHORTEST_PATH "${vertexIds.Caesar}" TO "${vertexIds.Emil}" GRAPH "${graphName}" RETURN {v: v._id, e: e._id})
+                         LET edges = (FOR e IN p[*].e FILTER e != null RETURN e)
+                         LET vertices = p[*].v
+                         LET distance = LENGTH(edges)
+                         RETURN {edges, vertices, distance}`;
+
       var actual;
 
       // Caesar -> Berta -> Gerda -> Dieter -> Emil
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', 'UnitTests_Hamburger/Caesar', " +
-        " 'UnitTests_Frankfurter/Emil', {direction : 'outbound', algorithm : 'Floyd-Warshall'}) " +
-        " RETURN p");
+      actual = getQueryResults(query);
       assertEqual(actual.length, 1, "Exactly one element is returned");
       var path = actual[0];
       assertTrue(path.hasOwnProperty("vertices"), "The path contains all vertices");
@@ -1286,9 +1310,16 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
       ], "The correct shortest path is using these vertices");
       assertEqual(path.distance, 4, "The distance is 1 per edge");
 
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', {}, " +
-        "{}, {direction : 'inbound', algorithm : 'Floyd-Warshall'}) SORT p.vertices[0], p.vertices[LENGTH(p.vertices) - 1] " +
-        "RETURN {vertices: p.vertices, distance: p.distance}");
+      query = `
+        FOR source in ${AQL_START_EVERYWHERE}
+          FOR target in ${AQL_START_EVERYWHERE}
+            FILTER source != target
+            LET vertices = (FOR v, e IN INBOUND SHORTEST_PATH source TO target GRAPH "${graphName}" RETURN v._id)
+            FILTER LENGTH(vertices) > 0
+            LET distance = LENGTH(vertices) - 1 
+            SORT source, target
+            RETURN {vertices, distance}`;
+      actual = getQueryResults(query);
       assertEqual(actual.length, 17, "For each pair that has a shortest path one entry is required");
       assertEqual(actual[0], {
         vertices: [vertexIds.Anton, vertexIds.Berta],
@@ -1359,82 +1390,14 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
         distance: 2
       });
 
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', {}, " +
-        "{}, {direction : 'inbound', algorithm : 'dijkstra'}) SORT p.vertices[0], p.vertices[LENGTH(p.vertices) - 1] " +
-        "RETURN {vertices: p.vertices, distance: p.distance}");
-      assertEqual(actual.length, 17, "For each pair that has a shortest path one entry is required");
-      assertEqual(actual[0], {
-        vertices: [vertexIds.Anton, vertexIds.Berta],
-        distance: 1
-      });
-      assertEqual(actual[1], {
-        vertices: [vertexIds.Anton, vertexIds.Caesar],
-        distance: 1
-      });
-      assertEqual(actual[2], {
-        vertices: [vertexIds.Berta, vertexIds.Caesar],
-        distance: 1
-      });
-      assertEqual(actual[3], {
-        vertices: [vertexIds.Emil,vertexIds.Dieter, vertexIds.Gerda, vertexIds.Berta],
-        distance: 3
-      });
-      assertEqual(actual[4], {
-        vertices: [vertexIds.Emil, vertexIds.Dieter, vertexIds.Gerda, vertexIds.Berta, vertexIds.Caesar],
-        distance: 4
-      });
-      assertEqual(actual[5], {
-        vertices: [vertexIds.Emil, vertexIds.Dieter],
-        distance: 1
-      });
-      assertEqual(actual[6], {
-        vertices: [vertexIds.Emil, vertexIds.Dieter, vertexIds.Gerda],
-        distance: 2
-      });
-      assertEqual(actual[7], {
-        vertices: [vertexIds.Fritz, vertexIds.Emil,vertexIds.Dieter, vertexIds.Gerda, vertexIds.Berta],
-        distance: 4
-      });
-      assertEqual(actual[8], {
-        vertices: [vertexIds.Fritz, vertexIds.Emil],
-        distance: 1
-      });
-      assertEqual(actual[9], {
-        vertices: [vertexIds.Fritz, vertexIds.Emil, vertexIds.Dieter, vertexIds.Gerda, vertexIds.Berta, vertexIds.Caesar],
-        distance: 5
-      });
-      assertEqual(actual[10], {
-        vertices: [vertexIds.Fritz, vertexIds.Emil, vertexIds.Dieter],
-        distance: 2
-      });
-      assertEqual(actual[11], {
-        vertices: [vertexIds.Fritz, vertexIds.Emil, vertexIds.Dieter, vertexIds.Gerda],
-        distance: 3
-      });
-      assertEqual(actual[12], {
-        vertices: [vertexIds.Dieter, vertexIds.Gerda, vertexIds.Berta],
-        distance: 2
-      });
-      assertEqual(actual[13], {
-        vertices: [vertexIds.Dieter, vertexIds.Gerda, vertexIds.Berta, vertexIds.Caesar],
-        distance: 3
-      });
-      assertEqual(actual[14], {
-        vertices: [vertexIds.Dieter, vertexIds.Gerda],
-        distance: 1
-      });
-      assertEqual(actual[15], {
-        vertices: [vertexIds.Gerda, vertexIds.Berta],
-        distance: 1
-      });
-      assertEqual(actual[16], {
-        vertices: [vertexIds.Gerda, vertexIds.Berta, vertexIds.Caesar],
-        distance: 2
-      });
-
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', {}, " +
-        "{_id: 'UnitTests_Berliner/Berta'}, {direction : 'inbound', algorithm : 'dijkstra'}) SORT p.vertices[0], p.vertices[LENGTH(p.vertices) - 1] " +
-        "RETURN {vertices: p.vertices, distance: p.distance}");
+      query = `FOR source IN ${AQL_START_EVERYWHERE}
+                FILTER source._id != "${vertexIds.Berta}"
+                LET vertices = (FOR v, e IN INBOUND SHORTEST_PATH source TO "${vertexIds.Berta}" GRAPH "${graphName}" RETURN v._id)
+                FILTER LENGTH(vertices) > 0
+                LET distance = LENGTH(vertices) - 1 
+                SORT source 
+                RETURN {vertices, distance}`;
+      actual = getQueryResults(query);
       assertEqual(actual.length, 5, "For each pair that has a shortest path one entry is required");
       assertEqual(actual[0], {
         vertices: [vertexIds.Anton, vertexIds.Berta],
@@ -1457,17 +1420,18 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
         distance: 1
       });
 
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', 'UnitTests_Hamburger/Caesar', " +
-        " 'UnitTests_Berliner/Anton', {direction : 'outbound',  weight: 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'}) RETURN p.vertices");
-      assertEqual(actual[0].length, 3);
+      query = `FOR v IN OUTBOUND SHORTEST_PATH "${vertexIds.Caesar}" TO "${vertexIds.Anton}" GRAPH "${graphName}" OPTIONS {weightAttribute: "entfernung", defaultWeight: 80} RETURN v._id`;
+      actual = getQueryResults(query);
+      assertEqual(actual.length, 3);
 
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', 'UnitTests_Hamburger/Caesar', " +
-        " 'UnitTests_Berliner/Anton', {direction : 'outbound', algorithm : 'Floyd-Warshall'}) RETURN p.vertices");
-      assertEqual(actual[0].length, 2);
+      query = `FOR v IN OUTBOUND SHORTEST_PATH "${vertexIds.Caesar}" TO "${vertexIds.Anton}" GRAPH "${graphName}" RETURN v._id`;
+      actual = getQueryResults(query);
+      assertEqual(actual.length, 2);
 
-      actual = getQueryResults("FOR e IN GRAPH_DISTANCE_TO('werKenntWen', 'UnitTests_Hamburger/Caesar',  'UnitTests_Frankfurter/Emil', " +
-        "{direction : 'outbound', weight: 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'}) " +
-        "RETURN e");
+      /*
+       COLLECT AGGREGATE does NOT work with non numeric values yet
+      query = `FOR v, e IN OUTBOUND SHORTEST_PATH "${vertexIds.Caesar}" TO "${vertexIds.Emil}" GRAPH "${graphName}" OPTIONS {weightAttribute: "entfernung", defaultWeight: 80} COLLECT AGGREGATE distance = SUM(e.entfernung) RETURN {vertex: "${vertexIds.Emil}", startVertex: "${vertexIds.Caesar}", distance: distance}`;
+      actual = getQueryResults(query);
       assertEqual(actual,
         [
           {
@@ -1477,52 +1441,47 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
           }
         ]
       );
+      */
     },
 
-    testGRAPH_SHORTEST_PATH_WITH_DIJKSTRA: function () {
-      var actual;
-
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', 'UnitTests_Hamburger/Caesar', " +
-        " 'UnitTests_Frankfurter/Emil', {direction : 'outbound', algorithm : 'dijkstra'}) RETURN p");
-
-      assertEqual(actual.length, 1, "Exactly one element is returned");
-      var path = actual[0];
-      assertTrue(path.hasOwnProperty("vertices"), "The path contains all vertices");
-      assertTrue(path.hasOwnProperty("edges"), "The path contains all edges");
-      assertTrue(path.hasOwnProperty("distance"), "The path contains the distance");
-      assertEqual(path.vertices, [
-        vertexIds.Caesar, vertexIds.Berta, vertexIds.Gerda, vertexIds.Dieter, vertexIds.Emil
-      ], "The correct shortest path is using these vertices");
-      assertEqual(path.distance, 4, "The distance is 1 per edge");
-
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', 'UnitTests_Hamburger/Caesar', " +
-        "'UnitTests_Berliner/Anton', {direction : 'outbound', algorithm : 'dijkstra'}) " +
-        "RETURN p.vertices");
-      assertEqual(actual[0].length, 2);
-
-      actual = getQueryResults("FOR p IN GRAPH_DISTANCE_TO('werKenntWen', 'UnitTests_Hamburger/Caesar',  'UnitTests_Frankfurter/Emil', " +
-        "{direction : 'outbound', weight: 'entfernung', defaultWeight : 80, algorithm : 'dijkstra'}) RETURN p");
-      assertEqual(actual,
-        [
-          {
-            vertex: vertexIds.Emil,
-            startVertex: vertexIds.Caesar,
-            distance: 830.1
+    testFindShortestShortestPath: function () {
+      var query = `
+        FOR target IN ${startWithFilter("FILTER x.gender == 'female'")}
+          LET p = (FOR v IN INBOUND SHORTEST_PATH "${vertexIds.Fritz}" TO target GRAPH "${graphName}" RETURN v._id)
+          LET l = LENGTH(p)
+          FILTER l > 0
+          SORT l
+          LIMIT 1
+          RETURN {
+            distance: l - 1,
+            vertices: p
           }
-        ]
-      );
-    },
-
-    testGRAPH_SHOTEST_PATH_with_stopAtFirstMatch: function () {
-      var actual;
-
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', 'UnitTests_Frankfurter/Fritz', " +
-        " {gender: 'female'}, {direction : 'inbound', stopAtFirstMatch: true}) RETURN p");
-
+      `;
+      var actual = getQueryResults(query);
       // Find only one match, ignore the second one.
       assertEqual(actual.length, 1);
       // Find the right match
       var path = actual[0];
+      assertEqual(path.distance, 3);
+      assertEqual(path.vertices, [
+        vertexIds.Fritz, vertexIds.Emil, vertexIds.Dieter, vertexIds.Gerda
+      ]);
+
+      // Alternative (identical, in some cases this is more performant, in others the first one is better)
+      query = `
+        FOR v, e, p IN 1..1000 INBOUND "${vertexIds.Fritz}" GRAPH "${graphName}" OPTIONS {bfs: true}
+          FILTER v.gender == "female"
+          LIMIT 1
+          RETURN {
+            distance: LENGTH(p.edges),
+            vertices: p.vertices[*]._id
+          }`;
+
+      actual = getQueryResults(query);
+      // Find only one match, ignore the second one.
+      assertEqual(actual.length, 1);
+      // Find the right match
+      path = actual[0];
       assertEqual(path.distance, 3);
       assertEqual(path.vertices, [
         vertexIds.Fritz, vertexIds.Emil, vertexIds.Dieter, vertexIds.Gerda
@@ -1756,12 +1715,21 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
       assertEqual(actual[0].toFixed(1), 830.3);
     },
 
-    testGRAPH_SHORTEST_PATHWithExamples: function () {
+    testShortestPathWithExamples: function () {
+      var query = `
+        FOR start IN ${startWithFilter("FILTER x.gender == 'female'")}
+          FOR target IN ${startWithFilter("FILTER x.gender == 'male' AND x.age == 30")}
+            FILTER start != target
+            SORT start._id, target._id
+            LET p = (FOR v, e IN ANY SHORTEST_PATH start TO target GRAPH "${graphName}" RETURN {v: v._id, e: e._id})
+            LET edges = (FOR e IN p[*].e FILTER e != null RETURN e)
+            LET vertices = p[*].v
+            LET distance = LENGTH(edges)
+            FILTER distance > 0
+            RETURN {edges, vertices, distance}`;
       var actual;
-
-      actual = getQueryResults("FOR e IN GRAPH_SHORTEST_PATH('werKenntWen', {gender : 'female'},  {gender : 'male', age : 30}, " +
-        "{direction : 'any', algorithm : 'Floyd-Warshall'}) SORT e.vertices[0], e.vertices[LENGTH(e.vertices) - 1] " +
-        "RETURN e");
+      actual = getQueryResults(query);
+      require("internal").print(actual);
       assertEqual(actual.length, 4, "All connected pairs should have one entry.");
       assertEqual(actual[0].vertices, [
         vertexIds.Berta, vertexIds.Gerda, vertexIds.Dieter, vertexIds.Emil, vertexIds.Fritz
@@ -1950,34 +1918,6 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
       assertEqual(actual[0].toFixed(1), 830.3);
     },
 
-    testGRAPH_SHORTEST_PATHWithExamples_WITH_DIJKSTRA: function () {
-      var actual;
-
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', {gender : 'female'},  {gender : 'male', age : 30}, " +
-        "{direction : 'any', algorithm : 'dijkstra'}) SORT p.vertices[0], p.vertices[LENGTH(p.vertices) - 1] " +
-        "RETURN p");
-      assertEqual(actual.length, 4, "All connected pairs should have one entry.");
-      assertEqual(actual[0].vertices, [
-        vertexIds.Berta, vertexIds.Gerda, vertexIds.Dieter, vertexIds.Emil, vertexIds.Fritz
-      ]);
-      assertEqual(actual[0].distance, 4);
-
-      assertEqual(actual[1].vertices, [
-        vertexIds.Berta, vertexIds.Caesar
-      ]);
-      assertEqual(actual[1].distance, 1);
-
-      assertEqual(actual[2].vertices, [
-        vertexIds.Gerda, vertexIds.Dieter, vertexIds.Emil, vertexIds.Fritz
-      ]);
-      assertEqual(actual[2].distance, 3);
-
-      assertEqual(actual[3].vertices, [
-        vertexIds.Gerda, vertexIds.Berta, vertexIds.Caesar
-      ]);
-      assertEqual(actual[3].distance, 2);
-    },
-
     testGRAPH_DISTANCE_TO_WithExamples_WITH_DIJKSTRA: function () {
       var actual;
       actual = getQueryResults("FOR p IN GRAPH_DISTANCE_TO('werKenntWen', {gender : 'female'},  {gender : 'male', age : 30}, " +
@@ -2016,7 +1956,19 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
 
 function ahuacatlQueryGeneralCyclesSuite() {
 
+  const v1 = "UnitTests_Berliner";
+  const v2 = "UnitTests_Hamburger";
+  const v3 = "UnitTests_Frankfurter";
+  const v4 = "UnitTests_Leipziger";
   var vertexIds = {};
+
+  const graphName = "werKenntWen";
+  const AQL_START_EVERYWHERE = `UNION(
+    (FOR x IN ${v1} RETURN x),
+    (FOR x IN ${v2} RETURN x),
+    (FOR x IN ${v3} RETURN x),
+    (FOR x IN ${v4} RETURN x)
+  )`;
 
   return {
 
@@ -2025,20 +1977,20 @@ function ahuacatlQueryGeneralCyclesSuite() {
     ////////////////////////////////////////////////////////////////////////////////
 
     setUp: function () {
-      db._drop("UnitTests_Berliner");
-      db._drop("UnitTests_Hamburger");
-      db._drop("UnitTests_Frankfurter");
-      db._drop("UnitTests_Leipziger");
+      db._drop(v1);
+      db._drop(v2);
+      db._drop(v3);
+      db._drop(v4);
       db._drop("UnitTests_KenntAnderenBerliner");
       db._drop("UnitTests_KenntAnderen");
 
       var KenntAnderenBerliner = "UnitTests_KenntAnderenBerliner";
       var KenntAnderen = "UnitTests_KenntAnderen";
 
-      var Berlin = db._create("UnitTests_Berliner");
-      var Hamburg = db._create("UnitTests_Hamburger");
-      var Frankfurt = db._create("UnitTests_Frankfurter");
-      var Leipzig = db._create("UnitTests_Leipziger");
+      var Berlin = db._create(v1);
+      var Hamburg = db._create(v2);
+      var Frankfurt = db._create(v3);
+      var Leipzig = db._create(v4);
       db._createEdgeCollection(KenntAnderenBerliner);
       db._createEdgeCollection(KenntAnderen);
 
@@ -2056,16 +2008,16 @@ function ahuacatlQueryGeneralCyclesSuite() {
       vertexIds.Fritz = Fritz._id;
 
       try {
-        db._collection("_graphs").remove("_graphs/werKenntWen");
+        db._collection("_graphs").remove(graphName);
       } catch (ignore) {
       }
       var g = graph._create(
-        "werKenntWen",
+        graphName,
         graph._edgeDefinitions(
-          graph._relation(KenntAnderenBerliner, "UnitTests_Berliner", "UnitTests_Berliner"),
+          graph._relation(KenntAnderenBerliner, v1, v1),
           graph._relation(KenntAnderen,
-            ["UnitTests_Hamburger", "UnitTests_Frankfurter", "UnitTests_Berliner", "UnitTests_Leipziger"],
-            ["UnitTests_Hamburger", "UnitTests_Frankfurter", "UnitTests_Berliner", "UnitTests_Leipziger"]
+            [v1, v2, v3, v4],
+            [v1, v2, v3, v4]
           )
         )
       );
@@ -2097,70 +2049,21 @@ function ahuacatlQueryGeneralCyclesSuite() {
     },
 
     ////////////////////////////////////////////////////////////////////////////////
-    /// @brief checks GRAPH_SHORTEST_PATH()
+    /// @brief checks shortest path with graph name
     ////////////////////////////////////////////////////////////////////////////////
 
-    testGRAPH_SHORTEST_PATH: function () {
+    testShortestPathWithGraphName: function () {
       var actual;
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', {}, " +
-        "{}, {direction : 'inbound', algorithm : 'Floyd-Warshall'}) SORT p.vertices[0], p.vertices[LENGTH(p.vertices) - 1] " +
-        "RETURN {vertices: p.vertices, distance: p.distance}");
-      assertEqual(actual.length, 12, "Expect one entry for every connected pair.");
-      assertEqual(actual[0], {
-        vertices: [vertexIds.Anton, vertexIds.Berta],
-        distance: 1
-      });
-      assertEqual(actual[1], {
-        vertices: [vertexIds.Anton, vertexIds.Berta, vertexIds.Caesar, vertexIds.Fritz],
-        distance: 3
-      });
-      assertEqual(actual[2], {
-        vertices: [vertexIds.Anton, vertexIds.Berta, vertexIds.Caesar],
-        distance: 2
-      });
-      assertEqual(actual[3], {
-        vertices: [vertexIds.Berta, vertexIds.Anton],
-        distance: 1
-      });
-      assertEqual(actual[4], {
-        vertices: [vertexIds.Berta, vertexIds.Caesar, vertexIds.Fritz],
-        distance: 2
-      });
-      assertEqual(actual[5], {
-        vertices: [vertexIds.Berta, vertexIds.Caesar],
-        distance: 1
-      });
-      assertEqual(actual[6], {
-        vertices: [vertexIds.Fritz, vertexIds.Anton],
-        distance: 1
-      });
-      assertEqual(actual[7], {
-        vertices: [vertexIds.Fritz, vertexIds.Anton, vertexIds.Berta],
-        distance: 2
-      });
-      assertEqual(actual[8], {
-        vertices: [vertexIds.Fritz, vertexIds.Anton, vertexIds.Berta, vertexIds.Caesar],
-        distance: 3
-      });
-      // we have two possible paths here.
-      assertEqual(actual[9].distance, 2);
-      assertEqual(actual[9].vertices[0], vertexIds.Caesar);
-      assertEqual(actual[9].vertices[2], vertexIds.Anton);
-      if (actual[9].vertices[1] !== vertexIds.Berta) {
-        assertEqual(actual[9].vertices[1], vertexIds.Fritz);
-      }
-      assertEqual(actual[10], {
-        vertices: [vertexIds.Caesar, vertexIds.Berta],
-        distance: 1
-      });
-      assertEqual(actual[11], {
-        vertices: [vertexIds.Caesar, vertexIds.Fritz],
-        distance: 1
-      });
-
-      actual = getQueryResults("FOR p IN GRAPH_SHORTEST_PATH('werKenntWen', {}, " +
-        "{}, {direction : 'inbound', algorithm : 'dijkstra'}) SORT p.vertices[0], p.vertices[LENGTH(p.vertices) - 1] " +
-        "RETURN {vertices: p.vertices, distance: p.distance}");
+      var query = `
+        FOR source in ${AQL_START_EVERYWHERE}
+          FOR target in ${AQL_START_EVERYWHERE}
+            FILTER source != target
+            LET vertices = (FOR v, e IN INBOUND SHORTEST_PATH source TO target GRAPH "${graphName}" RETURN v._id)
+            FILTER LENGTH(vertices) > 0
+            LET distance = LENGTH(vertices) - 1 
+            SORT source, target
+            RETURN {vertices, distance}`;
+      actual = getQueryResults(query);
       assertEqual(actual.length, 12, "Expect one entry for every connected pair.");
       assertEqual(actual[0], {
         vertices: [vertexIds.Anton, vertexIds.Berta],

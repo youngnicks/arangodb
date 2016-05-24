@@ -647,7 +647,7 @@ function ahuacatlQueryNeighborsTestSuite () {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief test suite for SHORTEST_PATH() function
+/// @brief test suite for SHORTEST_PATH 
 ////////////////////////////////////////////////////////////////////////////////
 
 function ahuacatlQueryShortestPathTestSuite () {
@@ -681,12 +681,6 @@ function ahuacatlQueryShortestPathTestSuite () {
         var w = item[2];
         edgeCollection.save(vn + "/" + l, vn + "/" + r, { _key: l + r, what : l + "->" + r, weight: w });
       });
-
-      try {
-        aqlfunctions.unregister("UnitTests::distance");
-      }
-      catch (err) {
-      }
     },
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -699,12 +693,6 @@ function ahuacatlQueryShortestPathTestSuite () {
 
       vertexCollection = null;
       edgeCollection = null;
-
-      try {
-        aqlfunctions.unregister("UnitTests::distance");
-      }
-      catch (err) {
-      }
     },
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -713,7 +701,7 @@ function ahuacatlQueryShortestPathTestSuite () {
 
     testShortestPathDijkstraOutbound : function () {
       var query = `LET p = (FOR v, e IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/H" ${en} RETURN {v: v._id, e: e._id})
-                   LET edges = p[*].e
+                   LET edges = (FOR e IN p[*].e FILTER e != null RETURN e)
                    LET vertices = p[*].v
                    LET distance = LENGTH(edges)
                    RETURN {edges, vertices, distance}`;
@@ -745,7 +733,7 @@ function ahuacatlQueryShortestPathTestSuite () {
 
     testShortestPathDijkstraOutboundIncludeData : function () {
       var query = `LET p = (FOR v, e IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/H" ${en} RETURN {v, e})
-                   LET edges = p[*].e
+                   LET edges = (FOR e IN p[*].e FILTER e != null RETURN e)
                    LET vertices = p[*].v
                    LET distance = LENGTH(edges)
                    RETURN {edges, vertices, distance}`;
@@ -774,6 +762,7 @@ function ahuacatlQueryShortestPathTestSuite () {
 
     testShortestPathDijkstraInbound : function () {
       var query = `FOR v IN INBOUND SHORTEST_PATH "${vn}/H" TO "${vn}/A" ${en} RETURN v._id`;
+      var actual = getQueryResults(query);
       assertEqual([ vn + "/H", vn + "/G", vn + "/E", vn + "/D", vn + "/A" ], actual);
     },
 
@@ -782,7 +771,8 @@ function ahuacatlQueryShortestPathTestSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     testShortestPathDijkstraDistance : function () {
-      var query = `FOR v IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/H" ${en} OPTIONS {distance: "weight"} RETURN v._key`;
+      var query = `FOR v IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/H" ${en} OPTIONS {weightAttribute: "weight"} RETURN v._key`;
+      var actual = getQueryResults(query);
       assertEqual([ "A", "B", "C", "D", "E", "G", "H" ], actual);
     },
 
@@ -811,7 +801,7 @@ function ahuacatlQueryShortestPathTestSuite () {
       // this item is not connected to any other
       vertexCollection.save({ _key: "J", name: "J" });
 
-      var query = `FOR v IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/J" ${en} RETURN v`;
+      var query = `FOR v IN OUTBOUND SHORTEST_PATH "${vn}/A" TO "${vn}/J" ${en} RETURN v._key`;
       var actual = getQueryResults(query);
 
       assertEqual([ ], actual);
@@ -1584,7 +1574,7 @@ function ahuacatlQueryShortestpathErrorsSuite () {
     },
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks error handling in SHORTEST_PATH()
+/// @brief checks error handling in SHORTEST_PATH
 ////////////////////////////////////////////////////////////////////////////////
 
     testShortestPathOOM : function () {
@@ -1592,13 +1582,11 @@ function ahuacatlQueryShortestpathErrorsSuite () {
       var m = vn + "/B";
       var t = vn + "/C";
 
-      var query = "RETURN SHORTEST_PATH(" + vn + " , " + en + ", '"
-                + s + "', '" + t + "', 'outbound')";
+      var query = `FOR v IN OUTBOUND SHORTEST_PATH "${s}" TO "${t}" ${en} RETURN v._id`;
 
-      var actual = getQueryResults(query)[0];
+      var actual = getQueryResults(query);
       // Positive Check
-      assertEqual(actual.vertices, [s, m, t]);
-      assertEqual(actual.distance, 2);
+      assertEqual(actual, [s, m, t]);
 
       internal.debugSetFailAt("TraversalOOMInitialize");
 
@@ -1613,9 +1601,8 @@ function ahuacatlQueryShortestpathErrorsSuite () {
       internal.debugClearFailAt();
 
       // Redo the positive check. Make sure the former fail is gone
-      actual = getQueryResults(query)[0];
-      assertEqual(actual.vertices, [s, m, t]);
-      assertEqual(actual.distance, 2);
+      actual = getQueryResults(query);
+      assertEqual(actual, [s, m, t]);
 
       internal.debugSetFailAt("TraversalOOMPath");
       // Negative Check
@@ -1636,12 +1623,9 @@ function ahuacatlQueryShortestpathErrorsSuite () {
 /// @brief executes the test suite
 ////////////////////////////////////////////////////////////////////////////////
 
-/*
 jsunity.run(ahuacatlQueryEdgesTestSuite);
 jsunity.run(ahuacatlQueryNeighborsTestSuite);
-*/
 jsunity.run(ahuacatlQueryShortestPathTestSuite);
-/*
 jsunity.run(ahuacatlQueryTraversalFilterTestSuite);
 jsunity.run(ahuacatlQueryTraversalTestSuite);
 jsunity.run(ahuacatlQueryTraversalTreeTestSuite);
@@ -1649,6 +1633,5 @@ if (internal.debugCanUseFailAt() && ! cluster.isCluster()) {
   jsunity.run(ahuacatlQueryNeighborsErrorsSuite);
   jsunity.run(ahuacatlQueryShortestpathErrorsSuite);
 }
-*/
 return jsunity.done();
 
