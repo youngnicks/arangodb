@@ -311,6 +311,7 @@ class MultiCollectionEdgeExpander {
             // Compare weight
             auto oldWeight = result[cand->second]->weight();
             if (currentWeight < oldWeight) {
+#warning check if we have to set predecessor here as well
               result[cand->second]->setWeight(currentWeight);
             }
           }
@@ -377,6 +378,7 @@ class SimpleEdgeExpander {
         // Compare weight
         auto oldWeight = result[cand->second]->weight();
         if (currentWeight < oldWeight) {
+#warning Check if we need to add the predecessor here as well
           result[cand->second]->setWeight(currentWeight);
         }
       }

@@ -34,6 +34,7 @@
 #include "Aql/Optimizer.h"
 #include "Aql/Query.h"
 #include "Aql/ShortestPathNode.h"
+#include "Aql/ShortestPathOptions.h"
 #include "Aql/SortNode.h"
 #include "Aql/TraversalNode.h"
 #include "Aql/TraversalOptions.h"
@@ -94,6 +95,35 @@ static TraversalOptions CreateTraversalOptions(AstNode const* node) {
 
   return options;
 }
+
+static ShortestPathOptions CreateShortestPathOptions(AstNode const* node) {
+  ShortestPathOptions options;
+
+  if (node != nullptr && node->type == NODE_TYPE_OBJECT) {
+    size_t n = node->numMembers();
+
+    for (size_t i = 0; i < n; ++i) {
+      auto member = node->getMember(i);
+
+      if (member != nullptr && member->type == NODE_TYPE_OBJECT_ELEMENT) {
+        std::string const name = member->getString();
+        auto value = member->getMember(0);
+
+        TRI_ASSERT(value->isConstant());
+
+        if (name == "weightAttribute" && value->isStringValue()) {
+          options.weightAttribute =
+              std::string(value->getStringValue(), value->getStringLength());
+        } else if (name == "defaultWeight" && value->isNumericValue()) {
+          options.defaultWeight = value->getDoubleValue();
+        }
+      }
+    }
+  }
+  return options;
+}
+
+
 
 
 /// @brief create the plan
@@ -757,7 +787,7 @@ ExecutionNode* ExecutionPlan::fromNodeShortestPath(ExecutionNode* previous,
   AstNode const* target = parseTraversalVertexNode(previous, node->getMember(2));
   AstNode const* graph = node->getMember(3);
 
-  TraversalOptions options = CreateTraversalOptions(node->getMember(4));
+  ShortestPathOptions options = CreateShortestPathOptions(node->getMember(4));
 
 
   // First create the node

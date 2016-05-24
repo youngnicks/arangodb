@@ -144,6 +144,7 @@ add_executable(${BIN_ARANGOD}
   Aql/Scopes.cpp
   Aql/ShortestPathBlock.cpp
   Aql/ShortestPathNode.cpp
+  Aql/ShortestPathOptions.cpp
   Aql/ShortStringStorage.cpp
   Aql/SortBlock.cpp
   Aql/SortCondition.cpp

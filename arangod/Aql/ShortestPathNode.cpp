@@ -27,6 +27,8 @@
 #include "Aql/ShortestPathNode.h"
 #include "Aql/Ast.h"
 #include "Aql/ExecutionPlan.h"
+#include "V8Server/V8Traverser.h"
+#include "Utils/CollectionNameResolver.h"
 
 using namespace arangodb::basics;
 using namespace arangodb::aql;
@@ -73,7 +75,7 @@ ShortestPathNode::ShortestPathNode(ExecutionPlan* plan, size_t id,
                                    TRI_vocbase_t* vocbase, uint64_t direction,
                                    AstNode const* start, AstNode const* target,
                                    AstNode const* graph,
-                                   TraversalOptions const& options)
+                                   ShortestPathOptions const& options)
     : ExecutionNode(plan, id),
       _vocbase(vocbase),
       _vertexOutVariable(nullptr),
@@ -151,6 +153,16 @@ ShortestPathNode::ShortestPathNode(ExecutionPlan* plan, size_t id,
 
   parseNodeInput(start, _startVertexId, _inStartVariable);
   parseNodeInput(target, _targetVertexId, _inTargetVariable);
+}
+
+void ShortestPathNode::fillOptions(arangodb::traverser::ShortestPathOptions& opts) const {
+  if (!_options.weightAttribute.empty()) {
+    opts.useWeight = true;
+    opts.weightAttribute = _options.weightAttribute;
+    opts.defaultWeight = _options.defaultWeight;
+  } else {
+    opts.useWeight = false;
+  }
 }
 
 #warning IMPLEMENT

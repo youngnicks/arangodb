@@ -26,9 +26,13 @@
 
 #include "Aql/ExecutionNode.h"
 #include "Aql/Graphs.h"
-#include "Aql/TraversalOptions.h"
+#include "Aql/ShortestPathOptions.h"
 
 namespace arangodb {
+
+namespace traverser {
+struct ShortestPathOptions;
+}
 namespace aql {
 
 /// @brief class ShortestPathNode
@@ -40,7 +44,7 @@ class ShortestPathNode : public ExecutionNode {
  public:
   ShortestPathNode(ExecutionPlan* plan, size_t id, TRI_vocbase_t* vocbase,
                 uint64_t direction, AstNode const* start, AstNode const* target,
-                AstNode const* graph, TraversalOptions const& options);
+                AstNode const* graph, ShortestPathOptions const& options);
 
   ShortestPathNode(ExecutionPlan* plan, arangodb::basics::Json const& base);
 
@@ -133,6 +137,8 @@ class ShortestPathNode : public ExecutionNode {
     }
   }
 
+  void fillOptions(arangodb::traverser::ShortestPathOptions&) const;
+
  private:
 
   /// @brief the database
@@ -169,7 +175,7 @@ class ShortestPathNode : public ExecutionNode {
   Graph const* _graphObj;
 
   /// @brief Options for traversals
-  TraversalOptions _options;
+  ShortestPathOptions _options;
 };
 
 } // namespace arangodb::aql

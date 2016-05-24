@@ -45,6 +45,38 @@ class HopWeightCalculator {
   double operator()(VPackSlice const edge) { return 1; }
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Define edge weight by ony special attribute.
+///        Respectively 1 for any edge.
+////////////////////////////////////////////////////////////////////////////////
+
+class AttributeWeightCalculator {
+  std::string const _attribute;
+  double const _defaultWeight;
+
+ public:
+  AttributeWeightCalculator(std::string const& attribute, double defaultWeight)
+      : _attribute(attribute), _defaultWeight(defaultWeight) {}
+
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief Callable weight calculator for edge
+  //////////////////////////////////////////////////////////////////////////////
+
+  double operator()(VPackSlice const edge) {
+    if (_attribute.empty()) {
+      return _defaultWeight;
+    }
+
+    VPackSlice attr = edge.get(_attribute);
+    if (!attr.isNumber()) {
+      return _defaultWeight;
+    }
+    return attr.getNumericValue<double>();
+  }
+};
+
+
+
 ShortestPathBlock::ShortestPathBlock(ExecutionEngine* engine,
                                      ShortestPathNode const* ep)
     : ExecutionBlock(engine, ep),
@@ -57,17 +89,32 @@ ShortestPathBlock::ShortestPathBlock(ExecutionEngine* engine,
       _useStartRegister(false),
       _useTargetRegister(false),
       _usedConstant(false) {
+
+  ep->fillOptions(_opts);
   // TODO COORDINATOR
 
   size_t count = ep->_edgeColls.size();
   TRI_ASSERT(ep->_directions.size());
   _collectionInfos.reserve(count);
 
+  std::function<double(arangodb::velocypack::Slice const)> weighter;
+  if (_opts.useWeight) {
+    TRI_ASSERT(!_opts.weightAttribute.empty());
+    weighter = [this](VPackSlice const edge) {
+      VPackSlice attr = edge.get(_opts.weightAttribute);
+      if (!attr.isNumber()) {
+        return _opts.defaultWeight;
+      }
+      return attr.getNumericValue<double>();
+    };
+  } else {
+    weighter = [](VPackSlice const) { return 1; };
+  }
   for (size_t j = 0; j < count; ++j) {
     // TODO Different Weighter
     auto info =
         std::make_unique<EdgeCollectionInfo>(
-            _trx, ep->_edgeColls[j], ep->_directions[j], HopWeightCalculator());
+            _trx, ep->_edgeColls[j], ep->_directions[j], weighter);
     _collectionInfos.emplace_back(info.get());
     info.release();
   }
@@ -217,8 +264,12 @@ bool ShortestPathBlock::nextPath(AqlItemBlock const* items) {
   }
 
   // TODO use different Path Finders directly, no wrapper
-  bool hasPath =
-      TRI_RunSimpleShortestPathSearch(_collectionInfos, _trx, *_path, _opts);
+  bool hasPath = false;
+  if (_opts.useWeight) {
+    hasPath = TRI_RunShortestPathSearch(_collectionInfos, *_path, _opts);
+  } else {
+    hasPath = TRI_RunSimpleShortestPathSearch(_collectionInfos, _trx, *_path, _opts);
+  }
 
   if (hasPath) {
     _posInPath = 0;
@@ -297,6 +348,15 @@ AqlItemBlock* ShortestPathBlock::getSome(size_t, size_t atMost) {
       res->setValue(j, _edgeReg, AqlValue(resultBuilder.slice()));
     }
     ++_posInPath;
+  }
+
+  if (_posInPath >= _pathLength) {
+    // Advance read position for next call
+    if (++_pos >= cur->size()) {
+      _buffer.pop_front();  // does not throw
+      delete cur;
+      _pos = 0;
+    }
   }
 
   // Clear out registers no longer needed later:

@@ -428,7 +428,7 @@ class PathFinder {
 
     EdgeWeight weight() const { return _weight; }
 
-    void setWeight(EdgeWeight w) { _weight = w; }
+    void setWeight(EdgeWeight w) { _weight = w;}
 
     VertexId const& getKey() const { return _vertex; }
   };
@@ -667,13 +667,11 @@ class PathFinder {
         _myInfo._pq.insert(step->_vertex, step);
         return;
       }
-      delete step;
-      if (s->_done) {
-        return;
-      }
-      if (s->weight() > newWeight) {
+      if (!s->_done && s->weight() > newWeight) {
+        s->_predecessor = step->_predecessor;
         _myInfo._pq.lowerWeight(s->_vertex, newWeight);
       }
+      delete step;
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -815,7 +813,7 @@ class PathFinder {
     Searcher forwardSearcher(this, forward, backward, start, _forwardExpander,
                              "Forward");
     std::unique_ptr<Searcher> backwardSearcher;
-    if (_bidirectional) {
+    if (false && _bidirectional) {
       backwardSearcher.reset(new Searcher(this, backward, forward, target,
                                           _backwardExpander, "Backward"));
     }
@@ -828,7 +826,7 @@ class PathFinder {
       if (!forwardSearcher.oneStep()) {
         break;
       }
-      if (!backwardSearcher->oneStep()) {
+      if (false && _bidirectional && !backwardSearcher->oneStep()) {
         break;
       }
     }
