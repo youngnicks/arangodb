@@ -175,6 +175,7 @@ bool ShortestPathBlock::nextPath(AqlItemBlock const* items) {
           TRI_ERROR_BAD_PARAMETER, "Invalid input for Shortest Path: Only "
                                        "id strings or objects with _id are "
                                        "allowed");
+      return false;
     }
 
   }
@@ -209,6 +210,7 @@ bool ShortestPathBlock::nextPath(AqlItemBlock const* items) {
           TRI_ERROR_BAD_PARAMETER, "Invalid input for Shortest Path: Only "
                                        "id strings or objects with _id are "
                                        "allowed");
+      return false;
     }
   }
 
