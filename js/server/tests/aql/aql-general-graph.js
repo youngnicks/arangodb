@@ -1752,35 +1752,6 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
       assertEqual(actual[3].distance, 2);
     },
 
-    testGRAPH_DISTANCE_TO_WithExamples: function () {
-      var actual;
-      actual = getQueryResults("FOR e IN GRAPH_DISTANCE_TO('werKenntWen', {gender : 'female'},  {gender : 'male', age : 30}, " +
-        "{direction : 'any'}) SORT e.startVertex, e.vertex._id SORT e.startVertex, e.vertex RETURN [e.startVertex, e.vertex, e.distance]");
-      assertEqual(actual, [
-        [
-          "UnitTests_Berliner/Berta",
-          "UnitTests_Frankfurter/Fritz",
-          4
-        ],
-        [
-          "UnitTests_Berliner/Berta",
-          "UnitTests_Hamburger/Caesar",
-          1
-
-        ],
-        [
-          "UnitTests_Leipziger/Gerda",
-          "UnitTests_Frankfurter/Fritz",
-          3
-        ],
-        [
-          "UnitTests_Leipziger/Gerda",
-          "UnitTests_Hamburger/Caesar",
-          2
-        ]
-      ]);
-    },
-
     testGRAPH_CLOSENESS_WITH_DIJKSTRA: function () {
       var actual;
       actual = getQueryResults("RETURN GRAPH_CLOSENESS('werKenntWen', {algorithm : 'dijkstra'})");
@@ -1916,35 +1887,6 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
 
       actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {algorithm : 'dijkstra', weight : 'entfernung', defaultWeight : 80})");
       assertEqual(actual[0].toFixed(1), 830.3);
-    },
-
-    testGRAPH_DISTANCE_TO_WithExamples_WITH_DIJKSTRA: function () {
-      var actual;
-      actual = getQueryResults("FOR p IN GRAPH_DISTANCE_TO('werKenntWen', {gender : 'female'},  {gender : 'male', age : 30}, " +
-        "{direction : 'any'}) SORT p.startVertex, p.vertex SORT p.startVertex, p.vertex RETURN [p.startVertex, p.vertex, p.distance]");
-      assertEqual(actual, [
-        [
-          "UnitTests_Berliner/Berta",
-          "UnitTests_Frankfurter/Fritz",
-          4
-        ],
-        [
-          "UnitTests_Berliner/Berta",
-          "UnitTests_Hamburger/Caesar",
-          1
-
-        ],
-        [
-          "UnitTests_Leipziger/Gerda",
-          "UnitTests_Frankfurter/Fritz",
-          3
-        ],
-        [
-          "UnitTests_Leipziger/Gerda",
-          "UnitTests_Hamburger/Caesar",
-          2
-        ]
-      ]);
     }
   };
 }

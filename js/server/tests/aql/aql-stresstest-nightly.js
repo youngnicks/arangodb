@@ -101,7 +101,6 @@ var aqlFuncs = {
   "WITHIN_RECTANGLE":"hs,d,d,d,d",
   "IS_IN_POLYGON":"l,ln|nb",
   "FULLTEXT":"hs,s,s|n",
-  "GRAPH_DISTANCE_TO":"s,als,als|a",
   "TRAVERSAL":"hs,hs,s,s|a",
   "GRAPH_TRAVERSAL":"s,als,s|a",
   "TRAVERSAL_TREE":"hs,hs,s,s,s|a",
