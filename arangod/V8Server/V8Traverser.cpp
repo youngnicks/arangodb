@@ -645,20 +645,6 @@ bool TRI_RunShortestPathSearch(
     std::vector<EdgeCollectionInfo*> const& collectionInfos,
     arangodb::traverser::ShortestPath& path,
     ShortestPathOptions& opts) {
-  TRI_edge_direction_e forward;
-  TRI_edge_direction_e backward;
-
-  if (opts.direction == "outbound") {
-    forward = TRI_EDGE_OUT;
-    backward = TRI_EDGE_IN;
-  } else if (opts.direction == "inbound") {
-    forward = TRI_EDGE_IN;
-    backward = TRI_EDGE_OUT;
-  } else {
-    forward = TRI_EDGE_ANY;
-    backward = TRI_EDGE_ANY;
-  }
-
   auto edgeFilterClosure = [&opts](VPackSlice edge)
                                -> bool { return opts.matchesEdge(edge); };
 
@@ -691,9 +677,9 @@ bool TRI_RunShortestPathSearch(
   };
 
   MultiCollectionEdgeExpander forwardExpander(
-      forward, collectionInfos, edgeFilterClosure, vertexFilterClosure);
+      false, collectionInfos, edgeFilterClosure, vertexFilterClosure);
   MultiCollectionEdgeExpander backwardExpander(
-      backward, collectionInfos, edgeFilterClosure, vertexFilterClosure);
+      true, collectionInfos, edgeFilterClosure, vertexFilterClosure);
 
   ArangoDBPathFinder pathFinder(forwardExpander, backwardExpander,
                                 opts.bidirectional);
@@ -717,22 +703,8 @@ bool TRI_RunSimpleShortestPathSearch(
     std::vector<EdgeCollectionInfo*> const& collectionInfos,
     arangodb::Transaction* trx, arangodb::traverser::ShortestPath& path,
     ShortestPathOptions& opts) {
-  TRI_edge_direction_e forward;
-  TRI_edge_direction_e backward;
-
-  if (opts.direction == "outbound") {
-    forward = TRI_EDGE_OUT;
-    backward = TRI_EDGE_IN;
-  } else if (opts.direction == "inbound") {
-    forward = TRI_EDGE_IN;
-    backward = TRI_EDGE_OUT;
-  } else {
-    forward = TRI_EDGE_ANY;
-    backward = TRI_EDGE_ANY;
-  }
-
-  auto fwExpander = BasicExpander(collectionInfos, trx, forward);
-  auto bwExpander = BasicExpander(collectionInfos, trx, backward);
+  auto fwExpander = BasicExpander(collectionInfos, trx, false);
+  auto bwExpander = BasicExpander(collectionInfos, trx, true);
 
   ArangoDBConstDistancePathFinder pathFinder(fwExpander, bwExpander);
   VPackSlice start = opts.getStart();
