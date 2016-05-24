@@ -1729,7 +1729,6 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
             RETURN {edges, vertices, distance}`;
       var actual;
       actual = getQueryResults(query);
-      require("internal").print(actual);
       assertEqual(actual.length, 4, "All connected pairs should have one entry.");
       assertEqual(actual[0].vertices, [
         vertexIds.Berta, vertexIds.Gerda, vertexIds.Dieter, vertexIds.Emil, vertexIds.Fritz
