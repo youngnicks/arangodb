@@ -152,6 +152,7 @@ bool ShortestPathBlock::nextPath(AqlItemBlock const* items) {
                                            "Invalid input for Shortest Path: "
                                            "Only id strings or objects with "
                                            "_id are allowed");
+      return false;
     } else {
       _opts.setStart(_startVertexId);
     }
@@ -187,6 +188,7 @@ bool ShortestPathBlock::nextPath(AqlItemBlock const* items) {
           TRI_ERROR_BAD_PARAMETER, "Invalid input for Shortest Path: "
                                        "Only id strings or objects with "
                                        "_id are allowed");
+      return false;
     } else {
       _opts.setEnd(_targetVertexId);
     }
