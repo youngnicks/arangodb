@@ -50,6 +50,18 @@ class ShortestPathNode : public ExecutionNode {
 
   ~ShortestPathNode() {}
 
+  /// @brief Internal constructor to clone the node.
+ private:
+  ShortestPathNode(ExecutionPlan* plan, size_t id, TRI_vocbase_t* vocbase,
+                   std::vector<std::string> const& edgeColls,
+                   std::vector<TRI_edge_direction_e> directions,
+                   Variable const* inStartVariable,
+                   std::string const& startVertexId,
+                   Variable const* inTargetVariable,
+                   std::string const& targetVertexId,
+                   ShortestPathOptions const& options);
+
+ public:
   /// @brief return the type of the node
   NodeType getType() const override final { return SHORTEST_PATH; }
 
@@ -151,13 +163,13 @@ class ShortestPathNode : public ExecutionNode {
   Variable const* _edgeOutVariable;
 
   /// @brief input variable only used if _vertexId is unused
-  Variable* _inStartVariable;
+  Variable const* _inStartVariable;
 
   /// @brief input vertexId only used if _inVariable is unused
   std::string _startVertexId;
 
   /// @brief input variable only used if _vertexId is unused
-  Variable* _inTargetVariable;
+  Variable const* _inTargetVariable;
 
   /// @brief input vertexId only used if _inVariable is unused
   std::string _targetVertexId;

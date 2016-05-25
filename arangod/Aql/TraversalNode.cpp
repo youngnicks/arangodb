@@ -450,6 +450,12 @@ TraversalNode::TraversalNode(ExecutionPlan* plan,
   if (base.has("pathOutVariable")) {
     _pathOutVariable = varFromJson(plan->getAst(), base, "pathOutVariable");
   }
+
+  // Flags
+  if (base.has("traversalFlags")) {
+    _options = TraversalOptions(base);
+  }
+
 }
 
 int TraversalNode::checkIsOutVariable(size_t variableId) const {
@@ -535,6 +541,9 @@ void TraversalNode::toVelocyPackHelper(arangodb::velocypack::Builder& nodes,
       }
     }
   }
+
+  nodes.add(VPackValue("traversalFlags"));
+  _options.toVelocyPack(nodes);
 
   // And close it:
   nodes.close();

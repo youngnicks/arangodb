@@ -27,6 +27,7 @@
 #include "Aql/ShortestPathNode.h"
 #include "Aql/Ast.h"
 #include "Aql/ExecutionPlan.h"
+#include "Indexes/Index.h"
 #include "V8Server/V8Traverser.h"
 #include "Utils/CollectionNameResolver.h"
 
@@ -34,7 +35,7 @@ using namespace arangodb::basics;
 using namespace arangodb::aql;
 
 static void parseNodeInput(AstNode const* node, std::string& id,
-                           Variable*& variable) {
+                           Variable const*& variable) {
   switch (node->type) {
     case NODE_TYPE_REFERENCE:
       variable = static_cast<Variable*>(node->getData());
@@ -155,6 +156,33 @@ ShortestPathNode::ShortestPathNode(ExecutionPlan* plan, size_t id,
   parseNodeInput(target, _targetVertexId, _inTargetVariable);
 }
 
+ShortestPathNode::ShortestPathNode(ExecutionPlan* plan, size_t id,
+                                   TRI_vocbase_t* vocbase,
+                                   std::vector<std::string> const& edgeColls,
+                                   std::vector<TRI_edge_direction_e> directions,
+                                   Variable const* inStartVariable,
+                                   std::string const& startVertexId,
+                                   Variable const* inTargetVariable,
+                                   std::string const& targetVertexId,
+                                   ShortestPathOptions const& options)
+    : ExecutionNode(plan, id),
+      _vocbase(vocbase),
+      _vertexOutVariable(nullptr),
+      _edgeOutVariable(nullptr),
+      _inStartVariable(inStartVariable),
+      _startVertexId(startVertexId),
+      _inTargetVariable(inTargetVariable),
+      _targetVertexId(targetVertexId),
+      _directions(directions),
+      _graphObj(nullptr),
+      _options(options) {
+  _graphJson = arangodb::basics::Json(arangodb::basics::Json::Array, edgeColls.size());
+  for (auto& it : edgeColls) {
+    _edgeColls.emplace_back(it);
+    _graphJson.add(arangodb::basics::Json(it));
+  }
+}
+
 void ShortestPathNode::fillOptions(arangodb::traverser::ShortestPathOptions& opts) const {
   if (!_options.weightAttribute.empty()) {
     opts.useWeight = true;
@@ -165,26 +193,242 @@ void ShortestPathNode::fillOptions(arangodb::traverser::ShortestPathOptions& opt
   }
 }
 
-#warning IMPLEMENT
 ShortestPathNode::ShortestPathNode(ExecutionPlan* plan,
                                    arangodb::basics::Json const& base)
-    : ExecutionNode(plan, base) {
-  THROW_ARANGO_EXCEPTION(TRI_ERROR_ARANGO_ILLEGAL_NAME);
+    : ExecutionNode(plan, base),
+      _vocbase(plan->getAst()->query()->vocbase()),
+      _vertexOutVariable(nullptr),
+      _edgeOutVariable(nullptr),
+      _inStartVariable(nullptr),
+      _inTargetVariable(nullptr),
+      _graphObj(nullptr) {
+  // Directions
+  auto dirList = base.get("directions");
+  TRI_ASSERT(dirList.json() != nullptr);
+  for (size_t i = 0; i < dirList.size(); ++i) {
+    auto dirJson = dirList.at(i);
+    uint64_t dir = arangodb::basics::JsonHelper::stringUInt64(dirJson.json());
+    TRI_edge_direction_e d;
+    switch (dir) {
+      case 0:
+        d = TRI_EDGE_ANY;
+        break;
+      case 1:
+        d = TRI_EDGE_IN;
+        break;
+      case 2:
+        d = TRI_EDGE_OUT;
+        break;
+      default:
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_BAD_PARAMETER,
+                                       "Invalid direction value");
+        break;
+    }
+    _directions.emplace_back(d);
+  }
+
+  // Start Vertex
+  if (base.has("inStartVariable")) {
+    _inStartVariable = varFromJson(plan->getAst(), base, "inStartVariable");
+  } else {
+    _startVertexId = arangodb::basics::JsonHelper::getStringValue(
+        base.json(), "startVertexId", "");
+    if (_startVertexId.empty()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_BAD_JSON_PLAN,
+                                     "start vertex mustn't be empty.");
+    }
+  }
+
+  // Target Vertex
+  if (base.has("inTargetVariable")) {
+    _inTargetVariable = varFromJson(plan->getAst(), base, "inTargetVariable");
+  } else {
+    _startVertexId = arangodb::basics::JsonHelper::getStringValue(
+        base.json(), "targetVertexId", "");
+    if (_startVertexId.empty()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_BAD_JSON_PLAN,
+                                     "target vertex mustn't be empty.");
+    }
+  }
+
+  std::string graphName;
+  if (base.has("graph") && (base.get("graph").isString())) {
+    graphName = JsonHelper::checkAndGetStringValue(base.json(), "graph");
+    if (base.has("graphDefinition")) {
+      _graphObj = plan->getAst()->query()->lookupGraphByName(graphName);
+
+      if (_graphObj == nullptr) {
+        THROW_ARANGO_EXCEPTION(TRI_ERROR_GRAPH_NOT_FOUND);
+      }
+
+      auto eColls = _graphObj->edgeCollections();
+      for (auto const& n : eColls) {
+        _edgeColls.push_back(n);
+      }
+    } else {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_BAD_JSON_PLAN,
+                                     "missing graphDefinition.");
+    }
+  } else {
+    _graphJson = base.get("graph").copy();
+    if (!_graphJson.isArray()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_BAD_JSON_PLAN,
+                                     "graph has to be an array.");
+    }
+    size_t edgeCollectionCount = _graphJson.size();
+    // List of edge collection names
+    for (size_t i = 0; i < edgeCollectionCount; ++i) {
+      auto at = _graphJson.at(i);
+      if (!at.isString()) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_BAD_JSON_PLAN,
+                                       "graph has to be an array of strings.");
+      }
+      _edgeColls.push_back(at.json()->_value._string.data);
+    }
+    if (_edgeColls.empty()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(
+          TRI_ERROR_QUERY_BAD_JSON_PLAN,
+          "graph has to be a non empty array of strings.");
+    }
+  }
+
+  // Out variables
+  if (base.has("vertexOutVariable")) {
+    _vertexOutVariable = varFromJson(plan->getAst(), base, "vertexOutVariable");
+  }
+  if (base.has("edgeOutVariable")) {
+    _edgeOutVariable = varFromJson(plan->getAst(), base, "edgeOutVariable");
+  }
+
+  // Flags
+  if (base.has("shortestPathFlags")) {
+    _options = ShortestPathOptions(base);
+  }
 }
 
-#warning IMPLEMENT
-void ShortestPathNode::toVelocyPackHelper(VPackBuilder&, bool) const {
-  THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-  return;
+void ShortestPathNode::toVelocyPackHelper(VPackBuilder& nodes,
+                                          bool verbose) const {
+  ExecutionNode::toVelocyPackHelperGeneric(nodes,
+                                           verbose);  // call base class method
+  nodes.add("database", VPackValue(_vocbase->_name));
+  {
+    // TODO Remove _graphJson
+    auto tmp = arangodb::basics::JsonHelper::toVelocyPack(_graphJson.json());
+    nodes.add("graph", tmp->slice());
+  }
+  nodes.add(VPackValue("directions"));
+  {
+    VPackArrayBuilder guard(&nodes);
+    for (auto const& d : _directions) {
+      nodes.add(VPackValue(d));
+    }
+  }
+
+  // In variables
+  if (usesStartInVariable()) {
+    nodes.add(VPackValue("startInVariable"));
+    startInVariable()->toVelocyPack(nodes);
+  } else {
+    nodes.add("startVertexId", VPackValue(_startVertexId));
+  }
+
+  if (usesTargetInVariable()) {
+    nodes.add(VPackValue("targetInVariable"));
+    targetInVariable()->toVelocyPack(nodes);
+  } else {
+    nodes.add("targetVertexId", VPackValue(_targetVertexId));
+  }
+
+  if (_graphObj != nullptr) {
+    nodes.add(VPackValue("graphDefinition"));
+    _graphObj->toVelocyPack(nodes, verbose);
+  }
+
+  // Out variables
+  if (usesVertexOutVariable()) {
+    nodes.add(VPackValue("vertexOutVariable"));
+    vertexOutVariable()->toVelocyPack(nodes);
+  }
+  if (usesEdgeOutVariable()) {
+    nodes.add(VPackValue("edgeOutVariable"));
+    edgeOutVariable()->toVelocyPack(nodes);
+  }
+
+  nodes.add(VPackValue("shortestPathFlags"));
+  _options.toVelocyPack(nodes);
+
+  // And close it:
+  nodes.close();
 }
 
-#warning IMPLEMENT
-ExecutionNode* ShortestPathNode::clone(ExecutionPlan*, bool, bool) const {
-  THROW_ARANGO_EXCEPTION(TRI_ERROR_ARANGO_COLLECTION_DIRECTORY_ALREADY_EXISTS);
-  return nullptr;
+ExecutionNode* ShortestPathNode::clone(ExecutionPlan* plan,
+                                       bool withDependencies,
+                                       bool withProperties) const {
+  auto c = new ShortestPathNode(plan, _id, _vocbase, _edgeColls, _directions,
+                                _inStartVariable, _startVertexId,
+                                _inTargetVariable, _targetVertexId, _options);
+  if (usesVertexOutVariable()) {
+    auto vertexOutVariable = _vertexOutVariable;
+    if (withProperties) {
+      vertexOutVariable =
+          plan->getAst()->variables()->createVariable(vertexOutVariable);
+    }
+    TRI_ASSERT(vertexOutVariable != nullptr);
+    c->setVertexOutput(vertexOutVariable);
+  }
+
+  if (usesEdgeOutVariable()) {
+    auto edgeOutVariable = _edgeOutVariable;
+    if (withProperties) {
+      edgeOutVariable =
+          plan->getAst()->variables()->createVariable(edgeOutVariable);
+    }
+    TRI_ASSERT(edgeOutVariable != nullptr);
+    c->setEdgeOutput(edgeOutVariable);
+  }
+
+  cloneHelper(c, plan, withDependencies, withProperties);
+
+  return static_cast<ExecutionNode*>(c);
 }
 
-#warning IMPLEMENT
-double ShortestPathNode::estimateCost(size_t&) const {
-  return 0;
+double ShortestPathNode::estimateCost(size_t& nrItems) const {
+  // Standard estimation for Shortest path is O(|E| + |V|*LOG(|V|))
+  // At this point we know |E| but do not know |V|.
+  size_t incoming = 0;
+  double depCost = _dependencies.at(0)->getCost(incoming);
+  auto trx = _plan->getAst()->query()->trx();
+  auto collections = _plan->getAst()->query()->collections();
+  size_t edgesCount = 0;
+  double nodesEstimate = 0;
+
+  TRI_ASSERT(collections != nullptr);
+
+  for (auto const& it : _edgeColls) {
+    auto collection = collections->get(it);
+
+    if (collection == nullptr) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL,
+                                     "unexpected pointer for collection");
+    }
+    size_t edges = collection->count();
+
+    auto indexes = trx->indexesForCollection(collection->name);
+    for (auto const& index : indexes) {
+      if (index->type() == arangodb::Index::IndexType::TRI_IDX_TYPE_EDGE_INDEX) {
+        // We can only use Edge Index
+        if (index->hasSelectivityEstimate()) {
+          nodesEstimate += edges * index->selectivityEstimate();
+        } else {
+          // Hard-coded fallback should not happen
+          nodesEstimate += edges * 0.01;
+        }
+        break;
+      }
+    }
+
+    edgesCount += edges;
+  }
+  nrItems = edgesCount + static_cast<size_t>(log(nodesEstimate) * nodesEstimate);
+  return depCost + nrItems;
 }
