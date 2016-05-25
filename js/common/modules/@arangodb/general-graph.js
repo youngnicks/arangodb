@@ -2053,15 +2053,25 @@ Graph.prototype._radius = function(options) {
 /// @brief was docuBlock JSF_general_graph_diameter
 ////////////////////////////////////////////////////////////////////////////////
 Graph.prototype._diameter = function(options) {
-
-  var query = "RETURN"
-    + " GRAPH_DIAMETER(@graphName"
-    + ',@options'
-    + ')';
+  var vcs = Object.keys(this.__vertexCollections);
+  var query;
+  if (vcs.length === 1) {
+    query = `FOR s IN ${vcs[0]} FOR t IN ${vcs[0]} `;
+  } else {
+    query = `LET ids = UNION(${vcs.map(function(v) {return `(FOR x IN ${v} RETURN x)`;}).join(",")})
+               FOR s IN ids FOR t IN ids `;
+  }
   options = options || {};
+  if (options.direction === "outbound") {
+    query += "FILTER s._id != t._id LET p = LENGTH((FOR v IN OUTBOUND ";
+  } else if (options.direction === "inbound") {
+    query += "FILTER s._id != t._id LET p = LENGTH((FOR v IN INBOUND ";
+  } else {
+    query += "FILTER s._id < t._id LET p = LENGTH((FOR v IN ANY ";
+  }
+  query += "SHORTEST_PATH s TO t GRAPH @graphName RETURN 1)) - 1 SORT p DESC LIMIT 1 RETURN p";
   var bindVars = {
-    "graphName": this.__name,
-    "options": options
+    "graphName": this.__name
   };
   var result = db._query(query, bindVars).toArray();
   if (result.length === 1) {
