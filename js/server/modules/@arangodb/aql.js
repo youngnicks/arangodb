@@ -6824,41 +6824,6 @@ function AQL_TRAVERSAL_TREE (vertexCollection,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_distance
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_DISTANCE_TO (graphName,
-                                startVertexExample,
-                                endVertexExample,
-                                options) {
-  'use strict';
-
-  if (! options) {
-    options = {};
-  }
-  else {
-    options = CLONE(options);
-  }
-  options.includeData = false;
-  if (! options.algorithm) {
-    options.algorithm = "dijkstra";
-  }
-  let paths = AQL_GRAPH_SHORTEST_PATH(
-    graphName, startVertexExample, endVertexExample, options
-  );
-  let result = [];
-  for (let i = 0; i < paths.length; ++i) {
-    let p = paths[i];
-    result.push({
-      startVertex: p.vertices[0],
-      vertex: p.vertices[p.vertices.length - 1],
-      distance: p.distance
-    });
-  }
-  return result;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief was docuBlock JSF_aql_general_graph_traversal_tree
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -7732,7 +7697,6 @@ exports.AQL_GRAPH_TRAVERSAL = AQL_GRAPH_TRAVERSAL;
 exports.AQL_GRAPH_TRAVERSAL_TREE = AQL_GRAPH_TRAVERSAL_TREE;
 exports.AQL_GRAPH_VERTICES = AQL_GRAPH_VERTICES;
 exports.AQL_GRAPH_SHORTEST_PATH = AQL_GRAPH_SHORTEST_PATH;
-exports.AQL_GRAPH_DISTANCE_TO = AQL_GRAPH_DISTANCE_TO;
 exports.AQL_GRAPH_ECCENTRICITY = AQL_GRAPH_ECCENTRICITY;
 exports.AQL_GRAPH_BETWEENNESS = AQL_GRAPH_BETWEENNESS;
 exports.AQL_GRAPH_CLOSENESS = AQL_GRAPH_CLOSENESS;

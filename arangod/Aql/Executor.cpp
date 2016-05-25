@@ -337,9 +337,6 @@ std::unordered_map<std::string, Function const> const Executor::FunctionNames{
               true, &Functions::Fulltext, NotInCoordinator)},
 
     // graph functions
-    {"GRAPH_DISTANCE_TO",
-     Function("GRAPH_DISTANCE_TO", "AQL_GRAPH_DISTANCE_TO", "s,als,als|a",
-              false, false, true, false, false)},
     {"TRAVERSAL", Function("TRAVERSAL", "AQL_TRAVERSAL", "hs,hs,s,s|a", false,
                            false, true, false, false)},
     {"GRAPH_TRAVERSAL",
