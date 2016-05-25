@@ -2979,9 +2979,6 @@ function OrphanCollectionSuite() {
       }
     }
   };
-
-
-
 }
 
 function MeasurementsSuite() {
@@ -3118,6 +3115,158 @@ function MeasurementsSuite() {
   };
 }
 
+function MeasurementsMovedFromAQLSuite() {
+  'use strict';
+
+  const v1 = "UnitTests_Berliner";
+  const v2 = "UnitTests_Hamburger";
+  const v3 = "UnitTests_Frankfurter";
+  const v4 = "UnitTests_Leipziger";
+  var vertexIds = {};
+  const graphName = "werKenntWen";
+  var g;
+
+  return {
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// @brief set up
+    ////////////////////////////////////////////////////////////////////////////////
+
+    setUp: function () {
+      db._drop(v1);
+      db._drop(v2);
+      db._drop(v3);
+      db._drop(v4);
+      db._drop("UnitTests_KenntAnderenBerliner");
+      db._drop("UnitTests_KenntAnderen");
+
+      var KenntAnderenBerliner = "UnitTests_KenntAnderenBerliner";
+      var KenntAnderen = "UnitTests_KenntAnderen";
+
+      var Berlin = db._create(v1);
+      var Hamburg = db._create(v2);
+      var Frankfurt = db._create(v3);
+      var Leipzig = db._create(v4);
+      db._createEdgeCollection(KenntAnderenBerliner);
+      db._createEdgeCollection(KenntAnderen);
+
+      var Anton = Berlin.save({ _key: "Anton", gender: "male", age: 20});
+      var Berta = Berlin.save({ _key: "Berta", gender: "female", age: 25});
+      var Caesar = Hamburg.save({ _key: "Caesar", gender: "male", age: 30});
+      var Dieter = Hamburg.save({ _key: "Dieter", gender: "male", age: 20});
+      var Emil = Frankfurt.save({ _key: "Emil", gender: "male", age: 25});
+      var Fritz = Frankfurt.save({ _key: "Fritz", gender: "male", age: 30});
+      var Gerda = Leipzig.save({ _key: "Gerda", gender: "female", age: 40});
+
+      vertexIds.Anton = Anton._id;
+      vertexIds.Berta = Berta._id;
+      vertexIds.Caesar = Caesar._id;
+      vertexIds.Dieter = Dieter._id;
+      vertexIds.Emil = Emil._id;
+      vertexIds.Fritz = Fritz._id;
+      vertexIds.Gerda = Gerda._id;
+
+      try {
+        db._collection("_graphs").remove(graphName);
+      } catch (ignore) {
+      }
+      g = graph._create(
+        graphName,
+        graph._edgeDefinitions(
+          graph._relation(KenntAnderenBerliner, v1, v1),
+          graph._relation(KenntAnderen,
+            [v1, v2, v3, v4],
+            [v1, v2, v3, v4]
+          )
+        )
+      );
+
+      function makeEdge(from, to, collection, distance) {
+        collection.save(from, to, { what: from.split("/")[1] + "->" + to.split("/")[1], entfernung: distance});
+      }
+
+      makeEdge(Berta._id, Anton._id, g[KenntAnderenBerliner], 0.1);
+      makeEdge(Caesar._id, Anton._id, g[KenntAnderen], 350);
+      makeEdge(Caesar._id, Berta._id, g[KenntAnderen], 250.1);
+      makeEdge(Berta._id, Gerda._id, g[KenntAnderen], 200);
+      makeEdge(Gerda._id, Dieter._id, g[KenntAnderen], "blub");
+      makeEdge(Dieter._id, Emil._id, g[KenntAnderen], 300);
+      makeEdge(Emil._id, Fritz._id, g[KenntAnderen], 0.2);
+    },
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// @brief tear down
+    ////////////////////////////////////////////////////////////////////////////////
+
+    tearDown: function () {
+      graph._drop("werKenntWen", true);
+    },
+
+    // Test Radius
+    testRadiusDefault: function () {
+      var actual = g._radius();
+      assertEqual(actual, 3);
+    },
+
+    testRadiusWeight: function () {
+      var actual = g._radius({weightAttribute: "entfernung", defaultWeight: 80});
+      assertEqual(actual.toFixed(1), 450.1);
+    },
+
+    testRadiusInbound: function () {
+      var actual = g._radius({direction: "inbound"});
+      assertEqual(actual, 1);
+    },
+
+    testRadiusInboundWeight: function () {
+      var actual = g._radius({direction: "inbound", weightAttribute: "entfernung", defaultWeight: 80});
+      assertEqual(actual.toFixed(1), 250.1);
+    },
+
+    testRadiusOutbound: function () {
+      var actual = g._radius({direction: "outbound"});
+      assertEqual(actual, 1);
+    },
+
+    testRadiusOutboundWeight: function () {
+      var actual = g._radius({direction: "outbound", weightAttribute: "entfernung", defaultWeight: 80});
+      assertEqual(actual.toFixed(1), 0.2);
+    },
+
+
+    // Test Diameter
+
+    testDiameterDefault: function () {
+      var actual = g._diameter();
+      assertEqual(actual, 5);
+    },
+
+    testDiameterWeight: function () {
+      var actual = g._diameter({weightAttribute: "entfernung", defaultWeight: 80});
+      assertEqual(actual.toFixed(1), 830.3);
+    },
+
+    testDiameterInbound: function () {
+      var actual = g._diameter({direction: "inbound"});
+      assertEqual(actual, 5);
+    },
+
+    testDiameterInboundWeight: function () {
+      var actual = g._diameter({direction: "inbound", weightAttribute: "entfernung", defaultWeight: 80});
+      assertEqual(actual.toFixed(1), 830.3);
+    },
+
+    testDiameterOutbound: function () {
+      var actual = g._diameter({direction: "outbound"});
+      assertEqual(actual, 5);
+    },
+
+    testDiameterOutboundWeight: function () {
+      var actual = g._diameter({direction: "outbound", weightAttribute: "entfernung", defaultWeight: 80});
+      assertEqual(actual.toFixed(1), 830.3);
+    }
+  };
+}
 
 
 
@@ -3131,10 +3280,14 @@ function MeasurementsSuite() {
 // jsunity.run(ChainedFluentAQLResultsSuite);
 // jsunity.run(GeneralGraphCommonNeighborsSuite);
 
+/*
 jsunity.run(EdgesAndVerticesSuite);
 jsunity.run(GeneralGraphCreationSuite);
 jsunity.run(OrphanCollectionSuite);
 jsunity.run(MeasurementsSuite);
+*/
+
+jsunity.run(MeasurementsMovedFromAQLSuite);
 
 return jsunity.done();
 

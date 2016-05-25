@@ -7513,61 +7513,6 @@ function AQL_GRAPH_BETWEENNESS (graphName, options) {
   return result;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_radius
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_RADIUS (graphName, options) {
-  'use strict';
-
-  options = CLONE(options) || {};
-  if (! options.direction) {
-    options.direction =  'any';
-  }
-  if (! options.algorithm) {
-    options.algorithm = "Floyd-Warshall";
-  }
-
-  var result = AQL_GRAPH_ABSOLUTE_ECCENTRICITY(graphName, {}, options), min = Infinity;
-  Object.keys(result).forEach(function (r) {
-    if (result[r] === 0) {
-      return;
-    }
-    if (result[r] < min) {
-      min = result[r];
-    }
-  });
-
-  return min;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_diameter
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_DIAMETER (graphName, options) {
-  'use strict';
-
-  options = CLONE(options) || {};
-  if (! options.direction) {
-    options.direction =  'any';
-  }
-  if (! options.algorithm) {
-    options.algorithm = "Floyd-Warshall";
-  }
-
-  var result = AQL_GRAPH_ABSOLUTE_ECCENTRICITY(graphName, {}, options),
-      max = 0;
-  Object.keys(result).forEach(function (r) {
-    if (result[r] > max) {
-      max = result[r];
-    }
-  });
-
-  return max;
-}
-
-
 exports.FCALL_USER = FCALL_USER;
 exports.KEYS = KEYS;
 exports.GET_INDEX = GET_INDEX;
@@ -7703,8 +7648,6 @@ exports.AQL_GRAPH_CLOSENESS = AQL_GRAPH_CLOSENESS;
 exports.AQL_GRAPH_ABSOLUTE_ECCENTRICITY = AQL_GRAPH_ABSOLUTE_ECCENTRICITY;
 exports.AQL_GRAPH_ABSOLUTE_BETWEENNESS = AQL_GRAPH_ABSOLUTE_BETWEENNESS;
 exports.AQL_GRAPH_ABSOLUTE_CLOSENESS = AQL_GRAPH_ABSOLUTE_CLOSENESS;
-exports.AQL_GRAPH_DIAMETER = AQL_GRAPH_DIAMETER;
-exports.AQL_GRAPH_RADIUS = AQL_GRAPH_RADIUS;
 exports.AQL_NOT_NULL = AQL_NOT_NULL;
 exports.AQL_FIRST_LIST = AQL_FIRST_LIST;
 exports.AQL_FIRST_DOCUMENT = AQL_FIRST_DOCUMENT;

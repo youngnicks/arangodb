@@ -1674,47 +1674,6 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
     },
 */
 
-    testGRAPH_DIAMETER_AND_RADIUS: function () {
-      var actual;
-      actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0], 3);
-
-      actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0].toFixed(1), 450.1);
-
-      actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0], 5);
-
-      actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0].toFixed(1), 830.3);
-
-
-
-      actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {direction : 'inbound', algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0], 1);
-
-      actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {direction : 'inbound', weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0].toFixed(1), 250.1);
-
-      actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {direction : 'inbound', algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0], 5);
-
-      actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {direction : 'inbound', weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0].toFixed(1), 830.3);
-
-      actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {direction : 'outbound', algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0], 1);
-
-      actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {direction : 'outbound', weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0].toFixed(1), 0.2);
-
-      actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {direction : 'outbound', algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0], 5);
-
-      actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {direction : 'outbound', weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0].toFixed(1), 830.3);
-    },
-
     testShortestPathWithExamples: function () {
       var query = `
         FOR start IN ${startWithFilter("FILTER x.gender == 'female'")}
@@ -1871,21 +1830,6 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
       assertEqual(actual[0]["UnitTests_Frankfurter/Emil"].toFixed(2), (0.54).toFixed(2));
       assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"].toFixed(2), (0.54).toFixed(2));
       assertEqual(actual[0]["UnitTests_Leipziger/Gerda"].toFixed(2), (1).toFixed(2));
-    },
-
-    testGRAPH_DIAMETER_AND_RADIUS_WITH_DIJKSTRA: function () {
-      var actual;
-      actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {algorithm : 'dijkstra'})");
-      assertEqual(actual[0], 3);
-
-      actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {algorithm : 'dijkstra', weight : 'entfernung', defaultWeight : 80})");
-      assertEqual(actual[0].toFixed(1), 450.1);
-
-      actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {algorithm : 'dijkstra'})");
-      assertEqual(actual[0], 5);
-
-      actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {algorithm : 'dijkstra', weight : 'entfernung', defaultWeight : 80})");
-      assertEqual(actual[0].toFixed(1), 830.3);
     }
   };
 }
@@ -2242,39 +2186,6 @@ function ahuacatlQueryGeneralCyclesSuite() {
 
   },
 */
-
-  testGRAPH_DIAMETER_AND_RADIUS: function () {
-    var actual;
-    actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0], 2);
-
-    actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0], 9);
-
-    actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0], 2);
-
-    actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0], 12);
-
-
-
-    actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {direction : 'inbound', algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0], 2);
-
-    actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {direction : 'inbound', weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0], 13);
-
-    actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {direction : 'inbound', algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0], 3);
-
-    actual = getQueryResults("RETURN GRAPH_DIAMETER('werKenntWen', {direction : 'inbound', weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0], 16);
-
-    actual = getQueryResults("RETURN GRAPH_RADIUS('werKenntWen', {direction : 'outbound', algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0], 2);
-
-  }
 };
 }
 

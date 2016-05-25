@@ -2030,16 +2030,42 @@ Graph.prototype._betweenness = function(options) {
 /// @brief was docuBlock JSF_general_graph_radius
 ////////////////////////////////////////////////////////////////////////////////
 Graph.prototype._radius = function(options) {
-
-  var query = "RETURN"
-    + " GRAPH_RADIUS(@graphName"
-    + ',@options'
-    + ')';
-  options = options || {};
+  var vcs = Object.keys(this.__vertexCollections);
+  var query;
+  var ids;
   var bindVars = {
-    "graphName": this.__name,
-    "options": options
+    "graphName": this.__name
   };
+  options = options || {};
+  if (vcs.length === 1) {
+    ids = vcs[0];
+  } else {
+    query = `LET ids = UNION(${vcs.map(function(v) {return `(FOR x IN ${v} RETURN x)`;}).join(",")}) `;
+    ids = "ids";
+  }
+
+  query += `FOR s IN ${ids} LET lsp = (
+    FOR t IN ${ids} FILTER s._id != t._id LET p = (FOR v, e IN `;
+
+  if (options.direction === "outbound") {
+    query += "OUTBOUND ";
+  } else if (options.direction === "inbound") {
+    query += "INBOUND ";
+  } else {
+    query += "ANY ";
+  }
+  query += "SHORTEST_PATH s TO t GRAPH @graphName ";
+  if (options.hasOwnProperty("weightAttribute") && options.hasOwnProperty("defaultWeight")) {
+    query += `OPTIONS {weightAttribute: @attribute, defaultWeight: @default}
+              FILTER e != null RETURN IS_NUMBER(e[@attribute]) ? e[@attribute] : @default) `;
+    bindVars.attribute = options.weightAttribute;
+    bindVars.default = options.defaultWeight;
+  } else {
+    query += "FILTER e != null RETURN 1) ";
+  }
+  query += `FILTER LENGTH(p) > 0 LET k = SUM(p) SORT k DESC LIMIT 1 RETURN k)
+            FILTER LENGTH(lsp) != 0
+            SORT lsp[0] ASC LIMIT 1 RETURN lsp[0]`;
   var result = db._query(query, bindVars).toArray();
   if (result.length === 1) {
     return result[0];
@@ -2063,16 +2089,25 @@ Graph.prototype._diameter = function(options) {
   }
   options = options || {};
   if (options.direction === "outbound") {
-    query += "FILTER s._id != t._id LET p = LENGTH((FOR v IN OUTBOUND ";
+    query += "FILTER s._id != t._id LET p = SUM((FOR v, e IN OUTBOUND ";
   } else if (options.direction === "inbound") {
-    query += "FILTER s._id != t._id LET p = LENGTH((FOR v IN INBOUND ";
+    query += "FILTER s._id != t._id LET p = SUM((FOR v, e IN INBOUND ";
   } else {
-    query += "FILTER s._id < t._id LET p = LENGTH((FOR v IN ANY ";
+    query += "FILTER s._id < t._id LET p = SUM((FOR v, e IN ANY ";
   }
-  query += "SHORTEST_PATH s TO t GRAPH @graphName RETURN 1)) - 1 SORT p DESC LIMIT 1 RETURN p";
   var bindVars = {
     "graphName": this.__name
   };
+  query += "SHORTEST_PATH s TO t GRAPH @graphName ";
+  if (options.hasOwnProperty("weightAttribute") && options.hasOwnProperty("defaultWeight")) {
+    query += `OPTIONS {weightAttribute: @attribute, defaultWeight: @default}
+              FILTER e != null RETURN IS_NUMBER(e[@attribute]) ? e[@attribute] : @default)) `;
+    bindVars.attribute = options.weightAttribute;
+    bindVars.default = options.defaultWeight;
+  } else {
+    query += "RETURN 1)) - 1 ";
+  }
+  query += "SORT p DESC LIMIT 1 RETURN p";
   var result = db._query(query, bindVars).toArray();
   if (result.length === 1) {
     return result[0];

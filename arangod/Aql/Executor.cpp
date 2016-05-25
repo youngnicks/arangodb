@@ -366,10 +366,6 @@ std::unordered_map<std::string, Function const> const Executor::FunctionNames{
     {"GRAPH_ABSOLUTE_CLOSENESS",
      Function("GRAPH_ABSOLUTE_CLOSENESS", "AQL_GRAPH_ABSOLUTE_CLOSENESS",
               "s,als|a", false, false, true, false, false)},
-    {"GRAPH_DIAMETER", Function("GRAPH_DIAMETER", "AQL_GRAPH_DIAMETER", "s|a",
-                                false, false, true, false, false)},
-    {"GRAPH_RADIUS", Function("GRAPH_RADIUS", "AQL_GRAPH_RADIUS", "s|a", false,
-                              false, true, false, false)},
 
     // date functions
     {"DATE_NOW",

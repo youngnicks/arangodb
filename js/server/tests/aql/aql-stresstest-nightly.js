@@ -106,8 +106,6 @@ var aqlFuncs = {
   "TRAVERSAL_TREE":"hs,hs,s,s,s|a",
   "GRAPH_TRAVERSAL_TREE":"s,als,s,s|a",
   "GRAPH_ECCENTRICITY":"s|a",
-  "GRAPH_DIAMETER":"s|a",
-  "GRAPH_RADIUS":"s|a",
   "DATE_NOW":"",
   "DATE_TIMESTAMP":"ns|ns,ns,ns,ns,ns,ns",
   "DATE_ISO8601":"ns|ns,ns,ns,ns,ns,ns",
