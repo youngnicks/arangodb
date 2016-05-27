@@ -1952,6 +1952,7 @@ Graph.prototype._distanceTo = function(startVertexExample, endVertexExample, opt
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief was docuBlock JSF_general_graph_absolute_eccentricity
 ////////////////////////////////////////////////////////////////////////////////
+
 Graph.prototype._absoluteEccentricity = function(vertexExample, options) {
   var bindVars = {};
   options = options || {};
@@ -1981,8 +1982,6 @@ Graph.prototype._absoluteEccentricity = function(vertexExample, options) {
   RETURN [start._id, lsp[0]]
   `;
   bindVars.graphName = this.__name;
-
-  require("internal").print(query, bindVars);
   var cursor = db._query(query, bindVars);
   var result = {};
   while (cursor.hasNext()) {
@@ -1991,6 +1990,49 @@ Graph.prototype._absoluteEccentricity = function(vertexExample, options) {
   }
   return result;
 };
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief was docuBlock JSF_general_graph_absolute_closeness
+////////////////////////////////////////////////////////////////////////////////
+
+Graph.prototype._farness = Graph.prototype._absoluteCloseness = function(vertexExample, options) {
+  var bindVars = {};
+  options = options || {};
+  var query = transformExampleToAQL(vertexExample, Object.keys(this.__vertexCollections), bindVars);
+  query += `
+  LET lsp = (
+    FOR target IN ${startInAllCollections(Object.keys(this.__vertexCollections))}
+      FILTER target._id != start._id
+        LET p = (FOR v, e IN `; 
+  if (options.direction === "outbound") {
+    query += "OUTBOUND ";
+  } else if (options.direction === "inbound") {
+    query += "INBOUND ";
+  } else {
+    query += "ANY ";
+  }
+  query += "SHORTEST_PATH start TO target GRAPH @graphName ";
+  if (options.hasOwnProperty("weightAttribute") && options.hasOwnProperty("defaultWeight")) {
+    query += `OPTIONS {weightAttribute: @attribute, defaultWeight: @default}
+              FILTER e != null RETURN IS_NUMBER(e[@attribute]) ? e[@attribute] : @default) `;
+    bindVars.attribute = options.weightAttribute;
+    bindVars.default = options.defaultWeight;
+  } else {
+    query += "FILTER e != null RETURN 1) ";
+  }
+  query += `LET k = LENGTH(p) == 0 ? 0 : SUM(p) RETURN k)
+  RETURN [start._id, SUM(lsp)]
+  `;
+  bindVars.graphName = this.__name;
+  var cursor = db._query(query, bindVars);
+  var result = {};
+  while (cursor.hasNext()) {
+    var r = cursor.next();
+    result[r[0]] = r[1];
+  }
+  return result;
+};
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2015,28 +2057,6 @@ Graph.prototype._eccentricity = function(options) {
 
 
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_general_graph_absolute_closeness
-////////////////////////////////////////////////////////////////////////////////
-Graph.prototype._absoluteCloseness = function(vertexExample, options) {
-  var ex1 = transformExample(vertexExample);
-  var query = "RETURN"
-    + " GRAPH_ABSOLUTE_CLOSENESS(@graphName"
-    + ',@ex1'
-    + ',@options'
-    + ')';
-  options = options || {};
-  var bindVars = {
-    "graphName": this.__name,
-    "options": options,
-    "ex1": ex1
-  };
-  var result = db._query(query, bindVars).toArray();
-  if (result.length === 1) {
-    return result[0];
-  }
-  return result;
-};
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief was docuBlock JSF_general_graph_closeness

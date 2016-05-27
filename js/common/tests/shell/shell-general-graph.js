@@ -3057,31 +3057,6 @@ function MeasurementsSuite() {
       }
     },
 
-    test_absoluteEccentricity : function () {
-      var a = g._absoluteEccentricity({});
-      assertEqual(Object.keys(a).length , 10);
-    },
-
-    test_eccentricity : function () {
-      var a = g._eccentricity({});
-      assertEqual(Object.keys(a).length , 10);
-    },
-    test_absoluteCloseness : function () {
-      var a = g._absoluteCloseness({});
-      assertEqual(Object.keys(a).length , 10);
-    },
-    test_closeness : function () {
-      var a = g._closeness({});
-      assertEqual(Object.keys(a).length , 10);
-    },
-    test_absoluteBetweenness : function () {
-      var a = g._absoluteBetweenness({});
-      assertEqual(Object.keys(a).length , 10);
-    },
-    test_betweenness : function () {
-      var a = g._betweenness({});
-      assertEqual(Object.keys(a).length , 10);
-    },
     test_radius : function () {
       var a = g._radius({});
       assertEqual(a , 3);
@@ -3125,6 +3100,13 @@ function MeasurementsMovedFromAQLSuite() {
   var vertexIds = {};
   const graphName = "werKenntWen";
   var g;
+
+  var validateNumericValues = function (actual, expected) {
+    assertEqual(Object.keys(actual).sort(), Object.keys(expected).sort());
+    for (let k of Object.keys(expected)) {
+      assertEqual(actual[k].toFixed(1), expected[k].toFixed(1));
+    }
+  };
 
   return {
 
@@ -3264,7 +3246,126 @@ function MeasurementsMovedFromAQLSuite() {
     testDiameterOutboundWeight: function () {
       var actual = g._diameter({direction: "outbound", weightAttribute: "entfernung", defaultWeight: 80});
       assertEqual(actual.toFixed(1), 830.3);
+    },
+
+    testAbsoluteEccentricityDefault: function () {
+      var actual = g._absoluteEccentricity(vertexIds.Anton);
+      var expected = {};
+      expected[vertexIds.Anton] = 5;
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteEccentricityWeight: function () {
+      var actual = g._absoluteEccentricity(vertexIds.Anton, {weightAttribute: "entfernung", defaultWeight: 80});
+      var expected = {};
+      expected[vertexIds.Anton] = 580.3;
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteEccentricityInbound: function () {
+      var actual = g._absoluteEccentricity(vertexIds.Anton, {direction: "inbound"});
+      var expected = {};
+      expected[vertexIds.Anton] = 1;
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteEccentricityInboundWeight: function () {
+      var actual = g._absoluteEccentricity(vertexIds.Anton, {direction: "inbound", weightAttribute: "entfernung", defaultWeight: 80});
+      var expected = {};
+      expected[vertexIds.Anton] = 250.2;
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteEccentricityOutbound: function () {
+      var actual = g._absoluteEccentricity(vertexIds.Gerda, {direction: "outbound"});
+      var expected = {};
+      expected[vertexIds.Gerda] = 3;
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteEccentricityOutboundWeight: function () {
+      var actual = g._absoluteEccentricity(vertexIds.Gerda, {direction: "outbound", weightAttribute: "entfernung", defaultWeight: 80});
+      var expected = {};
+      expected[vertexIds.Gerda] = 380.2;
+
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteEccentricityExample: function () {
+      var actual = g._absoluteEccentricity({gender: "female"}, {direction: "outbound"});
+      var expected = {};
+      expected[vertexIds.Berta] = 4;
+      expected[vertexIds.Gerda] = 3;
+
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteEccentricityExampleWeight: function () {
+      var actual = g._absoluteEccentricity({gender: "female"}, {direction: "outbound", weightAttribute: "entfernung", defaultWeight: 80});
+      var expected = {};
+      expected[vertexIds.Berta] = 580.2;
+      expected[vertexIds.Gerda] = 380.2;
+
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteEccentricityAll: function () {
+      var actual = g._absoluteEccentricity({}, {direction: "outbound"});
+      var expected = {};
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 4;
+      expected[vertexIds.Caesar] = 5;
+      expected[vertexIds.Dieter] = 2;
+      expected[vertexIds.Emil] = 1;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 3;
+
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteEccentricityAllWeight: function () {
+      var actual = g._absoluteEccentricity({}, {direction: "outbound", weightAttribute: "entfernung", defaultWeight: 80});
+      var expected = {};
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 580.2;
+      expected[vertexIds.Caesar] = 830.3;
+      expected[vertexIds.Dieter] = 300.2;
+      expected[vertexIds.Emil] = 0.2;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 380.2;
+
+      validateNumericValues(actual, expected);
+    },
+
+    testFarness: function () {
+      var actual = g._farness(vertexIds.Anton);
+      var expected = { };
+      expected[vertexIds.Anton] = 16;
+      validateNumericValues(actual, expected);
+    },
+
+    testFarnessOutbound: function () {
+      var actual = g._farness(vertexIds.Anton, {direction: "outbound"});
+      var expected = { };
+      expected[vertexIds.Anton] = 0;
+      validateNumericValues(actual, expected);
+    },
+
+    testFarnessExampleWeight: function () {
+      var actual = g._farness({gender: "male"}, {weightAttribute: "entfernung", defaultWeight: 80});
+      var expected = {};
+      expected[vertexIds.Anton] = 1890.9;
+      expected[vertexIds.Caesar] = 3140.9;
+      expected[vertexIds.Dieter] = 1770.4;
+      expected[vertexIds.Emil] = 2670.4;
+      expected[vertexIds.Fritz] = 2671.4;
+      validateNumericValues(actual, expected);
+
+      // Legacy
+      actual = g._absoluteCloseness({gender: "male"}, {weightAttribute: "entfernung", defaultWeight: 80});
+      validateNumericValues(actual, expected);
     }
+
   };
 }
 
