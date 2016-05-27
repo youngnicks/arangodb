@@ -201,6 +201,62 @@ var transformExample = function(example) {
   throw err;
 };
 
+// Returns either `collection` or UNION(`all collections`)
+// Does not contain filters or iterator variable
+// Can be used as for x IN ${startInAllCollections()} return x
+var startInAllCollections = function(collections) {
+  if (collections.length === 1) {
+    return `${collections[0]}`;
+  }
+  return `UNION(${collections.map(c => `FOR x IN ${c} RETURN x`).join(", ")})`;
+};
+
+// Returns FOR start IN (...)
+// So start contains every object in the graph
+// matching the example(s)
+var transformExampleToAQL = function(examples, collections, bindVars) {
+  var varcount = 0;
+  var foundAllMatch = false;
+  if (!Array.isArray(examples)) {
+    examples = [ examples ];
+  }
+  var filter = `FILTER (
+    ${examples.map(e => {
+      if (typeof e === "object") {
+        var keys = Object.keys(e);
+        if (keys.length === 0) {
+          foundAllMatch = true;
+          return "";
+        }
+        return keys.map(key => {
+          bindVars["exVar" + varcount] = key;
+          bindVars["exVal" + varcount] = e[key];
+          return `start[@exVar${varcount}] == @exVal${varcount++}`;
+        }).join(" AND ");
+      } else {
+        bindVars["exVar" + varcount] = e;
+        return `start._id == @exVar${varcount++}`;
+      }
+    }).join(") OR (")}
+  )`;
+  if (foundAllMatch) {
+    for (var i = 0; i < varcount; ++i) {
+      delete bindVars["exVar" + varcount];
+      delete bindVars["exVal" + varcount];
+    }
+    return `FOR start IN ${startInAllCollections(collections)} `;
+  }
+  var query = `FOR start IN `;
+  if (collections.length === 1) {
+    query += `${collections[0]} ${filter}`; 
+  } else {
+    query += `UNION (${collections.map(c => `(FOR start IN ${c} ${filter} RETURN start)`).join(", ")}) `;
+  }
+  return query;
+};
+
+
+
 var checkAllowsRestriction = function(list, rest, msg) {
   var unknown = [];
   var colList = _.map(list, function(item) {
@@ -1897,21 +1953,41 @@ Graph.prototype._distanceTo = function(startVertexExample, endVertexExample, opt
 /// @brief was docuBlock JSF_general_graph_absolute_eccentricity
 ////////////////////////////////////////////////////////////////////////////////
 Graph.prototype._absoluteEccentricity = function(vertexExample, options) {
-  var ex1 = transformExample(vertexExample);
-  var query = "RETURN"
-    + " GRAPH_ABSOLUTE_ECCENTRICITY(@graphName"
-    + ',@ex1'
-    + ',@options'
-    + ')';
+  var bindVars = {};
   options = options || {};
-  var bindVars = {
-    "graphName": this.__name,
-    "options": options,
-    "ex1": ex1
-  };
-  var result = db._query(query, bindVars).toArray();
-  if (result.length === 1) {
-    return result[0];
+  var query = transformExampleToAQL(vertexExample, Object.keys(this.__vertexCollections), bindVars);
+  query += `
+  LET lsp = (
+    FOR target IN ${startInAllCollections(Object.keys(this.__vertexCollections))}
+      FILTER target._id != start._id
+        LET p = (FOR v, e IN `; 
+  if (options.direction === "outbound") {
+    query += "OUTBOUND ";
+  } else if (options.direction === "inbound") {
+    query += "INBOUND ";
+  } else {
+    query += "ANY ";
+  }
+  query += "SHORTEST_PATH start TO target GRAPH @graphName ";
+  if (options.hasOwnProperty("weightAttribute") && options.hasOwnProperty("defaultWeight")) {
+    query += `OPTIONS {weightAttribute: @attribute, defaultWeight: @default}
+              FILTER e != null RETURN IS_NUMBER(e[@attribute]) ? e[@attribute] : @default) `;
+    bindVars.attribute = options.weightAttribute;
+    bindVars.default = options.defaultWeight;
+  } else {
+    query += "FILTER e != null RETURN 1) ";
+  }
+  query += `LET k = LENGTH(p) == 0 ? 0 : SUM(p) SORT k DESC LIMIT 1 RETURN k)
+  RETURN [start._id, lsp[0]]
+  `;
+  bindVars.graphName = this.__name;
+
+  require("internal").print(query, bindVars);
+  var cursor = db._query(query, bindVars);
+  var result = {};
+  while (cursor.hasNext()) {
+    var r = cursor.next();
+    result[r[0]] = r[1];
   }
   return result;
 };
