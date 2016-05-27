@@ -2061,21 +2061,22 @@ Graph.prototype._eccentricity = function(options) {
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief was docuBlock JSF_general_graph_closeness
 ////////////////////////////////////////////////////////////////////////////////
+
 Graph.prototype._closeness = function(options) {
-  var query = "RETURN"
-    + " GRAPH_CLOSENESS(@graphName"
-    + ',@options'
-    + ')';
-  options = options || {};
-  var bindVars = {
-    "graphName": this.__name,
-    "options": options
-  };
-  var result = db._query(query, bindVars).toArray();
-  if (result.length === 1) {
-    return result[0];
+  var farness = this._farness({}, options);
+  var keys = Object.keys(farness);
+  var min = Number.POSITIVE_INFINITY;
+  for (let t of keys) {
+    if (farness[t] > 0 && farness[t] < min) {
+      min = farness[t];
+    }
   }
-  return result;
+  for (let k of keys) {
+    if (farness[k] > 0) {
+      farness[k] = min / farness[k];
+    }
+  }
+  return farness;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

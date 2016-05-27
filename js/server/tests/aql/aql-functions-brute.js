@@ -141,7 +141,6 @@ function ahuacatlFunctionsBruteTestSuite () {
     "GRAPH_TRAVERSAL_TREE",
     "GRAPH_ECCENTRICITY",
     "GRAPH_BETWEENNESS",
-    "GRAPH_CLOSENESS",
     "GRAPH_ABSOLUTE_BETWEENNESS",
     "DATE_NOW",
     "DATE_TIMESTAMP",

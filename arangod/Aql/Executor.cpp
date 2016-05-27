@@ -355,8 +355,6 @@ std::unordered_map<std::string, Function const> const Executor::FunctionNames{
               false, true, false, false)},
     {"GRAPH_BETWEENNESS", Function("GRAPH_BETWEENNESS", "AQL_GRAPH_BETWEENNESS",
                                    "s|a", false, false, true, false, false)},
-    {"GRAPH_CLOSENESS", Function("GRAPH_CLOSENESS", "AQL_GRAPH_CLOSENESS",
-                                 "s|a", false, false, true, false, false)},
     {"GRAPH_ABSOLUTE_BETWEENNESS",
      Function("GRAPH_ABSOLUTE_BETWEENNESS", "AQL_GRAPH_ABSOLUTE_BETWEENNESS",
               "s,als|a", false, false, true, false, false)},

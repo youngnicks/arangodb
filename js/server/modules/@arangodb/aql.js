@@ -7323,60 +7323,6 @@ function AQL_GRAPH_ECCENTRICITY (graphName, options) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief visitor callback function for absolute closeness traversal
-////////////////////////////////////////////////////////////////////////////////
-
-function TRAVERSAL_CLOSENESS_VISITOR (config, result, node, path) {
-  'use strict';
-  result.current += node.dist;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_closeness
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_CLOSENESS (graphName, options) {
-  'use strict';
-
-  options = CLONE(options) || {};
-  if (! options.direction) {
-    options.direction =  'any';
-  }
-  if (! options.algorithm) {
-    options.algorithm = "dijkstra";
-  }
-  options.fromVertexExample = {};
-  options.toVertexExample = {};
-  options.visitor = TRAVERSAL_CLOSENESS_VISITOR;
-
-  var result = RUN_DIJKSTRA_WITH_RESULT_HANDLE(
-    "CLOSENESS",
-    graphName,
-    options,
-    {
-      vertices: {},
-      current: 0,
-      max: 0
-    },
-    function(result, vertex) {
-      if (result.current !== 0) {
-        result.current = 1 / result.current;
-      }
-      if (result.current > result.max) {
-        result.max = result.current;
-      }
-      result.vertices[vertex._id] = result.current;
-      result.current = 0;
-    }
-  );
-  var list = result.vertices;
-  Object.keys(list).forEach(function (r) {
-    list[r] /= result.max;
-  });
-  return list;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief was docuBlock JSF_aql_general_graph_absolute_betweenness
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -7573,7 +7519,6 @@ exports.AQL_GRAPH_VERTICES = AQL_GRAPH_VERTICES;
 exports.AQL_GRAPH_SHORTEST_PATH = AQL_GRAPH_SHORTEST_PATH;
 exports.AQL_GRAPH_ECCENTRICITY = AQL_GRAPH_ECCENTRICITY;
 exports.AQL_GRAPH_BETWEENNESS = AQL_GRAPH_BETWEENNESS;
-exports.AQL_GRAPH_CLOSENESS = AQL_GRAPH_CLOSENESS;
 exports.AQL_GRAPH_ABSOLUTE_BETWEENNESS = AQL_GRAPH_ABSOLUTE_BETWEENNESS;
 exports.AQL_NOT_NULL = AQL_NOT_NULL;
 exports.AQL_FIRST_LIST = AQL_FIRST_LIST;
