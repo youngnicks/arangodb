@@ -813,7 +813,7 @@ class PathFinder {
     Searcher forwardSearcher(this, forward, backward, start, _forwardExpander,
                              "Forward");
     std::unique_ptr<Searcher> backwardSearcher;
-    if (false && _bidirectional) {
+    if (_bidirectional) {
       backwardSearcher.reset(new Searcher(this, backward, forward, target,
                                           _backwardExpander, "Backward"));
     }
@@ -826,7 +826,7 @@ class PathFinder {
       if (!forwardSearcher.oneStep()) {
         break;
       }
-      if (false && _bidirectional && !backwardSearcher->oneStep()) {
+      if (_bidirectional && !backwardSearcher->oneStep()) {
         break;
       }
     }

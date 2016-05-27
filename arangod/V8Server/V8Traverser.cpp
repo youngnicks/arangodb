@@ -311,7 +311,6 @@ class MultiCollectionEdgeExpander {
             // Compare weight
             auto oldWeight = result[cand->second]->weight();
             if (currentWeight < oldWeight) {
-#warning check if we have to set predecessor here as well
               result[cand->second]->setWeight(currentWeight);
             }
           }
@@ -334,77 +333,6 @@ class MultiCollectionEdgeExpander {
           } else {
             inserter(to, from, currentWeight, edge);
           }
-        }
-      }
-    }
-  }
-};
-
-class SimpleEdgeExpander {
-  //////////////////////////////////////////////////////////////////////////////
-  /// @briefCheck if the edges in this expander should be followed reverse
-  //////////////////////////////////////////////////////////////////////////////
-
-  bool _reverse;
-
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief all info required for edge collection
-  //////////////////////////////////////////////////////////////////////////////
-
-  EdgeCollectionInfo* _edgeCollection;
-
-  std::unordered_map<VPackSlice, size_t> _candidates;
-
- public:
-  SimpleEdgeExpander(bool reverse,
-                     EdgeCollectionInfo* edgeCollection)
-      : _reverse(reverse), _edgeCollection(edgeCollection) {}
-
-  void operator()(VPackSlice const& source,
-                  std::vector<ArangoDBPathFinder::Step*>& result) {
-    TRI_ASSERT(_edgeCollection != nullptr);
-
-    _candidates.clear();
-
-    auto inserter = [&](VPackSlice const s, VPackSlice const t,
-                        double currentWeight, VPackSlice edge) {
-      auto cand = _candidates.find(t);
-      if (cand == _candidates.end()) {
-        // Add weight
-        auto step = std::make_unique<ArangoDBPathFinder::Step>(
-            std::move(t), std::move(s), currentWeight, std::move(edge));
-        result.emplace_back(step.release());
-      } else {
-        // Compare weight
-        auto oldWeight = result[cand->second]->weight();
-        if (currentWeight < oldWeight) {
-#warning Check if we need to add the predecessor here as well
-          result[cand->second]->setWeight(currentWeight);
-        }
-      }
-    };
-
-    std::shared_ptr<OperationCursor> edgeCursor;
-    if (_reverse) {
-      edgeCursor = _edgeCollection->getReverseEdges(source);
-    } else {
-      edgeCursor = _edgeCollection->getEdges(source);
-    }
-    auto opRes = std::make_shared<OperationResult>(TRI_ERROR_NO_ERROR);
-    while (edgeCursor->hasMore()) {
-      edgeCursor->getMore(opRes, UINT64_MAX, false);
-      if (opRes->failed()) {
-        THROW_ARANGO_EXCEPTION(opRes->code);
-      }
-      VPackSlice edges = opRes->slice();
-      for (auto const& edge : VPackArrayIterator(edges)) {
-        VPackSlice const from = Transaction::extractFromFromDocument(edge);
-        VPackSlice const to = Transaction::extractToFromDocument(edge);
-        double currentWeight = _edgeCollection->weightEdge(edge);
-        if (from == source) {
-          inserter(from, to, currentWeight, edge);
-        } else {
-          inserter(to, from, currentWeight, edge);
         }
       }
     }
