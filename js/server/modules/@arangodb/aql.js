@@ -7271,41 +7271,6 @@ function RUN_DIJKSTRA_WITH_RESULT_HANDLE (func, graphName, options, result, afte
 /// @brief visitor callback function for absolute eccentricity traversal
 ////////////////////////////////////////////////////////////////////////////////
 
-function TRAVERSAL_ABSOLUTE_ECCENTRICITY_VISITOR (config, result, node, path) {
-  'use strict';
-  result[path.vertices[0]._id] = Math.max(node.dist, result[path.vertices[0]._id] || 0);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_absolute_eccentricity
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_ABSOLUTE_ECCENTRICITY (graphName, vertexExample, options) {
-  'use strict';
-  options = CLONE(options) || {};
-  if (! options.direction) {
-    options.direction =  'any';
-  }
-  if (! options.algorithm) {
-    options.algorithm = "dijkstra";
-  }
-  options.fromVertexExample = vertexExample;
-  options.toVertexExample = {};
-
-  options.visitor = TRAVERSAL_ABSOLUTE_ECCENTRICITY_VISITOR;
-  return RUN_DIJKSTRA_WITH_RESULT_HANDLE(
-    "ABSOLUTE_ECCENTRICITY",
-    graphName,
-    options,
-    {}
-  );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief visitor callback function for absolute eccentricity traversal
-////////////////////////////////////////////////////////////////////////////////
-
 function TRAVERSAL_ECCENTRICITY_VISITOR (config, result, node, path) {
   'use strict';
   if (path.edges.length > 0) {
@@ -7645,7 +7610,6 @@ exports.AQL_GRAPH_SHORTEST_PATH = AQL_GRAPH_SHORTEST_PATH;
 exports.AQL_GRAPH_ECCENTRICITY = AQL_GRAPH_ECCENTRICITY;
 exports.AQL_GRAPH_BETWEENNESS = AQL_GRAPH_BETWEENNESS;
 exports.AQL_GRAPH_CLOSENESS = AQL_GRAPH_CLOSENESS;
-exports.AQL_GRAPH_ABSOLUTE_ECCENTRICITY = AQL_GRAPH_ABSOLUTE_ECCENTRICITY;
 exports.AQL_GRAPH_ABSOLUTE_BETWEENNESS = AQL_GRAPH_ABSOLUTE_BETWEENNESS;
 exports.AQL_GRAPH_ABSOLUTE_CLOSENESS = AQL_GRAPH_ABSOLUTE_CLOSENESS;
 exports.AQL_NOT_NULL = AQL_NOT_NULL;
