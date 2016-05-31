@@ -1074,6 +1074,50 @@ static void JS_FiguresVocbaseCol(
 /// @brief was docuBlock collectionLoad
 ////////////////////////////////////////////////////////////////////////////////
 
+static void JS_LeaderResign(v8::FunctionCallbackInfo<v8::Value> const& args) {
+  TRI_V8_TRY_CATCH_BEGIN(isolate);
+  v8::HandleScope scope(isolate);
+
+  TRI_vocbase_t* vocbase = GetContextVocBase(isolate);
+
+  if (vocbase == nullptr) {
+    TRI_V8_THROW_EXCEPTION(TRI_ERROR_ARANGO_DATABASE_NOT_FOUND);
+  }
+
+  if (ServerState::instance()->isDBServer()) {
+    TRI_vocbase_col_t const* collection =
+        TRI_UnwrapClass<TRI_vocbase_col_t>(args.Holder(), WRP_VOCBASE_COL_TYPE);
+
+    if (collection == nullptr) {
+      TRI_V8_THROW_EXCEPTION_INTERNAL("cannot extract collection");
+    }
+
+    TRI_vocbase_t* vocbase = collection->_vocbase;
+    std::string collectionName = collection->name();
+    if (vocbase == nullptr) {
+      TRI_V8_THROW_EXCEPTION(TRI_ERROR_ARANGO_DATABASE_NOT_FOUND);
+    }
+
+    auto transactionContext = std::make_shared<V8TransactionContext>(vocbase, true);
+
+    SingleCollectionTransaction trx(transactionContext, collectionName, 
+                                    TRI_TRANSACTION_READ);
+    int res = trx.begin();
+    if (res != TRI_ERROR_NO_ERROR) {
+      TRI_V8_THROW_EXCEPTION(res);
+    }
+    TRI_document_collection_t* docColl = trx.documentCollection();
+    docColl->followers()->clear();
+  }
+
+  TRI_V8_RETURN_UNDEFINED();
+  TRI_V8_TRY_CATCH_END
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief was docuBlock collectionLoad
+////////////////////////////////////////////////////////////////////////////////
+
 static void JS_LoadVocbaseCol(v8::FunctionCallbackInfo<v8::Value> const& args) {
   TRI_V8_TRY_CATCH_BEGIN(isolate);
   v8::HandleScope scope(isolate);
@@ -1317,7 +1361,6 @@ static void JS_PropertiesVocbaseCol(
   }
 
   TRI_document_collection_t* document = collection->_collection;
-  TRI_collection_t* base = document;
 
   // check if we want to change some parameters
   if (0 < args.Length()) {
@@ -1337,18 +1380,18 @@ static void JS_PropertiesVocbaseCol(
         // only work under the lock
         WRITE_LOCKER(writeLocker, document->_infoLock);
 
-        if (base->_info.isVolatile() &&
+        if (document->_info.isVolatile() &&
             arangodb::basics::VelocyPackHelper::getBooleanValue(
-                slice, "waitForSync", base->_info.waitForSync())) {
+                slice, "waitForSync", document->_info.waitForSync())) {
           ReleaseCollection(collection);
           // the combination of waitForSync and isVolatile makes no sense
           TRI_V8_THROW_EXCEPTION_PARAMETER(
               "volatile collections do not support the waitForSync option");
         }
 
-        if (base->_info.isVolatile() !=
+        if (document->_info.isVolatile() !=
             arangodb::basics::VelocyPackHelper::getBooleanValue(
-                slice, "isVolatile", base->_info.isVolatile())) {
+                slice, "isVolatile", document->_info.isVolatile())) {
           TRI_V8_THROW_EXCEPTION_PARAMETER(
               "isVolatile option cannot be changed at runtime");
         }
@@ -1363,11 +1406,11 @@ static void JS_PropertiesVocbaseCol(
               "indexBuckets must be a two-power between 1 and 1024");
         }
 
-      }  // Leave the scope and free the JOURNAL lock
+      }  // Leave the scope and free the lock
 
       // try to write new parameter to file
-      bool doSync = base->_vocbase->_settings.forceSyncProperties;
-      res = base->updateCollectionInfo(base->_vocbase, slice, doSync);
+      bool doSync = document->_vocbase->_settings.forceSyncProperties;
+      res = document->updateCollectionInfo(document->_vocbase, slice, doSync);
 
       if (res != TRI_ERROR_NO_ERROR) {
         ReleaseCollection(collection);
@@ -1377,7 +1420,7 @@ static void JS_PropertiesVocbaseCol(
       try {
         VPackBuilder infoBuilder;
         infoBuilder.openObject();
-        TRI_CreateVelocyPackCollectionInfo(base->_info, infoBuilder);
+        TRI_CreateVelocyPackCollectionInfo(document->_info, infoBuilder);
         infoBuilder.close();
 
         // now log the property changes
@@ -1411,12 +1454,12 @@ static void JS_PropertiesVocbaseCol(
   TRI_GET_GLOBAL_STRING(IsSystemKey);
   TRI_GET_GLOBAL_STRING(IsVolatileKey);
   TRI_GET_GLOBAL_STRING(JournalSizeKey);
-  result->Set(DoCompactKey, v8::Boolean::New(isolate, base->_info.doCompact()));
-  result->Set(IsSystemKey, v8::Boolean::New(isolate, base->_info.isSystem()));
+  result->Set(DoCompactKey, v8::Boolean::New(isolate, document->_info.doCompact()));
+  result->Set(IsSystemKey, v8::Boolean::New(isolate, document->_info.isSystem()));
   result->Set(IsVolatileKey,
-              v8::Boolean::New(isolate, base->_info.isVolatile()));
+              v8::Boolean::New(isolate, document->_info.isVolatile()));
   result->Set(JournalSizeKey,
-              v8::Number::New(isolate, base->_info.maximalSize()));
+              v8::Number::New(isolate, document->_info.maximalSize()));
   result->Set(TRI_V8_ASCII_STRING("indexBuckets"),
               v8::Number::New(isolate, document->_info.indexBuckets()));
 
@@ -1434,7 +1477,7 @@ static void JS_PropertiesVocbaseCol(
   }
   TRI_GET_GLOBAL_STRING(WaitForSyncKey);
   result->Set(WaitForSyncKey,
-              v8::Boolean::New(isolate, base->_info.waitForSync()));
+              v8::Boolean::New(isolate, document->_info.waitForSync()));
 
   ReleaseCollection(collection);
   TRI_V8_RETURN(result);
@@ -1458,11 +1501,11 @@ static int RenameGraphCollections(v8::Isolate* isolate,
   v8::HandleScope scope(isolate);
 
   StringBuffer buffer(TRI_UNKNOWN_MEM_ZONE);
-  buffer.appendText("require('@arangodb/general-graph')._renameCollection(\"");
+  buffer.appendText("require('@arangodb/general-graph')._renameCollection(");
   buffer.appendJsonEncoded(oldName.c_str(), oldName.size());
-  buffer.appendText("\", \"");
+  buffer.appendChar(',');
   buffer.appendJsonEncoded(newName.c_str(), newName.size());
-  buffer.appendText("\");");
+  buffer.appendText(");");
 
   TRI_ExecuteJavaScriptString(
       isolate, isolate->GetCurrentContext(),
@@ -3093,6 +3136,8 @@ void TRI_InitV8collection(v8::Handle<v8::Context> context, TRI_server_t* server,
                        JS_FiguresVocbaseCol);
   TRI_AddMethodVocbase(isolate, rt, TRI_V8_ASCII_STRING("insert"),
                        JS_InsertVocbaseCol);
+  TRI_AddMethodVocbase(isolate, rt, TRI_V8_ASCII_STRING("leaderResign"),
+                       JS_LeaderResign, true);
   TRI_AddMethodVocbase(isolate, rt, TRI_V8_ASCII_STRING("load"),
                        JS_LoadVocbaseCol);
   TRI_AddMethodVocbase(isolate, rt, TRI_V8_ASCII_STRING("name"),

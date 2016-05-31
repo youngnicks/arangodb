@@ -87,6 +87,14 @@ void HttpHandlerFactory::setMaintenance(bool value) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief sets maintenance mode
+////////////////////////////////////////////////////////////////////////////////
+
+bool HttpHandlerFactory::isMaintenance() {
+  return MaintenanceMode ? true : false;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief authenticates a new request
 ///
 /// wrapper method that will consider disabled authentication etc.
@@ -143,9 +151,7 @@ HttpRequest* HttpHandlerFactory::createRequest(ConnectionInfo const& info,
                                                char const* ptr, size_t length) {
   HttpRequest* request = new HttpRequest(info, ptr, length, _allowMethodOverride);
 
-  if (request != nullptr) {
-    setRequestContext(request);
-  }
+  setRequestContext(request);
 
   return request;
 }
@@ -159,14 +165,15 @@ HttpHandler* HttpHandlerFactory::createHandler(HttpRequest* request) {
 
   // In the bootstrap phase, we would like that coordinators answer the 
   // following to endpoints, but not yet others:
-  if (MaintenanceMode &&
-      (!ServerState::instance()->isCoordinator() ||
-       (path != "/_api/shard-comm" && 
-        path.find("/_api/agency/agency-callbacks") == std::string::npos &&
-        path.find("/_api/aql") == std::string::npos))) { 
-    LOG(DEBUG) << "Maintenance mode: refused path: "
-               << path;
-    return new MaintenanceHandler(request);
+  if (MaintenanceMode) {
+    if ((!ServerState::instance()->isCoordinator() && 
+         path.find("/_api/agency/agency-callbacks") == std::string::npos) ||
+        (path != "/_api/shard-comm" && 
+         path.find("/_api/agency/agency-callbacks") == std::string::npos &&
+         path.find("/_api/aql") == std::string::npos)) { 
+      LOG(DEBUG) << "Maintenance mode: refused path: " << path;
+      return new MaintenanceHandler(request);
+    }
   }
 
   std::unordered_map<std::string, create_fptr> const& ii = _constructors;

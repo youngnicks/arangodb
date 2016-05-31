@@ -622,7 +622,6 @@
       }
 
       if (self.server !== "-local-") {
-        url = self.serverInfo.endpoint + "/_admin/aardvark/statistics/cluster";
         urlParams += "&type=short&DBserver=" + self.serverInfo.target;
 
         if (! self.history.hasOwnProperty(self.server)) {
@@ -668,7 +667,7 @@
         = "?filter=" + this.dygraphConfig.mapStatToFigure[figure].join();
 
       if (self.server !== "-local-") {
-        url = self.server.endpoint + "/_admin/aardvark/statistics/cluster";
+        url = self.server.endpoint + arangoHelper.databaseUrl("/_admin/aardvark/statistics/cluster");
         urlParams += "&type=long&DBserver=" + self.server.target;
 
         if (! self.history.hasOwnProperty(self.server)) {

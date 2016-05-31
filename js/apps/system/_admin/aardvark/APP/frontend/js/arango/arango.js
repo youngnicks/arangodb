@@ -138,7 +138,6 @@
       else {
         callback(true, undefined);
       }
-      console.log(frontendConfig.db);
       return frontendConfig.db;
     },
 
@@ -274,8 +273,31 @@
       this.buildSubNavBar(menus);
     },
 
+    scaleability: undefined,
+
     //nav for cluster/nodes view
     buildNodesSubNav: function(type) {
+
+      if (this.scaleability === undefined) {
+        var self = this;
+
+        $.ajax({
+          type: "GET",
+          cache: false,
+          url: arangoHelper.databaseUrl("/_admin/cluster/numberOfServers"),
+          contentType: "application/json",
+          processData: false,
+          success: function(data) {
+            if (data.numberOfCoordinators !== null && data.numberOfDBServers !== null) {
+              self.scaleability = true;
+              self.buildNodesSubNav();
+            }
+            else {
+              self.scaleability = false;
+            }
+          }
+        });
+      }
 
       var menus = {
         Coordinators: {
@@ -286,11 +308,28 @@
         }
       };
 
+      menus.Scale = {
+        route: '#sNodes',
+        disabled: true
+      };
+
       if (type === 'coordinator') {
         menus.Coordinators.active = true;
       }
+      else if (type === 'scale') {
+        if (this.scaleability === true) {
+          menus.Scale.active = true;
+        }
+        else {
+          window.App.navigate('#nodes', {trigger: true});
+        }
+      }
       else {
         menus.DBServers.active = true;
+      }
+
+      if (this.scaleability === true) {
+        menus.Scale.disabled = false;
       }
 
       this.buildSubNavBar(menus);
@@ -360,6 +399,10 @@
 
     arangoError: function (title, content, info) {
       window.App.notificationList.add({title:title, content: content, info: info, type: 'error'});
+    },
+
+    arangoWarning: function (title, content, info) {
+      window.App.notificationList.add({title:title, content: content, info: info, type: 'warning'});
     },
 
     hideArangoNotifications: function() {
@@ -668,7 +711,7 @@
 
     databaseUrl: function(url, databaseName) {
       if (url.substr(0, 5) === '/_db/') {
-        throw new Error("Calling databasUrl with a databased url (" + url + ") doesn't make any sense");
+        throw new Error("Calling databaseUrl with a databased url (" + url + ") doesn't make any sense");
       }
 
       if (!databaseName) {

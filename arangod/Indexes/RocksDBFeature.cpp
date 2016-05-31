@@ -152,6 +152,8 @@ RocksDBFeature* RocksDBFeature::instance() {
 }
 
 int RocksDBFeature::syncWal() {
+#ifndef _WIN32
+  // SyncWAL() always reports a "not implemented" error on Windows
   if (Instance == nullptr || !Instance->isEnabled()) {
     return TRI_ERROR_NO_ERROR;
   }
@@ -164,7 +166,7 @@ int RocksDBFeature::syncWal() {
     LOG(ERR) << "error syncing rocksdb WAL: " << status.ToString();
     return TRI_ERROR_INTERNAL;
   }
-
+#endif
   return TRI_ERROR_NO_ERROR;
 }
 
@@ -207,6 +209,11 @@ int RocksDBFeature::dropPrefix(std::string const& prefix) {
     std::string l;
     l.reserve(prefix.size() + builder.slice().byteSize());
     l.append(prefix);
+    // extend the prefix to at least 24 bytes
+    while (l.size() < RocksDBIndex::keyPrefixSize()) {
+      uint64_t value = 0;
+      l.append(reinterpret_cast<char const*>(&value), sizeof(uint64_t));
+    }
     l.append(builder.slice().startAs<char const>(), builder.slice().byteSize());
     
     builder.clear();
@@ -217,6 +224,11 @@ int RocksDBFeature::dropPrefix(std::string const& prefix) {
     std::string u;
     u.reserve(prefix.size() + builder.slice().byteSize());
     u.append(prefix);
+    // extend the prefix to at least 24 bytes
+    while (u.size() < RocksDBIndex::keyPrefixSize()) {
+      uint64_t value = UINT64_MAX;
+      u.append(reinterpret_cast<char const*>(&value), sizeof(uint64_t));
+    }
     u.append(builder.slice().startAs<char const>(), builder.slice().byteSize());
  
 #if 0 
@@ -226,21 +238,24 @@ int RocksDBFeature::dropPrefix(std::string const& prefix) {
     }
 #endif
 
+    // delete files in range lower..upper
     LOG(TRACE) << "dropping range: " << VPackSlice(l.c_str() + prefix.size()).toJson() << " - " << VPackSlice(u.c_str() + prefix.size()).toJson();
 
     rocksdb::Slice lower(l.c_str(), l.size());
     rocksdb::Slice upper(u.c_str(), u.size());
-    
-    rocksdb::Status status = rocksdb::DeleteFilesInRange(_db->GetBaseDB(), _db->GetBaseDB()->DefaultColumnFamily(), &lower, &upper);
 
-    if (!status.ok()) {
-      // if file deletion failed, we will still iterate over the remaining keys, so we
-      // don't need to abort and raise an error here
-      LOG(WARN) << "rocksdb file deletion failed";
+    {
+      rocksdb::Status status = rocksdb::DeleteFilesInRange(_db->GetBaseDB(), _db->GetBaseDB()->DefaultColumnFamily(), &lower, &upper);
+
+      if (!status.ok()) {
+        // if file deletion failed, we will still iterate over the remaining keys, so we
+        // don't need to abort and raise an error here
+        LOG(WARN) << "rocksdb file deletion failed";
+      }
     }
-
+    
     // go on and delete the remaining keys (delete files in range does not necessarily
-    // find them all, just complete files
+    // find them all, just complete files)
     
     auto comparator = RocksDBFeature::instance()->comparator();
     rocksdb::DB* db = _db->GetBaseDB();
@@ -251,19 +266,19 @@ int RocksDBFeature::dropPrefix(std::string const& prefix) {
 
     it->Seek(lower);
     while (it->Valid()) {
-      batch.Delete(it->key());
-      
       int res = comparator->Compare(it->key(), upper);
 
       if (res >= 0) {
         break;
       }
+      
+      batch.Delete(it->key());
 
       it->Next();
     }
     
     // now apply deletion batch
-    status = db->Write(rocksdb::WriteOptions(), &batch);
+    rocksdb::Status status = db->Write(rocksdb::WriteOptions(), &batch);
 
     if (!status.ok()) {
       LOG(WARN) << "rocksdb key deletion failed";

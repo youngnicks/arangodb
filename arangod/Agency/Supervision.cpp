@@ -24,165 +24,17 @@
 #include "Supervision.h"
 
 #include "Agent.h"
+#include "CleanOutServer.h"
+#include "FailedLeader.h"
+#include "FailedServer.h"
+#include "Job.h"
 #include "Store.h"
 
 #include "Basics/ConditionLocker.h"
 #include "VocBase/server.h"
 
 #include <thread>
-
 using namespace arangodb;
-
-namespace arangodb {
-namespace consensus {
-
-std::string printTimestamp(Supervision::TimePoint const& t) {
-  time_t tt = std::chrono::system_clock::to_time_t(t);
-  struct tm tb;
-  size_t const len (21);
-  char buffer[len];
-  TRI_gmtime(tt, &tb);
-  ::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &tb);
-  return std::string(buffer, len);
-}
-
-inline arangodb::consensus::write_ret_t makeReport(Agent* _agent,
-                                                   Builder const& report) {
-  query_t envelope = std::make_shared<Builder>();
-  try {
-    envelope->openArray();
-    envelope->add(report.slice());
-    envelope->close();
-  } catch (std::exception const& e) {
-    LOG_TOPIC(ERR, Logger::AGENCY) << "Supervision failed to make report.";
-    LOG_TOPIC(ERR, Logger::AGENCY) << e.what();
-  }
-  return _agent->write(envelope);
-}
-
-static std::string const pendingPrefix = "/Supervision/Jobs/Pending/";
-static std::string const collectionsPrefix = "/Plan/Collections/";
-static std::string const toDoPrefix = "/Target/ToDo";
-
-struct MoveShard : public Job {
-
-  MoveShard (std::string const& creator,    std::string const& database,
-             std::string const& collection, std::string const& shard,
-             std::string const& fromServer, std::string const& toServer,
-             uint64_t const& jobId, std::string const& agencyPrefix,
-             Agent* agent) {
-
-    todoEntry (creator, database, collection, shard, fromServer, toServer,
-               jobId, agencyPrefix, agent);
-    
-  }
-
-  void todoEntry (std::string const& creator,    std::string const& database,
-                  std::string const& collection, std::string const& shard,
-                  std::string const& fromServer, std::string const& toServer,
-                  uint64_t const& jobId, std::string const& agencyPrefix,
-                  Agent* agent) {
-    Builder todo;
-    todo.openArray(); todo.openObject();
-    todo.add(VPackValue(agencyPrefix + toDoPrefix + "/"
-                        + std::to_string(jobId)));
-    {
-      VPackObjectBuilder entry(&todo);
-      todo.add("creator", VPackValue(creator));
-      todo.add("type", VPackValue("moveShard"));
-      todo.add("database", VPackValue(database));
-      todo.add("collection", VPackValue(collection));
-      todo.add("shard", VPackValue(shard));
-      todo.add("fromServer", VPackValue(fromServer));
-      todo.add("toServer", VPackValue(toServer));
-    }
-    todo.close(); todo.close();
-    write_ret_t ret = makeReport(agent, todo);
-    
-  }
-
-  
-};
-
-struct FailedServer : public Job {
-  FailedServer(Node const& snapshot, Agent* agent, uint64_t jobId,
-               std::string const& failed, std::string agencyPrefix) {
-    // 1. find all shards in plan, where failed was leader.
-    // 2. swap positions in plan between failed and a random in sync follower
-
-    Node::Children const& databases =
-        snapshot("/Plan/Collections").children();
-
-    for (auto const& database : databases) {
-      for (auto const& collptr : database.second->children()) {
-        Node const& collection = *(collptr.second);
-        Node const& replicationFactor = collection("replicationFactor");
-        if (replicationFactor.slice().getUInt() > 1) {
-          for (auto const& shard : collection("shards").children()) {
-            VPackArrayIterator dbsit(shard.second->slice());
-
-            if ((*dbsit.begin()).copyString() != failed) {  // Cannot do much
-              continue;
-            }
-
-            //MoveShard ()
-            reportJobInSupervision(jobId, shard, failed, agencyPrefix);
-            planChanges(collptr, database, shard, agencyPrefix);
-          }
-        }
-      }
-    }
-  }
-
-  void reportJobInSupervision(uint64_t jobId,
-                              std::pair<std::string,
-                              std::shared_ptr<Node>> const& shard,
-                              std::string const& serverID,
-                              std::string const& agencyPrefix) {
-
-    std::string const& shardId = shard.first;
-    VPackSlice const& dbservers = shard.second->slice();
-    std::string path = agencyPrefix + pendingPrefix
-      + arangodb::basics::StringUtils::itoa(jobId);
-    query_t envelope = std::make_shared<Builder>();
-
-    Builder report;
-    report.openArray();
-    report.openObject();
-    report.add(path, VPackValue(VPackValueType::Object));
-    report.add("type", VPackValue("shard"));
-    report.add("action", VPackValue("DB server fail"));
-    report.add("failed", VPackValue(serverID));
-    report.add("shard", VPackValue(shardId));
-    report.add("dbservers", VPackValue(serverID));
-    report.add("old", dbservers);  // old order
-
-    report.add("new", VPackValue(VPackValueType::Array));
-    for (size_t i = 1; i < dbservers.length(); ++i) {  // new order
-      report.add(dbservers[i]);
-    }
-    report.add(dbservers[0]);
-    report.close();
-
-    report.close();
-    report.close();
-    report.close();
-    // makeReport(envelope, report);
-
-  }
-
-  void planChanges(
-      std::pair<std::string, std::shared_ptr<Node>> const& database,
-      std::pair<std::string, std::shared_ptr<Node>> const& collection,
-      std::pair<std::string, std::shared_ptr<Node>> const& shard,
-      std::string const& agencyPrefix) {
-    std::string path = agencyPrefix + collectionsPrefix + database.first + "/" +
-                       collection.first + "/shards/" + shard.first;
-
-  }
-};
-}
-}
 
 using namespace arangodb::consensus;
 
@@ -193,7 +45,7 @@ Supervision::Supervision()
       _agent(nullptr),
       _snapshot("Supervision"),
       _frequency(5),
-      _gracePeriod(10),
+      _gracePeriod(15),
       _jobId(0),
       _jobIdMax(0) {}
 
@@ -206,7 +58,7 @@ void Supervision::wakeUp() {
 }
 
 static std::string const syncPrefix = "/Sync/ServerStates/";
-static std::string const supervisionPrefix = "/Supervision/Health/";
+static std::string const healthPrefix = "/Supervision/Health/";
 static std::string const planDBServersPrefix = "/Plan/DBServers";
 
 std::vector<check_t> Supervision::checkDBServers() {
@@ -215,63 +67,65 @@ std::vector<check_t> Supervision::checkDBServers() {
       _snapshot(planDBServersPrefix).children();
 
   for (auto const& machine : machinesPlanned) {
-    ServerID const& serverID = machine.first;
-    auto it = _vitalSigns.find(serverID);
-    std::string lastHeartbeatTime =
-        _snapshot(syncPrefix + serverID + "/time").toJson();
-    std::string lastHeartbeatStatus =
-        _snapshot(syncPrefix + serverID + "/status").toJson();
 
-    if (it != _vitalSigns.end()) {  // Existing server
+    bool good = false;
+    std::string lastHeartbeatTime, lastHeartbeatStatus, lastHeartbeatAcked,
+      lastStatus, heartbeatTime, heartbeatStatus, serverID;
 
-      query_t report = std::make_shared<Builder>();
-      report->openArray();
-      report->openArray();
-      report->openObject();
-      report->add(_agencyPrefix + supervisionPrefix + serverID,
-                  VPackValue(VPackValueType::Object));
-      report->add("LastHearbeatReceived",
-                  VPackValue(printTimestamp(it->second->myTimestamp)));
-      report->add("LastHearbeatSent", VPackValue(it->second->serverTimestamp));
-      report->add("LastHearbeatStatus", VPackValue(lastHeartbeatStatus));
-
-      if (it->second->serverTimestamp == lastHeartbeatTime) {
-        report->add("Status", VPackValue("DOWN"));
-        std::chrono::seconds t{0};
-        t = std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::system_clock::now() - it->second->myTimestamp);
-        if (t.count() > _gracePeriod) {  // Failure
-          if (it->second->maintenance() == 0) {
-            it->second->maintenance(TRI_NewTickServer());
-            FailedServer fsj(_snapshot, _agent, it->second->maintenance(),
-                             serverID, _agencyPrefix);
-          }
-        }
-
-      } else {
-        report->add("Status", VPackValue("UP"));
-        it->second->update(lastHeartbeatStatus, lastHeartbeatTime);
+    serverID        = machine.first;
+    heartbeatTime   = _snapshot(syncPrefix + serverID + "/time").toJson();
+    heartbeatStatus = _snapshot(syncPrefix + serverID + "/status").toJson();
+    
+    try {           // Existing
+      lastHeartbeatTime =
+        _snapshot(healthPrefix + serverID + "/LastHeartbeatSent").toJson();
+      lastHeartbeatStatus =
+        _snapshot(healthPrefix + serverID + "/LastHeartbeatStatus").toJson();
+      lastHeartbeatAcked =
+        _snapshot(healthPrefix + serverID + "/LastHeartbeatAcked").toJson();
+      lastStatus = _snapshot(healthPrefix + serverID + "/Status").toJson();
+      if (lastHeartbeatTime != heartbeatTime) { // Update
+        good = true;
       }
-
-      report->close();
-      report->close();
-      report->close();
-      report->close();
-      _agent->write(report);
-
-    } else {  // New server
-      _vitalSigns[serverID] =
-          std::make_shared<VitalSign>(lastHeartbeatStatus, lastHeartbeatTime);
+    } catch (...) { // New server
+      good = true;
     }
-  }
-
-  auto itr = _vitalSigns.begin();
-  while (itr != _vitalSigns.end()) {
-    if (machinesPlanned.find(itr->first) == machinesPlanned.end()) {
-      itr = _vitalSigns.erase(itr);
+    
+    query_t report = std::make_shared<Builder>();
+    report->openArray();
+    report->openArray();
+    report->openObject();
+    report->add(_agencyPrefix + healthPrefix + serverID,
+                VPackValue(VPackValueType::Object));
+    report->add("LastHeartbeatSent", VPackValue(heartbeatTime));
+    report->add("LastHeartbeatStatus", VPackValue(heartbeatStatus));
+    
+    if (good) {
+      report->add("LastHeartbeatAcked",
+                  VPackValue(
+                    timepointToString(std::chrono::system_clock::now())));
+      report->add("Status", VPackValue("UP"));
     } else {
-      ++itr;
+      std::chrono::seconds t{0};
+      t = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now()-stringToTimepoint(lastHeartbeatAcked));
+      if (t.count() > _gracePeriod) {  // Failure
+        if (lastStatus == "DOWN") {
+          report->add("Status", VPackValue("FAILED"));
+          FailedServer fsj(_snapshot, _agent, std::to_string(_jobId++),
+                           "supervision", _agencyPrefix, serverID);
+        }
+      } else {
+        report->add("Status", VPackValue("DOWN"));
+      }
     }
+
+    report->close();
+    report->close();
+    report->close();
+    report->close();
+    _agent->write(report);
+      
   }
 
   return ret;
@@ -315,12 +169,9 @@ void Supervision::run() {
         break;
       }
 
-      MoveShard ("coordinator1", "_system", "41", "s42", "DBServer1",
-                 "DBServer2", _jobId++, _agencyPrefix, _agent);
-
     }
 
-    // Wait unless leader 
+    // Do nothing unless leader 
     if (_agent->leading()) {
       timedout = _cv.wait(_frequency * 1000000);  // quarter second
     } else {
@@ -329,11 +180,33 @@ void Supervision::run() {
 
     // Do supervision
     doChecks(timedout);
-
+    workJobs();
     
 
   }
   
+}
+
+void Supervision::workJobs() {
+
+  for (auto const& todoEnt : _snapshot(toDoPrefix).children()) {
+    Node const& todo = *todoEnt.second;
+    if (todo("type").toJson() == "failedServer") {
+      FailedServer fs (
+        _snapshot, _agent, todo("jobId").toJson(), todo("creator").toJson(),
+        _agencyPrefix, todo("server").toJson());
+    }
+  }
+
+  for (auto const& todoEnt : _snapshot(pendingPrefix).children()) {
+    Node const& todo = *todoEnt.second;
+    if (todo("type").toJson() == "failedServer") {
+      FailedServer fs (
+        _snapshot, _agent, todo("jobId").toJson(), todo("creator").toJson(),
+        _agencyPrefix, todo("server").toJson());
+    }
+  }
+
 }
 
 // Start thread
@@ -357,7 +230,7 @@ bool Supervision::updateAgencyPrefix (size_t nTries, int intervalSec) {
   for (size_t i = 0; i < nTries; i++) {
     _snapshot = _agent->readDB().get("/");
     if (_snapshot.children().size() > 0) {
-      _agencyPrefix = _snapshot.children().begin()->first;
+      _agencyPrefix = std::string("/") + _snapshot.children().begin()->first;
       LOG_TOPIC(DEBUG, Logger::AGENCY) << "Agency prefix is " << _agencyPrefix;
       return true;
     }
@@ -394,7 +267,7 @@ bool Supervision::getUniqueIds() {
     uniq.close();
     uniq.close();
 
-    auto result = makeReport(_agent, uniq);
+    auto result = transact(_agent, uniq);
     if (result.indices[0]) {
       _agent->waitFor(result.indices[0]);
       success = true;

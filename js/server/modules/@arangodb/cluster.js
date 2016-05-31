@@ -33,6 +33,7 @@ var arangodb = require("@arangodb");
 var ArangoCollection = arangodb.ArangoCollection;
 var ArangoError = arangodb.ArangoError;
 var request = require("@arangodb/request").request;
+var wait = require("internal").wait;
 
 var endpointToURL = function (endpoint) {
   if (endpoint.substr(0,6) === "ssl://") {
@@ -46,81 +47,80 @@ var endpointToURL = function (endpoint) {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief create a unique identifier
-////////////////////////////////////////////////////////////////////////////////
-
-function getUUID () {
-  var rand = require("internal").rand;
-  var sha1 = require("internal").sha1;
-  return sha1("blabla"+rand());
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief create and post an AQL query that will fetch a READ lock on a
 /// collection and will time out after a number of seconds
 ////////////////////////////////////////////////////////////////////////////////
 
-function startReadingQuery (endpoint, collName, timeout) {
-  var uuid = getUUID();
-  var query = {"query": `LET t=SLEEP(${timeout})
-                         FOR x IN ${collName}
-                         LIMIT 1
-                         RETURN "${uuid}" + t`};
-  var url = endpointToURL(endpoint);
-  var r = request({ url: url + "/_api/cursor", body: JSON.stringify(query),
-                    method: "POST", headers:  {"x-arango-async": true} });
-  if (r.status !== 202) {
-    console.error("startReadingQuery: Could not start read transaction for shard", collName, r);
+function startReadLockOnLeader (endpoint, database, collName, timeout) {
+  var url = endpointToURL(endpoint) + "/_db/" + database;
+  var r = request({ url: url + "/_api/replication/holdReadLockCollection", 
+                    method: "GET" });
+  if (r.status !== 200) {
+    console.error("startReadLockOnLeader: Could not get ID for shard",
+                  collName, r);
     return false;
   }
-  var count = 0;
-  while (true) {
-    if (++count > 15) {
-      console.error("startReadingQuery: Read transaction did not begin. Giving up after 10 tries");
-      return false;
-    }
-    require("internal").wait(1);
-    r = request({ url: url + "/_api/query/current", method: "GET" });
-    if (r.status !== 200) {
-      console.error("startReadingQuery: Bad response from /_api/query/current",
-                    r);
-      continue;
-    }
-    try {
-      r = JSON.parse(r.body);
-    }
-    catch (err) {
-      console.error("startReadingQuery: Bad response body from",
-                    "/_api/query/current", r, JSON.stringify(err));
-      continue;
-    }
-    for (var i = 0; i < r.length; i++) {
-      if (r[i].query.indexOf(uuid) !== -1) {
-        // Bingo, found it: 
-        if (r[i].state === "executing") {
-          console.info("startReadingQuery: OK");
-          return r[i].id;
-        }
-        console.info("startReadingQuery: query found but not yet executing");
-        break;
-      }
-    }
-    console.info("startReadingQuery: Did not find query.", r);
+  try {
+    r = JSON.parse(r.body);
   }
+  catch (err) {
+    console.error("startReadLockOnLeader: Bad response body from",
+                  "/_api/replication/holdReadLockCollection", r, 
+                  JSON.stringify(err));
+    return false;
+  }
+  const id = r.id;
+
+  var body = { "id": id, "collection": collName, "ttl": timeout };
+  r = request({ url: url + "/_api/replication/holdReadLockCollection", 
+                body: JSON.stringify(body),
+                method: "POST", headers:  {"x-arango-async": "store"} });
+  if (r.status !== 202) {
+    console.error("startReadLockOnLeader: Could not start read lock for shard",
+                  collName, r);
+    return false;
+  }
+  var rr = r;  // keep a copy
+
+  var count = 0;
+  while (++count < 20) {   // wait for some time until read lock established:
+    // Now check that we hold the read lock:
+    r = request({ url: url + "/_api/replication/holdReadLockCollection", 
+                  body: JSON.stringify(body),
+                  method: "PUT" });
+    if (r.status === 200) {
+      return id;
+    }
+    console.debug("startReadLockOnLeader: Do not see read lock yet...");
+    wait(0.5);
+  }
+  var asyncJobId = rr.headers["x-arango-async-id"];
+  r = request({ url: url + "/_api/job/" + asyncJobId, body: "", method: "PUT"});
+  console.error("startReadLockOnLeader: giving up, async result:", r);
+  return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief cancel such a query, return whether or not the query was found
 ////////////////////////////////////////////////////////////////////////////////
 
-function cancelReadingQuery (endpoint, queryid) {
-  var url = endpointToURL(endpoint) + "/_api/query/" + queryid;
-  var r = request({url, method: "DELETE" });
-  if (r.status !== 200) {
-    console.error("CancelReadingQuery: error", r);
+function cancelReadLockOnLeader (endpoint, database, lockJobId) {
+  var url = endpointToURL(endpoint) + "/_db/" + database + 
+            "/_api/replication/holdReadLockCollection";
+  var r;
+  var body = {"id":lockJobId};
+  try {
+    r = request({url, body: JSON.stringify(body), method: "DELETE" });
+  }
+  catch (e) {
+    console.error("cancelReadLockOnLeader: exception caught:", e);
     return false;
   }
-  console.info("CancelReadingQuery: success");
+  if (r.status !== 200) {
+    console.error("cancelReadLockOnLeader: error", r);
+    return false;
+  }
+  console.debug("cancelReadLockOnLeader: success");
   return true;
 }
 
@@ -128,14 +128,15 @@ function cancelReadingQuery (endpoint, queryid) {
 /// @brief cancel barrier from sync
 ////////////////////////////////////////////////////////////////////////////////
 
-function cancelBarrier (endpoint, barrierId) {
-  var url = endpointToURL(endpoint) + "/_api/replication/barrier/" + barrierId;
+function cancelBarrier (endpoint, database, barrierId) {
+  var url = endpointToURL(endpoint) + "/_db/" + database +
+            "/_api/replication/barrier/" + barrierId;
   var r = request({url, method: "DELETE" });
   if (r.status !== 200 && r.status !== 204) {
     console.error("CancelBarrier: error", r);
     return false;
   }
-  console.info("cancelBarrier: success");
+  console.debug("cancelBarrier: success");
   return true;
 }
 
@@ -143,9 +144,10 @@ function cancelBarrier (endpoint, barrierId) {
 /// @brief tell leader that we are in sync
 ////////////////////////////////////////////////////////////////////////////////
 
-function addShardFollower(endpoint, shard) {
-  console.info("addShardFollower: tell the leader to put us into the follower list...");
-  var url = endpointToURL(endpoint) + "/_api/replication/addFollower";
+function addShardFollower(endpoint, database, shard) {
+  console.debug("addShardFollower: tell the leader to put us into the follower list...");
+  var url = endpointToURL(endpoint) + "/_db/" + database + 
+            "/_api/replication/addFollower";
   var body = {followerId: ArangoServerState.id(), shard };
   var r = request({url, body: JSON.stringify(body), method: "PUT"});
   if (r.status !== 200) {
@@ -373,9 +375,8 @@ function dropLocalDatabases (plannedDatabases, writeLocked) {
               console.info("stopping replication applier first");
               rep.applier.stop();
             }
-            db._useDatabase("_system");
           }
-          catch (err) {
+          finally {
             db._useDatabase("_system");
           }
         }
@@ -449,6 +450,7 @@ function handleDatabaseChanges (plan, current, writeLocked) {
 ////////////////////////////////////////////////////////////////////////////////
 
 function createLocalCollections (plannedCollections, planVersion,
+                                 currentCollections,
                                  takeOverResponsibility, writeLocked) {
   var ourselves = global.ArangoServerState.id();
   
@@ -480,8 +482,6 @@ function createLocalCollections (plannedCollections, planVersion,
     for (database in plannedCollections) {
       if (plannedCollections.hasOwnProperty(database)) {
         if (localDatabases.hasOwnProperty(database)) {
-          // save old database name
-          var previousDatabase = db._name();
           // switch into other database
           db._useDatabase(database);
 
@@ -505,7 +505,16 @@ function createLocalCollections (plannedCollections, planVersion,
               for (shard in shards) {
                 if (shards.hasOwnProperty(shard)) {
                   var didWrite = false;
-                  if (shards[shard][0] === ourselves) {
+                  if (shards[shard].indexOf(ourselves) >= 0) {
+                    var isLeader = shards[shard][0] === ourselves;
+                    var wasLeader = isLeader;
+                    try {
+                      var currentServers = currentCollections[database][collection][shard].servers;
+                      wasLeader = currentServers[0] === ourselves;
+                    }
+                    catch(err) {
+                    }
+
                     // found a shard we are responsible for
 
                     var error = { error: false, errorNum: 0,
@@ -538,12 +547,18 @@ function createLocalCollections (plannedCollections, planVersion,
                             JSON.stringify(err2));
                       }
 
-                      writeLocked({ part: "Current" },
-                          createCollectionAgency,
-                          [ database, shard, collInfo, error ]);
-                      didWrite = true;
+                      if (isLeader) {
+                        writeLocked({ part: "Current" },
+                            createCollectionAgency,
+                            [ database, shard, collInfo, error ]);
+                        didWrite = true;
+                      }
                     }
                     else {
+                      if (!isLeader && wasLeader) {
+                        db._collection(shard).leaderResign();
+                      }
+
                       if (localCollections[shard].status !== collInfo.status) {
                         console.info("detected status change for local shard '%s/%s'",
                             database,
@@ -561,10 +576,12 @@ function createLocalCollections (plannedCollections, planVersion,
                               shard);
                           db._collection(shard).load();
                         }
-                        writeLocked({ part: "Current" },
-                            createCollectionAgency,
-                            [ database, shard, collInfo, error ]);
-                        didWrite = true;
+                        if (isLeader) {
+                          writeLocked({ part: "Current" },
+                              createCollectionAgency,
+                              [ database, shard, collInfo, error ]);
+                          didWrite = true;
+                        }
                       }
 
                       // collection exists, now compare collection properties
@@ -591,18 +608,22 @@ function createLocalCollections (plannedCollections, planVersion,
                           error = { error: true, errorNum: err3.errorNum,
                             errorMessage: err3.errorMessage };
                         }
-                        writeLocked({ part: "Current" },
-                            createCollectionAgency,
-                            [ database, shard, collInfo, error ]);
-                        didWrite = true;
+                        if (isLeader) {
+                          writeLocked({ part: "Current" },
+                              createCollectionAgency,
+                              [ database, shard, collInfo, error ]);
+                          didWrite = true;
+                        }
                       }
                     }
 
                     if (error.error) {
                       if (takeOverResponsibility && !didWrite) {
-                        writeLocked({ part: "Current" },
-                            takeOver,
-                            [ database, shard, collInfo, error ]);
+                        if (isLeader) {
+                          writeLocked({ part: "Current" },
+                              takeOver,
+                              [ database, shard, collInfo, error ]);
+                        }
                       }
                       continue;  // No point to look for properties and
                       // indices, if the creation has not worked
@@ -639,7 +660,7 @@ function createLocalCollections (plannedCollections, planVersion,
 
                           changed = true;
                         }
-                        if (changed) {
+                        if (changed && isLeader) {
                           writeLocked({ part: "Current" },
                               createCollectionAgency,
                               [ database, shard, collInfo, error ]);
@@ -679,7 +700,7 @@ function createLocalCollections (plannedCollections, planVersion,
                           }
                         }
                       }
-                      if (changed2) {
+                      if (changed2 && isLeader) {
                         writeLocked({ part: "Current" },
                             createCollectionAgency,
                             [ database, shard, collInfo, error ]);
@@ -687,7 +708,8 @@ function createLocalCollections (plannedCollections, planVersion,
                       }
                     }
 
-                    if (takeOverResponsibility && !didWrite) {
+                    if ((takeOverResponsibility && !didWrite && isLeader) ||
+                        (!didWrite && isLeader && !wasLeader)) {
                       writeLocked({ part: "Current" },
                           takeOver,
                           [ database, shard, collInfo, error ]);
@@ -702,10 +724,11 @@ function createLocalCollections (plannedCollections, planVersion,
           }
           catch (err) {
             // always return to previous database
-            db._useDatabase(previousDatabase);
+            db._useDatabase("_system");
             throw err;
           }
 
+          db._useDatabase("_system");
         }
       }
     }
@@ -755,8 +778,6 @@ function dropLocalCollections (plannedCollections, writeLocked) {
     if (localDatabases.hasOwnProperty(database)) {
       var removeAll = ! plannedCollections.hasOwnProperty(database);
 
-      // save old database name
-      var previousDatabase = db._name();
       // switch into other database
       db._useDatabase(database);
 
@@ -791,9 +812,10 @@ function dropLocalCollections (plannedCollections, writeLocked) {
         }
       }
       catch (err) {
-        db._useDatabase(previousDatabase);
+        db._useDatabase("_system");
         throw err;
       }
+      db._useDatabase("_system");
     }
   }
 }
@@ -804,8 +826,6 @@ function dropLocalCollections (plannedCollections, writeLocked) {
 
 function cleanupCurrentCollections (plannedCollections, currentCollections,
                                     writeLocked) {
-  var ourselves = global.ArangoServerState.id();
-
   var dropCollectionAgency = function (database, collection, shardID) {
     try {
       global.ArangoAgency.remove("Current/Collections/" + database + "/" + collection + "/" + shardID);
@@ -834,11 +854,9 @@ function cleanupCurrentCollections (plannedCollections, currentCollections,
           for (shard in shards) {
             if (shards.hasOwnProperty(shard)) {
 
-              if (shards[shard].servers[0] === ourselves &&
-                  (! shardMap.hasOwnProperty(shard) ||
-                   shardMap[shard].indexOf(ourselves) !== 0)) {
-                // found an entry in current of a shard that we used to be 
-                // leader for but that we are no longer leader for
+              if (! shardMap.hasOwnProperty(shard)) {
+                // found an entry in current of a shard that is no longer
+                // mentioned in the plan
                 console.info("cleaning up entry for shard '%s' of '%s/%s",
                              shard,
                              database,
@@ -858,12 +876,186 @@ function cleanupCurrentCollections (plannedCollections, currentCollections,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief launch a scheduled job if needed
+////////////////////////////////////////////////////////////////////////////////
+
+function launchJob() {
+  const registerTask = require("internal").registerTask;
+  var jobs = global.KEYSPACE_GET("shardSynchronization");
+  if (jobs.running === null) {
+    var shards = Object.keys(jobs.scheduled);
+    if (shards.length > 0) {
+      var jobInfo = jobs.scheduled[shards[0]];
+      registerTask({
+        database: jobInfo.database,
+        params: {database: jobInfo.database, shard: jobInfo.shard, 
+                 planId: jobInfo.planId, leader: jobInfo.leader},
+        command: function(params) {
+          require("@arangodb/cluster").synchronizeOneShard(
+            params.database, params.shard, params.planId, params.leader);
+        }});
+      global.KEY_SET("shardSynchronization", "running", jobInfo);
+      console.debug("scheduleOneShardSynchronization: have launched job", jobInfo);
+      delete jobs.scheduled[shards[0]];
+      global.KEY_SET("shardSynchronization", "scheduled", jobs.scheduled);
+    }
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief synchronize one shard, this is run as a V8 task
+////////////////////////////////////////////////////////////////////////////////
+
+function synchronizeOneShard(database, shard, planId, leader) {
+  // synchronize this shard from the leader
+  // this function will throw if anything goes wrong
+
+  var ok = false;
+  const rep = require("@arangodb/replication");
+
+  console.info("synchronizeOneShard: trying to synchronize local shard '%s/%s' for central '%s/%s'",
+               database, shard, database, planId);
+  try {
+    var ep = ArangoClusterInfo.getServerEndpoint(leader);
+    // First once without a read transaction:
+    var sy;
+    var count = 3600;   // Try for a full hour, this is because there
+                        // can only be one syncCollection in flight
+                        // at a time
+    while (true) {
+      try {
+        sy = rep.syncCollection(shard, 
+            { endpoint: ep, incremental: true,
+              keepBarrier: true });
+        break;
+      }
+      catch (err) {
+        console.info("synchronizeOneShard: syncCollection did not work,",
+                     "trying again later for shard", shard);
+      }
+      if (--count <= 0) {
+        console.error("synchronizeOneShard: syncCollection did not work",
+                      "after many tries, giving up on shard", shard);
+        throw "syncCollection did not work";
+      }
+      wait(1.0);
+    }
+
+    if (sy.error) {
+      console.error("synchronizeOneShard: could not initially synchronize",
+                    "shard ", shard, sy);
+      throw "Initial sync for shard " + shard + " failed";
+    } else {
+      if (sy.collections.length === 0 ||
+          sy.collections[0].name !== shard) {
+        cancelBarrier(ep, database, sy.barrierId);
+        throw "Shard " + shard + " seems to be gone from leader!";
+      } else {
+        // Now start a read transaction to stop writes:
+        var lockJobId = false;
+        try {
+          lockJobId = startReadLockOnLeader(ep, database,
+                                            shard, 300);
+          console.debug("lockJobId:", lockJobId);
+        }
+        catch (err1) {
+          console.error("synchronizeOneShard: exception in startReadLockOnLeader:", err1);
+        }
+        finally {
+          cancelBarrier(ep, database, sy.barrierId);
+        }
+        if (lockJobId !== false) {
+          try {
+            var sy2 = rep.syncCollectionFinalize(
+              database, shard, sy.collections[0].id, 
+              sy.lastLogTick, { endpoint: ep });
+            if (sy2.error) {
+              console.error("synchronizeOneShard: Could not synchronize shard",
+                            shard, sy2);
+              ok = false;
+            } else {
+              ok = addShardFollower(ep, database, shard);
+            }
+          }
+          catch (err3) {
+            console.error("synchronizeOneshard: exception in",
+                          "syncCollectionFinalize:", err3);
+          }
+          finally {
+            if (!cancelReadLockOnLeader(ep, database, 
+                                        lockJobId)) {
+              console.error("synchronizeOneShard: read lock has timed out",
+                            "for shard", shard);
+              ok = false;
+            }
+          }
+        } else {
+          console.error("synchronizeOneShard: lockJobId was false for shard",
+                        shard);
+        }
+        if (ok) {
+          console.info("synchronizeOneShard: synchronization worked for shard",
+                       shard);
+        } else {
+          throw "Did not work for shard " + shard + ".";  
+          // just to log below in catch
+        }
+      }
+    }
+  }
+  catch (err2) {
+    console.error("synchronization of local shard '%s/%s' for central '%s/%s' failed: %s",
+                  database, shard, database, planId, JSON.stringify(err2));
+  }
+  // Tell others that we are done:
+  global.KEY_SET("shardSynchronization", "running", null);
+  launchJob();  // start a new one if needed
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief schedule a shard synchronization
+////////////////////////////////////////////////////////////////////////////////
+
+function scheduleOneShardSynchronization(database, shard, planId, leader) {
+  console.debug("scheduleOneShardSynchronization:", database, shard, planId,
+                leader);
+  var jobs;
+  try {
+    jobs = global.KEYSPACE_GET("shardSynchronization");
+  }
+  catch (e) {
+    global.KEYSPACE_CREATE("shardSynchronization");
+    global.KEY_SET("shardSynchronization", "scheduled", {});
+    global.KEY_SET("shardSynchronization", "running", null);
+    jobs = { scheduled: {}, running: null };
+  }
+
+  if ((jobs.running !== null && jobs.running.shard === shard) ||
+      jobs.scheduled.hasOwnProperty(shard)) {
+    console.debug("task is already running or scheduled,",
+                  "ignoring scheduling request");
+    return false;
+  }
+
+  // If we reach this, we actually have to schedule a new task:
+  var jobInfo = { database, shard, planId, leader };
+  jobs.scheduled[shard] = jobInfo;
+  global.KEY_SET("shardSynchronization", "scheduled", jobs.scheduled);
+  console.debug("scheduleOneShardSynchronization: have scheduled job", jobInfo);
+  if (jobs.running === null) {  // no job scheduled, so start it:
+    launchJob();
+  }
+  return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief synchronize collections for which we are followers (synchronously
 /// replicated shards)
 ////////////////////////////////////////////////////////////////////////////////
 
 function synchronizeLocalFollowerCollections (plannedCollections,
                                               currentCollections) {
+  var ok = true;
   var ourselves = global.ArangoServerState.id();
 
   var db = require("internal").db;
@@ -871,14 +1063,10 @@ function synchronizeLocalFollowerCollections (plannedCollections,
   var localDatabases = getLocalDatabases();
   var database;
 
-  var rep = require("@arangodb/replication");
-
   // iterate over all matching databases
   for (database in plannedCollections) {
     if (plannedCollections.hasOwnProperty(database)) {
       if (localDatabases.hasOwnProperty(database)) {
-        // save old database name
-        var previousDatabase = db._name();
         // switch into other database
         db._useDatabase(database);
 
@@ -910,68 +1098,14 @@ function synchronizeLocalFollowerCollections (plannedCollections,
                         typeof inCurrent.servers !== "object" ||
                         typeof inCurrent.servers[0] !== "string" ||
                         inCurrent.servers[0] === "") {
-                      console.info("Leader has not yet created shard, let's",
-                                   "come back later to this shard...");
+                      console.debug("Leader has not yet created shard, let's",
+                                    "come back later to this shard...");
                     } else {
                       if (inCurrent.servers.indexOf(ourselves) === -1) {
-                        // we not in there - must synchronize this shard from
-                        // the leader
-                        console.info("trying to synchronize local shard '%s/%s' for central '%s/%s'",
-                                     database,
-                                     shard,
-                                     database,
-                                     collInfo.planId);
-                        try {
-                          var ep = ArangoClusterInfo.getServerEndpoint(
-                                inCurrent.servers[0]);
-                          // First once without a read transaction:
-                          var sy = rep.syncCollection(shard, 
-                            { endpoint: ep, incremental: true,
-                              keepBarrier: true });
-                          if (sy.error) {
-                            console.error("Could not initially synchronize shard ", shard, sy);
-                          } else {
-                            var ok = false;
-                            // Now start a read transaction to stop writes:
-                            var queryid;
-                            try {
-                              queryid = startReadingQuery(ep, shard, 300);
-                            }
-                            finally {
-                              cancelBarrier(ep, sy.barrierId);
-                            }
-                            try {
-                              var sy2 = rep.syncCollectionFinalize(
-                                shard, sy.collections[0].id, sy.lastLogTick,
-                                { endpoint: ep });
-                              if (sy2.error) {
-                                console.error("Could not synchronize shard", shard,
-                                              sy2);
-                                ok = false;
-                              } else {
-                                ok = addShardFollower(ep, shard);
-                              }
-                            }
-                            finally {
-                              if (!cancelReadingQuery(ep, queryid)) {
-                                console.error("Read transaction has timed out for shard", shard);
-                                ok = false;
-                              }
-                            }
-                            if (ok) {
-                              console.info("Synchronization worked for shard", shard);
-                            } else {
-                              throw "Did not work.";  // just to log below in catch
-                            }
-                          }
-                        }
-                        catch (err2) {
-                          console.error("synchronization of local shard '%s/%s' for central '%s/%s' failed: %s",
-                                        database,
-                                        shard,
-                                        database,
-                                        collInfo.planId,
-                                        JSON.stringify(err2));
+                        if (!scheduleOneShardSynchronization(
+                                database, shard, collInfo.planId,
+                                inCurrent.servers[0])) {
+                          ok = false;
                         }
                       }
                     }
@@ -983,13 +1117,15 @@ function synchronizeLocalFollowerCollections (plannedCollections,
         }
         catch (err) {
           // always return to previous database
-          db._useDatabase(previousDatabase);
+          db._useDatabase("_system");
           throw err;
         }
 
+        db._useDatabase("_system");
       }
     }
   }
+  return ok;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1004,14 +1140,20 @@ function handleCollectionChanges (plan, current, takeOverResponsibility,
   var ok = true;
 
   try {
-    // Note that createLocalCollections and dropLocalCollections do not 
+    createLocalCollections(plannedCollections, plan.Version, currentCollections,
+                           takeOverResponsibility, writeLocked);
+    // Note that dropLocalCollections does not 
     // need the currentCollections, since they compare the plan with
     // the local situation.
-    createLocalCollections(plannedCollections, plan.Version, takeOverResponsibility, writeLocked);
     dropLocalCollections(plannedCollections, writeLocked);
     cleanupCurrentCollections(plannedCollections, currentCollections,
                               writeLocked);
-    synchronizeLocalFollowerCollections(plannedCollections, currentCollections);
+    if (!synchronizeLocalFollowerCollections(plannedCollections,
+                                             currentCollections)) {
+      // If not all needed jobs have been scheduled, then work is still
+      // ongoing, therefore we want to revisit this soon.
+      ok = false;
+    }
   }
   catch (err) {
     console.error("Caught error in handleCollectionChanges: " + 
@@ -1453,4 +1595,4 @@ exports.shardList                     = shardList;
 exports.status                        = status;
 exports.wait                          = waitForDistributedResponse;
 exports.endpointToURL                 = endpointToURL;
-
+exports.synchronizeOneShard           = synchronizeOneShard;

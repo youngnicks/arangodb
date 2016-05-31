@@ -89,10 +89,14 @@ struct Functions {
                        VPackFunctionParameters const&);
   static AqlValue Nth(arangodb::aql::Query*, arangodb::AqlTransaction*,
                       VPackFunctionParameters const&);
+  static AqlValue Contains(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                           VPackFunctionParameters const&);
   static AqlValue Concat(arangodb::aql::Query*, arangodb::AqlTransaction*,
                          VPackFunctionParameters const&);
   static AqlValue Like(arangodb::aql::Query*, arangodb::AqlTransaction*,
                        VPackFunctionParameters const&);
+  static AqlValue Regex(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                        VPackFunctionParameters const&);
   static AqlValue Passthru(arangodb::aql::Query*, arangodb::AqlTransaction*,
                            VPackFunctionParameters const&);
   static AqlValue Unset(arangodb::aql::Query*, arangodb::AqlTransaction*,
@@ -121,6 +125,8 @@ struct Functions {
                       VPackFunctionParameters const&);
   static AqlValue Average(arangodb::aql::Query*, arangodb::AqlTransaction*,
                           VPackFunctionParameters const&);
+  static AqlValue RandomToken(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                              VPackFunctionParameters const&);
   static AqlValue Md5(arangodb::aql::Query*, arangodb::AqlTransaction*,
                       VPackFunctionParameters const&);
   static AqlValue Sha1(arangodb::aql::Query*, arangodb::AqlTransaction*,
@@ -171,6 +177,32 @@ struct Functions {
                        VPackFunctionParameters const&);
   static AqlValue Pow(arangodb::aql::Query*, arangodb::AqlTransaction*,
                       VPackFunctionParameters const&);
+  static AqlValue Log(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                      VPackFunctionParameters const&);
+  static AqlValue Log2(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                       VPackFunctionParameters const&);
+  static AqlValue Log10(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                        VPackFunctionParameters const&);
+  static AqlValue Exp(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                      VPackFunctionParameters const&);
+  static AqlValue Exp2(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                       VPackFunctionParameters const&);
+  static AqlValue Sin(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                      VPackFunctionParameters const&);
+  static AqlValue Cos(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                      VPackFunctionParameters const&);
+  static AqlValue Tan(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                      VPackFunctionParameters const&);
+  static AqlValue Asin(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                       VPackFunctionParameters const&);
+  static AqlValue Acos(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                       VPackFunctionParameters const&);
+  static AqlValue Atan(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                       VPackFunctionParameters const&);
+  static AqlValue Radians(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                          VPackFunctionParameters const&);
+  static AqlValue Degrees(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                          VPackFunctionParameters const&);
   static AqlValue Rand(arangodb::aql::Query*, arangodb::AqlTransaction*,
                        VPackFunctionParameters const&);
   static AqlValue FirstDocument(arangodb::aql::Query*,

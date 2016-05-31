@@ -1829,7 +1829,7 @@ static void JS_RandomNumbers(v8::FunctionCallbackInfo<v8::Value> const& args) {
                                    "<length> must be between 0 and 65536");
   }
 
-  std::string&& str = JSNumGenerator.random(length);
+  std::string str = JSNumGenerator.random(length);
   TRI_V8_RETURN_STD_STRING(str);
   TRI_V8_TRY_CATCH_END
 }
@@ -3048,7 +3048,7 @@ static void JS_Wait(v8::FunctionCallbackInfo<v8::Value> const& args) {
   // wait without gc
   double until = TRI_microtime() + n;
   while (TRI_microtime() < until) {
-    usleep(100);
+    usleep(1000);
   }
 
   TRI_V8_RETURN_UNDEFINED();
@@ -4161,7 +4161,7 @@ bool TRI_RunGarbageCollectionV8(v8::Isolate* isolate, double availableTime) {
       }
     }
 
-    usleep(100);
+    usleep(1000);
   }
 
   return true;

@@ -30,11 +30,12 @@
 #include "Cluster/ClusterComm.h"
 #include "Cluster/ClusterInfo.h"
 #include "Cluster/ClusterMethods.h"
-#include "Cluster/ServerJob.h"
+#include "Cluster/DBServerAgencySync.h"
 #include "Cluster/ServerState.h"
 #include "Dispatcher/Dispatcher.h"
 #include "Dispatcher/DispatcherFeature.h"
 #include "Dispatcher/Job.h"
+#include "HttpServer/HttpHandlerFactory.h"
 #include "V8/v8-globals.h"
 #include "VocBase/auth.h"
 #include "VocBase/server.h"
@@ -109,6 +110,16 @@ void HeartbeatThread::run() {
 void HeartbeatThread::runDBServer() {
   LOG_TOPIC(TRACE, Logger::HEARTBEAT) 
       << "starting heartbeat thread (DBServer version)";
+  
+  // mop: the heartbeat thread itself is now ready
+  setReady();
+  // mop: however we need to wait for the rest server here to come up
+  // otherwise we would already create collections and the coordinator would think
+  // ohhh the dbserver is online...pump some documents into it
+  // which fails when it is still in maintenance mode
+  while (arangodb::rest::HttpHandlerFactory::isMaintenance()) {
+    usleep(100000);
+  }
 
   // convert timeout to seconds
   double const interval = (double)_interval / 1000.0 / 1000.0;
@@ -453,8 +464,9 @@ bool HeartbeatThread::init() {
 /// @brief finished plan change
 ////////////////////////////////////////////////////////////////////////////////
 
-void HeartbeatThread::removeDispatchedJob(ServerJobResult result) {
+void HeartbeatThread::removeDispatchedJob(DBServerAgencySyncResult result) {
   LOG_TOPIC(TRACE, Logger::HEARTBEAT) << "Dispatched job returned!";
+  bool doSleep = false;
   {
     MUTEX_LOCKER(mutexLocker, _statusLock);
     if (result.success) {
@@ -465,9 +477,12 @@ void HeartbeatThread::removeDispatchedJob(ServerJobResult result) {
     } else {
       LOG_TOPIC(DEBUG, Logger::HEARTBEAT) << "Sync request failed!";
       // mop: we will retry immediately so wait at least a LITTLE bit
-      usleep(10000);
+      doSleep = true;
     }
     _isDispatchingChange = false;
+  }
+  if (doSleep) {
+    usleep(10000);
   }
   CONDITION_LOCKER(guard, _condition);
   _wasNotified = true;
@@ -659,7 +674,7 @@ bool HeartbeatThread::syncDBServerStatusQuo() {
 
     LOG_TOPIC(TRACE, Logger::HEARTBEAT) << "Dispatching Sync";
     // schedule a job for the change
-    std::unique_ptr<arangodb::rest::Job> job(new ServerJob(this));
+    std::unique_ptr<arangodb::rest::Job> job(new DBServerAgencySync(this));
 
     auto dispatcher = DispatcherFeature::DISPATCHER;
     if (dispatcher == nullptr) {

@@ -84,6 +84,9 @@ add_executable(${BIN_ARANGOD}
   Agency/Agent.cpp
   Agency/AgentCallback.cpp
   Agency/Constituent.cpp
+  Agency/CleanOutServer.cpp
+  Agency/FailedLeader.cpp
+  Agency/FailedServer.cpp
   Agency/NotifierThread.cpp
   Agency/NotifyCallback.cpp
   Agency/Node.cpp
@@ -122,6 +125,7 @@ add_executable(${BIN_ARANGOD}
   Aql/ExecutionStats.cpp
   Aql/Executor.cpp
   Aql/Expression.cpp
+  Aql/FunctionDefinitions.cpp
   Aql/Function.cpp
   Aql/Functions.cpp
   Aql/Graphs.cpp
@@ -170,7 +174,7 @@ add_executable(${BIN_ARANGOD}
   Cluster/HeartbeatThread.cpp
   Cluster/RestAgencyCallbacksHandler.cpp
   Cluster/RestShardHandler.cpp
-  Cluster/ServerJob.cpp
+  Cluster/DBServerAgencySync.cpp
   Cluster/ServerState.cpp
   Cluster/v8-cluster.cpp
   Dispatcher/Dispatcher.cpp

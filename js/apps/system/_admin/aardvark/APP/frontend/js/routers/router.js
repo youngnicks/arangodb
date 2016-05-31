@@ -37,6 +37,7 @@
       "nodes": "cNodes",
       "cNodes": "cNodes",
       "dNodes": "dNodes",
+      "sNodes": "sNodes",
       "node/:name": "node",
       //"nLogs/:name": "nLogs",
       "logs": "logs",
@@ -124,6 +125,12 @@
     initFinished: false,
 
     initialize: function () {
+
+      //check frontend config for global conf settings
+      if (frontendConfig.isCluster === true) {
+        this.isCluster = true;
+      }
+
       // This should be the only global object
       window.modalView = new window.ModalView();
 
@@ -143,7 +150,6 @@
         var callback = function(error, isCoordinator) {
           self = this;
           if (isCoordinator === true) {
-            self.isCluster = true;
 
             self.coordinatorCollection.fetch({
               success: function() {
@@ -151,14 +157,14 @@
               }
             });
           }
-          else {
-            self.isCluster = false;
-          }
         }.bind(this);
 
         window.isCoordinator(callback);
 
-        this.initFinished = true;
+        if (frontendConfig.isCluster === false) {
+          this.initFinished = true;
+        }
+
         this.arangoDatabase = new window.ArangoDatabase();
         this.currentDB = new window.CurrentDatabase();
 
@@ -286,7 +292,6 @@
         this.navigate("#dashboard", {trigger: true});
         return;
       }
-
       this.nodesView = new window.NodesView({
         coordinators: this.coordinatorCollection,
         dbServers: this.dbServers[0],
@@ -306,6 +311,10 @@
         this.navigate("#dashboard", {trigger: true});
         return;
       }
+      if (this.dbServers.length === 0) {
+        this.navigate("#cNodes", {trigger: true});
+        return;
+      }
 
       this.nodesView = new window.NodesView({
         coordinators: this.coordinatorCollection,
@@ -313,6 +322,25 @@
         toRender: 'dbserver'
       });
       this.nodesView.render();
+    },
+
+    sNodes: function (initialized) {
+      this.checkUser();
+      if (!initialized || this.isCluster === undefined) {
+        this.waitForInit(this.sNodes.bind(this));
+        return;
+      }
+      if (this.isCluster === false) {
+        this.routes[""] = 'dashboard';
+        this.navigate("#dashboard", {trigger: true});
+        return;
+      }
+
+      this.scaleView = new window.ScaleView({
+        coordinators: this.coordinatorCollection,
+        dbServers: this.dbServers[0]
+      });
+      this.scaleView.render();
     },
 
     addAuth: function (xhr) {
@@ -818,8 +846,9 @@
       this.userManagementView.render(true);
     },
     
-    fetchDBS: function() {
+    fetchDBS: function(callback) {
       var self = this;
+      var cb = false;
 
       this.coordinatorCollection.each(function(coordinator) {
         self.dbServers.push(
@@ -828,8 +857,20 @@
           })
         );
       });
+
+      this.initFinished = true;
+
       _.each(this.dbServers, function(dbservers) {
-        dbservers.fetch();
+        dbservers.fetch({
+          success: function() {
+            if (cb === false) {
+              if (callback) {
+                callback();
+                cb = true;
+              }
+            }
+          }
+        });
       });
     },
 

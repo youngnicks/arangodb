@@ -165,7 +165,7 @@ macro (install_command_alias name where alias)
 	      ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$(Configuration)/${alias}.exe)
     install(
       PROGRAMS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$(Configuration)/${alias}.exe
-      RUNTIME DESTINATION ${where})
+      DESTINATION ${where})
   else ()
     add_custom_command(
       TARGET ${name}
@@ -174,7 +174,7 @@ macro (install_command_alias name where alias)
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${alias}) 
     install(
       PROGRAMS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${alias}
-      RUNTIME DESTINATION ${where})
+      DESTINATION ${where})
   endif ()
 endmacro ()
 
@@ -313,6 +313,7 @@ set(CPACK_BUNDLE_STARTUP_COMMAND "${PROJECT_SOURCE_DIR}/Installation/MacOSX/Bund
 if (MSVC)
   set(CPACK_PACKAGE_NAME "ArangoDB")
   set(CPACK_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/Installation/Windows/Templates")
+  set(CPACK_PLUGIN_PATH "${CMAKE_CURRENT_SOURCE_DIR}/Installation/Windows/Plugins")
   set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL 1)
   set(BITS 64)
 
@@ -397,6 +398,7 @@ install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/js/actions ${PROJECT_SOURCE_DIR}/js/apps ${PROJECT_SOURCE_DIR}/js/contrib ${PROJECT_SOURCE_DIR}/js/node ${PROJECT_SOURCE_DIR}/js/server
   DESTINATION share/arangodb3/js
   REGEX "^.*/server/tests$" EXCLUDE
+  REGEX "^.*/aardvark/APP/node_modules$" EXCLUDE
 )
 
 ################################################################################
