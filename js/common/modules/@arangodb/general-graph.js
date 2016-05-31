@@ -208,7 +208,7 @@ var startInAllCollections = function(collections) {
   if (collections.length === 1) {
     return `${collections[0]}`;
   }
-  return `UNION(${collections.map(c => `FOR x IN ${c} RETURN x`).join(", ")})`;
+  return `UNION(${collections.map(c => `(FOR x IN ${c} RETURN x)`).join(", ")})`;
 };
 
 // Returns FOR start IN (...)
@@ -2083,21 +2083,53 @@ Graph.prototype._closeness = function(options) {
 /// @brief was docuBlock JSF_general_graph_absolute_betweenness
 ////////////////////////////////////////////////////////////////////////////////
 Graph.prototype._absoluteBetweenness = function(example, options) {
-
-  var query = "RETURN"
-    + " GRAPH_ABSOLUTE_BETWEENNESS(@graphName"
-    + ",@example"
-    + ",@options"
-    + ")";
+  var bindVars = {};
   options = options || {};
-  var bindVars = {
-    "example": example,
-    "graphName": this.__name,
-    "options": options
-  };
-  var result = db._query(query, bindVars).toArray();
-  if (result.length === 1) {
-    return result[0];
+  bindVars.graphName = this.__name;
+
+  var query = `
+    LET toFind = (${transformExampleToAQL(example, Object.keys(this.__vertexCollections), bindVars)} RETURN start._id)
+    LET paths = (
+    FOR start IN ${startInAllCollections(Object.keys(this.__vertexCollections))}
+      FOR target IN ${startInAllCollections(Object.keys(this.__vertexCollections))}
+        FILTER start._id != target._id
+        FOR v IN `;
+  if (options.direction === "outbound") {
+    query += "OUTBOUND ";
+  } else if (options.direction === "inbound") {
+    query += "INBOUND ";
+  } else {
+    query += "ANY ";
+  }
+  query += "SHORTEST_PATH start TO target GRAPH @graphName ";
+  if (options.hasOwnProperty("weightAttribute") && options.hasOwnProperty("defaultWeight")) {
+    query += `OPTIONS {weightAttribute: @attribute, defaultWeight: @default} `;
+    bindVars.attribute = options.weightAttribute;
+    bindVars.default = options.defaultWeight;
+  }
+  query += `
+    FILTER v._id != start._id AND v._id != target._id AND v._id IN toFind
+    COLLECT id = v._id WITH COUNT INTO betweenness
+    RETURN [id, betweenness])
+  RETURN {toFind, paths}
+  `;
+
+  var res = db._query(query, bindVars).toArray();
+  var result = {};
+  var toFind = res[0].toFind;
+  for (let pair of res[0].paths) {
+    if (options.direction !== "inbound" && options.direction !== "outbound") {
+      // In any every path is contained twice, once forward once backward.
+      result[pair[0]] = pair[1] / 2;
+    } else {
+      result[pair[0]] = pair[1];
+    }
+  }
+  // Add all not found values as 0.
+  for (let nf of toFind) {
+    if (! result.hasOwnProperty(nf)) {
+      result[nf] = 0;
+    }
   }
   return result;
 };
@@ -2106,19 +2138,17 @@ Graph.prototype._absoluteBetweenness = function(example, options) {
 /// @brief was docuBlock JSF_general_graph_betweenness
 ////////////////////////////////////////////////////////////////////////////////
 Graph.prototype._betweenness = function(options) {
-
-  var query = "RETURN"
-    + " GRAPH_BETWEENNESS(@graphName"
-    + ',@options'
-    + ')';
-  options = options || {};
-  var bindVars = {
-    "graphName": this.__name,
-    "options": options
-  };
-  var result = db._query(query, bindVars).toArray();
-  if (result.length === 1) {
-    return result[0];
+  let result = this._absoluteBetweenness({}, options);
+  let max = 0;
+  for (let k of Object.keys(result)) {
+    if (result[k] > max) {
+      max = result[k];
+    }
+  }
+  if (max !== 0) {
+    for (let k of Object.keys(result)) {
+      result[k] = result[k] / max;
+    }
   }
   return result;
 };

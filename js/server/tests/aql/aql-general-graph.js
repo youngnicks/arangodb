@@ -1525,64 +1525,6 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
       assertEqual(actual[0]["UnitTests_Leipziger/Gerda"].toFixed(2), (1).toFixed(2));
     },
 
-    /*
-    testGRAPH_BETWEENNESS: function () {
-      var actual;
-
-      actual = getQueryResults("RETURN GRAPH_ABSOLUTE_BETWEENNESS('werKenntWen', {algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"], 0);
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"], 16);
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"], 10);
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"], 16);
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 18);
-
-
-      actual = getQueryResults("RETURN GRAPH_BETWEENNESS('werKenntWen', {algorithm : 'Floyd-Warshall'})");
-
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"], 0);
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"].toFixed(2), 0.89);
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"].toFixed(2), 0.56);
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"].toFixed(2), 0.89);
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 1);
-
-
-      actual = getQueryResults("RETURN GRAPH_ABSOLUTE_BETWEENNESS('werKenntWen', {algorithm : 'Floyd-Warshall', direction : 'inbound'})");
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"], 0);
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"], 4);
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"], 4);
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"], 6);
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 6);
-
-      actual = getQueryResults("RETURN GRAPH_BETWEENNESS('werKenntWen', {algorithm : 'Floyd-Warshall', direction : 'inbound'})");
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"], 0);
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"].toFixed(2), 0.67);
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"].toFixed(2), 0.67);
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"], 1);
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 1);
-
-
-
-      actual = getQueryResults("RETURN GRAPH_BETWEENNESS('werKenntWen', {weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"], 0);
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"], 1);
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"].toFixed(2), 0.56);
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"].toFixed(2), 0.89);
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 1);
-
-
-    },
-*/
-
     testShortestPathWithExamples: function () {
       var query = `
         FOR start IN ${startWithFilter("FILTER x.gender == 'female'")}
@@ -1856,61 +1798,6 @@ function ahuacatlQueryGeneralCyclesSuite() {
     assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"].toFixed(2), (9 / 12).toFixed(2));
   },
 
-/*
-  testGRAPH_BETWEENNESS: function () {
-    var actual;
-
-    actual = getQueryResults("RETURN GRAPH_ABSOLUTE_BETWEENNESS('werKenntWen', {algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0]["UnitTests_Berliner/Anton"], 1);
-    assertEqual(actual[0]["UnitTests_Berliner/Berta"], 1);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Emil"], 0);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 1);
-    assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 1);
-    assertEqual(actual[0]["UnitTests_Hamburger/Dieter"], 0);
-    assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 0);
-
-    actual = getQueryResults("RETURN GRAPH_BETWEENNESS('werKenntWen', {algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0]["UnitTests_Berliner/Anton"], 1);
-    assertEqual(actual[0]["UnitTests_Berliner/Berta"], 1);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Emil"], 0);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 1);
-    assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 1);
-    assertEqual(actual[0]["UnitTests_Hamburger/Dieter"], 0);
-    assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 0);
-
-
-    actual = getQueryResults("RETURN GRAPH_ABSOLUTE_BETWEENNESS('werKenntWen', {algorithm : 'Floyd-Warshall', direction : 'inbound'})");
-    assertEqual(actual[0]["UnitTests_Berliner/Anton"], 2);
-    assertEqual(actual[0]["UnitTests_Berliner/Berta"], 3.5);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Emil"], 0);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 0.5);
-    assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 2);
-    assertEqual(actual[0]["UnitTests_Hamburger/Dieter"], 0);
-    assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 0);
-
-
-
-    actual = getQueryResults("RETURN GRAPH_ABSOLUTE_BETWEENNESS('werKenntWen', {weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0]["UnitTests_Berliner/Anton"], 2);
-    assertEqual(actual[0]["UnitTests_Berliner/Berta"], 2);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Emil"],0 );
-    assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 0);
-    assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 0);
-    assertEqual(actual[0]["UnitTests_Hamburger/Dieter"], 0);
-    assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 0);
-
-    actual = getQueryResults("RETURN GRAPH_BETWEENNESS('werKenntWen', {weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0]["UnitTests_Berliner/Anton"], 1);
-    assertEqual(actual[0]["UnitTests_Berliner/Berta"], 1);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Emil"], 0);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 0);
-    assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 0);
-    assertEqual(actual[0]["UnitTests_Hamburger/Dieter"], 0);
-    assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 0);
-
-
-  },
-*/
 };
 }
 

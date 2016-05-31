@@ -3337,6 +3337,20 @@ function MeasurementsMovedFromAQLSuite() {
       validateNumericValues(actual, expected);
     },
 
+    testEccentricityOutbound: function () {
+      var actual = g._eccentricity({direction: "outbound"});
+      var expected = {};
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 4 / 5;
+      expected[vertexIds.Caesar] = 5 / 5;
+      expected[vertexIds.Dieter] = 2 / 5;
+      expected[vertexIds.Emil] = 1 / 5;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 3 / 5;
+
+      validateNumericValues(actual, expected);
+    },
+
     testFarness: function () {
       var actual = g._farness(vertexIds.Anton);
       var expected = { };
@@ -3364,7 +3378,154 @@ function MeasurementsMovedFromAQLSuite() {
       // Legacy
       actual = g._absoluteCloseness({gender: "male"}, {weightAttribute: "entfernung", defaultWeight: 80});
       validateNumericValues(actual, expected);
+    },
+
+    testFarnessAll: function () {
+      var actual = g._farness({});
+      var expected = { };
+      expected[vertexIds.Anton] = 16;
+      expected[vertexIds.Berta] = 12;
+      expected[vertexIds.Caesar] = 16;
+      expected[vertexIds.Dieter] = 12;
+      expected[vertexIds.Emil] = 15;
+      expected[vertexIds.Fritz] = 20;
+      expected[vertexIds.Gerda] = 11;
+      validateNumericValues(actual, expected);
+    },
+
+    testFarnessAllOutbound: function () {
+      var actual = g._farness({}, {direction: "outbound"});
+      var expected = { };
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 11;
+      expected[vertexIds.Caesar] = 16;
+      expected[vertexIds.Dieter] = 3;
+      expected[vertexIds.Emil] = 1;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 6;
+      validateNumericValues(actual, expected);
+    },
+
+    testClosenessDefault: function () {
+      var actual = g._closeness();
+      var expected = { };
+      expected[vertexIds.Anton] = 11 / 16;
+      expected[vertexIds.Berta] = 11 / 12;
+      expected[vertexIds.Caesar] = 11 / 16;
+      expected[vertexIds.Dieter] = 11 / 12;
+      expected[vertexIds.Emil] = 11 / 15;
+      expected[vertexIds.Fritz] = 11 / 20;
+      expected[vertexIds.Gerda] = 11 / 11;
+      validateNumericValues(actual, expected);
+    },
+
+    testClosenessOutbound: function () {
+      var actual = g._closeness({direction: "outbound"});
+      var expected = { };
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 1 / 11;
+      expected[vertexIds.Caesar] = 1 / 16;
+      expected[vertexIds.Dieter] = 1 / 3;
+      expected[vertexIds.Emil] = 1 / 1;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 1 / 6;
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteBetweness: function () {
+      var actual = g._absoluteBetweenness(vertexIds.Anton);
+      var expected = { };
+      expected[vertexIds.Anton] = 0;
+      validateNumericValues(actual, expected);
+    },
+    
+    testAbsoluteBetwenessAll: function () {
+      var actual = g._absoluteBetweenness({});
+      var expected = { };
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 8;
+      expected[vertexIds.Caesar] = 0;
+      expected[vertexIds.Dieter] = 8;
+      expected[vertexIds.Emil] = 5;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 9;
+      validateNumericValues(actual, expected);
+    },
+    
+    testAbsoluteBetwenessExample: function () {
+      var actual = g._absoluteBetweenness({gender: "female"});
+      var expected = { };
+      expected[vertexIds.Berta] = 8;
+      expected[vertexIds.Gerda] = 9;
+      validateNumericValues(actual, expected);
+    },
+ 
+    testAbsoluteBetwenessAllOutbound: function () {
+      var actual = g._absoluteBetweenness({}, {direction: "outbound"});
+      var expected = { };
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 4;
+      expected[vertexIds.Caesar] = 0;
+      expected[vertexIds.Dieter] = 6;
+      expected[vertexIds.Emil] = 4;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 6;
+      validateNumericValues(actual, expected);
+    },
+
+    testAbsoluteBetwenessAllInbound: function () {
+      var actual = g._absoluteBetweenness({}, {direction: "inbound"});
+      var expected = { };
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 4;
+      expected[vertexIds.Caesar] = 0;
+      expected[vertexIds.Dieter] = 6;
+      expected[vertexIds.Emil] = 4;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 6;
+      validateNumericValues(actual, expected);
+    },
+
+    testBetwenessAny: function () {
+      var actual = g._betweenness();
+      var expected = { };
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 8 / 9;
+      expected[vertexIds.Caesar] = 0;
+      expected[vertexIds.Dieter] = 8 / 9;
+      expected[vertexIds.Emil] = 5 / 9;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 9 / 9;
+      validateNumericValues(actual, expected);
+    },
+    
+    testBetwenessOutbound: function () {
+      var actual = g._betweenness({direction: "outbound"});
+      var expected = { };
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 4 / 6;
+      expected[vertexIds.Caesar] = 0;
+      expected[vertexIds.Dieter] = 6 / 6;
+      expected[vertexIds.Emil] = 4 / 6;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 6 / 6;
+      validateNumericValues(actual, expected);
+    },
+
+    testBetwenessInbound: function () {
+      var actual = g._betweenness({direction: "inbound"});
+      var expected = { };
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 4 / 6;
+      expected[vertexIds.Caesar] = 0;
+      expected[vertexIds.Dieter] = 6 / 6;
+      expected[vertexIds.Emil] = 4 / 6;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 6 / 6;
+      validateNumericValues(actual, expected);
     }
+
+
 
   };
 }

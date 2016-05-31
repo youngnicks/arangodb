@@ -7322,72 +7322,6 @@ function AQL_GRAPH_ECCENTRICITY (graphName, options) {
   return list;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_absolute_betweenness
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_ABSOLUTE_BETWEENNESS (graphName, options) {
-  'use strict';
-
-  if (typeof options !== "object" || Array.isArray(options)) {
-    options = {};
-  } else {
-    options = CLONE(options);
-  }
-  if (! options.direction) {
-    options.direction =  'any';
-  }
-  options.algorithm = "Floyd-Warshall";
-
-  // Make sure we ONLY extract _ids
-  options.includeData = false;
-  let graph = graphModule._graph(graphName);
-  let vertexCollections = graph._vertexCollections().map(function (c) { return c.name();});
-  let vertexIds = DOCUMENT_IDS_BY_EXAMPLE("GRAPH_ABSOLUTE_BETWEENNESS", vertexCollections, {});
-  let result = {};
-  let distanceMap = AQL_GRAPH_SHORTEST_PATH(graphName, vertexIds , vertexIds, options);
-  for (let k = 0; k < vertexIds.length; k++) {
-    result[vertexIds[k]] = 0;
-  }
-  distanceMap.forEach(function(d) {
-    let startVertex = d.vertices[0];
-    let l = d.vertices.length;
-    let targetVertex = d.vertices[l - 1];
-    let val = 1 / l;
-    d.vertices.forEach(function (v) {
-      if (v === startVertex || v === targetVertex) {
-        return;
-      }
-      result[v] += val;
-    });
-  });
-  return result;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief was docuBlock JSF_aql_general_graph_betweenness
-////////////////////////////////////////////////////////////////////////////////
-
-function AQL_GRAPH_BETWEENNESS (graphName, options) {
-  'use strict';
-
-  options = CLONE(options) || {};
-
-  var result = AQL_GRAPH_ABSOLUTE_BETWEENNESS(graphName, options),  max = 0;
-  Object.keys(result).forEach(function (r) {
-    if (result[r] > max) {
-      max = result[r];
-    }
-  });
-  if (max === 0) {
-    return result;
-  }
-  Object.keys(result).forEach(function (r) {
-    result[r] = result[r] / max;
-  });
-  return result;
-}
-
 exports.FCALL_USER = FCALL_USER;
 exports.KEYS = KEYS;
 exports.GET_INDEX = GET_INDEX;
@@ -7518,8 +7452,6 @@ exports.AQL_GRAPH_TRAVERSAL_TREE = AQL_GRAPH_TRAVERSAL_TREE;
 exports.AQL_GRAPH_VERTICES = AQL_GRAPH_VERTICES;
 exports.AQL_GRAPH_SHORTEST_PATH = AQL_GRAPH_SHORTEST_PATH;
 exports.AQL_GRAPH_ECCENTRICITY = AQL_GRAPH_ECCENTRICITY;
-exports.AQL_GRAPH_BETWEENNESS = AQL_GRAPH_BETWEENNESS;
-exports.AQL_GRAPH_ABSOLUTE_BETWEENNESS = AQL_GRAPH_ABSOLUTE_BETWEENNESS;
 exports.AQL_NOT_NULL = AQL_NOT_NULL;
 exports.AQL_FIRST_LIST = AQL_FIRST_LIST;
 exports.AQL_FIRST_DOCUMENT = AQL_FIRST_DOCUMENT;

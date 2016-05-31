@@ -353,11 +353,6 @@ std::unordered_map<std::string, Function const> const Executor::FunctionNames{
     {"GRAPH_ECCENTRICITY",
      Function("GRAPH_ECCENTRICITY", "AQL_GRAPH_ECCENTRICITY", "s|a", false,
               false, true, false, false)},
-    {"GRAPH_BETWEENNESS", Function("GRAPH_BETWEENNESS", "AQL_GRAPH_BETWEENNESS",
-                                   "s|a", false, false, true, false, false)},
-    {"GRAPH_ABSOLUTE_BETWEENNESS",
-     Function("GRAPH_ABSOLUTE_BETWEENNESS", "AQL_GRAPH_ABSOLUTE_BETWEENNESS",
-              "s,als|a", false, false, true, false, false)},
     // date functions
     {"DATE_NOW",
      Function("DATE_NOW", "AQL_DATE_NOW", "", false, false, false, true, true)},
