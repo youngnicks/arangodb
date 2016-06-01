@@ -2038,25 +2038,22 @@ Graph.prototype._farness = Graph.prototype._absoluteCloseness = function(vertexE
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief was docuBlock JSF_general_graph_eccentricity
 ////////////////////////////////////////////////////////////////////////////////
+
 Graph.prototype._eccentricity = function(options) {
-  var query = "RETURN"
-    + " GRAPH_ECCENTRICITY(@graphName"
-    + ',@options'
-    + ')';
-  options = options || {};
-  var bindVars = {
-    "graphName": this.__name,
-    "options": options
-  };
-  var result = db._query(query, bindVars).toArray();
-  if (result.length === 1) {
-    return result[0];
+  let result = this._absoluteEccentricity({}, options);
+  let min = Number.POSITIVE_INFINITY;
+  for (let k of Object.keys(result)) {
+    if (result[k] !== 0 && result[k] < min) {
+      min = result[k];
+    }
+  }
+  for (let k of Object.keys(result)) {
+    if (result[k] !== 0) {
+      result[k] = min / result[k];
+    }
   }
   return result;
 };
-
-
-
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief was docuBlock JSF_general_graph_closeness

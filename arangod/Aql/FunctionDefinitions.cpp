@@ -367,8 +367,6 @@ struct FunctionDefiner {
               false, false, true, false, false});
     add({"GRAPH_VERTICES", "AQL_GRAPH_VERTICES",
                                 "s,als|a", false, false, true, false, false});
-    add({"GRAPH_ECCENTRICITY", "AQL_GRAPH_ECCENTRICITY", "s|a", false,
-              false, true, false, false});
   }
 
   void addDateFunctions() {

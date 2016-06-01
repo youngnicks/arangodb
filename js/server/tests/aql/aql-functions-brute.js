@@ -139,7 +139,6 @@ function ahuacatlFunctionsBruteTestSuite () {
     "GRAPH_TRAVERSAL",
     "TRAVERSAL_TREE",
     "GRAPH_TRAVERSAL_TREE",
-    "GRAPH_ECCENTRICITY",
     "DATE_NOW",
     "DATE_TIMESTAMP",
     "DATE_ISO8601",

@@ -3104,7 +3104,7 @@ function MeasurementsMovedFromAQLSuite() {
   var validateNumericValues = function (actual, expected) {
     assertEqual(Object.keys(actual).sort(), Object.keys(expected).sort());
     for (let k of Object.keys(expected)) {
-      assertEqual(actual[k].toFixed(1), expected[k].toFixed(1));
+      assertEqual(actual[k].toFixed(4), expected[k].toFixed(4));
     }
   };
 
@@ -3341,12 +3341,26 @@ function MeasurementsMovedFromAQLSuite() {
       var actual = g._eccentricity({direction: "outbound"});
       var expected = {};
       expected[vertexIds.Anton] = 0;
-      expected[vertexIds.Berta] = 4 / 5;
-      expected[vertexIds.Caesar] = 5 / 5;
-      expected[vertexIds.Dieter] = 2 / 5;
-      expected[vertexIds.Emil] = 1 / 5;
+      expected[vertexIds.Berta] =  1 / 4;
+      expected[vertexIds.Caesar] = 1 / 5;
+      expected[vertexIds.Dieter] = 1 / 2;
+      expected[vertexIds.Emil] = 1 / 1;
       expected[vertexIds.Fritz] = 0;
-      expected[vertexIds.Gerda] = 3 / 5;
+      expected[vertexIds.Gerda] = 1 / 3;
+
+      validateNumericValues(actual, expected);
+    },
+
+    testEccentricityOutboundWeight: function () {
+      var actual = g._eccentricity({direction: "outbound", weightAttribute: "entfernung", defaultWeight: 80});
+      var expected = {};
+      expected[vertexIds.Anton] = 0;
+      expected[vertexIds.Berta] = 0.2 / 580.2;
+      expected[vertexIds.Caesar] = 0.2 / 830.3;
+      expected[vertexIds.Dieter] = 0.2 / 300.2;
+      expected[vertexIds.Emil] = 0.2 / 0.2;
+      expected[vertexIds.Fritz] = 0;
+      expected[vertexIds.Gerda] = 0.2 / 380.2;
 
       validateNumericValues(actual, expected);
     },

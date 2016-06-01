@@ -1488,43 +1488,6 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
       ]);
     },
 
-    testGRAPH_ECCENTRICITY: function () {
-      var actual;
-      actual = getQueryResults("RETURN GRAPH_ECCENTRICITY('werKenntWen', {algorithm : 'Floyd-Warshall'})");
-
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"].toFixed(1), (0.6).toFixed(1));
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"].toFixed(2), (0.75).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"].toFixed(1), (0.6).toFixed(1));
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"].toFixed(2), (1).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"].toFixed(2), (0.75).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"].toFixed(1), (0.6).toFixed(1));
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"].toFixed(2), (1).toFixed(2));
-    },
-
-    testGRAPH_ECCENTRICITY_inbound: function () {
-      var actual;
-      actual = getQueryResults("RETURN GRAPH_ECCENTRICITY('werKenntWen', {algorithm : 'Floyd-Warshall', direction : 'inbound'})");
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"].toFixed(2), (1).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"].toFixed(2), (1).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 0);
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"].toFixed(2), (0.3333).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"].toFixed(2), (0.25).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"].toFixed(2), (0.2).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"].toFixed(2), (0.5).toFixed(2));
-    },
-
-    testGRAPH_ECCENTRICITY_weight: function () {
-      var actual;
-      actual = getQueryResults("RETURN GRAPH_ECCENTRICITY('werKenntWen', {weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"].toFixed(2), (0.78).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"].toFixed(2), (0.78).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"].toFixed(2), (0.54).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"].toFixed(2), (0.85).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"].toFixed(2), (0.54).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"].toFixed(2), (0.54).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"].toFixed(2), (1).toFixed(2));
-    },
-
     testShortestPathWithExamples: function () {
       var query = `
         FOR start IN ${startWithFilter("FILTER x.gender == 'female'")}
@@ -1559,46 +1522,6 @@ function ahuacatlQueryGeneralTraversalTestSuite() {
         vertexIds.Gerda, vertexIds.Berta, vertexIds.Caesar
       ]);
       assertEqual(actual[3].distance, 2);
-    },
-
-    testGRAPH_ECCENTRICITY_WITH_DIJKSTRA: function () {
-      var actual;
-      actual = getQueryResults("RETURN GRAPH_ECCENTRICITY('werKenntWen', {algorithm : 'dijkstra'})");
-
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"].toFixed(1), (0.6).toFixed(1));
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"].toFixed(2), (0.75).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"].toFixed(1), (0.6).toFixed(1));
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"].toFixed(2), (1).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"].toFixed(2), (0.75).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"].toFixed(1), (0.6).toFixed(1));
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"].toFixed(2), (1).toFixed(2));
-    },
-
-
-    testGRAPH_ECCENTRICITY_WITH_DIJKSTRA_inbound: function () {
-      var actual;
-      actual = getQueryResults("RETURN GRAPH_ECCENTRICITY('werKenntWen', {algorithm : 'dijkstra', direction : 'inbound'})");
-
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"].toFixed(2), (1).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"].toFixed(2), (1).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"].toFixed(2), (0).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"].toFixed(2), (0.33).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"].toFixed(2), (0.25).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"].toFixed(1), (0.2).toFixed(1));
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"].toFixed(1), (0.5).toFixed(1));
-    },
-
-    testGRAPH_ECCENTRICITY_WITH_DIJKSTRA_weight: function () {
-      var actual;
-      actual = getQueryResults("RETURN GRAPH_ECCENTRICITY('werKenntWen', {algorithm : 'dijkstra', weight : 'entfernung', defaultWeight : 80})");
-
-      assertEqual(actual[0]["UnitTests_Berliner/Anton"].toFixed(2), (0.78).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Berliner/Berta"].toFixed(2), (0.78).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Hamburger/Caesar"].toFixed(2), (0.54).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Hamburger/Dieter"].toFixed(2), (0.85).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Emil"].toFixed(2), (0.54).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"].toFixed(2), (0.54).toFixed(2));
-      assertEqual(actual[0]["UnitTests_Leipziger/Gerda"].toFixed(2), (1).toFixed(2));
     }
   };
 }
@@ -1770,33 +1693,7 @@ function ahuacatlQueryGeneralCyclesSuite() {
         vertices: [vertexIds.Caesar, vertexIds.Fritz],
         distance: 1
       });
-  },
-
-  testGRAPH_ECCENTRICITY: function () {
-    var actual;
-
-    actual = getQueryResults("RETURN GRAPH_ECCENTRICITY('werKenntWen', {algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0]["UnitTests_Berliner/Anton"], 1);
-    assertEqual(actual[0]["UnitTests_Berliner/Berta"], 1);
-    assertEqual(actual[0]["UnitTests_Hamburger/Caesar"], 1);
-    assertEqual(actual[0]["UnitTests_Hamburger/Dieter"], 0);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Emil"], 0);
-    assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"], 1);
-    assertEqual(actual[0]["UnitTests_Leipziger/Gerda"], 0);
-
-
-    actual = getQueryResults("RETURN GRAPH_ECCENTRICITY('werKenntWen', {algorithm : 'Floyd-Warshall', direction : 'inbound'})");
-    assertEqual(actual[0]["UnitTests_Berliner/Anton"].toFixed(2), (2/3).toFixed(2));
-    assertEqual(actual[0]["UnitTests_Berliner/Berta"].toFixed(2), (1).toFixed(2));
-    assertEqual(actual[0]["UnitTests_Hamburger/Caesar"].toFixed(2), (1).toFixed(2));
-    assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"].toFixed(2), (2/3).toFixed(2));
-
-    actual = getQueryResults("RETURN GRAPH_ECCENTRICITY('werKenntWen', {weight : 'entfernung', defaultWeight : 80, algorithm : 'Floyd-Warshall'})");
-    assertEqual(actual[0]["UnitTests_Berliner/Anton"].toFixed(2), (1).toFixed(2));
-    assertEqual(actual[0]["UnitTests_Berliner/Berta"].toFixed(2), (9 / 12).toFixed(2));
-    assertEqual(actual[0]["UnitTests_Hamburger/Caesar"].toFixed(2), (9 / 11).toFixed(2));
-    assertEqual(actual[0]["UnitTests_Frankfurter/Fritz"].toFixed(2), (9 / 12).toFixed(2));
-  },
+  }
 
 };
 }
