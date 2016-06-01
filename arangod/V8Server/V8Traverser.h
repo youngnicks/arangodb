@@ -41,7 +41,7 @@ class Slice;
 /// @brief typedef the template instantiation of the PathFinder
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef arangodb::basics::PathFinder<
+typedef arangodb::basics::DynamicDistanceFinder<
     arangodb::velocypack::Slice, arangodb::velocypack::Slice, double,
     arangodb::traverser::ShortestPath> ArangoDBPathFinder;
 

@@ -150,7 +150,6 @@ struct BasicExpander {
             res_edges.emplace_back(edge);
             neighbors.emplace_back(from);
           }
-
         }
       }
     }
@@ -640,7 +639,7 @@ bool TRI_RunSimpleShortestPathSearch(
   VPackSlice start = opts.getStart();
   VPackSlice end = opts.getEnd();
 
-  return pathFinder.search(start, end, path);
+  return pathFinder.shortestPath(start, end, path);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

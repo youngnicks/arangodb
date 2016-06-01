@@ -399,8 +399,20 @@ class PriorityQueue {
   std::vector<Value*> _history;
 };
 
-template <typename VertexId, typename EdgeId, typename EdgeWeight, typename Path>
+template <typename VertexId, typename Path>
 class PathFinder {
+ protected:
+  PathFinder() {
+  }
+public:
+
+  virtual ~PathFinder() {}
+
+  virtual bool shortestPath(VertexId& start, VertexId& target, Path& result);
+};
+
+template <typename VertexId, typename EdgeId, typename EdgeWeight, typename Path>
+class DynamicDistanceFinder : public PathFinder<VertexId, Path> {
  public:
 
   //////////////////////////////////////////////////////////////////////////////
@@ -466,7 +478,7 @@ class PathFinder {
   //////////////////////////////////////////////////////////////////////////////
 
   class SearcherTwoThreads {
-    PathFinder* _pathFinder;
+    DynamicDistanceFinder* _pathFinder;
     ThreadInfo& _myInfo;
     ThreadInfo& _peerInfo;
     VertexId _start;
@@ -474,7 +486,7 @@ class PathFinder {
     std::string _id;
 
    public:
-    SearcherTwoThreads(PathFinder* pathFinder, ThreadInfo& myInfo,
+    SearcherTwoThreads(DynamicDistanceFinder* pathFinder, ThreadInfo& myInfo,
                        ThreadInfo& peerInfo, VertexId& start,
                        ExpanderFunction expander, std::string const& id)
         : _pathFinder(pathFinder),
@@ -636,7 +648,7 @@ class PathFinder {
   //////////////////////////////////////////////////////////////////////////////
 
   class Searcher {
-    PathFinder* _pathFinder;
+    DynamicDistanceFinder* _pathFinder;
     ThreadInfo& _myInfo;
     ThreadInfo& _peerInfo;
     VertexId _start;
@@ -644,7 +656,7 @@ class PathFinder {
     std::string _id;
 
    public:
-    Searcher(PathFinder* pathFinder, ThreadInfo& myInfo, ThreadInfo& peerInfo,
+    Searcher(DynamicDistanceFinder* pathFinder, ThreadInfo& myInfo, ThreadInfo& peerInfo,
              VertexId& start, ExpanderFunction expander, std::string const& id)
         : _pathFinder(pathFinder),
           _myInfo(myInfo),
@@ -761,15 +773,15 @@ class PathFinder {
 
   // -----------------------------------------------------------------------------
 
-  PathFinder(PathFinder const&) = delete;
-  PathFinder& operator=(PathFinder const&) = delete;
-  PathFinder() = delete;
+  DynamicDistanceFinder(DynamicDistanceFinder const&) = delete;
+  DynamicDistanceFinder& operator=(DynamicDistanceFinder const&) = delete;
+  DynamicDistanceFinder() = delete;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief create the PathFinder
   //////////////////////////////////////////////////////////////////////////////
 
-  PathFinder(ExpanderFunction forwardExpander,
+  DynamicDistanceFinder(ExpanderFunction forwardExpander,
              ExpanderFunction backwardExpander, bool bidirectional = true)
       : _highscoreSet(false),
         _highscore(0),
@@ -781,7 +793,7 @@ class PathFinder {
         _backwardExpander(backwardExpander),
         _bidirectional(bidirectional){};
 
-  ~PathFinder(){};
+  ~DynamicDistanceFinder(){};
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief Find the shortest path between start and target.
@@ -792,12 +804,13 @@ class PathFinder {
   // Caller has to free the result
   // If this returns true there is a path, if this returns false there is no
   // path
-  bool shortestPath(VertexId& start, VertexId& target, Path& result) {
+  bool shortestPath(VertexId& start, VertexId& target, Path& result) override{
     // For the result:
     result.clear();
     _highscoreSet = false;
     _highscore = 0;
     _bingo = false;
+    _intermediateSet = false;
 
     // Forward with initialization:
     VertexId emptyVertex;
@@ -1213,7 +1226,7 @@ class PathEnumerator {
 };
 
 template <typename VertexId, typename EdgeId, typename HashFuncType, typename EqualFuncType, typename Path>
-class ConstDistanceFinder {
+class ConstDistanceFinder : public PathFinder<VertexId, Path> {
  public:
 
 
@@ -1255,13 +1268,18 @@ class ConstDistanceFinder {
     }
   }
 
-  bool search(VertexId& start, VertexId& end, Path& result) {
+  bool shortestPath(VertexId& start, VertexId& end, Path& result) override {
     result.clear();
     // Init
     if (start == end) {
       result._vertices.emplace_back(start);
       return true;
     }
+    _leftClosure.clear();
+    _leftFound.clear();
+    _rightClosure.clear();
+    _rightFound.clear();
+
     _leftFound.emplace(start, nullptr);
     _rightFound.emplace(end, nullptr);
     _leftClosure.emplace_back(start);

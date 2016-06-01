@@ -123,8 +123,8 @@ class TraverserExpression {
 };
 
 class ShortestPath {
-  friend class basics::PathFinder<arangodb::velocypack::Slice, arangodb::velocypack::Slice, size_t, ShortestPath>;
-  friend class basics::PathFinder<arangodb::velocypack::Slice,
+  friend class basics::DynamicDistanceFinder<arangodb::velocypack::Slice, arangodb::velocypack::Slice, size_t, ShortestPath>;
+  friend class basics::DynamicDistanceFinder<arangodb::velocypack::Slice,
                                   arangodb::velocypack::Slice, double,
                                   ShortestPath>;
   friend class arangodb::basics::ConstDistanceFinder<

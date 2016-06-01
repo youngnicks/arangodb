@@ -96,6 +96,10 @@ class ShortestPathBlock : public ExecutionBlock {
   /// @brief current computed path.
   std::unique_ptr<traverser::ShortestPath> _path;
 
+  /// @brief the shortest path finder.
+  std::unique_ptr<arangodb::basics::PathFinder<
+      arangodb::velocypack::Slice, arangodb::traverser::ShortestPath>> _finder;
+
   /// @brief The information to get the starting point, when a register id is
   /// used
   arangodb::aql::RegisterId _startReg;
@@ -124,7 +128,6 @@ class ShortestPathBlock : public ExecutionBlock {
   /// computation
   ///        We use it to check if we are done with enumerating.
   bool _usedConstant;
-
 };
 
 } // namespace arangodb::aql
