@@ -1,4 +1,4 @@
-/*jshint globalstrict:false, strict:false, unused: false */
+/*jshint globalstrict:false, strict:false */
 /*global assertEqual */
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -32,7 +32,6 @@ var jsunity = require("jsunity");
 
 var arangodb = require("@arangodb");
 var traversal = require("@arangodb/graph/traversal");
-var graph = require("@arangodb/graph");
 var generalGraph = require("@arangodb/general-graph");
 
 var db = arangodb.db;
@@ -209,7 +208,7 @@ function MemoryTraversalSuite () {
 
   var visitor = traversal.trackingVisitor;
 
-  var filter = function (config, vertex, path) {
+  var filter = function (config, vertex) {
     var r = [ ];
 
     if (config.noVisit && config.noVisit[vertex._id]) {
@@ -223,7 +222,7 @@ function MemoryTraversalSuite () {
     return r;
   };
 
-  var expander = function (config, vertex, path) {
+  var expander = function (config, vertex) {
     var r = [ ];
     var edgesList = config.datasource.getOutEdges(vertex);
     var i;
@@ -1075,7 +1074,7 @@ function MemoryTraversalSuite () {
 
     testIncludeMatchingAttributesFilter : function () {
       // Can be removed as soon as all expanders use datasource
-      var anyExp = function (config, vertex, path) {
+      var anyExp = function (config, vertex) {
         var result = [ ];
         var edgesList = config.datasource.getAllEdges(vertex);
 
@@ -1123,23 +1122,23 @@ function MemoryTraversalSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     testCombineFilters : function () {
-      var excluder1 = function(config, vertex, path) {
+      var excluder1 = function(config, vertex) {
         if (vertex.name && vertex.name === config.exclude1) { return "exclude"; }
       };
 
-      var excluder2 = function(config, vertex, path) {
+      var excluder2 = function(config, vertex) {
         if (vertex.name && vertex.name === config.exclude2) { return "exclude"; }
       };
 
-      var excluder3 = function(config, vertex, path) {
+      var excluder3 = function(config, vertex) {
         if (vertex.name && vertex.name === config.exclude3) { return "exclude"; }
       };
 
-      var pruner1 = function(config, vertex, path) {
+      var pruner1 = function(config, vertex) {
         if (vertex.name && vertex.name === config.prune1) { return "prune"; }
       };
 
-      var pruner2 = function(config, vertex, path) {
+      var pruner2 = function(config, vertex) {
         if (vertex.name && vertex.name === config.prune2) { return "prune"; }
       };
 
@@ -1196,7 +1195,7 @@ function MemoryTraversalSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     testOverrideExcludeAndPruneOfCombinedFilters : function () {
-      var excludeAndPrune = function(config, vertex, path) {
+      var excludeAndPrune = function(config, vertex) {
         if (vertex.name && vertex.name === config.excludeAndPrune) { return ["prune", "exclude"]; }
       };
 
