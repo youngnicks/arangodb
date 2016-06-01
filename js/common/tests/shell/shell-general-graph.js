@@ -3074,7 +3074,7 @@ function MeasurementsSuite() {
         {first_name: 'Tam'},
         {first_name: 'Tem', age : 20}
       ]);
-      assertEqual(a[0].length , 9);
+      assertEqual(a.length , 9);
     },
 
     test_distanceTo : function () {
@@ -3556,13 +3556,10 @@ function MeasurementsMovedFromAQLSuite() {
 // jsunity.run(ChainedFluentAQLResultsSuite);
 // jsunity.run(GeneralGraphCommonNeighborsSuite);
 
-/*
 jsunity.run(EdgesAndVerticesSuite);
 jsunity.run(GeneralGraphCreationSuite);
 jsunity.run(OrphanCollectionSuite);
 jsunity.run(MeasurementsSuite);
-*/
-
 jsunity.run(MeasurementsMovedFromAQLSuite);
 
 return jsunity.done();

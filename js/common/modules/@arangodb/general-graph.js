@@ -211,10 +211,10 @@ var startInAllCollections = function(collections) {
   return `UNION(${collections.map(c => `(FOR x IN ${c} RETURN x)`).join(", ")})`;
 };
 
-// Returns FOR start IN (...)
+// Returns FOR <varname> IN (...)
 // So start contains every object in the graph
 // matching the example(s)
-var transformExampleToAQL = function(examples, collections, bindVars) {
+var transformExampleToAQL = function(examples, collections, bindVars, varname) {
   var varcount = 0;
   var foundAllMatch = false;
   if (!Array.isArray(examples)) {
@@ -229,28 +229,28 @@ var transformExampleToAQL = function(examples, collections, bindVars) {
           return "";
         }
         return keys.map(key => {
-          bindVars["exVar" + varcount] = key;
-          bindVars["exVal" + varcount] = e[key];
-          return `start[@exVar${varcount}] == @exVal${varcount++}`;
+          bindVars[varname + "ExVar" + varcount] = key;
+          bindVars[varname + "ExVal" + varcount] = e[key];
+          return `${varname}[@${varname}ExVar${varcount}] == @${varname}ExVal${varcount++}`;
         }).join(" AND ");
       } else {
-        bindVars["exVar" + varcount] = e;
-        return `start._id == @exVar${varcount++}`;
+        bindVars[varname + "ExVar" + varcount] = e;
+        return `${varname}._id == @${varname}ExVar${varcount++}`;
       }
     }).join(") OR (")}
   )`;
   if (foundAllMatch) {
     for (var i = 0; i < varcount; ++i) {
-      delete bindVars["exVar" + varcount];
-      delete bindVars["exVal" + varcount];
+      delete bindVars[varname + "ExVar" + varcount];
+      delete bindVars[varname + "ExVal" + varcount];
     }
-    return `FOR start IN ${startInAllCollections(collections)} `;
+    return `FOR ${varname} IN ${startInAllCollections(collections)} `;
   }
-  var query = `FOR start IN `;
+  var query = `FOR ${varname} IN `;
   if (collections.length === 1) {
     query += `${collections[0]} ${filter}`; 
   } else {
-    query += `UNION (${collections.map(c => `(FOR start IN ${c} ${filter} RETURN start)`).join(", ")}) `;
+    query += `UNION (${collections.map(c => `(FOR ${varname} IN ${c} ${filter} RETURN ${varname})`).join(", ")}) `;
   }
   return query;
 };
@@ -1906,23 +1906,43 @@ Graph.prototype._paths = function(options) {
 /// @brief was docuBlock JSF_general_graph_shortest_path
 ////////////////////////////////////////////////////////////////////////////////
 Graph.prototype._shortestPath = function(startVertexExample, endVertexExample, options) {
-  var ex1 = transformExample(startVertexExample);
-  var ex2 = transformExample(endVertexExample);
-  var query = "RETURN"
-    + " GRAPH_SHORTEST_PATH(@graphName"
-    + ',@ex1'
-    + ',@ex2'
-    + ',@options'
-    + ')';
+  var bindVars = {};
   options = options || {};
-  var bindVars = {
-    "graphName": this.__name,
-    "options": options,
-    "ex1": ex1,
-    "ex2": ex2
-  };
-  var result = db._query(query, bindVars).toArray();
-  return result;
+  var query = `
+    ${transformExampleToAQL(startVertexExample, Object.keys(this.__vertexCollections), bindVars, "start")}
+      ${transformExampleToAQL(endVertexExample, Object.keys(this.__vertexCollections), bindVars, "target")}
+      FILTER target._id != start._id
+        LET p = (FOR v, e IN `; 
+  if (options.direction === "outbound") {
+    query += "OUTBOUND ";
+  } else if (options.direction === "inbound") {
+    query += "INBOUND ";
+  } else {
+    query += "ANY ";
+  }
+  query += `SHORTEST_PATH start TO target GRAPH @graphName `;
+  if (options.hasOwnProperty("weightAttribute") && options.hasOwnProperty("defaultWeight")) {
+    query += `OPTIONS {weightAttribute: @attribute, defaultWeight: @default}
+    RETURN {
+      v: v,
+      e: e,
+      d: IS_NULL(e) ? 0 : (IS_NUMBER(e[@attribute]) ? e[@attribute] : @default))
+    } `;
+    bindVars.attribute = options.weightAttribute;
+    bindVars.default = options.defaultWeight;
+  } else {
+    query += "RETURN {v: v, e: e, d: IS_NULL(e) ? 0 : 1}) ";
+  }
+  query += `
+  FILTER LENGTH(p) > 0
+  RETURN {
+    vertices: p[*].v,
+    edges: p[* FILTER CURRENT.e != null].e,
+    distance: SUM(p[*].d)
+  }`;
+
+  bindVars.graphName = this.__name;
+  return db._query(query, bindVars).toArray();
 };
 
 
@@ -1930,23 +1950,39 @@ Graph.prototype._shortestPath = function(startVertexExample, endVertexExample, o
 /// @brief was docuBlock JSF_general_graph_distance_to
 ////////////////////////////////////////////////////////////////////////////////
 Graph.prototype._distanceTo = function(startVertexExample, endVertexExample, options) {
-  var ex1 = transformExample(startVertexExample);
-  var ex2 = transformExample(endVertexExample);
-  var query = "RETURN"
-    + " GRAPH_DISTANCE_TO(@graphName"
-    + ',@ex1'
-    + ',@ex2'
-    + ',@options'
-    + ')';
+  var bindVars = {};
   options = options || {};
-  var bindVars = {
-    "graphName": this.__name,
-    "options": options,
-    "ex1": ex1,
-    "ex2": ex2
-  };
-  var result = db._query(query, bindVars).toArray();
-  return result[0];
+  var query = `
+    ${transformExampleToAQL(startVertexExample, Object.keys(this.__vertexCollections), bindVars, "start")}
+      ${transformExampleToAQL(endVertexExample, Object.keys(this.__vertexCollections), bindVars, "target")}
+      FILTER target._id != start._id
+        LET p = (FOR v, e IN `; 
+  if (options.direction === "outbound") {
+    query += "OUTBOUND ";
+  } else if (options.direction === "inbound") {
+    query += "INBOUND ";
+  } else {
+    query += "ANY ";
+  }
+  query += `SHORTEST_PATH start TO target GRAPH @graphName `;
+  if (options.hasOwnProperty("weightAttribute") && options.hasOwnProperty("defaultWeight")) {
+    query += `OPTIONS {weightAttribute: @attribute, defaultWeight: @default}
+              FILTER e != null RETURN IS_NUMBER(e[@attribute]) ? e[@attribute] : @default) `;
+    bindVars.attribute = options.weightAttribute;
+    bindVars.default = options.defaultWeight;
+  } else {
+    query += "FILTER e != null RETURN 1) ";
+  }
+  query += `
+  FILTER LENGTH(p) > 0
+  RETURN {
+    startVertex: start._id,
+    vertex: target._id,
+    distance: SUM(p)
+  }`;
+
+  bindVars.graphName = this.__name;
+  return db._query(query, bindVars).toArray();
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1956,7 +1992,7 @@ Graph.prototype._distanceTo = function(startVertexExample, endVertexExample, opt
 Graph.prototype._absoluteEccentricity = function(vertexExample, options) {
   var bindVars = {};
   options = options || {};
-  var query = transformExampleToAQL(vertexExample, Object.keys(this.__vertexCollections), bindVars);
+  var query = transformExampleToAQL(vertexExample, Object.keys(this.__vertexCollections), bindVars, "start");
   query += `
   LET lsp = (
     FOR target IN ${startInAllCollections(Object.keys(this.__vertexCollections))}
@@ -1998,7 +2034,7 @@ Graph.prototype._absoluteEccentricity = function(vertexExample, options) {
 Graph.prototype._farness = Graph.prototype._absoluteCloseness = function(vertexExample, options) {
   var bindVars = {};
   options = options || {};
-  var query = transformExampleToAQL(vertexExample, Object.keys(this.__vertexCollections), bindVars);
+  var query = transformExampleToAQL(vertexExample, Object.keys(this.__vertexCollections), bindVars, "start");
   query += `
   LET lsp = (
     FOR target IN ${startInAllCollections(Object.keys(this.__vertexCollections))}
@@ -2085,7 +2121,7 @@ Graph.prototype._absoluteBetweenness = function(example, options) {
   bindVars.graphName = this.__name;
 
   var query = `
-    LET toFind = (${transformExampleToAQL(example, Object.keys(this.__vertexCollections), bindVars)} RETURN start._id)
+    LET toFind = (${transformExampleToAQL(example, Object.keys(this.__vertexCollections), bindVars, "start")} RETURN start._id)
     LET paths = (
     FOR start IN ${startInAllCollections(Object.keys(this.__vertexCollections))}
       FOR target IN ${startInAllCollections(Object.keys(this.__vertexCollections))}
@@ -2155,7 +2191,7 @@ Graph.prototype._betweenness = function(options) {
 ////////////////////////////////////////////////////////////////////////////////
 Graph.prototype._radius = function(options) {
   var vcs = Object.keys(this.__vertexCollections);
-  var query;
+  var query = "";
   var ids;
   var bindVars = {
     "graphName": this.__name
@@ -2190,11 +2226,11 @@ Graph.prototype._radius = function(options) {
   query += `FILTER LENGTH(p) > 0 LET k = SUM(p) SORT k DESC LIMIT 1 RETURN k)
             FILTER LENGTH(lsp) != 0
             SORT lsp[0] ASC LIMIT 1 RETURN lsp[0]`;
-  var result = db._query(query, bindVars).toArray();
-  if (result.length === 1) {
-    return result[0];
+  var res = db._query(query, bindVars).toArray();
+  if (res.length > 0) {
+    return res[0];
   }
-  return result;
+  return res;
 };
 
 
