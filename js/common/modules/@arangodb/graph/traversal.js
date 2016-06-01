@@ -1,4 +1,4 @@
-/*jshint strict: false, unused: false */
+/*jshint strict: false, unused: true */
 /*global ArangoClusterComm, AQL_QUERY_IS_KILLED */
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +29,6 @@
 /// @author Copyright 2011-2013, triAGENS GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
-var graph = require("@arangodb/graph-blueprint");
 var generalGraph = require("@arangodb/general-graph");
 var arangodb = require("@arangodb");
 var BinaryHeap = require("@arangodb/heap").BinaryHeap;
@@ -466,7 +465,7 @@ function anyExpander (config, vertex, path) {
 /// @brief expands all outbound edges labeled with at least one label in config.labels
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-function expandOutEdgesWithLabels (config, vertex, path) {
+function expandOutEdgesWithLabels (config, vertex) {
   var datasource = config.datasource;
   var result = [ ];
   var i;
@@ -495,7 +494,7 @@ function expandOutEdgesWithLabels (config, vertex, path) {
 /// @brief expands all inbound edges labeled with at least one label in config.labels
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-function expandInEdgesWithLabels (config, vertex, path) {
+function expandInEdgesWithLabels (config, vertex) {
   var datasource = config.datasource;
   var result = [ ];
   var i;
@@ -524,7 +523,7 @@ function expandInEdgesWithLabels (config, vertex, path) {
 /// @brief expands all edges labeled with at least one label in config.labels
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-function expandEdgesWithLabels (config, vertex, path) {
+function expandEdgesWithLabels (config, vertex) {
   var datasource = config.datasource;
   var result = [ ];
   var i;
@@ -572,7 +571,7 @@ function trackingVisitor (config, result, vertex, path) {
 /// @brief a visitor that counts the number of nodes visited
 ////////////////////////////////////////////////////////////////////////////////
 
-function countingVisitor (config, result, vertex, path) {
+function countingVisitor (config, result) {
   if (! result) {
     return;
   }
@@ -626,7 +625,7 @@ function minDepthFilter (config, vertex, path) {
 /// @brief include all vertices matching one of the given attribute sets
 ////////////////////////////////////////////////////////////////////////////////
 
-function includeMatchingAttributesFilter (config, vertex, path) {
+function includeMatchingAttributesFilter (config, vertex) {
   if (! Array.isArray(config.matchingAttributes)) {
     config.matchingAttributes = [config.matchingAttributes];
   }
