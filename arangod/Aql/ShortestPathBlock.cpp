@@ -82,7 +82,9 @@ class AttributeWeightCalculator {
 ///        Will be handed over to the path finder
 ////////////////////////////////////////////////////////////////////////////////
 
-struct arangodb::aql::ConstDistanceExpanderLocal {
+namespace arangodb {
+namespace aql {
+struct ConstDistanceExpanderLocal {
  private:
   /// @brief reference to the Block
   ShortestPathBlock const* _block; 
@@ -136,7 +138,7 @@ struct arangodb::aql::ConstDistanceExpanderLocal {
 ///        Will be handed over to the path finder
 ////////////////////////////////////////////////////////////////////////////////
 
-struct arangodb::aql::ConstDistanceExpanderCluster {
+struct ConstDistanceExpanderCluster {
  private:
 
   /// @brief reference to the Block
@@ -190,7 +192,7 @@ struct arangodb::aql::ConstDistanceExpanderCluster {
 /// @brief Expander for weighted edges
 ////////////////////////////////////////////////////////////////////////////////
 
-struct arangodb::aql::EdgeWeightExpanderLocal {
+struct EdgeWeightExpanderLocal {
 
  private:
 
@@ -260,7 +262,7 @@ struct arangodb::aql::EdgeWeightExpanderLocal {
 /// @brief Expander for weighted edges
 ////////////////////////////////////////////////////////////////////////////////
 
-struct arangodb::aql::EdgeWeightExpanderCluster {
+struct EdgeWeightExpanderCluster {
 
  private:
 
@@ -325,6 +327,8 @@ struct arangodb::aql::EdgeWeightExpanderCluster {
     }
   }
 };
+}
+}
 
 ShortestPathBlock::ShortestPathBlock(ExecutionEngine* engine,
                                      ShortestPathNode const* ep)
