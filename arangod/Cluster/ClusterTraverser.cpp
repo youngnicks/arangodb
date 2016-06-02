@@ -118,7 +118,6 @@ void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
     TRI_ASSERT(_traverser->_iteratorCache.size() == result.size());
     // We have to request the next level
     arangodb::GeneralResponse::ResponseCode responseCode;
-    std::string contentType;
     std::vector<TraverserExpression*> expEdges;
     auto found = _traverser->_expressions->find(depth);
     if (found != _traverser->_expressions->end()) {
@@ -129,7 +128,7 @@ void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
     resultEdges.openObject();
     int res = getFilteredEdgesOnCoordinator(
         _traverser->_dbname, collName, startVertex, dir,
-        expEdges, responseCode, contentType, resultEdges);
+        expEdges, responseCode, resultEdges);
     if (res != TRI_ERROR_NO_ERROR) {
       THROW_ARANGO_EXCEPTION(res);
     }

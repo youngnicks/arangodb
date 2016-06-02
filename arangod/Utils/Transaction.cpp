@@ -1296,6 +1296,7 @@ int Transaction::documentFastPath(std::string const& collectionName,
       return opRes.code;
     }
     result.add(opRes.slice());
+    return TRI_ERROR_NO_ERROR;
   }
 
   TRI_voc_cid_t cid = addCollectionAtRuntime(collectionName); 

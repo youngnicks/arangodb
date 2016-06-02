@@ -79,12 +79,17 @@ void arangodb::traverser::ShortestPath::edgeToVelocyPack(Transaction*, size_t po
 void arangodb::traverser::ShortestPath::vertexToVelocyPack(Transaction* trx, size_t position, VPackBuilder& builder) {
   TRI_ASSERT(position < length());
   VPackSlice v = _vertices[position];
+  _searchBuilder.clear();
   TRI_ASSERT(v.isString());
   std::string collection =  v.copyString();
   size_t p = collection.find("/");
   TRI_ASSERT(p != std::string::npos);
+  _searchBuilder.openObject();
+  _searchBuilder.add(StaticStrings::KeyString, VPackValue(collection.substr(p + 1)));
+  _searchBuilder.close();
   collection = collection.substr(0, p);
-  int res = trx->documentFastPath(collection, v, builder);
+
+  int res = trx->documentFastPath(collection, _searchBuilder.slice(), builder);
   if (res != TRI_ERROR_NO_ERROR) {
     builder.clear(); // Just in case...
     builder.add(basics::VelocyPackHelper::NullValue());

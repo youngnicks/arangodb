@@ -1267,7 +1267,6 @@ int getDocumentOnCoordinator(
         if (!options.ignoreRevs && slice.hasKey(StaticStrings::RevString)) {
           headers->emplace("if-match", slice.get(StaticStrings::RevString).copyString());
         }
-
         // We send to single endpoint
         requests.emplace_back(
             "shard:" + it.first, reqType,
@@ -1584,7 +1583,7 @@ int getFilteredEdgesOnCoordinator(
     std::string const& vertex, TRI_edge_direction_e const& direction,
     std::vector<traverser::TraverserExpression*> const& expressions,
     arangodb::GeneralResponse::ResponseCode& responseCode,
-    std::string& contentType, VPackBuilder& result) {
+    VPackBuilder& result) {
   TRI_ASSERT(result.isOpenObject());
 
   // Set a few variables needed for our work:
@@ -1627,7 +1626,6 @@ int getFilteredEdgesOnCoordinator(
   // Now listen to the results:
   int count;
   responseCode = arangodb::GeneralResponse::ResponseCode::OK;
-  contentType = StaticStrings::MimeTypeJson;
   size_t filtered = 0;
   size_t scannedIndex = 0;
 

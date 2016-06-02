@@ -23,6 +23,7 @@
 
 #include "V8Traverser.h"
 #include "Basics/StaticStrings.h"
+#include "Cluster/ClusterMethods.h"
 #include "Indexes/EdgeIndex.h"
 #include "Utils/CollectionNameResolver.h"
 #include "Utils/OperationCursor.h"
@@ -177,8 +178,6 @@ EdgeCollectionInfo::EdgeCollectionInfo(arangodb::Transaction* trx,
       break;
   }
 
-  trx->addCollectionAtRuntime(collectionName);
-
   if (!trx->isEdgeCollection(collectionName)) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_ARANGO_COLLECTION_TYPE_INVALID);
   }
@@ -207,6 +206,26 @@ std::shared_ptr<OperationCursor> EdgeCollectionInfo::getEdges(
                          _searchBuilder.slice(), 0, UINT64_MAX, 1000, false);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Get edges for the given direction and start vertex. On Coordinator.
+////////////////////////////////////////////////////////////////////////////////
+
+int EdgeCollectionInfo::getEdgesCoordinator(VPackSlice const& vertexId,
+                                            VPackBuilder& result) {
+  TRI_ASSERT(result.isEmpty());
+  arangodb::GeneralResponse::ResponseCode responseCode;
+  result.openObject();
+  int res = getFilteredEdgesOnCoordinator(
+      _trx->vocbase()->_name, _collectionName, vertexId.copyString(),
+      _forwardDir, _unused, responseCode, result);
+  result.close();
+  return res;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Get edges for the given direction and start vertex. Reverse version
+////////////////////////////////////////////////////////////////////////////////
+
 std::shared_ptr<OperationCursor> EdgeCollectionInfo::getReverseEdges(
     std::string const& vertexId) {
   _searchBuilder.clear();
@@ -224,6 +243,23 @@ std::shared_ptr<OperationCursor> EdgeCollectionInfo::getReverseEdges(
                          arangodb::Transaction::CursorType::INDEX, _indexId,
                          _searchBuilder.slice(), 0, UINT64_MAX, 1000, false);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Get edges for the given direction and start vertex. Reverse version on Coordinator.
+////////////////////////////////////////////////////////////////////////////////
+
+int EdgeCollectionInfo::getReverseEdgesCoordinator(VPackSlice const& vertexId,
+                                                   VPackBuilder& result) {
+  TRI_ASSERT(result.isEmpty());
+  arangodb::GeneralResponse::ResponseCode responseCode;
+  result.openObject();
+  int res = getFilteredEdgesOnCoordinator(
+      _trx->vocbase()->_name, _collectionName, vertexId.copyString(),
+      _backwardDir, _unused, responseCode, result);
+  result.close();
+  return res;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Compute the weight of an edge

@@ -93,34 +93,102 @@ struct ConstDistanceExpanderLocal {
                              bool isReverse)
       : _colls(colls), _isReverse(isReverse) {}
 
-  void operator()(VPackSlice const& v, std::vector<VPackSlice>& res_edges,
+  void operator()(VPackSlice const& v, std::vector<VPackSlice>& resEdges,
                   std::vector<VPackSlice>& neighbors) {
+    std::shared_ptr<arangodb::OperationCursor> edgeCursor;
     for (auto const& edgeCollection : _colls) {
       _cursor.clear();
       TRI_ASSERT(edgeCollection != nullptr);
-      std::shared_ptr<arangodb::OperationCursor> edgeCursor;
       if (_isReverse) {
         edgeCursor = edgeCollection->getReverseEdges(v);
       } else {
-         edgeCursor = edgeCollection->getEdges(v);
+        edgeCursor = edgeCollection->getEdges(v);
       }
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(_cursor, UINT64_MAX);
         for (auto const& mptr : _cursor) {
           VPackSlice edge(mptr->vpack());
-          VPackSlice from = arangodb::Transaction::extractFromFromDocument(edge);
+          VPackSlice from =
+              arangodb::Transaction::extractFromFromDocument(edge);
           if (from == v) {
             VPackSlice to = arangodb::Transaction::extractToFromDocument(edge);
             if (to != v) {
-              res_edges.emplace_back(edge);
+              resEdges.emplace_back(edge);
               neighbors.emplace_back(to);
             }
           } else {
-            res_edges.emplace_back(edge);
+            resEdges.emplace_back(edge);
             neighbors.emplace_back(from);
           }
         }
       }
+    }
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Cluster class to expand edges.
+///        Will be handed over to the path finder
+////////////////////////////////////////////////////////////////////////////////
+
+struct ConstDistanceExpanderCluster {
+ private:
+
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief all info required for edge collection
+  //////////////////////////////////////////////////////////////////////////////
+
+  std::vector<EdgeCollectionInfo*> const _colls;
+
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief Defines if this expander follows the edges in reverse
+  //////////////////////////////////////////////////////////////////////////////
+
+  bool _isReverse;
+
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief Cache for edges send over the network
+  //////////////////////////////////////////////////////////////////////////////
+
+  std::vector<std::shared_ptr<VPackBuffer<uint8_t>>> _results;
+
+ public:
+  ConstDistanceExpanderCluster(std::vector<EdgeCollectionInfo*> const& colls,
+                               bool isReverse)
+      : _colls(colls), _isReverse(isReverse) {}
+
+  void operator()(VPackSlice const& v, std::vector<VPackSlice>& resEdges,
+                  std::vector<VPackSlice>& neighbors) {
+    int res = TRI_ERROR_NO_ERROR;
+    for (auto const& edgeCollection : _colls) {
+      VPackBuilder result;
+      TRI_ASSERT(edgeCollection != nullptr);
+      if (_isReverse) {
+        res = edgeCollection->getReverseEdgesCoordinator(v, result);
+      } else {
+        res = edgeCollection->getEdgesCoordinator(v, result);
+      }
+
+      if (res != TRI_ERROR_NO_ERROR) {
+        THROW_ARANGO_EXCEPTION(res);
+      }
+
+      VPackSlice edges = result.slice().get("edges");
+      for (auto const& edge : VPackArrayIterator(edges)) {
+        VPackSlice from = arangodb::Transaction::extractFromFromDocument(edge);
+        if (from == v) {
+          VPackSlice to = arangodb::Transaction::extractToFromDocument(edge);
+          if (to != v) {
+            resEdges.emplace_back(edge);
+            neighbors.emplace_back(to);
+          }
+        } else {
+          resEdges.emplace_back(edge);
+          neighbors.emplace_back(from);
+        }
+      }
+      // Make sure the data Slices are pointing to is not running out of scope.
+      _results.emplace_back(result.steal());
     }
   }
 };
@@ -155,7 +223,6 @@ struct EdgeWeightExpanderLocal {
     std::shared_ptr<arangodb::OperationCursor> edgeCursor;
     for (auto const& edgeCollection : _edgeCollections) {
       TRI_ASSERT(edgeCollection != nullptr);
-
       if (_reverse) {
         edgeCursor = edgeCollection->getReverseEdges(source);
       } else {
@@ -180,13 +247,14 @@ struct EdgeWeightExpanderLocal {
           }
         }
       };
-      
+
       cursor.clear();
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(cursor, UINT64_MAX);
         for (auto const& mptr : cursor) {
           VPackSlice edge(mptr->vpack());
-          VPackSlice from = arangodb::Transaction::extractFromFromDocument(edge);
+          VPackSlice from =
+              arangodb::Transaction::extractFromFromDocument(edge);
           VPackSlice to = arangodb::Transaction::extractToFromDocument(edge);
           double currentWeight = edgeCollection->weightEdge(edge);
           if (from == source) {
@@ -199,6 +267,89 @@ struct EdgeWeightExpanderLocal {
     }
   }
 };
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Expander for weighted edges
+////////////////////////////////////////////////////////////////////////////////
+
+struct EdgeWeightExpanderCluster {
+
+ private:
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief all info required for edge collection
+  //////////////////////////////////////////////////////////////////////////////
+
+  std::vector<EdgeCollectionInfo*> const _edgeCollections;
+
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief Defines if this expander follows the edges in reverse
+  //////////////////////////////////////////////////////////////////////////////
+
+  bool _reverse;
+
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief Cache for edges send over the network
+  //////////////////////////////////////////////////////////////////////////////
+
+  std::vector<std::shared_ptr<VPackBuffer<uint8_t>>> _results;
+
+ public:
+  EdgeWeightExpanderCluster(
+      std::vector<EdgeCollectionInfo*> const& edgeCollections, bool reverse)
+      : _edgeCollections(edgeCollections), _reverse(reverse) {}
+
+  void operator()(VPackSlice const& source,
+                  std::vector<ArangoDBPathFinder::Step*>& result) {
+    int res = TRI_ERROR_NO_ERROR;
+    for (auto const& edgeCollection : _edgeCollections) {
+      TRI_ASSERT(edgeCollection != nullptr);
+      VPackBuilder edgesBuilder;
+      if (_reverse) {
+        res = edgeCollection->getReverseEdgesCoordinator(source, edgesBuilder);
+      } else {
+        res = edgeCollection->getEdgesCoordinator(source, edgesBuilder);
+      }
+
+      if (res != TRI_ERROR_NO_ERROR) {
+        THROW_ARANGO_EXCEPTION(res);
+      }
+
+      std::unordered_map<VPackSlice, size_t> candidates;
+
+      auto inserter = [&](VPackSlice const& s, VPackSlice const& t,
+                          double currentWeight, VPackSlice const& edge) {
+        auto cand = candidates.find(t);
+        if (cand == candidates.end()) {
+          // Add weight
+          auto step = std::make_unique<ArangoDBPathFinder::Step>(
+              t, s, currentWeight, std::move(edge));
+          result.emplace_back(step.release());
+          candidates.emplace(t, result.size() - 1);
+        } else {
+          // Compare weight
+          auto oldWeight = result[cand->second]->weight();
+          if (currentWeight < oldWeight) {
+            result[cand->second]->setWeight(currentWeight);
+          }
+        }
+      };
+
+      VPackSlice edges = edgesBuilder.slice().get("edges");
+      for (auto const& edge : VPackArrayIterator(edges)) {
+        VPackSlice from = arangodb::Transaction::extractFromFromDocument(edge);
+        VPackSlice to = arangodb::Transaction::extractToFromDocument(edge);
+        double currentWeight = edgeCollection->weightEdge(edge);
+        if (from == source) {
+          inserter(from, to, currentWeight, edge);
+        } else {
+          inserter(to, from, currentWeight, edge);
+        }
+      }
+      _results.emplace_back(edgesBuilder.steal());
+    }
+  }
+};
+
 
 ShortestPathBlock::ShortestPathBlock(ExecutionEngine* engine,
                                      ShortestPathNode const* ep)
@@ -268,8 +419,22 @@ ShortestPathBlock::ShortestPathBlock(ExecutionEngine* engine,
   _path = std::make_unique<arangodb::traverser::ShortestPath>();
 
   if (arangodb::ServerState::instance()->isCoordinator()) {
-    // TODO COORDINATOR
-    THROW_ARANGO_EXCEPTION(TRI_ERROR_NOT_IMPLEMENTED);
+    if (_opts.useWeight) {
+      auto fwExpander = EdgeWeightExpanderCluster(_collectionInfos, false);
+      auto bwExpander = EdgeWeightExpanderCluster(_collectionInfos, true);
+      _finder.reset(new arangodb::basics::DynamicDistanceFinder<
+                    arangodb::velocypack::Slice, arangodb::velocypack::Slice,
+                    double, arangodb::traverser::ShortestPath>(
+          fwExpander, bwExpander, _opts.bidirectional));
+    } else {
+      auto fwExpander = ConstDistanceExpanderCluster(_collectionInfos, false);
+      auto bwExpander = ConstDistanceExpanderCluster(_collectionInfos, true);
+      _finder.reset(new arangodb::basics::ConstDistanceFinder<arangodb::velocypack::Slice,
+                                              arangodb::velocypack::Slice,
+                                              arangodb::basics::VelocyPackHelper::VPackStringHash, 
+                                              arangodb::basics::VelocyPackHelper::VPackStringEqual,
+                                              arangodb::traverser::ShortestPath>(fwExpander, bwExpander));
+    }
   } else {
     if (_opts.useWeight) {
       auto fwExpander = EdgeWeightExpanderLocal(_collectionInfos, false);

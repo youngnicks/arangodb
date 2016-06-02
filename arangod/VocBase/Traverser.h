@@ -170,6 +170,9 @@ class ShortestPath {
 
  private:
 
+  /// @brief Local builder to create a search value
+  arangodb::velocypack::Builder _searchBuilder;
+
   /// @brief Count how many documents have been read
   size_t _readDocuments;
 

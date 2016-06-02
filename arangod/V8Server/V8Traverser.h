@@ -424,6 +424,8 @@ class EdgeCollectionInfo {
 
   TRI_edge_direction_e _backwardDir;
 
+  std::vector<arangodb::traverser::TraverserExpression*> _unused;
+
  public:
   EdgeCollectionInfo(arangodb::Transaction* trx,
                      std::string const& collectionName,
@@ -436,12 +438,29 @@ class EdgeCollectionInfo {
 
   std::shared_ptr<arangodb::OperationCursor> getEdges(std::string const&);
 
-  std::shared_ptr<arangodb::OperationCursor> getEdges(VPackSlice const&);
+  std::shared_ptr<arangodb::OperationCursor> getEdges(arangodb::velocypack::Slice const&);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Get edges for the given direction and start vertex. On Coordinator.
+////////////////////////////////////////////////////////////////////////////////
+
+  int getEdgesCoordinator(arangodb::velocypack::Slice const&,
+                          arangodb::velocypack::Builder&);
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Get edges for the given direction and start vertex. Reverse version
+////////////////////////////////////////////////////////////////////////////////
 
   std::shared_ptr<arangodb::OperationCursor> getReverseEdges(std::string const&);
 
-  std::shared_ptr<arangodb::OperationCursor> getReverseEdges(VPackSlice const&);
+  std::shared_ptr<arangodb::OperationCursor> getReverseEdges(arangodb::velocypack::Slice const&);
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Get edges for the given direction and start vertex. Reverse version on Coordinator.
+////////////////////////////////////////////////////////////////////////////////
+
+  int getReverseEdgesCoordinator(arangodb::velocypack::Slice const&,
+                                 arangodb::velocypack::Builder&);
 
   double weightEdge(arangodb::velocypack::Slice const);
   
