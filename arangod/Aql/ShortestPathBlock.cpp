@@ -82,21 +82,26 @@ class AttributeWeightCalculator {
 ///        Will be handed over to the path finder
 ////////////////////////////////////////////////////////////////////////////////
 
-struct ConstDistanceExpanderLocal {
+struct arangodb::aql::ConstDistanceExpanderLocal {
  private:
-  std::vector<EdgeCollectionInfo*> const _colls;
+  /// @brief reference to the Block
+  ShortestPathBlock const* _block; 
+
+  /// @brief Defines if this expander follows the edges in reverse
   bool _isReverse;
+
+  /// @brief Local cursor vector
   std::vector<TRI_doc_mptr_t*> _cursor;
 
  public:
-  ConstDistanceExpanderLocal(std::vector<EdgeCollectionInfo*> const& colls,
+  ConstDistanceExpanderLocal(ShortestPathBlock const* block,
                              bool isReverse)
-      : _colls(colls), _isReverse(isReverse) {}
+      : _block(block), _isReverse(isReverse) {}
 
   void operator()(VPackSlice const& v, std::vector<VPackSlice>& resEdges,
                   std::vector<VPackSlice>& neighbors) {
     std::shared_ptr<arangodb::OperationCursor> edgeCursor;
-    for (auto const& edgeCollection : _colls) {
+    for (auto const& edgeCollection : _block->_collectionInfos) {
       _cursor.clear();
       TRI_ASSERT(edgeCollection != nullptr);
       if (_isReverse) {
@@ -131,36 +136,23 @@ struct ConstDistanceExpanderLocal {
 ///        Will be handed over to the path finder
 ////////////////////////////////////////////////////////////////////////////////
 
-struct ConstDistanceExpanderCluster {
+struct arangodb::aql::ConstDistanceExpanderCluster {
  private:
 
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief all info required for edge collection
-  //////////////////////////////////////////////////////////////////////////////
+  /// @brief reference to the Block
+  ShortestPathBlock* _block; 
 
-  std::vector<EdgeCollectionInfo*> const _colls;
-
-  //////////////////////////////////////////////////////////////////////////////
   /// @brief Defines if this expander follows the edges in reverse
-  //////////////////////////////////////////////////////////////////////////////
-
   bool _isReverse;
 
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief Cache for edges send over the network
-  //////////////////////////////////////////////////////////////////////////////
-
-  std::vector<std::shared_ptr<VPackBuffer<uint8_t>>> _results;
-
  public:
-  ConstDistanceExpanderCluster(std::vector<EdgeCollectionInfo*> const& colls,
-                               bool isReverse)
-      : _colls(colls), _isReverse(isReverse) {}
+  ConstDistanceExpanderCluster(ShortestPathBlock* block, bool isReverse)
+      : _block(block), _isReverse(isReverse) {}
 
   void operator()(VPackSlice const& v, std::vector<VPackSlice>& resEdges,
                   std::vector<VPackSlice>& neighbors) {
     int res = TRI_ERROR_NO_ERROR;
-    for (auto const& edgeCollection : _colls) {
+    for (auto const& edgeCollection : _block->_collectionInfos) {
       VPackBuilder result;
       TRI_ASSERT(edgeCollection != nullptr);
       if (_isReverse) {
@@ -188,7 +180,8 @@ struct ConstDistanceExpanderCluster {
         }
       }
       // Make sure the data Slices are pointing to is not running out of scope.
-      _results.emplace_back(result.steal());
+      // This is not thread-safe!
+      _block->_coordinatorCache.emplace_back(result.steal());
     }
   }
 };
@@ -197,31 +190,26 @@ struct ConstDistanceExpanderCluster {
 /// @brief Expander for weighted edges
 ////////////////////////////////////////////////////////////////////////////////
 
-struct EdgeWeightExpanderLocal {
+struct arangodb::aql::EdgeWeightExpanderLocal {
 
  private:
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief all info required for edge collection
-  //////////////////////////////////////////////////////////////////////////////
 
-  std::vector<EdgeCollectionInfo*> _edgeCollections;
+  /// @brief reference to the Block
+  ShortestPathBlock const* _block; 
 
-  //////////////////////////////////////////////////////////////////////////////
   /// @brief Defines if this expander follows the edges in reverse
-  //////////////////////////////////////////////////////////////////////////////
-
   bool _reverse;
 
  public:
   EdgeWeightExpanderLocal(
-      std::vector<EdgeCollectionInfo*> const& edgeCollections, bool reverse)
-      : _edgeCollections(edgeCollections), _reverse(reverse) {}
+      ShortestPathBlock const* block, bool reverse)
+      : _block(block), _reverse(reverse) {}
 
   void operator()(VPackSlice const& source,
                   std::vector<ArangoDBPathFinder::Step*>& result) {
     std::vector<TRI_doc_mptr_t*> cursor;
     std::shared_ptr<arangodb::OperationCursor> edgeCursor;
-    for (auto const& edgeCollection : _edgeCollections) {
+    for (auto const& edgeCollection : _block->_collectionInfos) {
       TRI_ASSERT(edgeCollection != nullptr);
       if (_reverse) {
         edgeCursor = edgeCollection->getReverseEdges(source);
@@ -272,36 +260,24 @@ struct EdgeWeightExpanderLocal {
 /// @brief Expander for weighted edges
 ////////////////////////////////////////////////////////////////////////////////
 
-struct EdgeWeightExpanderCluster {
+struct arangodb::aql::EdgeWeightExpanderCluster {
 
  private:
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief all info required for edge collection
-  //////////////////////////////////////////////////////////////////////////////
 
-  std::vector<EdgeCollectionInfo*> const _edgeCollections;
+  /// @brief reference to the Block
+  ShortestPathBlock* _block;
 
-  //////////////////////////////////////////////////////////////////////////////
   /// @brief Defines if this expander follows the edges in reverse
-  //////////////////////////////////////////////////////////////////////////////
-
   bool _reverse;
 
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief Cache for edges send over the network
-  //////////////////////////////////////////////////////////////////////////////
-
-  std::vector<std::shared_ptr<VPackBuffer<uint8_t>>> _results;
-
  public:
-  EdgeWeightExpanderCluster(
-      std::vector<EdgeCollectionInfo*> const& edgeCollections, bool reverse)
-      : _edgeCollections(edgeCollections), _reverse(reverse) {}
+  EdgeWeightExpanderCluster(ShortestPathBlock* block, bool reverse)
+      : _block(block), _reverse(reverse) {}
 
   void operator()(VPackSlice const& source,
                   std::vector<ArangoDBPathFinder::Step*>& result) {
     int res = TRI_ERROR_NO_ERROR;
-    for (auto const& edgeCollection : _edgeCollections) {
+    for (auto const& edgeCollection : _block->_collectionInfos) {
       TRI_ASSERT(edgeCollection != nullptr);
       VPackBuilder edgesBuilder;
       if (_reverse) {
@@ -345,11 +321,10 @@ struct EdgeWeightExpanderCluster {
           inserter(to, from, currentWeight, edge);
         }
       }
-      _results.emplace_back(edgesBuilder.steal());
+      _block->_coordinatorCache.emplace_back(edgesBuilder.steal());
     }
   }
 };
-
 
 ShortestPathBlock::ShortestPathBlock(ExecutionEngine* engine,
                                      ShortestPathNode const* ep)
@@ -420,37 +395,35 @@ ShortestPathBlock::ShortestPathBlock(ExecutionEngine* engine,
 
   if (arangodb::ServerState::instance()->isCoordinator()) {
     if (_opts.useWeight) {
-      auto fwExpander = EdgeWeightExpanderCluster(_collectionInfos, false);
-      auto bwExpander = EdgeWeightExpanderCluster(_collectionInfos, true);
       _finder.reset(new arangodb::basics::DynamicDistanceFinder<
                     arangodb::velocypack::Slice, arangodb::velocypack::Slice,
                     double, arangodb::traverser::ShortestPath>(
-          fwExpander, bwExpander, _opts.bidirectional));
+          EdgeWeightExpanderCluster(this, false),
+          EdgeWeightExpanderCluster(this, true), _opts.bidirectional));
     } else {
-      auto fwExpander = ConstDistanceExpanderCluster(_collectionInfos, false);
-      auto bwExpander = ConstDistanceExpanderCluster(_collectionInfos, true);
-      _finder.reset(new arangodb::basics::ConstDistanceFinder<arangodb::velocypack::Slice,
-                                              arangodb::velocypack::Slice,
-                                              arangodb::basics::VelocyPackHelper::VPackStringHash, 
-                                              arangodb::basics::VelocyPackHelper::VPackStringEqual,
-                                              arangodb::traverser::ShortestPath>(fwExpander, bwExpander));
+      _finder.reset(new arangodb::basics::ConstDistanceFinder<
+                    arangodb::velocypack::Slice, arangodb::velocypack::Slice,
+                    arangodb::basics::VelocyPackHelper::VPackStringHash,
+                    arangodb::basics::VelocyPackHelper::VPackStringEqual,
+                    arangodb::traverser::ShortestPath>(
+          ConstDistanceExpanderCluster(this, false),
+          ConstDistanceExpanderCluster(this, true)));
     }
   } else {
     if (_opts.useWeight) {
-      auto fwExpander = EdgeWeightExpanderLocal(_collectionInfos, false);
-      auto bwExpander = EdgeWeightExpanderLocal(_collectionInfos, true);
       _finder.reset(new arangodb::basics::DynamicDistanceFinder<
                     arangodb::velocypack::Slice, arangodb::velocypack::Slice,
                     double, arangodb::traverser::ShortestPath>(
-          fwExpander, bwExpander, _opts.bidirectional));
+          EdgeWeightExpanderLocal(this, false),
+          EdgeWeightExpanderLocal(this, true), _opts.bidirectional));
     } else {
-      auto fwExpander = ConstDistanceExpanderLocal(_collectionInfos, false);
-      auto bwExpander = ConstDistanceExpanderLocal(_collectionInfos, true);
-      _finder.reset(new arangodb::basics::ConstDistanceFinder<arangodb::velocypack::Slice,
-                                              arangodb::velocypack::Slice,
-                                              arangodb::basics::VelocyPackHelper::VPackStringHash, 
-                                              arangodb::basics::VelocyPackHelper::VPackStringEqual,
-                                              arangodb::traverser::ShortestPath>(fwExpander, bwExpander));
+      _finder.reset(new arangodb::basics::ConstDistanceFinder<
+                    arangodb::velocypack::Slice, arangodb::velocypack::Slice,
+                    arangodb::basics::VelocyPackHelper::VPackStringHash,
+                    arangodb::basics::VelocyPackHelper::VPackStringEqual,
+                    arangodb::traverser::ShortestPath>(
+          ConstDistanceExpanderLocal(this, false),
+          ConstDistanceExpanderLocal(this, true)));
     }
   }
 }
@@ -574,6 +547,9 @@ bool ShortestPathBlock::nextPath(AqlItemBlock const* items) {
   VPackSlice start = _opts.getStart();
   VPackSlice end = _opts.getEnd();
   TRI_ASSERT(_finder != nullptr);
+  // We do not need this data anymore. Result has been processed.
+  // Save some memory.
+  _coordinatorCache.clear();
   bool hasPath = _finder->shortestPath(start, end, *_path);
 
   if (hasPath) {

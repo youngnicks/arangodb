@@ -408,7 +408,7 @@ public:
 
   virtual ~PathFinder() {}
 
-  virtual bool shortestPath(VertexId& start, VertexId& target, Path& result);
+  virtual bool shortestPath(VertexId& start, VertexId& target, Path& result) = 0;
 };
 
 template <typename VertexId, typename EdgeId, typename EdgeWeight, typename Path>
@@ -781,8 +781,8 @@ class DynamicDistanceFinder : public PathFinder<VertexId, Path> {
   /// @brief create the PathFinder
   //////////////////////////////////////////////////////////////////////////////
 
-  DynamicDistanceFinder(ExpanderFunction forwardExpander,
-             ExpanderFunction backwardExpander, bool bidirectional = true)
+  DynamicDistanceFinder(ExpanderFunction&& forwardExpander,
+             ExpanderFunction&& backwardExpander, bool bidirectional = true)
       : _highscoreSet(false),
         _highscore(0),
         _bingo(false),

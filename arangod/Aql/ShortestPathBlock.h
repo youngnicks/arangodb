@@ -34,6 +34,10 @@ namespace aql {
 class ShortestPathNode;
 
 class ShortestPathBlock : public ExecutionBlock {
+  friend struct ConstDistanceExpanderLocal;
+  friend struct ConstDistanceExpanderCluster;
+  friend struct EdgeWeightExpanderLocal;
+  friend struct EdgeWeightExpanderCluster;
 
  public:
   ShortestPathBlock(ExecutionEngine* engine, ShortestPathNode const* ep);
@@ -128,6 +132,10 @@ class ShortestPathBlock : public ExecutionBlock {
   /// computation
   ///        We use it to check if we are done with enumerating.
   bool _usedConstant;
+
+  /// @brief Cache for edges send over the network
+  std::vector<std::shared_ptr<VPackBuffer<uint8_t>>> _coordinatorCache;
+
 };
 
 } // namespace arangodb::aql
