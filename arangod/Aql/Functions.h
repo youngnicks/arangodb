@@ -93,6 +93,8 @@ struct Functions {
                            VPackFunctionParameters const&);
   static AqlValue Concat(arangodb::aql::Query*, arangodb::AqlTransaction*,
                          VPackFunctionParameters const&);
+  static AqlValue ConcatSeparator(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                                  VPackFunctionParameters const&);
   static AqlValue Like(arangodb::aql::Query*, arangodb::AqlTransaction*,
                        VPackFunctionParameters const&);
   static AqlValue Regex(arangodb::aql::Query*, arangodb::AqlTransaction*,
@@ -199,6 +201,8 @@ struct Functions {
                        VPackFunctionParameters const&);
   static AqlValue Atan(arangodb::aql::Query*, arangodb::AqlTransaction*,
                        VPackFunctionParameters const&);
+  static AqlValue Atan2(arangodb::aql::Query*, arangodb::AqlTransaction*,
+                        VPackFunctionParameters const&);
   static AqlValue Radians(arangodb::aql::Query*, arangodb::AqlTransaction*,
                           VPackFunctionParameters const&);
   static AqlValue Degrees(arangodb::aql::Query*, arangodb::AqlTransaction*,

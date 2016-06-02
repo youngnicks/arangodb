@@ -53,7 +53,9 @@ Supervision::~Supervision() { shutdown(); };
 
 void Supervision::wakeUp() {
   TRI_ASSERT(_agent != nullptr);
-  _snapshot = _agent->readDB().get(_agencyPrefix);
+  if (!this->isStopping()) {
+    _snapshot = _agent->readDB().get(_agencyPrefix);
+  }
   _cv.signal();
 }
 
@@ -124,7 +126,9 @@ std::vector<check_t> Supervision::checkDBServers() {
     report->close();
     report->close();
     report->close();
-    _agent->write(report);
+    if (!this->isStopping()) {
+      _agent->write(report);
+    }
       
   }
 
@@ -132,7 +136,8 @@ std::vector<check_t> Supervision::checkDBServers() {
 }
 
 bool Supervision::doChecks(bool timedout) {
-  if (_agent == nullptr) {
+
+  if (_agent == nullptr || this->isStopping()) {
     return false;
   }
 
@@ -146,45 +151,53 @@ bool Supervision::doChecks(bool timedout) {
 
 void Supervision::run() {
 
-  CONDITION_LOCKER(guard, _cv);
-  TRI_ASSERT(_agent != nullptr);
-  bool timedout = false;
+  // We do a try/catch around everything to prevent agency crashes until
+  // debugging of the Supervision is finished:
 
-  while (!this->isStopping()) {
+  try {
+    CONDITION_LOCKER(guard, _cv);
+    TRI_ASSERT(_agent != nullptr);
+    bool timedout = false;
 
-    // Get agency prefix after cluster init
-    if (_jobId == 0) {
-      if (!updateAgencyPrefix(10)) {
-        LOG_TOPIC(ERR, Logger::AGENCY)
-          << "Cannot get prefix from Agency. Stopping supervision for good.";
-        break;
+    while (!this->isStopping()) {
+
+      // Get agency prefix after cluster init
+      if (_jobId == 0) {
+        // We need the agency prefix to work, but it is only initialized by
+        // some other server in the cluster. Since the supervision does not
+        // make sense at all without other ArangoDB servers, we wait pretty
+        // long here before giving up:
+        if (!updateAgencyPrefix(1000, 1)) {
+          LOG_TOPIC(ERR, Logger::AGENCY)
+            << "Cannot get prefix from Agency. Stopping supervision for good.";
+          break;
+        }
       }
-    }
 
-    // Get bunch of job IDs from agency for future jobs
-    if (_jobId == 0 || _jobId == _jobIdMax) {
-      if (!getUniqueIds()) {
-        LOG_TOPIC(ERR, Logger::AGENCY)
-          << "Cannot get unique IDs from Agency. Stopping supervision for good.";
-        break;
+      // Get bunch of job IDs from agency for future jobs
+      if (_jobId == 0 || _jobId == _jobIdMax) {
+        getUniqueIds();  // cannot fail but only hang
       }
 
+      // Do nothing unless leader 
+      if (_agent->leading()) {
+        timedout = _cv.wait(_frequency * 1000000);  // quarter second
+      } else {
+        _cv.wait();
+      }
+
+      // Do supervision
+      doChecks(timedout);
+      workJobs();
+      
+
     }
-
-    // Do nothing unless leader 
-    if (_agent->leading()) {
-      timedout = _cv.wait(_frequency * 1000000);  // quarter second
-    } else {
-      _cv.wait();
-    }
-
-    // Do supervision
-    doChecks(timedout);
-    workJobs();
-    
-
   }
-  
+  catch (std::exception const& e) {
+    LOG_TOPIC(ERR, Logger::AGENCY) 
+        << "Supervision thread has caught an exception and is terminated: "
+        << e.what();
+  }
 }
 
 void Supervision::workJobs() {
@@ -227,7 +240,7 @@ bool Supervision::start(Agent* agent) {
 bool Supervision::updateAgencyPrefix (size_t nTries, int intervalSec) {
 
   // Try nTries to get agency's prefix in intervals 
-  for (size_t i = 0; i < nTries; i++) {
+  while (!this->isStopping()) {
     _snapshot = _agent->readDB().get("/");
     if (_snapshot.children().size() > 0) {
       _agencyPrefix = std::string("/") + _snapshot.children().begin()->first;
@@ -244,19 +257,19 @@ bool Supervision::updateAgencyPrefix (size_t nTries, int intervalSec) {
 
 static std::string const syncLatest = "/Sync/LatestID";
 // Get bunch of cluster's unique ids from agency 
-bool Supervision::getUniqueIds() {
+void Supervision::getUniqueIds() {
   uint64_t latestId;
+  // Run forever, supervision does not make sense before the agency data
+  // is initialized by some other server...
+  while (!this->isStopping()) {
+    try {
+      latestId = std::stoul(
+          _agent->readDB().get(_agencyPrefix + "/Sync/LatestID").slice().toJson());
+    } catch (std::exception const&) {
+      std::this_thread::sleep_for (std::chrono::seconds(1));
+      continue;
+    }
 
-  try {
-    latestId = std::stoul(
-        _agent->readDB().get(_agencyPrefix + "/Sync/LatestID").slice().toJson());
-  } catch (std::exception const& e) {
-    LOG(WARN) << e.what();
-    return false;
-  }
-
-  bool success = false;
-  while (!success) {
     Builder uniq;
     uniq.openArray();
     uniq.openObject();
@@ -270,16 +283,11 @@ bool Supervision::getUniqueIds() {
     auto result = transact(_agent, uniq);
     if (result.indices[0]) {
       _agent->waitFor(result.indices[0]);
-      success = true;
       _jobId = latestId;
       _jobIdMax = latestId + 100000;
+      return;
     }
-
-    latestId = std::stoul(
-        _agent->readDB().get(_agencyPrefix + "/Sync/LatestID").slice().toJson());
   }
-
-  return success;
 }
 
 void Supervision::updateFromAgency() {

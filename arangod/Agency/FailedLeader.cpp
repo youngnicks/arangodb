@@ -36,13 +36,20 @@ FailedLeader::FailedLeader(
   Job(snapshot, agent, jobId, creator, agencyPrefix), _database(database),
   _collection(collection), _shard(shard), _from(from), _to(to) {
   
-  if (exists()) {
-    if (!status()) {  
-      start();        
-    } 
-  } else {            
-    create();
-    start();
+  try {
+    if (exists()) {
+      if (!status()) {  
+        start();        
+      } 
+    } else {            
+      create();
+      start();
+    }
+  } catch (...) {
+    if (_shard == "") {
+      _shard = _snapshot(pendingPrefix + _jobId + "/shard").getString();
+    }
+    finish("Shards/" + _shard, false);
   }
   
 }
@@ -91,7 +98,7 @@ bool FailedLeader::start() const {
     planColPrefix + _database + "/" + _collection + "/shards/" + _shard;
   std::string curPath =
     curColPrefix + _database + "/" + _collection + "/" + _shard + "/servers";
-  
+
   Node const& current = _snapshot(curPath);
   
   if (current.slice().length() == 1) {
@@ -105,7 +112,13 @@ bool FailedLeader::start() const {
   
   // Get todo entry
   todo.openArray();
-  _snapshot(toDoPrefix + _jobId).toBuilder(todo);
+  try {
+    _snapshot(toDoPrefix + _jobId).toBuilder(todo);
+  } catch (std::exception const&) {
+    LOG_TOPIC(INFO, Logger::AGENCY) <<
+      "Failed to get key " + toDoPrefix + _jobId + " from agency snapshot";
+    return false;
+  }
   todo.close();
   
   // Transaction
@@ -193,13 +206,14 @@ unsigned FailedLeader::status () const {
     return TODO;
     
   } else if (target.exists(std::string("/Pending/")  + _jobId).size() == 2) {
-    
+
     Node const& job = _snapshot(pendingPrefix + _jobId);
     std::string database = job("database").toJson(),
       collection = job("collection").toJson(),
-      shard = job("shard").toJson(),
-      planPath = planColPrefix + database + "/" + collection + "/shards/"
-      + shard,
+      shard = job("shard").toJson();
+    
+    std::string planPath = planColPrefix + database + "/" + collection
+      + "/shards/" + shard,
       curPath = curColPrefix + database + "/" + collection + "/" + shard
       + "/servers";
     
@@ -213,7 +227,7 @@ unsigned FailedLeader::status () const {
       }
         
     }
-
+    
     return PENDING;
       
   } else if (target.exists(std::string("/Finished/")  + _jobId).size() == 2) {
