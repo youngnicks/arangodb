@@ -1022,6 +1022,7 @@ bool DepthFirstTraverser::UniqueVertexGetter::getVertex(
   if (_returnedVertices.find(result) != _returnedVertices.end()) {
     return false;
   }
+  _returnedVertices.emplace(result);
   return true;
 }
 

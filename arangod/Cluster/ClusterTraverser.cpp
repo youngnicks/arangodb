@@ -138,7 +138,7 @@ bool ClusterTraverser::UniqueVertexGetter::getVertex(
       ++_traverser->_filteredPaths;
       return false;
     }
-    _returnedVertices.emplace(std::move(result));
+    _returnedVertices.emplace(result);
     return true;
   }
   // This should never be reached
