@@ -28,6 +28,10 @@
 #include "Aql/Function.h"
 
 namespace arangodb {
+namespace velocypack {
+class Builder;
+}
+
 namespace aql {
 
 struct FunctionDefinitions {
@@ -36,6 +40,8 @@ struct FunctionDefinitions {
   
   /// @brief AQL user-callable function names
   static std::unordered_map<std::string, Function const> FunctionNames;
+
+  static void toVelocyPack(arangodb::velocypack::Builder&);
 };
 }
 }

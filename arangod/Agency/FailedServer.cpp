@@ -29,34 +29,51 @@
 
 using namespace arangodb::consensus;
 
-FailedServer::FailedServer(Node const& snapshot, Agent* agent, std::string const& jobId,
-                           std::string const& creator, std::string const& agencyPrefix,
-                           std::string const& failed) :
-  Job(snapshot, agent, jobId, creator, agencyPrefix), _server(failed) {
+FailedServer::FailedServer(Node const& snapshot,
+                           Agent* agent,
+                           std::string const& jobId,
+                           std::string const& creator,
+                           std::string const& agencyPrefix,
+                           std::string const& server) :
+  Job(snapshot, agent, jobId, creator, agencyPrefix),
+  _server(server) {
   
-  try {
-    if (exists()) {
-      if (status() == TODO) {  
-        start();        
-      } 
-    } else {            
-      create();
-      start();
-    }
-  } catch (...) {
-    if (_server == "") {
+  if (_server == "") {
+    try {
+      _server = _snapshot(toDoPrefix + _jobId + "/server").getString();
+    } catch (...) {}
+  } 
+  
+  if (_server == "") {
+    try {
       _server = _snapshot(pendingPrefix + _jobId + "/server").getString();
+    } catch (...) {}
+  } 
+  
+  if (_server != "") {
+    try {
+      if (exists()) {
+        if (status() == TODO) {  
+          start();        
+        } 
+      } else {            
+        create();
+        start();
+      }
+    } catch (...) {
+      finish("DBServers/" + _server, false);
     }
-    
-    finish("DBServers/" + _server, false);
+  } else {
+    LOG_TOPIC(ERR, Logger::AGENCY) << "CleanOutServer job with id " <<
+      jobId << " failed catastrophically. Cannot find server id.";
   }
   
 }
-  
+
 FailedServer::~FailedServer () {}
 
 bool FailedServer::start() const {
-
+  
   // Copy todo to pending
   Builder todo, pending;
 
@@ -198,14 +215,16 @@ unsigned FailedServer::status () const {
     Node::Children const& subJobs = _snapshot(pendingPrefix).children();
 
     size_t found = 0;
-      
-    for (auto const& subJob : subJobs) {
-      if (!subJob.first.compare(0, _jobId.size()+1, _jobId + "-")) {
-        found++;
-        Node const& sj = *(subJob.second);
-        std::string subJobId = sj("jobId").slice().copyString();
-        std::string creator  = sj("creator").slice().copyString();
-        FailedLeader(_snapshot, _agent, subJobId, creator, _agencyPrefix);
+
+    if (!subJobs.empty()) {
+      for (auto const& subJob : subJobs) {
+        if (!subJob.first.compare(0, _jobId.size()+1, _jobId + "-")) {
+          found++;
+          Node const& sj = *(subJob.second);
+          std::string subJobId = sj("jobId").slice().copyString();
+          std::string creator  = sj("creator").slice().copyString();
+          FailedLeader(_snapshot, _agent, subJobId, creator, _agencyPrefix);
+        }
       }
     }
 

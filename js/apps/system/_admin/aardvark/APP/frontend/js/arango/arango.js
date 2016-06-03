@@ -1,5 +1,5 @@
 /*jshint unused: false */
-/*global window, $, document, _, arangoHelper, frontendConfig */
+/*global window, $, document, _, arangoHelper, frontendConfig, arangoHelper, localStorage */
 
 (function() {
   "use strict";
@@ -45,6 +45,14 @@
   };
 
   window.arangoHelper = {
+    getCurrentJwt: function() {
+      return localStorage.getItem("jwt");
+    },
+
+    setCurrentJwt: function(jwt) {
+      localStorage.setItem("jwt", jwt);
+    },
+    
     lastNotificationMessage: null,
 
     CollectionTypes: {},

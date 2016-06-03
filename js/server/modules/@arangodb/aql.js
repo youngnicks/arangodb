@@ -2048,9 +2048,9 @@ function ARITHMETIC_DIVIDE (lhs, rhs) {
 
   lhs = AQL_TO_NUMBER(lhs);
   rhs = AQL_TO_NUMBER(rhs);
-  if (rhs === 0 || rhs === null) {
+  if (rhs === 0 || rhs === null || isNaN(rhs) || !isFinite(rhs)) {
     WARN(null, INTERNAL.errors.ERROR_QUERY_DIVISION_BY_ZERO);
-    return 0;
+    return null;
   }
 
   return AQL_TO_NUMBER(lhs / rhs);
@@ -2065,9 +2065,9 @@ function ARITHMETIC_MODULUS (lhs, rhs) {
 
   lhs = AQL_TO_NUMBER(lhs);
   rhs = AQL_TO_NUMBER(rhs);
-  if (rhs === 0 || rhs === null) {
+  if (rhs === 0 || rhs === null || isNaN(rhs) || !isFinite(rhs)) {
     WARN(null, INTERNAL.errors.ERROR_QUERY_DIVISION_BY_ZERO);
-    return 0;
+    return null;
   }
 
   return AQL_TO_NUMBER(lhs % rhs);
@@ -3046,6 +3046,16 @@ function AQL_DEGREES (value) {
   'use strict';
 
   return NUMERIC_VALUE(value * (180 / Math.PI));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief pi
+////////////////////////////////////////////////////////////////////////////////
+
+function AQL_PI () {
+  'use strict';
+
+  return Math.PI;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -6325,6 +6335,7 @@ exports.AQL_ATAN = AQL_ATAN;
 exports.AQL_ATAN2 = AQL_ATAN2;
 exports.AQL_RADIANS = AQL_RADIANS;
 exports.AQL_DEGREES = AQL_DEGREES;
+exports.AQL_PI = AQL_PI;
 exports.AQL_LENGTH = AQL_LENGTH;
 exports.AQL_FIRST = AQL_FIRST;
 exports.AQL_LAST = AQL_LAST;
@@ -6422,6 +6433,3 @@ exports.fixValue = FIX_VALUE;
 
 // initialize the query engine
 exports.clearCaches();
-//reloadUserFunctions();
-
-

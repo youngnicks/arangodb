@@ -71,7 +71,6 @@
 #include "V8Server/v8-voccursor.h"
 #include "V8Server/v8-vocindex.h"
 #include "VocBase/KeyGenerator.h"
-#include "VocBase/auth.h"
 #include "Wal/LogfileManager.h"
 
 using namespace arangodb;
@@ -929,24 +928,6 @@ static void JS_ParseDatetime(v8::FunctionCallbackInfo<v8::Value> const& args) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief reloads the authentication info, coordinator case
-////////////////////////////////////////////////////////////////////////////////
-
-static bool ReloadAuthCoordinator(TRI_vocbase_t* vocbase) {
-  VPackBuilder builder;
-  builder.openArray();
-
-  int res = usersOnCoordinator(std::string(vocbase->_name), builder, 60.0);
-
-  if (res == TRI_ERROR_NO_ERROR) {
-    builder.close();
-    return TRI_PopulateAuthInfo(vocbase, builder.slice());
-  }
-
-  return false;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief reloads the authentication info from collection _users
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -964,16 +945,9 @@ static void JS_ReloadAuth(v8::FunctionCallbackInfo<v8::Value> const& args) {
     TRI_V8_THROW_EXCEPTION_USAGE("RELOAD_AUTH()");
   }
 
-  bool result;
-  if (ServerState::instance()->isCoordinator()) {
-    result = ReloadAuthCoordinator(vocbase);
-  } else {
-    result = TRI_ReloadAuthInfo(vocbase);
-  }
-  if (result) {
-    TRI_V8_RETURN_TRUE();
-  }
-  TRI_V8_RETURN_FALSE();
+  RestServerFeature::AUTH_INFO.outdate();
+
+  TRI_V8_RETURN_TRUE();
   TRI_V8_TRY_CATCH_END
 }
 
@@ -3148,10 +3122,6 @@ static void JS_CreateDatabase(v8::FunctionCallbackInfo<v8::Value> const& args) {
   // and switch back
   v8g->_vocbase = orig;
 
-  // populate the authentication cache. otherwise no one can access the new
-  // database
-  TRI_ReloadAuthInfo(database);
-
   // finally decrease the reference-counter
   TRI_ReleaseVocBase(database);
 
@@ -3184,9 +3154,6 @@ static void DropDatabaseCoordinator(
 
   ClusterInfo* ci = ClusterInfo::instance();
   std::string errorMsg;
-
-  // clear local sid cache for database
-  arangodb::VocbaseContext::clearSid(name);
 
   int res = ci->dropDatabaseCoordinator(name, errorMsg, 120.0);
 
@@ -3254,9 +3221,6 @@ static void JS_DropDatabase(v8::FunctionCallbackInfo<v8::Value> const& args) {
   if (res != TRI_ERROR_NO_ERROR) {
     TRI_V8_THROW_EXCEPTION(res);
   }
-
-  // clear local sid cache for the database
-  arangodb::VocbaseContext::clearSid(name);
 
   // run the garbage collection in case the database held some objects which can
   // now be freed

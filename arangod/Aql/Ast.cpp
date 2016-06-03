@@ -2136,7 +2136,7 @@ AstNode* Ast::createArithmeticResultNode(double value) {
     // if the architecture does not use IEEE754 values then this shouldn't do
     // any harm either
     _query->registerWarning(TRI_ERROR_QUERY_NUMBER_OUT_OF_RANGE);
-    return const_cast<AstNode*>(&ZeroNode);
+    return const_cast<AstNode*>(&NullNode);
   }
 
   return createNodeValueDouble(value);
@@ -2490,7 +2490,7 @@ AstNode* Ast::optimizeBinaryOperatorArithmetic(AstNode* node) {
 
         if (r == 0) {
           _query->registerWarning(TRI_ERROR_QUERY_DIVISION_BY_ZERO);
-          return const_cast<AstNode*>(&ZeroNode);
+          return const_cast<AstNode*>(&NullNode);
         }
 
         // check if the result would overflow
@@ -2505,7 +2505,7 @@ AstNode* Ast::optimizeBinaryOperatorArithmetic(AstNode* node) {
 
       if (right->getDoubleValue() == 0.0) {
         _query->registerWarning(TRI_ERROR_QUERY_DIVISION_BY_ZERO);
-        return const_cast<AstNode*>(&ZeroNode);
+        return const_cast<AstNode*>(&NullNode);
       }
 
       return createArithmeticResultNode(left->getDoubleValue() /
@@ -2522,7 +2522,7 @@ AstNode* Ast::optimizeBinaryOperatorArithmetic(AstNode* node) {
 
         if (r == 0) {
           _query->registerWarning(TRI_ERROR_QUERY_DIVISION_BY_ZERO);
-          return const_cast<AstNode*>(&ZeroNode);
+          return const_cast<AstNode*>(&NullNode);
         }
 
         // check if the result would overflow
@@ -2536,7 +2536,7 @@ AstNode* Ast::optimizeBinaryOperatorArithmetic(AstNode* node) {
 
       if (right->getDoubleValue() == 0.0) {
         _query->registerWarning(TRI_ERROR_QUERY_DIVISION_BY_ZERO);
-        return const_cast<AstNode*>(&ZeroNode);
+        return const_cast<AstNode*>(&NullNode);
       }
 
       return createArithmeticResultNode(

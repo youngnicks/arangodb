@@ -78,6 +78,24 @@ function ahuacatlStringFunctionsTestSuite () {
 
     testRegex : function () {
       var values = [
+        // empty values
+        ["", "", true],
+        ["", "^", true],
+        ["", "$", true],
+        ["", "^$", true],
+        ["", "^.*$", true],
+        ["", "^.+$", false],
+        ["", ".", false],
+        ["", ".?", true],
+        [" ", ".?", true],
+        [" ", ".+", true],
+        [" ", ".$", true],
+        [" ", "^.", true],
+        [" ", ".$", true],
+        [" ", "^.$", true],
+        [" ", "^.{1,}$", true],
+        [" ", "^.{2,}$", false],
+
         // whole words
         ["the quick brown fox", "the", true],
         ["the quick brown fox", "quick", true],
@@ -89,6 +107,7 @@ function ahuacatlStringFunctionsTestSuite () {
         ["the quick brown fox", "THE", false],
         ["the quick brown fox", "foxx", false],
         ["the quick brown fox", "hasi", false],
+        ["the quick brown fox", "number", false],
         
         // anchored
         ["the quick brown fox", "^the", true],
@@ -153,6 +172,8 @@ function ahuacatlStringFunctionsTestSuite () {
         ["the quick brown fox", " ", true],
         ["the quick brown fox", "  ", false],
         ["the quick brown fox", "", true],
+        ["the quick brown fox", "number one", false],
+        ["the quick brown fox", "123", false],
 
         // wildcards
         ["the quick brown fox", "the.*fox", true],
@@ -171,6 +192,28 @@ function ahuacatlStringFunctionsTestSuite () {
         ["the quick brown fox", "^t.*(fox|wolf)$", true],
         ["the quick brown fox", "^t.*(fo|wolf)x$", true],
         ["the quick brown fox", "^t.*(fo|wolf)xx", false],
+        
+        // line breaks
+        ["the quick\nbrown\nfox", "the.*fox", false],
+        ["the quick\nbrown\nfox", "the(.|\n)*fox", true],
+        ["the quick\nbrown\nfox", "^the.*fox$", false],
+        ["the quick\nbrown\nfox", "^the(.|\n)*fox$", true],
+        ["the quick\nbrown\nfox", "the.*fox$", false],
+        ["the quick\nbrown\nfox", "the(.|\n)*fox$", true],
+        ["the quick\nbrown\nfox", "^the.*fox$", false],
+        ["the quick\nbrown\nfox", "^the(.|\n)*fox$", true],
+        ["the quick\nbrown\nfox", "^the.*dog$", false],
+        ["the quick\nbrown\nfox", "^the(.|\n)*dog$", false],
+        ["the quick\nbrown\nfox", "brown fox", false],
+        ["the quick\nbrown\nfox", "brown.fox", false],
+        ["the quick\nbrown\nfox", "brown(.|\n)fox", true],
+        ["the quick\nbrown\nfox", "brown\\nfox", true],
+        ["the quick\nbrown\nfox", "quick.brown", false],
+        ["the quick\nbrown\nfox", "quick(.|\n)brown", true],
+        ["the quick\r\nbrown\nfox", "quick.brown", false],
+        ["the quick\r\nbrown\nfox", "quick(.|\r\n)brown", true],
+        ["the quick\r\nbrown\nfox", "quick\\r\\nbrown", true],
+        ["the quick\r\nbrown\nfox", "quick\\r\\red", false]
       ];
 
       values.forEach(function(v) {
@@ -1655,7 +1698,7 @@ function ahuacatlStringFunctionsTestSuite () {
         assertEqual([ 675717317264138 ], getQueryResults(buildQuery(i, "null")));
         assertEqual([ 1217335385489389 ], getQueryResults(buildQuery(i, "false")));
         assertEqual([ 57801618404459 ], getQueryResults(buildQuery(i, "true")));
-        assertEqual([ 2964198978643 ], getQueryResults(buildQuery(i, "1 / 0")));
+        assertEqual([ 675717317264138 ], getQueryResults(buildQuery(i, "1 / 0")));
         assertEqual([ 2964198978643 ], getQueryResults(buildQuery(i, "0")));
         assertEqual([ 2964198978643 ], getQueryResults(buildQuery(i, "0.0")));
         assertEqual([ 464020872367562 ], getQueryResults(buildQuery(i, "0.00001")));
