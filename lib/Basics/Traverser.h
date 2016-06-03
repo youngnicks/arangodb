@@ -1090,6 +1090,14 @@ struct EnumeratedPath {
   EnumeratedPath() {}
 };
 
+template <typename edgeIdentifier, typename vertexIdentifier>
+struct VertexGetter {
+  VertexGetter() = default;
+  virtual ~VertexGetter() = default;
+  virtual bool getVertex(edgeIdentifier const&, vertexIdentifier const&, size_t,
+                         vertexIdentifier&) = 0;
+};
+
 template <typename edgeIdentifier, typename vertexIdentifier, typename edgeItem>
 class PathEnumerator {
  private:
@@ -1131,8 +1139,7 @@ class PathEnumerator {
   ///        Returns false if the vertex does not match the filter
   //////////////////////////////////////////////////////////////////////////////
 
-  std::function<bool(edgeIdentifier const&, vertexIdentifier const&, size_t,
-                     vertexIdentifier&)> _getVertex;
+  VertexGetter<edgeIdentifier, vertexIdentifier>* _vertexGetter;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief Indicates if we issue next() the first time.
@@ -1145,10 +1152,9 @@ class PathEnumerator {
   PathEnumerator(
       std::function<void(vertexIdentifier const&, std::vector<edgeIdentifier>&,
                          edgeItem*&, size_t&, bool&)> getEdge,
-      std::function<bool(edgeIdentifier const&, vertexIdentifier const&, size_t,
-                         vertexIdentifier&)> getVertex,
+                         VertexGetter<edgeIdentifier, vertexIdentifier>* vertexGetter,
       vertexIdentifier const& startVertex)
-      : _getEdge(getEdge), _getVertex(getVertex), _isFirst(true) {
+      : _getEdge(getEdge), _vertexGetter(vertexGetter), _isFirst(true) {
     _enumeratedPath.vertices.push_back(startVertex);
     _lastEdges.push(nullptr);
     _lastEdgesDir.push(false);
@@ -1184,9 +1190,9 @@ class PathEnumerator {
         _lastEdgesDir.push(false);
         _lastEdgesIdx.push(0);
         vertexIdentifier v;
-        bool isValid = _getVertex(_enumeratedPath.edges.back(),
-                                  _enumeratedPath.vertices.back(),
-                                  _enumeratedPath.vertices.size(), v);
+        bool isValid = _vertexGetter->getVertex(
+            _enumeratedPath.edges.back(), _enumeratedPath.vertices.back(),
+            _enumeratedPath.vertices.size(), v);
         _enumeratedPath.vertices.push_back(v);
         TRI_ASSERT(_enumeratedPath.vertices.size() ==
                    _enumeratedPath.edges.size() + 1);

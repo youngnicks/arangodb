@@ -915,7 +915,11 @@ DepthFirstTraverser::DepthFirstTraverser(
     std::unordered_map<size_t, std::vector<TraverserExpression*>> const*
         expressions)
     : Traverser(opts, expressions), _edgeGetter(this, opts, trx), _trx(trx) {
-  _defInternalFunctions();
+  if (opts.uniqueVertices == TraverserOptions::UniquenessLevel::GLOBAL) {
+    _vertexGetter = std::make_unique<UniqueVertexGetter>(this);
+  } else {
+    _vertexGetter = std::make_unique<VertexGetter>(this);
+  }
 }
 
 bool DepthFirstTraverser::edgeMatchesConditions(VPackSlice e, size_t depth) {
@@ -982,41 +986,47 @@ std::shared_ptr<VPackBuffer<uint8_t>> DepthFirstTraverser::fetchVertexData(
   return it->second;
 }
 
-void DepthFirstTraverser::_defInternalFunctions() {
-  if (_opts.uniqueVertices == TraverserOptions::UniquenessLevel::GLOBAL) {
-    _getVertex = [this](std::string const& edge, std::string const& vertex, size_t depth,
-                    std::string& result) -> bool {
-      auto const& it = _edges.find(edge);
-      TRI_ASSERT(it != _edges.end());
-      VPackSlice v(it->second->data());
-      // NOTE: We assume that we only have valid edges.
-      VPackSlice from = Transaction::extractFromFromDocument(v);
-      if (from.isEqualString(vertex)) {
-        result = Transaction::extractToFromDocument(v).copyString();
-      } else {
-        result = from.copyString();
-      }
-      if (_returnedVertices.find(result) != _returnedVertices.end()) {
-        return false;
-      }
-      return true;
-    };
+bool DepthFirstTraverser::VertexGetter::getVertex(std::string const& edge,
+                                                  std::string const& vertex,
+                                                  size_t depth,
+                                                  std::string& result) {
+  auto const& it = _traverser->_edges.find(edge);
+  TRI_ASSERT(it != _traverser->_edges.end());
+  VPackSlice v(it->second->data());
+  // NOTE: We assume that we only have valid edges.
+  VPackSlice from = Transaction::extractFromFromDocument(v);
+  if (from.isEqualString(vertex)) {
+    result = Transaction::extractToFromDocument(v).copyString();
   } else {
-    _getVertex = [this](std::string const& edge, std::string const& vertex, size_t depth,
-                    std::string& result) -> bool {
-      auto const& it = _edges.find(edge);
-      TRI_ASSERT(it != _edges.end());
-      VPackSlice v(it->second->data());
-      // NOTE: We assume that we only have valid edges.
-      VPackSlice from = Transaction::extractFromFromDocument(v);
-      if (from.isEqualString(vertex)) {
-        result = Transaction::extractToFromDocument(v).copyString();
-      } else {
-        result = from.copyString();
-      }
-      return true;
-    };
+    result = from.copyString();
   }
+  return true;
+}
+
+void DepthFirstTraverser::VertexGetter::reset() {
+}
+
+bool DepthFirstTraverser::UniqueVertexGetter::getVertex(
+    std::string const& edge, std::string const& vertex, size_t depth,
+    std::string& result) {
+  auto const& it = _traverser->_edges.find(edge);
+  TRI_ASSERT(it != _traverser->_edges.end());
+  VPackSlice v(it->second->data());
+  // NOTE: We assume that we only have valid edges.
+  VPackSlice from = Transaction::extractFromFromDocument(v);
+  if (from.isEqualString(vertex)) {
+    result = Transaction::extractToFromDocument(v).copyString();
+  } else {
+    result = from.copyString();
+  }
+  if (_returnedVertices.find(result) != _returnedVertices.end()) {
+    return false;
+  }
+  return true;
+}
+
+void DepthFirstTraverser::UniqueVertexGetter::reset() {
+  _returnedVertices.clear();
 }
 
 void DepthFirstTraverser::setStartVertex(std::string const& v) {
@@ -1057,12 +1067,9 @@ void DepthFirstTraverser::setStartVertex(std::string const& v) {
     }
   }
 
-  if (_opts.uniqueVertices == TraverserOptions::UniquenessLevel::GLOBAL) {
-    _returnedVertices.clear();
-  }
-
+  _vertexGetter->reset();
   _enumerator.reset(new PathEnumerator<std::string, std::string, VPackValueLength>(
-      _edgeGetter, _getVertex, v));
+      _edgeGetter, _vertexGetter.get(), v));
   _done = false;
 }
 
@@ -1098,6 +1105,7 @@ TraversalPath* DepthFirstTraverser::next() {
     _pruneNext = true;
   }
   // If we get here the vertex has to be counted as visited
+  /*
   if (_opts.uniqueVertices == TraverserOptions::UniquenessLevel::GLOBAL) {
     auto last = path.vertices.back();
     if (_returnedVertices.find(last) != _returnedVertices.end()) {
@@ -1106,6 +1114,7 @@ TraversalPath* DepthFirstTraverser::next() {
     }
     _returnedVertices.emplace(last);
   }
+  */
   if (countEdges < _opts.minDepth) {
     return next();
   }

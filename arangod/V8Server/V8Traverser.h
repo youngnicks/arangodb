@@ -199,6 +199,40 @@ class DepthFirstTraverser : public Traverser {
   friend class SingleServerTraversalPath;
 
  private:
+
+  class VertexGetter : public arangodb::basics::VertexGetter<std::string, std::string> {
+   public:
+    explicit VertexGetter(DepthFirstTraverser* traverser)
+        : _traverser(traverser) {}
+
+    virtual ~VertexGetter() = default;
+
+    virtual bool getVertex(std::string const&, std::string const&, size_t,
+                           std::string&) override;
+    virtual void reset();
+
+   protected:
+    DepthFirstTraverser* _traverser;
+  };
+
+  class UniqueVertexGetter : public VertexGetter {
+   public:
+    explicit UniqueVertexGetter(DepthFirstTraverser* traverser)
+        : VertexGetter(traverser) {}
+
+    ~UniqueVertexGetter() = default;
+
+    bool getVertex(std::string const&, std::string const&, size_t,
+                    std::string&) override;
+
+    void reset() override;
+
+   private:
+    std::unordered_set<std::string> _returnedVertices;
+  };
+
+
+
   //////////////////////////////////////////////////////////////////////////////
   /// @brief callable class to load edges based on opts.
   //////////////////////////////////////////////////////////////////////////////
@@ -282,6 +316,8 @@ class DepthFirstTraverser : public Traverser {
 
   };
 
+
+
   //////////////////////////////////////////////////////////////////////////////
   /// @brief internal cursor to enumerate the paths of a graph
   //////////////////////////////////////////////////////////////////////////////
@@ -294,6 +330,12 @@ class DepthFirstTraverser : public Traverser {
   //////////////////////////////////////////////////////////////////////////////
 
   EdgeGetter _edgeGetter;
+
+  //////////////////////////////////////////////////////////////////////////////
+  /// @brief internal getter to extract an edge
+  //////////////////////////////////////////////////////////////////////////////
+
+  std::unique_ptr<VertexGetter> _vertexGetter;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief internal function to extract vertex information
@@ -341,13 +383,6 @@ class DepthFirstTraverser : public Traverser {
   //////////////////////////////////////////////////////////////////////////////
 
   void _defInternalFunctions();
-
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief Set to track which vertices have been returned thus far.
-  ///        Only required with Vertex Uniqness == GLOBAL
-  //////////////////////////////////////////////////////////////////////////////
-
-  std::unordered_set<std::string> _returnedVertices;
 
  public:
   DepthFirstTraverser(

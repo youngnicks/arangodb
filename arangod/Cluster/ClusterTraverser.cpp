@@ -69,10 +69,10 @@ void ClusterTraversalPath::lastEdgeToVelocyPack(Transaction*, VPackBuilder& resu
   result.add(VPackSlice(cached->second->data()));
 }
 
-bool ClusterTraverser::VertexGetter::operator()(std::string const& edgeId,
-                                                std::string const& vertexId,
-                                                size_t depth,
-                                                std::string& result) {
+bool ClusterTraverser::VertexGetter::getVertex(std::string const& edgeId,
+                                               std::string const& vertexId,
+                                               size_t depth,
+                                               std::string& result) {
   auto it = _traverser->_edges.find(edgeId);
   if (it != _traverser->_edges.end()) {
     VPackSlice slice(it->second->data());
@@ -101,6 +101,53 @@ bool ClusterTraverser::VertexGetter::operator()(std::string const& edgeId,
   // This should never be reached
   result = "";
   return false;
+}
+
+void ClusterTraverser::VertexGetter::reset() {
+  // Nothing to do here. Subclass has to clear list of already returned vertices.
+}
+
+bool ClusterTraverser::UniqueVertexGetter::getVertex(
+    std::string const& edgeId, std::string const& vertexId, size_t depth,
+    std::string& result) {
+  auto it = _traverser->_edges.find(edgeId);
+  if (it != _traverser->_edges.end()) {
+    VPackSlice slice(it->second->data());
+    std::string from = slice.get(StaticStrings::FromString).copyString();
+    if (from != vertexId) {
+      result = from;
+    } else {
+      std::string to = slice.get(StaticStrings::ToString).copyString();
+      result = to;
+    }
+    auto exp = _traverser->_expressions->find(depth);
+    if (exp != _traverser->_expressions->end()) {
+      auto v = _traverser->_vertices.find(result);
+      if (v == _traverser->_vertices.end()) {
+        // If the vertex ist not in list it means it has not passed any
+        // filtering up to now
+        ++_traverser->_filteredPaths;
+        return false;
+      }
+      if (!_traverser->vertexMatchesCondition(VPackSlice(v->second->data()), exp->second)) {
+        return false;
+      }
+    }
+    if (_returnedVertices.find(result) != _returnedVertices.end()) {
+      // This vertex is not unique.
+      ++_traverser->_filteredPaths;
+      return false;
+    }
+    _returnedVertices.emplace(std::move(result));
+    return true;
+  }
+  // This should never be reached
+  result = "";
+  return false;
+}
+
+void ClusterTraverser::UniqueVertexGetter::reset() {
+  _returnedVertices.clear();
 }
 
 void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
@@ -222,9 +269,10 @@ void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
 }
 
 void ClusterTraverser::setStartVertex(std::string const& id) {
+  _vertexGetter->reset();
   _enumerator.reset(
       new arangodb::basics::PathEnumerator<std::string, std::string, size_t>(
-          _edgeGetter, _vertexGetter, id));
+          _edgeGetter, _vertexGetter.get(), id));
   _done = false;
   auto it = _vertices.find(id);
   if (it == _vertices.end()) {
