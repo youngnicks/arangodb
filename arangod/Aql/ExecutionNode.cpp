@@ -69,7 +69,8 @@ std::unordered_map<int, std::string const> const ExecutionNode::TypeNames{
     {static_cast<int>(GATHER), "GatherNode"},
     {static_cast<int>(NORESULTS), "NoResultsNode"},
     {static_cast<int>(UPSERT), "UpsertNode"},
-    {static_cast<int>(TRAVERSAL), "TraversalNode"}};
+    {static_cast<int>(TRAVERSAL), "TraversalNode"},
+    {static_cast<int>(SHORTEST_PATH), "ShortestPathNode"}};
 
 /// @brief returns the type name of the node
 std::string const& ExecutionNode::getTypeString() const {
