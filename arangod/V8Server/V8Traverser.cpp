@@ -1000,6 +1000,9 @@ bool DepthFirstTraverser::VertexGetter::getVertex(std::string const& edge,
   } else {
     result = from.copyString();
   }
+  if (!_traverser->vertexMatchesConditions(result, depth)) {
+    return false;
+  }
   return true;
 }
 
@@ -1020,6 +1023,9 @@ bool DepthFirstTraverser::UniqueVertexGetter::getVertex(
     result = from.copyString();
   }
   if (_returnedVertices.find(result) != _returnedVertices.end()) {
+    return false;
+  }
+  if (!_traverser->vertexMatchesConditions(result, depth)) {
     return false;
   }
   _returnedVertices.emplace(result);
@@ -1228,15 +1234,6 @@ void DepthFirstTraverser::EdgeGetter::nextEdge(
 
     VPackBuilder tmpBuilder = VPackBuilder::clone(edge);
     _traverser->_edges.emplace(id, tmpBuilder.steal());
-
-    std::string other;
-    _traverser->_getVertex(id, startVertex, 0, other);
-    if (!_traverser->vertexMatchesConditions(other, edges.size() + 1)) {
-      // Retry with the next element
-      TRI_ASSERT(last != nullptr);
-      (*last)++;
-      continue;
-    }
 
     edges.emplace_back(id);
     return;
