@@ -25,6 +25,12 @@
 
 #include "ApplicationFeatures/ApplicationFeature.h"
 
+extern SERVICE_STATUS_HANDLE ServiceStatus;
+
+void SetServiceStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode,
+                      DWORD dwCheckPoint, DWORD dwWaitHint);
+
+void WINAPI ServiceCtrl(DWORD dwCtrlCode);
 
 namespace arangodb {
 class WindowsServiceFeature final : public application_features::ApplicationFeature {
@@ -43,6 +49,8 @@ class WindowsServiceFeature final : public application_features::ApplicationFeat
   void startupFinished ();
 
   void shutDownBegins ();
+  void shutDownComplete ();
+  void shutDownFailure ();
 
  public:
   bool _installService = false;

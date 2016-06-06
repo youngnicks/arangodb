@@ -47,16 +47,22 @@ static double const CL_DEFAULT_TIMEOUT = 60.0;
 namespace arangodb {
 
 static int handleGeneralCommErrors(ClusterCommResult const* res) {
+  // This function creates an error code from a ClusterCommResult.
+  // If TRI_ERROR_NO_ERROR is returned, then the result was CL_COMM_RECEIVED
+  // and .answer can safely be inspected.
   if (res->status == CL_COMM_TIMEOUT) {
     // No reply, we give up:
     return TRI_ERROR_CLUSTER_TIMEOUT;
   } else if (res->status == CL_COMM_ERROR) {
-    // This could be a broken connection or an Http error:
-    if (res->result == nullptr || !res->result->isComplete()) {
-      // there is not result
+    return TRI_ERROR_CLUSTER_CONNECTION_LOST;
+  } else if (res->status == CL_COMM_BACKEND_UNAVAILABLE) {
+    if (res->result == nullptr) {
       return TRI_ERROR_CLUSTER_CONNECTION_LOST;
     }
-  } else if (res->status == CL_COMM_BACKEND_UNAVAILABLE) {
+    if (!res->result->isComplete()) {
+      // there is no result
+      return TRI_ERROR_CLUSTER_CONNECTION_LOST;
+    }
     return TRI_ERROR_CLUSTER_BACKEND_UNAVAILABLE;
   }
 
@@ -337,27 +343,26 @@ static void collectResultsFromAllShards(
   responseCode = GeneralResponse::ResponseCode::SERVER_ERROR;
   for (auto const& req : requests) {
     auto res = req.result;
-    if (res.status == CL_COMM_RECEIVED) {
-      int commError = handleGeneralCommErrors(&res);
-      if (commError != TRI_ERROR_NO_ERROR) {
-        auto tmpBuilder = std::make_shared<VPackBuilder>();
-        auto weSend = shardMap.find(res.shardID);
-        TRI_ASSERT(weSend != shardMap.end());  // We send sth there earlier.
-        size_t count = weSend->second.size();
-        for (size_t i = 0; i < count; ++i) {
-          tmpBuilder->openObject();
-          tmpBuilder->add("error", VPackValue(true));
-          tmpBuilder->add("errorNum", VPackValue(commError));
-          tmpBuilder->close();
-        }
-        resultMap.emplace(res.shardID, tmpBuilder);
-      } else {
-        TRI_ASSERT(res.answer != nullptr);
-        resultMap.emplace(res.shardID,
-                          res.answer->toVelocyPack(&VPackOptions::Defaults));
-        extractErrorCodes(res, errorCounter, true);
-        responseCode = res.answer_code;
+
+    int commError = handleGeneralCommErrors(&res);
+    if (commError != TRI_ERROR_NO_ERROR) {
+      auto tmpBuilder = std::make_shared<VPackBuilder>();
+      auto weSend = shardMap.find(res.shardID);
+      TRI_ASSERT(weSend != shardMap.end());  // We send sth there earlier.
+      size_t count = weSend->second.size();
+      for (size_t i = 0; i < count; ++i) {
+        tmpBuilder->openObject();
+        tmpBuilder->add("error", VPackValue(true));
+        tmpBuilder->add("errorNum", VPackValue(commError));
+        tmpBuilder->close();
       }
+      resultMap.emplace(res.shardID, tmpBuilder);
+    } else {
+      TRI_ASSERT(res.answer != nullptr);
+      resultMap.emplace(res.shardID,
+                        res.answer->toVelocyPack(&VPackOptions::Defaults));
+      extractErrorCodes(res, errorCounter, true);
+      responseCode = res.answer_code;
     }
   }
 }
@@ -785,15 +790,14 @@ int createDocumentOnCoordinator(
 
   // Perform the requests
   size_t nrDone = 0;
-  size_t nrGood = cc->performRequests(requests, CL_DEFAULT_TIMEOUT, nrDone,
-                                      Logger::REQUESTS);
+  cc->performRequests(requests, CL_DEFAULT_TIMEOUT, nrDone, Logger::REQUESTS);
 
   // Now listen to the results:
   if (!useMultiple) {
     TRI_ASSERT(requests.size() == 1);
     auto const& req = requests[0];
-    auto res = req.result;
-    if (nrGood == 0) {
+    auto& res = req.result;
+    if (nrDone == 0 || res.status != CL_COMM_RECEIVED) {
       // There has been Communcation error. Handle and return it.
       return handleGeneralCommErrors(&res);
     }
@@ -944,15 +948,14 @@ int deleteDocumentOnCoordinator(
 
     // Perform the requests
     size_t nrDone = 0;
-    size_t nrGood = cc->performRequests(requests, CL_DEFAULT_TIMEOUT, nrDone,
-                                        Logger::REQUESTS);
+    cc->performRequests(requests, CL_DEFAULT_TIMEOUT, nrDone, Logger::REQUESTS);
 
     // Now listen to the results:
     if (!useMultiple) {
       TRI_ASSERT(requests.size() == 1);
       auto const& req = requests[0];
-      auto res = req.result;
-      if (nrGood == 0) {
+      auto& res = req.result;
+      if (nrDone == 0 || res.status != CL_COMM_RECEIVED) {
         return handleGeneralCommErrors(&res);
       }
       responseCode = res.answer_code;
@@ -1032,7 +1035,7 @@ int deleteDocumentOnCoordinator(
     auto res = req.result;
     int error = handleGeneralCommErrors(&res);
     if (error != TRI_ERROR_NO_ERROR) {
-      // Local data structores are automatically freed
+      // Local data structures are automatically freed
       return error;
     }
     if (res.answer_code == GeneralResponse::ResponseCode::OK ||
@@ -1561,11 +1564,10 @@ int getFilteredEdgesOnCoordinator(
     int error = handleGeneralCommErrors(&res);
     if (error != TRI_ERROR_NO_ERROR) {
       cc->drop("", coordTransactionID, 0, "");
+      if (res.status == CL_COMM_ERROR || res.status == CL_COMM_DROPPED) {
+        return TRI_ERROR_INTERNAL;
+      }
       return error;
-    }
-    if (res.status == CL_COMM_ERROR || res.status == CL_COMM_DROPPED) {
-      cc->drop("", coordTransactionID, 0, "");
-      return TRI_ERROR_INTERNAL;
     }
     std::shared_ptr<VPackBuilder> shardResult = res.answer->toVelocyPack(&VPackOptions::Defaults);
 

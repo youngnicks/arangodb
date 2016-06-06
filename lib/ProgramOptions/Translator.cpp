@@ -21,7 +21,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "Translator.h"
-
+#include "Basics/tri-strings.h"
+#include "Basics/files.h"
 std::string arangodb::options::EnvironmentTranslator(std::string const& value) {
   if (value.empty()) {
     return value;
@@ -55,7 +56,7 @@ std::string arangodb::options::EnvironmentTranslator(std::string const& value) {
 
           if (v == nullptr) {
 #if _WIN32
-            if (TRI_EqualString(k, "ROOTDIR")) {
+            if (TRI_EqualString(k.c_str(), "ROOTDIR")) {
               vv = TRI_LocateInstallDirectory();
 
               if (! vv.empty()) {

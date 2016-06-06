@@ -491,7 +491,7 @@ function analyzeServerCrash(arangod, options, checkStr)
     statusExternal(arangod.monitor, true);
     analyzeCoreDumpWindows(arangod);
   } else {
-    fs.copyFile("bin/arangod", storeArangodPath);
+    fs.copyFile(ARANGOD_BIN, storeArangodPath);
     analyzeCoreDump(arangod, options, storeArangodPath, arangod.pid);
   }
 
@@ -3205,6 +3205,7 @@ testFuncs.replication_static = function(options) {
     "--javascript.execute-string",
     "var users = require('@arangodb/users'); " +
     "users.save('replicator-user', 'replicator-password', true); " +
+    "users.grantDatabase('replicator-user', '_system'); " +
     "users.reload();"
   ]);
 
