@@ -1195,7 +1195,7 @@ std::unique_ptr<ClusterCommResult> RemoteBlock::sendRequest(
 
   // Later, we probably want to set these sensibly:
   ClientTransactionID const clientTransactionId = "AQL";
-  CoordTransactionID const coordTransactionId = TRI_NewTickServer();  // 1;
+  CoordTransactionID const coordTransactionId = TRI_NewTickServer();
   std::unordered_map<std::string, std::string> headers;
   if (!_ownName.empty()) {
     headers.emplace("Shard-Id", _ownName);
@@ -1225,13 +1225,28 @@ std::unique_ptr<ClusterCommResult> RemoteBlock::sendRequest(
 /// @brief initialize
 int RemoteBlock::initialize() {
   ENTER_BLOCK
-  int res = ExecutionBlock::initialize();
+  
+  std::unique_ptr<ClusterCommResult> res =
+      sendRequest(GeneralRequest::RequestType::PUT,
+                  "/_api/aql/initialize/", "{}");
+  throwExceptionAfterBadSyncRequest(res.get(), false);
 
-  if (res != TRI_ERROR_NO_ERROR) {
+  // If we get here, then res->result is the response which will be
+  // a serialized AqlItemBlock:
+  StringBuffer const& responseBodyBuf(res->result->getBody());
+  Json responseBodyJson(
+      TRI_UNKNOWN_MEM_ZONE,
+      TRI_JsonString(TRI_UNKNOWN_MEM_ZONE, responseBodyBuf.begin()));
+
+  {
+    int res = JsonHelper::getNumericValue<int>(responseBodyJson.json(), "code",
+                                             TRI_ERROR_INTERNAL);
+    if (res == TRI_ERROR_NO_ERROR) {
+      res = ExecutionBlock::initialize();
+    }
+
     return res;
   }
-
-  return TRI_ERROR_NO_ERROR;
   LEAVE_BLOCK
 }
 
