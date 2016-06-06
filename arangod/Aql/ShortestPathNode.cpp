@@ -228,8 +228,8 @@ ShortestPathNode::ShortestPathNode(ExecutionPlan* plan,
   }
 
   // Start Vertex
-  if (base.has("inStartVariable")) {
-    _inStartVariable = varFromJson(plan->getAst(), base, "inStartVariable");
+  if (base.has("startInVariable")) {
+    _inStartVariable = varFromJson(plan->getAst(), base, "startInVariable");
   } else {
     _startVertexId = arangodb::basics::JsonHelper::getStringValue(
         base.json(), "startVertexId", "");
@@ -240,12 +240,12 @@ ShortestPathNode::ShortestPathNode(ExecutionPlan* plan,
   }
 
   // Target Vertex
-  if (base.has("inTargetVariable")) {
-    _inTargetVariable = varFromJson(plan->getAst(), base, "inTargetVariable");
+  if (base.has("targetInVariable")) {
+    _inTargetVariable = varFromJson(plan->getAst(), base, "targetInVariable");
   } else {
-    _startVertexId = arangodb::basics::JsonHelper::getStringValue(
+    _targetVertexId = arangodb::basics::JsonHelper::getStringValue(
         base.json(), "targetVertexId", "");
-    if (_startVertexId.empty()) {
+    if (_targetVertexId.empty()) {
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_BAD_JSON_PLAN,
                                      "target vertex mustn't be empty.");
     }
