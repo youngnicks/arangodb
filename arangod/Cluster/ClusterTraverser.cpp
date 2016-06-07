@@ -203,10 +203,9 @@ void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
       std::string edgeId = arangodb::basics::VelocyPackHelper::getStringValue(
           edge, StaticStrings::IdString.c_str(), "");
       if (_traverser->_opts.uniqueEdges == TraverserOptions::UniquenessLevel::GLOBAL) {
+        // DO not push this edge on the stack.
         if (_traverser->_edges.find(edgeId) != _traverser->_edges.end()) {
-          // This edge is already known continue with the next.
-          operator()(startVertex, result, last, eColIdx, unused);
-          return;
+          continue;
         }
       }
       std::string fromId = arangodb::basics::VelocyPackHelper::getStringValue(
@@ -223,6 +222,15 @@ void ClusterTraverser::EdgeGetter::operator()(std::string const& startVertex,
       tmpBuilder.add(edge);
       _traverser->_edges.emplace(edgeId, tmpBuilder.steal());
       stack.push(std::move(edgeId));
+    }
+
+    if (stack.empty()) {
+      // We did not find any valid edge here.
+      // Try next index
+      last = nullptr;
+      eColIdx++;
+      operator()(startVertex, result, last, eColIdx, unused);
+      return;
     }
 
     _traverser->fetchVertices(verticesToFetch, depth + 1);
@@ -357,6 +365,19 @@ arangodb::traverser::TraversalPath* ClusterTraverser::next() {
     // Done traversing
     return nullptr;
   }
+  if (_opts.uniqueVertices == TraverserOptions::UniquenessLevel::PATH) {
+    // it is sufficient to check if any of the vertices on the path is equal to the end.
+    // Then we prune and any intermediate equality cannot happen.
+    auto last = path.vertices.back();
+    auto found = std::find(path.vertices.begin(), path.vertices.end(), last);
+    TRI_ASSERT(found != path.vertices.end()); // We have to find it once, it is at least the last!
+    if ((++found) != path.vertices.end()) {
+      // Test if we found the last element. That is ok.
+      _pruneNext = true;
+      return next();
+    }
+  }
+
   size_t countEdges = path.edges.size();
 
   auto p = std::make_unique<ClusterTraversalPath>(this, path);
