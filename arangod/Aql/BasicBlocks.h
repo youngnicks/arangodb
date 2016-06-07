@@ -47,7 +47,7 @@ class SingletonBlock : public ExecutionBlock {
 
   ~SingletonBlock() { deleteInputVariables(); }
 
-  int initialize() override {
+  int initialize() override final {
     _inputRegisterValues = nullptr;  // just in case
     return ExecutionBlock::initialize();
   }
@@ -78,8 +78,6 @@ class FilterBlock : public ExecutionBlock {
   FilterBlock(ExecutionEngine*, FilterNode const*);
 
   ~FilterBlock();
-
-  int initialize() override final;
 
  private:
   /// @brief internal function to actually decide if the document should be used
@@ -123,8 +121,6 @@ class LimitBlock : public ExecutionBlock {
         _fullCount(ep->_fullCount) {}
 
   ~LimitBlock() {}
-
-  int initialize() override;
 
   int initializeCursor(AqlItemBlock* items, size_t pos) override final;
 
@@ -176,8 +172,6 @@ class NoResultsBlock : public ExecutionBlock {
       : ExecutionBlock(engine, ep) {}
 
   ~NoResultsBlock() {}
-
-  int initialize() override { return ExecutionBlock::initialize(); }
 
   /// @brief initializeCursor, store a copy of the register values coming from
   /// above

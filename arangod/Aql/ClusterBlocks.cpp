@@ -101,13 +101,7 @@ GatherBlock::~GatherBlock() {
 int GatherBlock::initialize() {
   ENTER_BLOCK
   _atDep = 0;
-  auto res = ExecutionBlock::initialize();
-
-  if (res != TRI_ERROR_NO_ERROR) {
-    return res;
-  }
-
-  return TRI_ERROR_NO_ERROR;
+  return ExecutionBlock::initialize();
   LEAVE_BLOCK
 }
 
@@ -1176,7 +1170,7 @@ RemoteBlock::RemoteBlock(ExecutionEngine* engine, RemoteNode const* en,
       _server(server),
       _ownName(ownName),
       _queryId(queryId),
-      _isResponsibleForInitCursor(en->isResponsibleForInitCursor()) {
+      _isResponsibleForInitializeCursor(en->isResponsibleForInitializeCursor()) {
   TRI_ASSERT(!queryId.empty());
   TRI_ASSERT(
       (arangodb::ServerState::instance()->isCoordinator() && ownName.empty()) ||
@@ -1226,10 +1220,16 @@ std::unique_ptr<ClusterCommResult> RemoteBlock::sendRequest(
 int RemoteBlock::initialize() {
   ENTER_BLOCK
   
+  if (!_isResponsibleForInitializeCursor) {
+    // do nothing...
+    return TRI_ERROR_NO_ERROR;
+  }
+ 
   std::unique_ptr<ClusterCommResult> res =
       sendRequest(GeneralRequest::RequestType::PUT,
                   "/_api/aql/initialize/", "{}");
   throwExceptionAfterBadSyncRequest(res.get(), false);
+ 
 
   // If we get here, then res->result is the response which will be
   // a serialized AqlItemBlock:
@@ -1238,15 +1238,8 @@ int RemoteBlock::initialize() {
       TRI_UNKNOWN_MEM_ZONE,
       TRI_JsonString(TRI_UNKNOWN_MEM_ZONE, responseBodyBuf.begin()));
 
-  {
-    int res = JsonHelper::getNumericValue<int>(responseBodyJson.json(), "code",
-                                             TRI_ERROR_INTERNAL);
-    if (res == TRI_ERROR_NO_ERROR) {
-      res = ExecutionBlock::initialize();
-    }
-
-    return res;
-  }
+  return JsonHelper::getNumericValue<int>(responseBodyJson.json(), "code",
+                                          TRI_ERROR_INTERNAL);
   LEAVE_BLOCK
 }
 
@@ -1255,7 +1248,7 @@ int RemoteBlock::initializeCursor(AqlItemBlock* items, size_t pos) {
   ENTER_BLOCK
   // For every call we simply forward via HTTP
 
-  if (!_isResponsibleForInitCursor) {
+  if (!_isResponsibleForInitializeCursor) {
     // do nothing...
     return TRI_ERROR_NO_ERROR;
   }
@@ -1301,7 +1294,7 @@ int RemoteBlock::initializeCursor(AqlItemBlock* items, size_t pos) {
 int RemoteBlock::shutdown(int errorCode) {
   ENTER_BLOCK
 
-  if (!_isResponsibleForInitCursor) {
+  if (!_isResponsibleForInitializeCursor) {
     // do nothing...
     return TRI_ERROR_NO_ERROR;
   }
