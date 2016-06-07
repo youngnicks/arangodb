@@ -1336,7 +1336,7 @@ int getDocumentOnCoordinator(
   // If no server responds we return 500
   responseCode = GeneralResponse::ResponseCode::SERVER_ERROR;
   for (auto const& req : requests) {
-    auto res = req.result;
+    auto& res = req.result;
     int error = handleGeneralCommErrors(&res);
     if (error != TRI_ERROR_NO_ERROR) {
       // Cluster is in bad state. Just report. Drop other results.
@@ -1473,7 +1473,7 @@ int getFilteredDocumentsOnCoordinator(
 
   // All requests send, now collect results.
   for (auto const& req : requests) {
-    auto res = req.result;
+    auto& res = req.result;
     if (res.status == CL_COMM_RECEIVED) {
       std::shared_ptr<VPackBuilder> resultBody = res.answer->toVelocyPack(&VPackOptions::Defaults);
       VPackSlice resSlice = resultBody->slice();
@@ -1539,7 +1539,6 @@ int getFilteredEdgesOnCoordinator(
   }
 
   auto shards = collinfo->shardIds();
-  CoordTransactionID coordTransactionID = TRI_NewTickServer();
   std::string queryParameters = "?vertex=" + StringUtils::urlEncode(vertex);
   if (direction == TRI_EDGE_IN) {
     queryParameters += "&direction=in";
@@ -1556,29 +1555,36 @@ int getFilteredEdgesOnCoordinator(
     bodyBuilder.close();
     reqBodyString->append(bodyBuilder.toJson());
   }
+
+  std::vector<ClusterCommRequest> requests;
+  std::string baseUrl = "/_db/" + StringUtils::urlEncode(dbname) + "/_api/edges/";
+
   for (auto const& p : *shards) {
-    auto headers = std::make_unique<std::unordered_map<std::string, std::string>>();
-    cc->asyncRequest("", coordTransactionID, "shard:" + p.first,
-                     arangodb::GeneralRequest::RequestType::PUT,
-                     "/_db/" + StringUtils::urlEncode(dbname) + "/_api/edges/" +
-                         p.first + queryParameters,
-                     reqBodyString, headers, nullptr, 3600.0);
+    requests.emplace_back(
+        "shard:" + p.first, arangodb::GeneralRequest::RequestType::PUT,
+        baseUrl + StringUtils::urlEncode(p.first) + queryParameters,
+        reqBodyString);
   }
-  // Now listen to the results:
-  int count;
-  responseCode = arangodb::GeneralResponse::ResponseCode::OK;
+
+  // Perform the requests
+  size_t nrDone = 0;
+  cc->performRequests(requests, CL_DEFAULT_TIMEOUT, nrDone, Logger::REQUESTS);
+
   size_t filtered = 0;
   size_t scannedIndex = 0;
+  responseCode = arangodb::GeneralResponse::ResponseCode::OK;
 
   result.add("edges", VPackValue(VPackValueType::Array));
 
-  for (count = (int)shards->size(); count > 0; count--) {
-    auto res = cc->wait("", coordTransactionID, 0, "", 0.0);
+  // All requests send, now collect results.
+  for (auto const& req : requests) {
+    auto& res = req.result;
     int error = handleGeneralCommErrors(&res);
     if (error != TRI_ERROR_NO_ERROR) {
-      cc->drop("", coordTransactionID, 0, "");
+      // Cluster is in bad state. Report.
       return error;
     }
+    TRI_ASSERT(res.answer != nullptr);
     std::shared_ptr<VPackBuilder> shardResult = res.answer->toVelocyPack(&VPackOptions::Defaults);
 
     if (shardResult == nullptr) {
@@ -1592,6 +1598,7 @@ int getFilteredEdgesOnCoordinator(
 
     bool const isError = arangodb::basics::VelocyPackHelper::getBooleanValue(
         shardSlice, "error", false);
+
     if (isError) {
       // shard returned an error
       return arangodb::basics::VelocyPackHelper::getNumericValue<int>(
