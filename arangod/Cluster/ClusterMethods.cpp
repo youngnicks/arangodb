@@ -1184,7 +1184,6 @@ int getDocumentOnCoordinator(
     optsUrlPart += std::string("&onlyget=true");
   }
 
-  CoordTransactionID coordTransactionID = TRI_NewTickServer();
   if (canUseFastPath) {
     // All shard keys are known in all documents.
     // Contact all shards directly with the correct information.
@@ -1337,8 +1336,6 @@ int getDocumentOnCoordinator(
     auto& res = req.result;
     int error = handleGeneralCommErrors(&res);
     if (error != TRI_ERROR_NO_ERROR) {
-      // Cluster is in bad state. Just report. Drop other results.
-      cc->drop("", coordTransactionID, 0, "");
       // Local data structores are automatically freed
       return error;
     }
