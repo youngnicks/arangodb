@@ -497,20 +497,6 @@ class EdgeCollectionInfo {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief Wrapper for the shortest path computation
-////////////////////////////////////////////////////////////////////////////////
-
-bool TRI_RunShortestPathSearch(
-    std::vector<EdgeCollectionInfo*> const& collectionInfos,
-    arangodb::traverser::ShortestPath& path,
-    arangodb::traverser::ShortestPathOptions& opts);
-
-bool TRI_RunSimpleShortestPathSearch(
-    std::vector<EdgeCollectionInfo*> const& collectionInfos,
-    arangodb::Transaction*, arangodb::traverser::ShortestPath& path,
-    arangodb::traverser::ShortestPathOptions& opts);
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief Wrapper for the neighbors computation
 ////////////////////////////////////////////////////////////////////////////////
 
