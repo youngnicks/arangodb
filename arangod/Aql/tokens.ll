@@ -203,6 +203,14 @@ namespace arangodb {
   * operators
   * --------------------------------------------------------------------------- */
 
+"=~" {
+  return T_REGEX_MATCH;
+}
+
+"!~" {
+  return T_REGEX_NON_MATCH;
+}
+
 "==" {
   return T_EQ;
 }
