@@ -54,6 +54,7 @@ int SingletonBlock::initializeCursor(AqlItemBlock* items, size_t pos) {
       }
     }
 
+    deleteInputVariables();
     _inputRegisterValues = items->slice(pos, whitelist);
   }
 

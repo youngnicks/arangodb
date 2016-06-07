@@ -48,7 +48,7 @@ class SingletonBlock : public ExecutionBlock {
   ~SingletonBlock() { deleteInputVariables(); }
 
   int initialize() override final {
-    _inputRegisterValues = nullptr;  // just in case
+    deleteInputVariables();
     return ExecutionBlock::initialize();
   }
 
