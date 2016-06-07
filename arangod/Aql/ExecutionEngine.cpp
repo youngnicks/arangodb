@@ -443,7 +443,7 @@ struct CoordinatorInstanciator : public WalkerWorker<ExecutionNode> {
         // initializeCursor and shutDown requests
         // for simplicity, we always use the first remote block if we have more
         // than one
-        static_cast<RemoteNode*>(clone)->isResponsibleForInitCursor(nr == 0);
+        static_cast<RemoteNode*>(clone)->isResponsibleForInitializeCursor(nr == 0);
       }
 
       if (previous != nullptr) {

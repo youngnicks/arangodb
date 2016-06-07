@@ -121,9 +121,6 @@ int IndexBlock::initialize() {
   DEBUG_BEGIN_BLOCK();
   int res = ExecutionBlock::initialize();
 
-  cleanupNonConstExpressions();
-
-  _alreadyReturned.clear();
   auto en = static_cast<IndexNode const*>(getPlanNode());
   auto ast = en->_plan->getAst();
 
@@ -440,6 +437,8 @@ int IndexBlock::initializeCursor(AqlItemBlock* items, size_t pos) {
   if (res != TRI_ERROR_NO_ERROR) {
     return res;
   }
+  
+  _alreadyReturned.clear();
   _pos = 0;
   _posInDocs = 0;
 

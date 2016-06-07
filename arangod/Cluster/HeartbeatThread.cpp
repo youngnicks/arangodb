@@ -618,7 +618,7 @@ bool HeartbeatThread::syncDBServerStatusQuo() {
 
     auto dispatcher = DispatcherFeature::DISPATCHER;
     if (dispatcher == nullptr) {
-      LOG_TOPIC(ERR, Logger::HEARTBEAT)
+      LOG_TOPIC(DEBUG, Logger::HEARTBEAT)
           << "could not schedule dbserver sync - dispatcher gone.";
       return false;
     }
