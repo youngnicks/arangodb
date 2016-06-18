@@ -1256,7 +1256,6 @@ size_t TRI_CharLengthUtf8String(char const* in) {
     } else if (c < 248) {
       p += 4;
     } else {
-      printf("invalid utf\n");
       // invalid UTF-8 sequence
       break;
     }

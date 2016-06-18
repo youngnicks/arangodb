@@ -332,14 +332,17 @@ class Builder {
   // Add a subvalue into an object from a Value:
   uint8_t* add(std::string const& attrName, Value const& sub);
   uint8_t* add(char const* attrName, Value const& sub);
+  uint8_t* add(char const* attrName, size_t attrLength, Value const& sub);
 
   // Add a subvalue into an object from a Slice:
   uint8_t* add(std::string const& attrName, Slice const& sub);
   uint8_t* add(char const* attrName, Slice const& sub);
+  uint8_t* add(char const* attrName, size_t attrLength, Slice const& sub);
 
   // Add a subvalue into an object from a ValuePair:
   uint8_t* add(std::string const& attrName, ValuePair const& sub);
   uint8_t* add(char const* attrName, ValuePair const& sub);
+  uint8_t* add(char const* attrName, size_t attrLength, ValuePair const& sub);
   
   // Add all subkeys and subvalues into an object from an ObjectIterator
   // and leaves open the object intentionally
@@ -627,6 +630,11 @@ private:
   
   template <typename T>
   uint8_t* addInternal(char const* attrName, T const& sub) {
+    return addInternal<T>(attrName, strlen(attrName), sub);
+  }
+  
+  template <typename T>
+  uint8_t* addInternal(char const* attrName, size_t attrLength, T const& sub) {
     bool haveReported = false;
     if (!_stack.empty()) {
       ValueLength& tos = _stack.back();
@@ -639,8 +647,6 @@ private:
       reportAdd();
       haveReported = true;
     }
-
-    ValueLength attrLength = strlen(attrName);
 
     try {
       if (options->attributeTranslator != nullptr) {
