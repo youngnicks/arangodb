@@ -28,6 +28,7 @@
 #include "Aql/V8Expression.h"
 #include "Aql/Variable.h"
 #include "Basics/StringBuffer.h"
+#include "Basics/StringUtils.h"
 #include "Basics/Exceptions.h"
 #include "V8/v8-conv.h"
 #include "V8/v8-globals.h"
@@ -74,7 +75,7 @@ V8Expression* Executor::generateExpression(AstNode const* node) {
   v8::Handle<v8::Object> constantValues = v8::Object::New(isolate);
   for (auto const& it : _constantRegisters) {
     std::string name = "r";
-    name.append(std::to_string(it.second));
+    name.append(basics::StringUtils::itoa(it.second));
 
     constantValues->ForceSet(TRI_V8_STD_STRING(name), toV8(isolate, it.first));
   }

@@ -59,7 +59,7 @@ class CollectionNameResolver {
   //////////////////////////////////////////////////////////////////////////////
 
   TRI_voc_cid_t getCollectionIdLocal(std::string const& name) const {
-    if (name[0] >= '0' && name[0] <= '9') {
+    if (name[0] <= '9' && name[0] >= '0') {
       // name is a numeric id
       return static_cast<TRI_voc_cid_t>(
           arangodb::basics::StringUtils::uint64(name));
@@ -84,7 +84,7 @@ class CollectionNameResolver {
     if (!ServerState::isRunningInCluster(_serverRole)) {
       return getCollectionIdLocal(name);
     }
-    if (name[0] >= '0' && name[0] <= '9') {
+    if (name[0] <= '9' && name[0] >= '0') {
       // name is a numeric id
       TRI_voc_cid_t cid = static_cast<TRI_voc_cid_t>(arangodb::basics::StringUtils::uint64(name));
       // Now validate the cid
@@ -125,7 +125,7 @@ class CollectionNameResolver {
   //////////////////////////////////////////////////////////////////////////////
 
   TRI_col_type_t getCollectionType(std::string const& name) const {
-    if (name[0] >= '0' && name[0] <= '9') {
+    if (name[0] <= '9' && name[0] >= '0') {
       // name is a numeric id
       return getCollectionType(getCollectionName(static_cast<TRI_voc_cid_t>(
           arangodb::basics::StringUtils::uint64(name))));
@@ -171,7 +171,7 @@ class CollectionNameResolver {
     if (!ServerState::isCoordinator(_serverRole)) {
       return getCollectionType(name);
     }
-    if (name[0] >= '0' && name[0] <= '9') {
+    if (name[0] <= '9' && name[0] >= '0') {
       // name is a numeric id
       return getCollectionTypeCluster(
           getCollectionName(static_cast<TRI_voc_cid_t>(
@@ -264,7 +264,7 @@ class CollectionNameResolver {
 
   std::string getCollectionName(std::string const& nameOrId) const {
     if (!nameOrId.empty() &&
-        (nameOrId[0] < '0' || nameOrId[0] > '9')) {
+        (nameOrId[0] > '9' || nameOrId[0] < '0')) {
       return nameOrId;
     }
     TRI_voc_cid_t tmp = arangodb::basics::StringUtils::uint64(nameOrId);

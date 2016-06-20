@@ -3433,7 +3433,7 @@ int TRI_document_collection_t::update(Transaction* trx,
     if (options.recoveryMarker == nullptr) {
       mergeObjectsForUpdate(
         trx, VPackSlice(oldHeader->vpack()), newSlice, isEdgeCollection,
-        std::to_string(revisionId), options.mergeObjects, options.keepNull,
+        basics::StringUtils::itoa(revisionId), options.mergeObjects, options.keepNull,
         *builder.get());
  
       if (ServerState::isDBServer(trx->serverRole())) {
@@ -3578,7 +3578,7 @@ int TRI_document_collection_t::replace(Transaction* trx,
     TransactionBuilderLeaser builder(trx);
     newObjectForReplace(
         trx, VPackSlice(oldHeader->vpack()),
-        newSlice, fromSlice, toSlice, isEdgeCollection, std::to_string(revisionId), *builder.get());
+        newSlice, fromSlice, toSlice, isEdgeCollection, basics::StringUtils::itoa(revisionId), *builder.get());
 
     if (ServerState::isDBServer(trx->serverRole())) {
       // Need to check that no sharding keys have changed:
@@ -3655,7 +3655,7 @@ int TRI_document_collection_t::remove(arangodb::Transaction* trx,
   
   TransactionBuilderLeaser builder(trx);
   newObjectForRemove(
-      trx, slice, std::to_string(revisionId), *builder.get());
+      trx, slice, basics::StringUtils::itoa(revisionId), *builder.get());
 
   prevRev = VPackSlice();
 
@@ -4172,7 +4172,7 @@ int TRI_document_collection_t::newObjectForInsert(
     if (newRev == 0) {
       newRev = TRI_NewTickServer();
     }
-    newRevSt = std::to_string(newRev);
+    newRevSt = basics::StringUtils::itoa(newRev);
   }
   builder.add(StaticStrings::RevString, VPackValue(newRevSt));
   

@@ -28,6 +28,7 @@
 
 #include "Logger/Logger.h"
 #include "Basics/Exceptions.h"
+#include "Basics/fpconv.h"
 #include "Basics/tri-strings.h"
 #include "Basics/StringBuffer.h"
 
@@ -218,8 +219,8 @@ char* duplicate(std::string const& source) {
 }
 
 char* duplicate(char const* source, size_t len) {
-  if (source == 0) {
-    return 0;
+  if (source == nullptr) {
+    return nullptr;
   }
 
   char* result = new char[len + 1];
@@ -231,8 +232,8 @@ char* duplicate(char const* source, size_t len) {
 }
 
 char* duplicate(char const* source) {
-  if (source == 0) {
-    return 0;
+  if (source == nullptr) {
+    return nullptr;
   }
   size_t len = strlen(source);
   char* result = new char[len + 1];
@@ -244,25 +245,25 @@ char* duplicate(char const* source) {
 }
 
 void destroy(char*& source) {
-  if (source != 0) {
+  if (source != nullptr) {
     ::memset(source, 0, ::strlen(source));
     delete[] source;
-    source = 0;
+    source = nullptr;
   }
 }
 
 void destroy(char*& source, size_t length) {
-  if (source != 0) {
+  if (source != nullptr) {
     ::memset(source, 0, length);
     delete[] source;
-    source = 0;
+    source = nullptr;
   }
 }
 
 void erase(char*& source) {
-  if (source != 0) {
+  if (source != nullptr) {
     delete[] source;
-    source = 0;
+    source = nullptr;
   }
 }
 
@@ -800,7 +801,7 @@ std::vector<std::string> split(std::string const& source, char delim,
     for (; q < e; ++q) {
       if (*q == delim) {
         *p = '\0';
-        result.push_back(std::string(buffer, p - buffer));
+        result.emplace_back(std::string(buffer, p - buffer));
         p = buffer;
       } else {
         *p++ = *q;
@@ -814,7 +815,7 @@ std::vector<std::string> split(std::string const& source, char delim,
         }
       } else if (*q == delim) {
         *p = '\0';
-        result.push_back(std::string(buffer, p - buffer));
+        result.emplace_back(std::string(buffer, p - buffer));
         p = buffer;
       } else {
         *p++ = *q;
@@ -823,7 +824,7 @@ std::vector<std::string> split(std::string const& source, char delim,
   }
 
   *p = '\0';
-  result.push_back(std::string(buffer, p - buffer));
+  result.emplace_back(std::string(buffer, p - buffer));
 
   delete[] buffer;
 
@@ -848,7 +849,7 @@ std::vector<std::string> split(std::string const& source,
     for (; q < e; ++q) {
       if (delim.find(*q) != std::string::npos) {
         *p = '\0';
-        result.push_back(std::string(buffer, p - buffer));
+        result.emplace_back(std::string(buffer, p - buffer));
         p = buffer;
       } else {
         *p++ = *q;
@@ -862,7 +863,7 @@ std::vector<std::string> split(std::string const& source,
         }
       } else if (delim.find(*q) != std::string::npos) {
         *p = '\0';
-        result.push_back(std::string(buffer, p - buffer));
+        result.emplace_back(std::string(buffer, p - buffer));
         p = buffer;
       } else {
         *p++ = *q;
@@ -871,7 +872,7 @@ std::vector<std::string> split(std::string const& source,
   }
 
   *p = '\0';
-  result.push_back(std::string(buffer, p - buffer));
+  result.emplace_back(std::string(buffer, p - buffer));
 
   delete[] buffer;
 
@@ -884,9 +885,8 @@ std::string trim(std::string const& sourceStr, std::string const& trimStr) {
 
   if (s == std::string::npos) {
     return std::string();
-  } else {
-    return std::string(sourceStr, s, e - s + 1);
-  }
+  } 
+  return std::string(sourceStr, s, e - s + 1);
 }
 
 void trimInPlace(std::string& str, std::string const& trimStr) {
@@ -909,9 +909,9 @@ std::string lTrim(std::string const& str, std::string const& trimStr) {
 
   if (s == std::string::npos) {
     return std::string();
-  } else {
-    return std::string(str, s);
-  }
+  } 
+
+  return std::string(str, s);
 }
 
 std::string rTrim(std::string const& sourceStr, std::string const& trimStr) {
@@ -955,12 +955,12 @@ std::vector<std::string> wrap(std::string const& sourceStr, size_t size,
         m += 1;
       }
 
-      result.push_back(next.substr(0, m));
+      result.emplace_back(next.substr(0, m));
       next = next.substr(m);
     }
   }
 
-  result.push_back(next);
+  result.emplace_back(next);
 
   return result;
 }
@@ -1062,6 +1062,20 @@ std::string tolower(std::string const& str) {
     return "";
   }
 
+  if (len <= 64) {
+    // optimized version with a small local buffer
+    char buffer[64];
+    char* qtr = buffer;
+    char const* ptr = str.c_str();
+
+    for (; 0 < len; len--, ptr++, qtr++) {
+      *qtr = static_cast<char>(::tolower(*ptr));
+    }
+
+    return std::string(buffer, str.size());
+  }
+
+  // version that needs to do new/delete
   char* buffer = new char[len];
   char* qtr = buffer;
   char const* ptr = str.c_str();
@@ -1095,7 +1109,21 @@ std::string toupper(std::string const& str) {
   if (len == 0) {
     return "";
   }
+  
+  if (len <= 64) {
+    // optimized version with a small local buffer
+    char buffer[64];
+    char* qtr = buffer;
+    char const* ptr = str.c_str();
 
+    for (; 0 < len; len--, ptr++, qtr++) {
+      *qtr = static_cast<char>(::toupper(*ptr));
+    }
+
+    return std::string(buffer, str.size());
+  }
+
+  // version that needs to do new/delete
   char* buffer = new char[len];
   char* qtr = buffer;
   char const* ptr = str.c_str();
@@ -1247,13 +1275,13 @@ std::string urlEncode(char const* src, size_t const len) {
 // CONVERT TO STRING
 // .............................................................................
 
-std::string itoa(int16_t attr) {
-  char buffer[7];
-  char* p = buffer;
-
+size_t itoa(int16_t attr, char* buffer) {
   if (attr == INT16_MIN) {
-    return "-32768";
+    memcpy(buffer, "-32768", 6);
+    return 6;
   }
+  
+  char* p = buffer;
 
   if (attr < 0) {
     *p++ = '-';
@@ -1274,41 +1302,38 @@ std::string itoa(int16_t attr) {
   }
 
   *p++ = char(attr % 10 + '0');
-  *p = '\0';
 
-  return buffer;
+  return (p - buffer);
 }
 
-std::string itoa(uint16_t attr) {
-  char buffer[6];
+size_t itoa(uint16_t attr, char* buffer) {
   char* p = buffer;
 
-  if (10000L <= attr) {
-    *p++ = char((attr / 10000L) % 10 + '0');
+  if (10000UL <= attr) {
+    *p++ = char((attr / 10000LU) % 10 + '0');
   }
-  if (1000L <= attr) {
-    *p++ = char((attr / 1000L) % 10 + '0');
+  if (1000UL <= attr) {
+    *p++ = char((attr / 1000UL) % 10 + '0');
   }
-  if (100L <= attr) {
-    *p++ = char((attr / 100L) % 10 + '0');
+  if (100UL <= attr) {
+    *p++ = char((attr / 100UL) % 10 + '0');
   }
-  if (10L <= attr) {
-    *p++ = char((attr / 10L) % 10 + '0');
+  if (10UL <= attr) {
+    *p++ = char((attr / 10UL) % 10 + '0');
   }
 
   *p++ = char(attr % 10 + '0');
-  *p = '\0';
 
-  return buffer;
+  return (p - buffer);
 }
 
-std::string itoa(int32_t attr) {
-  char buffer[12];
-  char* p = buffer;
-
+size_t itoa(int32_t attr, char* buffer) {
   if (attr == INT32_MIN) {
-    return "-2147483648";
+    memcpy(buffer, "-2147483648", 11);
+    return 11;
   }
+  
+  char* p = buffer;
 
   if (attr < 0) {
     *p++ = '-';
@@ -1344,56 +1369,53 @@ std::string itoa(int32_t attr) {
   }
 
   *p++ = char(attr % 10 + '0');
-  *p = '\0';
 
-  return buffer;
+  return (p - buffer);
 }
 
-std::string itoa(uint32_t attr) {
-  char buffer[11];
+size_t itoa(uint32_t attr, char* buffer) {
   char* p = buffer;
 
-  if (1000000000L <= attr) {
-    *p++ = char((attr / 1000000000L) % 10 + '0');
+  if (1000000000UL <= attr) {
+    *p++ = char((attr / 1000000000UL) % 10 + '0');
   }
-  if (100000000L <= attr) {
-    *p++ = char((attr / 100000000L) % 10 + '0');
+  if (100000000UL <= attr) {
+    *p++ = char((attr / 100000000UL) % 10 + '0');
   }
-  if (10000000L <= attr) {
-    *p++ = char((attr / 10000000L) % 10 + '0');
+  if (10000000UL <= attr) {
+    *p++ = char((attr / 10000000UL) % 10 + '0');
   }
-  if (1000000L <= attr) {
-    *p++ = char((attr / 1000000L) % 10 + '0');
+  if (1000000UL <= attr) {
+    *p++ = char((attr / 1000000UL) % 10 + '0');
   }
-  if (100000L <= attr) {
-    *p++ = char((attr / 100000L) % 10 + '0');
+  if (100000UL <= attr) {
+    *p++ = char((attr / 100000UL) % 10 + '0');
   }
-  if (10000L <= attr) {
-    *p++ = char((attr / 10000L) % 10 + '0');
+  if (10000UL <= attr) {
+    *p++ = char((attr / 10000UL) % 10 + '0');
   }
-  if (1000L <= attr) {
-    *p++ = char((attr / 1000L) % 10 + '0');
+  if (1000UL <= attr) {
+    *p++ = char((attr / 1000UL) % 10 + '0');
   }
-  if (100L <= attr) {
-    *p++ = char((attr / 100L) % 10 + '0');
+  if (100UL <= attr) {
+    *p++ = char((attr / 100UL) % 10 + '0');
   }
-  if (10L <= attr) {
-    *p++ = char((attr / 10L) % 10 + '0');
+  if (10UL <= attr) {
+    *p++ = char((attr / 10UL) % 10 + '0');
   }
 
   *p++ = char(attr % 10 + '0');
-  *p = '\0';
 
-  return buffer;
+  return (p - buffer);
 }
 
-std::string itoa(int64_t attr) {
-  char buffer[21];
-  char* p = buffer;
-
+size_t itoa(int64_t attr, char* buffer) {
   if (attr == INT64_MIN) {
-    return "-9223372036854775808";
+    memcpy(buffer, "-9223372036854775808", 20);
+    return 20;
   }
+  
+  char* p = buffer;
 
   if (attr < 0) {
     *p++ = '-';
@@ -1456,13 +1478,11 @@ std::string itoa(int64_t attr) {
   }
 
   *p++ = char(attr % 10 + '0');
-  *p = '\0';
 
-  return buffer;
+  return (p - buffer);
 }
 
-std::string itoa(uint64_t attr) {
-  char buffer[21];
+size_t itoa(uint64_t attr, char* buffer) {
   char* p = buffer;
 
   if (10000000000000000000ULL <= attr) {
@@ -1524,19 +1544,19 @@ std::string itoa(uint64_t attr) {
   }
 
   *p++ = char(attr % 10 + '0');
-  *p = '\0';
 
-  return buffer;
+  return (p - buffer);
 }
 
-std::string ftoa(double i) {
-  StringBuffer buffer(TRI_CORE_MEM_ZONE);
+std::string ftoa(double value) {
+  char buffer[24];
+  int length = fpconv_dtoa(value, &buffer[0]);
 
-  buffer.appendDecimal(i);
+  return std::string(&buffer[0], static_cast<size_t>(length));
+}
 
-  std::string result(buffer.c_str());
-
-  return result;
+size_t ftoa(double value, char* buffer) {
+  return static_cast<size_t>(fpconv_dtoa(value, buffer));
 }
 
 // .............................................................................
@@ -1549,9 +1569,8 @@ bool boolean(std::string const& str) {
   if (lower == "true" || lower == "yes" || lower == "on" || lower == "y" ||
       lower == "1") {
     return true;
-  } else {
-    return false;
   }
+  return false;
 }
 
 int64_t int64(std::string const& str) {
@@ -1817,14 +1836,6 @@ double doubleDecimal(char const* value, size_t size) {
   expValue = expValue * expSign;
 
   return (v / e) * pow(10.0, double(expValue));
-}
-
-float floatDecimal(std::string const& str) {
-  return floatDecimal(str.c_str(), str.size());
-}
-
-float floatDecimal(char const* value, size_t size) {
-  return (float)doubleDecimal(value, size);
 }
 
 // .............................................................................
@@ -2214,10 +2225,8 @@ size_t numEntries(std::string const& sourceStr, std::string const& delimiter) {
 }
 
 std::string encodeHex(std::string const& str) {
-  char* tmp;
   size_t len;
-
-  tmp = TRI_EncodeHexString(str.c_str(), str.length(), &len);
+  char* tmp = TRI_EncodeHexString(str.c_str(), str.length(), &len);
   auto result = std::string(tmp, len);
   TRI_FreeString(TRI_CORE_MEM_ZONE, tmp);
 
@@ -2225,10 +2234,8 @@ std::string encodeHex(std::string const& str) {
 }
 
 std::string decodeHex(std::string const& str) {
-  char* tmp;
   size_t len;
-
-  tmp = TRI_DecodeHexString(str.c_str(), str.length(), &len);
+  char* tmp = TRI_DecodeHexString(str.c_str(), str.length(), &len);
   auto result = std::string(tmp, len);
   TRI_FreeString(TRI_CORE_MEM_ZONE, tmp);
 

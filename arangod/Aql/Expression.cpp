@@ -36,6 +36,7 @@
 #include "Basics/Exceptions.h"
 #include "Basics/JsonHelper.h"
 #include "Basics/StringBuffer.h"
+#include "Basics/StringUtils.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Basics/VPackStringBufferAdapter.h"
 
@@ -598,7 +599,7 @@ AqlValue Expression::executeSimpleExpressionIndexedAccess(
     AqlValueGuard guard(indexResult, mustDestroy);
 
     if (indexResult.isNumber()) {
-      std::string const indexString = std::to_string(indexResult.toInt64());
+      std::string const indexString = basics::StringUtils::itoa(indexResult.toInt64());
       return result.get(trx, indexString, mustDestroy, true);
     }
      

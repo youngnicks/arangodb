@@ -69,8 +69,7 @@ int IndexIteratorContext::resolveId(char const* handle, size_t length,
   if (*handle >= '0' && *handle <= '9') {
     cid = arangodb::basics::StringUtils::uint64(handle, p - handle);
   } else {
-    std::string const name(handle, p - handle);
-    cid = getResolver()->getCollectionIdCluster(name);
+    cid = getResolver()->getCollectionIdCluster(std::string(handle, p - handle));
   }
 
   if (cid == 0) {

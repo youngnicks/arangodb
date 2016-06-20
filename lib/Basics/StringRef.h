@@ -108,6 +108,22 @@ class StringRef {
     return StringRef(_data + pos, count);
   }
 
+  int compare(std::string const& other) const {
+    int res = memcmp(_data, other.c_str(), (std::min)(_length, other.size()));
+    if (res != 0) {
+      return res;
+    }
+    return (_length - other.size());
+  }
+  
+  int compare(StringRef const& other) const {
+    int res = memcmp(_data, other._data, (std::min)(_length, other._length));
+    if (res != 0) {
+      return res;
+    }
+    return (_length - other._length);
+  }
+
   inline std::string toString() const {
     return std::string(_data, _length);
   }
@@ -130,6 +146,10 @@ class StringRef {
   inline char const* end() const {
     return _data + _length;
   }
+
+  inline char front() const { return _data[0]; }
+
+  inline char back() const { return _data[_length - 1]; }
   
   inline char operator[](size_t index) const noexcept { 
     return _data[index];

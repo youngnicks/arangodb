@@ -329,37 +329,73 @@ std::string urlEncode(std::string const& str);
 /// @brief converts integer to string
 ////////////////////////////////////////////////////////////////////////////////
 
-std::string itoa(int16_t i);
+size_t itoa(int16_t value, char* buffer);
+
+inline std::string itoa(int16_t value) {
+  char buffer[7];
+  size_t length = itoa(value, &buffer[0]);
+  return std::string(&buffer[0], length);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief converts unsigned integer to string
 ////////////////////////////////////////////////////////////////////////////////
 
-std::string itoa(uint16_t i);
+size_t itoa(uint16_t value, char* buffer);
+
+inline std::string itoa(uint16_t value) {
+  char buffer[6];
+  size_t length = itoa(value, &buffer[0]);
+  return std::string(&buffer[0], length);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief converts integer to string
 ////////////////////////////////////////////////////////////////////////////////
 
-std::string itoa(int64_t i);
+size_t itoa(int32_t value, char* buffer);
+
+inline std::string itoa(int32_t value) {
+  char buffer[12];
+  size_t length = itoa(value, &buffer[0]);
+  return std::string(&buffer[0], length);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief converts unsigned integer to string
 ////////////////////////////////////////////////////////////////////////////////
 
-std::string itoa(uint64_t i);
+size_t itoa(uint32_t value, char* buffer);
+
+inline std::string itoa(uint32_t value) {
+  char buffer[11];
+  size_t length = itoa(value, &buffer[0]);
+  return std::string(&buffer[0], length);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief converts integer to string
 ////////////////////////////////////////////////////////////////////////////////
 
-std::string itoa(int32_t i);
+size_t itoa(int64_t i, char* buffer);
+
+inline std::string itoa(int64_t value) {
+  char buffer[21];
+  size_t length = itoa(value, &buffer[0]);
+  return std::string(&buffer[0], length);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief converts unsigned integer to string
 ////////////////////////////////////////////////////////////////////////////////
 
-std::string itoa(uint32_t i);
+size_t itoa(uint64_t value, char* buffer);
+
+inline std::string itoa(uint64_t value) {
+  char buffer[21];
+  size_t length = itoa(value, &buffer[0]);
+  return std::string(&buffer[0], length);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief converts size_t to string
@@ -370,10 +406,12 @@ std::string itoa(uint32_t i);
 #if TRI_SIZEOF_SIZE_T == 4
 
 inline std::string itoa(size_t i) { return itoa(uint32_t(i)); }
+inline size_t itoa(size_t i, char* buffer) { return itoa(uint32_t(i), buffer); }
 
 #elif TRI_SIZEOF_SIZE_T == 8
 
 inline std::string itoa(size_t i) { return itoa(uint64_t(i)); }
+inline size_t itoa(size_t i, char* buffer) { return itoa(uint64_t(i), buffer); }
 
 #endif
 
@@ -384,6 +422,7 @@ inline std::string itoa(size_t i) { return itoa(uint64_t(i)); }
 ////////////////////////////////////////////////////////////////////////////////
 
 std::string ftoa(double i);
+size_t ftoa(double i, char*);
 
 // -----------------------------------------------------------------------------
 // CONVERT FROM STRING
@@ -512,18 +551,6 @@ double doubleDecimal(std::string const& str);
 ////////////////////////////////////////////////////////////////////////////////
 
 double doubleDecimal(char const* value, size_t size);
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief parses a decimal
-////////////////////////////////////////////////////////////////////////////////
-
-float floatDecimal(std::string const& str);
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief parses a decimal
-////////////////////////////////////////////////////////////////////////////////
-
-float floatDecimal(char const* value, size_t size);
 
 // -----------------------------------------------------------------------------
 // BASE64

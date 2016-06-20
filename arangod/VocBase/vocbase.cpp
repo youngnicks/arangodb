@@ -1581,7 +1581,7 @@ TRI_vocbase_col_t* TRI_LookupCollectionByNameVocBase(TRI_vocbase_t* vocbase,
   // if collection name is passed as a stringified id, we'll use the lookupbyid
   // function
   // this is safe because collection names must not start with a digit
-  if (name[0] >= '0' && name[0] <= '9') {
+  if (name[0] <= '9' && name[0] >= '0') {
     return TRI_LookupCollectionByIdVocBase(vocbase, StringUtils::uint64(name));
   }
 

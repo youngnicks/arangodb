@@ -23,12 +23,12 @@
 
 #include "Aql/VariableGenerator.h"
 #include "Basics/Exceptions.h"
+#include "Basics/StringUtils.h"
 
 #include <velocypack/Builder.h>
 #include <velocypack/Iterator.h>
 #include <velocypack/Slice.h>
 #include <velocypack/velocypack-aliases.h>
-
 
 using namespace arangodb::aql;
 
@@ -180,7 +180,7 @@ Variable* VariableGenerator::getVariable(VariableId id) const {
 std::string VariableGenerator::nextName() {
   // note: if the naming scheme is adjusted, it may be necessary to adjust
   // Variable::isUserDefined, too!
-  return std::to_string(nextId());
+  return basics::StringUtils::itoa(nextId());
 }
 
 /// @brief export to VelocyPack
