@@ -119,25 +119,29 @@ std::unique_ptr<basics::StringBuffer> createChunkForNetworkSingleCompressed(
       std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE, dataLength, false);
   for (auto const& slice : slices) {
     uncompressedBuffer->appendText(
-        std::string(slice.startAs<char>(), slice.byteSize()));
+        slice.startAs<char>(), slice.byteSize());
   }
 
   std::size_t extraLen = 100;
   auto buffer = std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE,
-                                               chunkLength + extraLen, false);
+                                           headLength + dataLength + extraLen, false);
 
-  uint32_t compressedLength = LZ4_compress_default(uncompressedBuffer->begin(),
-                                                   buffer->begin() + headLength,
-                                                   dataLength, dataLength);
-  // resize/shrink
-  chunkLength = headLength + compressedLength;
   auto sbuff = buffer->stringBuffer();
-  sbuff->_len = chunkLength;  // set payload len to that waht we need
+  char* current = sbuff->_current;
+  sbuff->_current += headLength;
+  uint32_t compressedLength = LZ4_compress_default(uncompressedBuffer->begin(),
+                                                   sbuff->_current,
+                                                   dataLength, dataLength + extraLen);
+  sbuff->_current = current;
 
+  chunkLength = headLength + compressedLength;
+  // resize/shrink
   appendToBuffer(buffer.get(), chunkLength);
   appendToBuffer(buffer.get(), chunk);
   appendToBuffer(buffer.get(), id);
   appendToBuffer(buffer.get(), dataLength);
+  sbuff->_current += compressedLength;
+  
 
   return buffer;
 }
@@ -356,6 +360,7 @@ bool VppCommTask::processRead() {
                             std::distance(vpackBegin, chunkEnd),
                             chunkHeader._uncompressedLength);
         char* bufferBegin = reinterpret_cast<char*>(buffer.data());
+	buffer._pos += chunkHeader._uncompressedLength;
         payloads = validateAndCount(bufferBegin, bufferBegin + buffer.length());
       } else
         payloads = validateAndCount(vpackBegin, chunkEnd);
