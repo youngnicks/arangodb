@@ -122,13 +122,17 @@ std::unique_ptr<basics::StringBuffer> createChunkForNetworkSingleCompressed(
         std::string(slice.startAs<char>(), slice.byteSize()));
   }
 
-  auto buffer =
-      std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE, chunkLength, false);
+  std::size_t extraLen = 100;
+  auto buffer = std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE,
+                                               chunkLength + extraLen, false);
 
   uint32_t compressedLength = LZ4_compress_default(uncompressedBuffer->begin(),
                                                    buffer->begin() + headLength,
                                                    dataLength, dataLength);
+  // resize/shrink
   chunkLength = headLength + compressedLength;
+  auto sbuff = buffer->stringBuffer();
+  sbuff->_len = chunkLength;  // set payload len to that waht we need
 
   appendToBuffer(buffer.get(), chunkLength);
   appendToBuffer(buffer.get(), chunk);
@@ -252,7 +256,8 @@ void VppCommTask::addResponse(VppResponse* response) {
 
   // adds chunk header infromation and creates SingBuffer* that can be
   // used with _writeBuffers
-  auto buffer = createChunkForNetworkSingle(slices, id);
+  // auto buffer = createChunkForNetworkSingle(slices, id);
+  auto buffer = createChunkForNetworkSingleCompressed(slices, id);
 
   addWriteBuffer(std::move(buffer));
 }
