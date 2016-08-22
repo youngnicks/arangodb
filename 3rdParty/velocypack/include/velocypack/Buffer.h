@@ -211,7 +211,9 @@ class Buffer {
 
   T* _buffer;
   ValueLength _alloc;
+public:
   ValueLength _pos;
+private:
 
   // an already initialized space for small values
   T _local[192];
