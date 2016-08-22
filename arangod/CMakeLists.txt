@@ -198,6 +198,7 @@ add_executable(${BIN_ARANGOD}
   GeneralServer/RestHandler.cpp
   GeneralServer/RestHandlerFactory.cpp
   GeneralServer/VppCommTask.cpp
+  GeneralServer/lz4.c
   GeoIndex/GeoIndex.cpp
   Indexes/EdgeIndex.cpp
   Indexes/FulltextIndex.cpp

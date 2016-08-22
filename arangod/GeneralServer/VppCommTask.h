@@ -120,6 +120,7 @@ class VppCommTask : public GeneralCommTask {
     uint32_t _chunk;
     uint64_t _messageID;
     uint64_t _messageLength;
+    uint64_t _uncompressedLength;
     bool _isFirst;
   };
   bool isChunkComplete(char*);    // sub-function of processRead

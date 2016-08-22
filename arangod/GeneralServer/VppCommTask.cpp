@@ -41,6 +41,12 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <memory>
+#include <vector>
+
+extern "C" {
+#include "lz4.h"
+}
 
 using namespace arangodb;
 using namespace arangodb::basics;
@@ -85,6 +91,53 @@ std::size_t appendToBuffer(StringBuffer* buffer, T& value) {
   return len;
 }
 
+std::unique_ptr<basics::StringBuffer> createChunkForNetworkSingleCompressed(
+    std::vector<VPackSlice> const& slices, uint64_t id) {
+  using basics::StringBuffer;
+
+  uint32_t chunk = 1;
+  chunk <<= 1;
+  chunk |= 0x1;
+
+  // get the lenght of VPack data
+  uint32_t dataLength = 0;
+  uint32_t uncompressedLength = 0;
+  uint32_t chunkLength = 0;
+
+  for (auto& slice : slices) {
+    // TODO: is a 32bit value sufficient for all Slices here?
+    dataLength += static_cast<uint32_t>(slice.byteSize());
+  }
+
+  uint32_t headLength = (sizeof(chunkLength) + sizeof(chunk) + sizeof(id) +
+                         sizeof(uncompressedLength));
+
+  // int LZ4_compress_default(const char* source, char* dest, int sourceSize,
+  // int maxDestSize);
+
+  auto uncompressedBuffer =
+      std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE, dataLength, false);
+  for (auto const& slice : slices) {
+    uncompressedBuffer->appendText(
+        std::string(slice.startAs<char>(), slice.byteSize()));
+  }
+
+  auto buffer =
+      std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE, chunkLength, false);
+
+  uint32_t compressedLength = LZ4_compress_default(uncompressedBuffer->begin(),
+                                                   buffer->begin() + headLength,
+                                                   dataLength, dataLength);
+  chunkLength = headLength + compressedLength;
+
+  appendToBuffer(buffer.get(), chunkLength);
+  appendToBuffer(buffer.get(), chunk);
+  appendToBuffer(buffer.get(), id);
+  appendToBuffer(buffer.get(), dataLength);
+
+  return buffer;
+}
+
 std::unique_ptr<basics::StringBuffer> createChunkForNetworkDetail(
     std::vector<VPackSlice> const& slices, bool isFirstChunk, uint32_t chunk,
     uint64_t id, uint32_t totalMessageLength = 0) {
@@ -105,6 +158,8 @@ std::unique_ptr<basics::StringBuffer> createChunkForNetworkDetail(
 
   // get the lenght of VPack data
   uint32_t dataLength = 0;
+
+  // compress here
   for (auto& slice : slices) {
     // TODO: is a 32bit value sufficient for all Slices here?
     dataLength += static_cast<uint32_t>(slice.byteSize());
@@ -228,6 +283,14 @@ VppCommTask::ChunkHeader VppCommTask::readChunkHeader() {
     header._messageLength = 0;  // not needed
   }
 
+  if (header._isFirst) {
+    std::memcpy(&header._uncompressedLength, cursor,
+                sizeof(header._uncompressedLength));
+    cursor += sizeof(header._uncompressedLength);
+  } else {
+    header._uncompressedLength = 0;  // not needed
+  }
+
   header._headerLength =
       std::distance(_processReadVariables._readBufferCursor, cursor);
 
@@ -279,9 +342,18 @@ bool VppCommTask::processRead() {
   // CASE 1: message is in one chunk
   if (chunkHeader._isFirst && chunkHeader._chunk == 1) {
     std::size_t payloads = 0;
-
+    VPackBuffer<uint8_t> buffer(chunkHeader._uncompressedLength);
     try {
-      payloads = validateAndCount(vpackBegin, chunkEnd);
+      if (chunkHeader._uncompressedLength) {
+        // int LZ4_decompress_safe (const char* source, char* dest, int
+        // compressedSize, int maxDecompressedSize);
+        LZ4_decompress_safe(vpackBegin, reinterpret_cast<char*>(buffer.data()),
+                            std::distance(vpackBegin, chunkEnd),
+                            chunkHeader._uncompressedLength);
+        char* bufferBegin = reinterpret_cast<char*>(buffer.data());
+        payloads = validateAndCount(bufferBegin, bufferBegin + buffer.length());
+      } else
+        payloads = validateAndCount(vpackBegin, chunkEnd);
     } catch (std::exception const& e) {
       handleSimpleError(GeneralResponse::ResponseCode::BAD,
                         TRI_ERROR_ARANGO_DATABASE_NOT_FOUND, e.what(),
@@ -297,18 +369,20 @@ bool VppCommTask::processRead() {
       return false;
     }
 
-    VPackBuffer<uint8_t> buffer;
-    buffer.append(vpackBegin, std::distance(vpackBegin, chunkEnd));
-    message.set(chunkHeader._messageID, std::move(buffer), payloads);  // fixme
+    if (!chunkHeader._uncompressedLength) {
+      buffer.append(vpackBegin, std::distance(vpackBegin, chunkEnd));
+    }
+    // VPackBuffer<uint8_t> buffer;
 
     // message._header = VPackSlice(message._buffer.data());
     // if (payloadOffset) {
     //  message._payload = VPackSlice(message._buffer.data() + payloadOffset);
     // }
-
+    message.set(chunkHeader._messageID, std::move(buffer), payloads);  // fixme
     doExecute = true;
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "CASE 1";
   }
+
   // CASE 2:  message is in multiple chunks
   auto incompleteMessageItr = _incompleteMessages.find(chunkHeader._messageID);
 
