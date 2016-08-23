@@ -104,17 +104,14 @@ std::unique_ptr<basics::StringBuffer> createChunkForNetworkSingleCompressed(
   uint32_t uncompressedLength = 0;
   uint32_t chunkLength = 0;
 
-  // calculate length for uncompressed buffer
-  for (auto& slice : slices) {
-    // TODO: is a 32bit value sufficient for all Slices here?
-    dataLength += static_cast<uint32_t>(slice.byteSize());
-  }
-
   // calculate header length
   uint32_t headLength = (sizeof(chunkLength) + sizeof(chunk) + sizeof(id) +
                          sizeof(uncompressedLength));
 
-  // create and fill uncompressed buffer
+  // calculate length for uncompressed buffer and fill it
+  for (auto& slice : slices) {
+    dataLength += static_cast<uint32_t>(slice.byteSize());
+  }
   auto uncompressedBuffer =
       std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE, dataLength, false);
   for (auto const& slice : slices) {
@@ -137,7 +134,7 @@ std::unique_ptr<basics::StringBuffer> createChunkForNetworkSingleCompressed(
   uint32_t compressedLength =
       LZ4_compress_default(uncompressedBuffer->begin(), sbuff->_current,
                            dataLength, compressedSizeMax);
-  // reset cursor positon
+  // restore cursor positon
   sbuff->_current = current;
 
   // now that we know the compressed Length we can calculate the chunkLength
