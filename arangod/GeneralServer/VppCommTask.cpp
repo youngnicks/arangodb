@@ -104,44 +104,52 @@ std::unique_ptr<basics::StringBuffer> createChunkForNetworkSingleCompressed(
   uint32_t uncompressedLength = 0;
   uint32_t chunkLength = 0;
 
+  // calculate length for uncompressed buffer
   for (auto& slice : slices) {
     // TODO: is a 32bit value sufficient for all Slices here?
     dataLength += static_cast<uint32_t>(slice.byteSize());
   }
 
+  // calculate header length
   uint32_t headLength = (sizeof(chunkLength) + sizeof(chunk) + sizeof(id) +
                          sizeof(uncompressedLength));
 
-  // int LZ4_compress_default(const char* source, char* dest, int sourceSize,
-  // int maxDestSize);
-
+  // create and fill uncompressed buffer
   auto uncompressedBuffer =
       std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE, dataLength, false);
   for (auto const& slice : slices) {
-    uncompressedBuffer->appendText(
-        slice.startAs<char>(), slice.byteSize());
+    uncompressedBuffer->appendText(slice.startAs<char>(), slice.byteSize());
   }
 
-  std::size_t extraLen = 100;
-  auto buffer = std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE,
-                                           headLength + dataLength + extraLen, false);
+  // create buffer that will be put on the network
+  // it contains chunk header and compressed data
+  int compressedSizeMax = LZ4_compressBound(dataLength);
+  auto buffer = std::make_unique<StringBuffer>(
+      TRI_UNKNOWN_MEM_ZONE, headLength + compressedSizeMax, false);
 
+  // access underlying string buffer
   auto sbuff = buffer->stringBuffer();
+  // store cursor positon
   char* current = sbuff->_current;
+  // advance cursor positon to the correct location (skip header information)
   sbuff->_current += headLength;
-  uint32_t compressedLength = LZ4_compress_default(uncompressedBuffer->begin(),
-                                                   sbuff->_current,
-                                                   dataLength, dataLength + extraLen);
+  // write to the buffer and get the length of the stored data
+  uint32_t compressedLength =
+      LZ4_compress_default(uncompressedBuffer->begin(), sbuff->_current,
+                           dataLength, compressedSizeMax);
+  // reset cursor positon
   sbuff->_current = current;
 
+  // now that we know the compressed Length we can calculate the chunkLength
   chunkLength = headLength + compressedLength;
-  // resize/shrink
+  // write chunkHeader
   appendToBuffer(buffer.get(), chunkLength);
   appendToBuffer(buffer.get(), chunk);
   appendToBuffer(buffer.get(), id);
   appendToBuffer(buffer.get(), dataLength);
+  // add the length of the compressed data that we have written first directly
+  // into the buffer
   sbuff->_current += compressedLength;
-  
 
   return buffer;
 }
@@ -360,7 +368,7 @@ bool VppCommTask::processRead() {
                             std::distance(vpackBegin, chunkEnd),
                             chunkHeader._uncompressedLength);
         char* bufferBegin = reinterpret_cast<char*>(buffer.data());
-	buffer._pos += chunkHeader._uncompressedLength;
+        buffer._pos += chunkHeader._uncompressedLength;
         payloads = validateAndCount(bufferBegin, bufferBegin + buffer.length());
       } else
         payloads = validateAndCount(vpackBegin, chunkEnd);
