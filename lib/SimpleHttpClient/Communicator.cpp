@@ -24,12 +24,27 @@
 #include "Communicator.h"
 
 #include "Basics/MutexLocker.h"
+#include "Basics/socket-utils.h"
+#include "Logger/Logger.h"
+
+#define MAX_WAIT_MSECS 30 * 1000 /* Wait max. 30 seconds */
 
 using namespace arangodb;
 using namespace arangodb::communicator;
 
 namespace {
 std::atomic_uint_fast64_t NEXT_TICKET_ID(static_cast<uint64_t>(0));
+}
+
+Communicator::Communicator() : _curl(nullptr) {
+  curl_global_init(CURL_GLOBAL_ALL);
+  _curl = curl_multi_init();
+  
+  pipe(_fds);
+  TRI_SetNonBlockingSocket(fds[0]);
+
+  _wakeup.fd = _fds[0];
+  _wakeup.events = CURL_WAIT_POLLIN;
 }
 
 Ticket Communicator::addRequest(Destination destination,
@@ -42,11 +57,14 @@ Ticket Communicator::addRequest(Destination destination,
     _newRequests.emplace_back(destination, std::move(request), callbacks,
                               options, id);
   }
+  write(fds[1], "x", 1);
 
   return Ticket{id};
 }
 
 void Communicator::work_once() {
+  
+
   std::vector<NewRequest> newRequests;
 
   {
@@ -61,14 +79,15 @@ void Communicator::work_once() {
         createRequestInProgress(std::move(newRequest));
   }
 
-  for (auto rip : _requestsInProgress) {
-    rip._connection.run();
+  _mc = curl_multi_perform(_curl, &_stillRunning);
+  if (_mc != CURLM_OK) {
+    // TODO?
+    return;
   }
+  int res = curl_multi_wait(_curl, &_wakeup, 1, MAX_WAIT_MSECS, &_numFds);
 }
 
 RequestInProgress Communicator::createRequestInProgress(NewRequest newRequest) {
-  dbinterface::Connection connection =
-      ConnectionManager2.connection(newRequest._destination);
-
-  // TODO
+  RequestInProgress request();
+  return request;
 }

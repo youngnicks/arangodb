@@ -24,8 +24,9 @@
 #ifndef ARANGODB_SIMPLE_HTTP_CLIENT_COMMUNICATOR_H
 #define ARANGODB_SIMPLE_HTTP_CLIENT_COMMUNICATOR_H 1
 
-#include "Basics/Common.h"
+#include "curl/multi.h"
 
+#include "Basics/Common.h"
 #include "Basics/Mutex.h"
 #include "Rest/GeneralRequest.h"
 #include "SimpleHttpClient/Callbacks.h"
@@ -37,6 +38,7 @@ namespace arangodb {
 namespace communicator {
 class Communicator {
  public:
+  Communicator();
   Ticket addRequest(Destination, std::unique_ptr<GeneralRequest>, Callbacks,
                     Options);
 
@@ -59,9 +61,27 @@ class Communicator {
     uint64_t _ticketId;
   };
 
+  struct RequestInProgress {
+    RequestInProgress() {
+      _eh = curl_easy_init();
+    }
+    CURL* _eh;
+  };
+
  private:
   Mutex _newRequestsLock;
   std::vector<NewRequest> _newRequests;
+  std::vector<RequestInProgress> _requestsInProgress;
+  CURLM* _curl;
+  CURLMcode _mc;
+  curl_waitfd _wakeup;
+
+  int _fds[2];
+  int _numFds;
+  int _stillRunning;
+
+ private:
+  RequestInProgress createRequestInProgress(NewRequest newRequest);
 };
 }
 }
