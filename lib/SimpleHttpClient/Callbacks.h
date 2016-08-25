@@ -38,9 +38,9 @@ class Callbacks {
   typedef std::function<void(std::unique_ptr<GeneralResponse>)>
       OnSuccessCallback;
 
- private:
-  OnErrorCallback onError;
-  OnSuccessCallback onSuccess;
+ public:
+  OnErrorCallback _onError;
+  OnSuccessCallback _onSuccess;
 };
 }
 }

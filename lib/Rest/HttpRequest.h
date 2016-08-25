@@ -25,8 +25,8 @@
 #ifndef ARANGODB_REST_HTTP_REQUEST_H
 #define ARANGODB_REST_HTTP_REQUEST_H 1
 
-#include "Rest/GeneralRequest.h"
 #include "Endpoint/ConnectionInfo.h"
+#include "Rest/GeneralRequest.h"
 
 namespace arangodb {
 class RestBatchHandler;
@@ -43,12 +43,8 @@ struct Options;
 }
 
 class HttpRequest : public GeneralRequest {
-  friend class rest::HttpCommTask;
-  friend class rest::HttpsCommTask;
-  friend class rest::GeneralCommTask;
-  friend class RestBatchHandler;  // TODO must be removed
-
- private:
+ public:
+  HttpRequest() = default;
   HttpRequest(ConnectionInfo const&, char const*, size_t, bool);
 
  public:

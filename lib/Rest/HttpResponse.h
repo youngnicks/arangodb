@@ -38,14 +38,10 @@ class GeneralCommTask;
 }
 
 class HttpResponse : public GeneralResponse {
-  friend class rest::GeneralCommTask;
-  friend class rest::HttpCommTask;
-  friend class RestBatchHandler;  // TODO must be removed
-
  public:
   static bool HIDE_PRODUCT_HEADER;
 
- private:
+ public:
   explicit HttpResponse(ResponseCode code);
 
  public:

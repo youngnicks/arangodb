@@ -40,6 +40,10 @@
 #include "Shell/V8ShellFeature.h"
 #include "Ssl/SslFeature.h"
 
+#include "Rest/HttpRequest.h"
+#include "Rest/HttpResponse.h"
+#include "SimpleHttpClient/Communicator.h"
+
 using namespace arangodb;
 using namespace arangodb::application_features;
 
@@ -80,6 +84,36 @@ int main(int argc, char* argv[]) {
     LOG(ERR) << "arangosh terminated because of an unhandled exception of "
                 "unknown type";
     ret = EXIT_FAILURE;
+  }
+
+  communicator::Communicator c;
+
+  std::unique_ptr<GeneralRequest> request(new HttpRequest());
+
+  communicator::Callbacks callbacks{
+      ._onError =
+          [](int ec, std::unique_ptr<GeneralResponse> response) {
+            std::cout << "ERROR" << std::endl;
+          },
+      ._onSuccess =
+          [](std::unique_ptr<GeneralResponse> response) {
+            std::cout << "SUCCESS" << std::endl;
+          }};
+
+  std::unique_ptr<GeneralResponse> response(
+      new HttpResponse(GeneralResponse::ResponseCode::OK));
+
+  callbacks._onSuccess(std::move(response));
+
+  communicator::Options opt;
+
+  c.addRequest(communicator::Destination{"http://www.arangodb.com/"},
+               std::move(request), callbacks, opt);
+
+  while (true) {
+    c.work_once();
+    c.wait();
+    std::cout << "AFTER WAIT IN NOOP LOOP" << std::endl;
   }
 
   return context.exit(ret);

@@ -30,9 +30,9 @@
 #include <velocypack/Validator.h>
 #include <velocypack/velocypack-aliases.h>
 
-#include "Basics/conversions.h"
 #include "Basics/StaticStrings.h"
 #include "Basics/StringUtils.h"
+#include "Basics/conversions.h"
 #include "Basics/tri-strings.h"
 #include "Logger/Logger.h"
 
@@ -46,7 +46,7 @@ HttpRequest::HttpRequest(ConnectionInfo const& connectionInfo,
       _contentLength(0),
       _header(nullptr),
       _allowMethodOverride(allowMethodOverride),
-      _vpackBuilder(nullptr){
+      _vpackBuilder(nullptr) {
   if (0 < length) {
     _contentType = ContentType::JSON;
     _contentTypeResponse = ContentType::JSON;
@@ -57,7 +57,11 @@ HttpRequest::HttpRequest(ConnectionInfo const& connectionInfo,
   }
 }
 
-HttpRequest::~HttpRequest() { delete[] _header; }
+HttpRequest::~HttpRequest() {
+  if (_header != nullptr) {
+    delete[] _header;
+  }
+}
 
 void HttpRequest::parseHeader(size_t length) {
   char* start = _header;
@@ -714,12 +718,12 @@ VPackSlice HttpRequest::payload(VPackOptions const* options) {
   TRI_ASSERT(_vpackBuilder == nullptr);
   // check options for nullptr?
 
-  if( _contentType == ContentType::JSON) {
+  if (_contentType == ContentType::JSON) {
     VPackParser parser(options);
     parser.parse(body());
     _vpackBuilder = parser.steal();
     return VPackSlice(_vpackBuilder->slice());
-  } else /*VPACK*/{
+  } else /*VPACK*/ {
     VPackValidator validator;
     validator.validate(body().c_str(), body().length());
     return VPackSlice(body().c_str());

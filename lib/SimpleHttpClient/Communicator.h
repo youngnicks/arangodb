@@ -29,6 +29,7 @@
 #include "Basics/Common.h"
 #include "Basics/Mutex.h"
 #include "Rest/GeneralRequest.h"
+#include "Rest/HttpResponse.h"
 #include "SimpleHttpClient/Callbacks.h"
 #include "SimpleHttpClient/Destination.h"
 #include "SimpleHttpClient/Options.h"
@@ -39,21 +40,16 @@ namespace communicator {
 class Communicator {
  public:
   Communicator();
+
+ public:
   Ticket addRequest(Destination, std::unique_ptr<GeneralRequest>, Callbacks,
                     Options);
 
   void work_once();
+  void wait();
 
  private:
   struct NewRequest {
-    NewRequest(Destination destination, std::unique_ptr<GeneralRequest> request,
-               Callbacks callbacks, Options options, uint64_t ticketId)
-        : _destination(destination),
-          _request(std::move(request)),
-          _callbacks(callbacks),
-          _options(options),
-          _ticketId(ticketId) {}
-
     Destination _destination;
     std::unique_ptr<GeneralRequest> _request;
     Callbacks _callbacks;
@@ -62,16 +58,18 @@ class Communicator {
   };
 
   struct RequestInProgress {
-    RequestInProgress() {
-      _eh = curl_easy_init();
-    }
     CURL* _eh;
+    Destination _destination;
+    Callbacks _callbacks;
+    Options _options;
+    uint64_t _ticketId;
   };
 
  private:
   Mutex _newRequestsLock;
   std::vector<NewRequest> _newRequests;
-  std::vector<RequestInProgress> _requestsInProgress;
+  std::unordered_map<uint64_t, std::unique_ptr<RequestInProgress>>
+      _requestsInProgress;
   CURLM* _curl;
   CURLMcode _mc;
   curl_waitfd _wakeup;
@@ -81,7 +79,9 @@ class Communicator {
   int _stillRunning;
 
  private:
-  RequestInProgress createRequestInProgress(NewRequest newRequest);
+  void createRequestInProgress(NewRequest const& newRequest);
+  void handleResult(CURL* eh, CURLcode rc);
+  void transformResult(CURL*, HttpResponse*);
 };
 }
 }
