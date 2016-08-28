@@ -28,6 +28,7 @@
 
 #include "Basics/Common.h"
 #include "Basics/Mutex.h"
+#include "Basics/StringBuffer.h"
 #include "Rest/GeneralRequest.h"
 #include "Rest/HttpResponse.h"
 #include "SimpleHttpClient/Callbacks.h"
@@ -36,6 +37,8 @@
 #include "SimpleHttpClient/Ticket.h"
 
 namespace arangodb {
+using namespace basics;
+
 namespace communicator {
 class Communicator {
  public:
@@ -45,8 +48,18 @@ class Communicator {
   Ticket addRequest(Destination, std::unique_ptr<GeneralRequest>, Callbacks,
                     Options);
 
-  void work_once();
+  int work_once();
   void wait();
+ 
+ public:
+  struct RequestInProgress {
+    CURL* _eh;
+    Destination _destination;
+    Callbacks _callbacks;
+    Options _options;
+    uint64_t _ticketId;
+    std::unique_ptr<StringBuffer> buffer;
+  };
 
  private:
   struct NewRequest {
@@ -57,12 +70,7 @@ class Communicator {
     uint64_t _ticketId;
   };
 
-  struct RequestInProgress {
-    CURL* _eh;
-    Destination _destination;
-    Callbacks _callbacks;
-    Options _options;
-    uint64_t _ticketId;
+  struct CurlData {
   };
 
  private:
@@ -76,12 +84,11 @@ class Communicator {
 
   int _fds[2];
   int _numFds;
-  int _stillRunning;
 
  private:
   void createRequestInProgress(NewRequest const& newRequest);
   void handleResult(CURL* eh, CURLcode rc);
-  void transformResult(CURL*, HttpResponse*);
+  void transformResult(CURL*, std::unique_ptr<StringBuffer>, HttpResponse*);
 };
 }
 }

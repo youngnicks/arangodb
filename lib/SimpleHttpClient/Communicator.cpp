@@ -36,7 +36,20 @@ namespace {
 std::atomic_uint_fast64_t NEXT_TICKET_ID(static_cast<uint64_t>(0));
 }
 
-Communicator::Communicator() : _curl(nullptr) {
+size_t writeFunction(void* data, size_t size, size_t nmemb, void* userp) {
+  size_t realsize = size * nmemb;
+
+  Communicator::RequestInProgress* rip = (struct Communicator::RequestInProgress*) userp;
+  try {
+    rip->buffer->appendText((char*) data, realsize);
+    return realsize;
+  } catch (std::bad_alloc& ba) {
+    return 0;
+  }
+}
+
+Communicator::Communicator()
+    : _curl(nullptr) {
   curl_global_init(CURL_GLOBAL_ALL);
   _curl = curl_multi_init();
 
@@ -64,12 +77,12 @@ Ticket Communicator::addRequest(Destination destination,
         NewRequest{destination, std::move(request), callbacks, options, id});
   }
 
-  write(_fds[1], "x", 1);
+  write(_fds[1], "", 0);
 
   return Ticket{id};
 }
 
-void Communicator::work_once() {
+int Communicator::work_once() {
   std::vector<NewRequest> newRequests;
 
   {
@@ -80,13 +93,14 @@ void Communicator::work_once() {
   for (auto const& newRequest : newRequests) {
     createRequestInProgress(newRequest);
   }
-
-  _mc = curl_multi_perform(_curl, &_stillRunning);
-  std::cout << "RUNNING: " << _stillRunning << std::endl;
+  
+  int stillRunning; 
+  _mc = curl_multi_perform(_curl, &stillRunning);
+  std::cout << "RUNNING: " << stillRunning << std::endl;
 
   if (_mc != CURLM_OK) {
     // TODO?
-    return;
+    return 0;
   }
 
   // handle all messages received
@@ -100,6 +114,7 @@ void Communicator::work_once() {
       handleResult(eh, msg->data.result);
     }
   }
+  return stillRunning;
 }
 
 void Communicator::wait() {
@@ -123,12 +138,21 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
 
   std::unique_ptr<RequestInProgress> request(
       new RequestInProgress{eh, newRequest._destination, newRequest._callbacks,
-                            newRequest._options, newRequest._ticketId});
-
+                            newRequest._options, newRequest._ticketId,
+                            std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE, false)});
+  
+  struct curl_slist *headers = nullptr;
+  for (auto const& header: newRequest._request->headers()) {
+    std::string thisHeader(header.first + ": " + header.second);
+    headers = curl_slist_append(headers, thisHeader.c_str());
+  }
+  curl_easy_setopt(eh, CURLOPT_HTTPHEADER, headers); 
   curl_easy_setopt(eh, CURLOPT_HEADER, 0L);
   curl_easy_setopt(eh, CURLOPT_URL, newRequest._destination.url().c_str());
   curl_easy_setopt(eh, CURLOPT_PRIVATE, request.get());
-  curl_easy_setopt(eh, CURLOPT_VERBOSE, 0L);
+  curl_easy_setopt(eh, CURLOPT_VERBOSE, 1L);
+  curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, writeFunction);
+  curl_easy_setopt(eh, CURLOPT_WRITEDATA, request.get());
 
   _requestsInProgress.emplace(newRequest._ticketId, std::move(request));
 
@@ -153,7 +177,7 @@ void Communicator::handleResult(CURL* eh, CURLcode rc) {
 
       std::unique_ptr<GeneralResponse> response(new HttpResponse(
           static_cast<GeneralResponse::ResponseCode>(httpStatusCode)));
-      transformResult(eh, dynamic_cast<HttpResponse*>(response.get()));
+      transformResult(eh, std::move(request->buffer), dynamic_cast<HttpResponse*>(response.get()));
 
       if (httpStatusCode < 400) {
         request->_callbacks._onSuccess(std::move(response));
@@ -176,4 +200,6 @@ void Communicator::handleResult(CURL* eh, CURLcode rc) {
   curl_easy_cleanup(eh);
 }
 
-void Communicator::transformResult(CURL* eh, HttpResponse* response) {}
+void Communicator::transformResult(CURL* eh, std::unique_ptr<StringBuffer> buffer, HttpResponse* response) {
+  response->body().swap(buffer.get());
+}

@@ -890,3 +890,20 @@ endif()
 add_custom_target(packages
   DEPENDS ${PACKAGES_LIST}
   )
+
+add_executable(request-test
+  request-test.cpp
+  lib/Basics/WorkMonitorDummy.cpp
+
+)
+target_link_libraries(request-test
+  ${LIB_ARANGO_FE}
+  ${LIB_ARANGO_V8}
+  ${LIB_ARANGO}
+  ${LIBEV_LIBS}
+  ${LINENOISE_LIBS}
+  ${MSVC_LIBS}
+  ${V8_LIBS}
+  ${ROCKSDB_LIBS}
+  ${SYSTEM_LIBRARIES}
+)
