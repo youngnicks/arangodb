@@ -169,7 +169,7 @@ void Communicator::handleResult(CURL* eh, CURLcode rc) {
     curl_easy_cleanup(eh);
     return;
   }
-
+  
   switch (rc) {
     case CURLE_OK: {
       long httpStatusCode = 200;
@@ -186,8 +186,12 @@ void Communicator::handleResult(CURL* eh, CURLcode rc) {
       }
       break;
     }
+    case CURLE_COULDNT_CONNECT:
+      request->_callbacks._onError(TRI_ERROR_CLUSTER_CONNECTION_LOST, {nullptr});
+      break;
 
     default:
+      LOG(ERR) << "Curl return " << rc;
       request->_callbacks._onError(TRI_ERROR_INTERNAL, {nullptr});
       break;
   }
