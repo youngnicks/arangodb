@@ -98,6 +98,36 @@ void simplePostTest() {
                std::move(request), callbacks, opt);
 }
 
+void simplePostBodyTest() {
+  HttpRequest* httpRequest = new HttpRequest();
+  httpRequest->setRequestType(GeneralRequest::RequestType::POST);
+
+  std::string body("return {hase: true}");
+  httpRequest->setBody(body.c_str(), body.length());
+
+  std::unique_ptr<GeneralRequest> request(httpRequest);
+
+  std::string funcName(__func__);
+  communicator::Callbacks callbacks {
+      ._onError = createUnexpectedError(__func__),
+      ._onSuccess = [funcName](std::unique_ptr<GeneralResponse> response) {
+        if (response->responseCode() != GeneralResponse::ResponseCode::OK) {
+          throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
+        }
+        
+        std::string body(response->body().c_str(), response->body().length());
+        if (body != "{\"hase\":true,\"error\":false,\"code\":200}") {
+          throw std::runtime_error("Got invalid response in " + funcName + ": Expecting hase in body but body was " + body);
+        }
+      }
+  };
+
+  communicator::Options opt;
+
+  c.addRequest(communicator::Destination{"http://localhost:8529/_admin/execute?returnAsJSON=true"},
+               std::move(request), callbacks, opt);
+}
+
 void sendHeadersTest() {
   HttpRequest* httpRequest = new HttpRequest();
   httpRequest->setHeader("Accept-Encoding", 15, "wurst/curry", 11);
@@ -128,7 +158,8 @@ int main() {
   connectionRefusedTest();
   simpleGetTest();
   simplePostTest();
-  //sendHeadersTest();
+  simplePostBodyTest();
+  sendHeadersTest();
   int stillRunning;
   try {
     do {
