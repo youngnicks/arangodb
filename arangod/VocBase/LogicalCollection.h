@@ -26,6 +26,7 @@
 
 #include "Basics/Common.h"
 #include "VocBase/DatafileStatisticsContainer.h"
+#include "VocBase/DocumentCache.h"
 #include "VocBase/MasterPointers.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/voc-types.h"
@@ -524,6 +525,8 @@ class LogicalCollection {
   uint64_t _numberDocuments;
 
   TRI_voc_tick_t _maxTick;
+
+  DocumentCache _documentCache;
 
   std::unique_ptr<arangodb::KeyGenerator> _keyGenerator;
   

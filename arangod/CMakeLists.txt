@@ -265,6 +265,7 @@ add_executable(${BIN_ARANGOD}
   RestServer/InitDatabaseFeature.cpp
   RestServer/LockfileFeature.cpp
   RestServer/QueryRegistryFeature.cpp
+  RestServer/RevisionCacheFeature.cpp
   RestServer/ScriptFeature.cpp
   RestServer/ServerFeature.cpp
   RestServer/ServerIdFeature.cpp
@@ -331,6 +332,8 @@ add_executable(${BIN_ARANGOD}
   VocBase/AuthInfo.cpp
   VocBase/DatafileStatisticsContainer.cpp
   VocBase/Ditch.cpp
+  VocBase/DocumentCache.cpp
+  VocBase/DocumentCacheAllocator.cpp
   VocBase/EdgeCollectionInfo.cpp
   VocBase/Graphs.cpp
   VocBase/IndexPoolFeature.cpp
@@ -338,6 +341,7 @@ add_executable(${BIN_ARANGOD}
   VocBase/LogicalCollection.cpp
   VocBase/MasterPointers.cpp
   VocBase/PathEnumerator.cpp
+  VocBase/RevisionCacheChunk.cpp
   VocBase/SingleServerTraverser.cpp
   VocBase/Traverser.cpp
   VocBase/TraverserOptions.cpp

@@ -234,6 +234,7 @@ DatabaseFeature::DatabaseFeature(ApplicationServer* server)
   startsAfter("LogfileManager");
   startsAfter("InitDatabase");
   startsAfter("IndexPool");
+  startsAfter("RevisionCache");
 }
 
 DatabaseFeature::~DatabaseFeature() {
