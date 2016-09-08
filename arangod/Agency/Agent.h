@@ -25,13 +25,14 @@
 #define ARANGOD_CONSENSUS_AGENT_H 1
 
 #include "Agency/AgencyCommon.h"
-#include "Agency/AgentConfiguration.h"
+#include "Agency/AgentActivator.h"
 #include "Agency/AgentCallback.h"
+#include "Agency/AgentConfiguration.h"
 #include "Agency/Constituent.h"
-#include "Agency/Supervision.h"
+#include "Agency/Inception.h"
 #include "Agency/State.h"
 #include "Agency/Store.h"
-#include "Agency/Inception.h"
+#include "Agency/Supervision.h"
 
 struct TRI_server_t;
 struct TRI_vocbase_t;
@@ -53,8 +54,8 @@ class Agent : public arangodb::Thread {
   std::string id() const;
 
   /// @brief Vote request
-  priv_rpc_ret_t requestVote(term_t, std::string const&, index_t,
-                             index_t, query_t const&);
+  priv_rpc_ret_t requestVote(term_t, std::string const&, index_t, index_t,
+                             query_t const&);
 
   /// @brief Provide configuration
   config_t const config() const;
@@ -94,13 +95,13 @@ class Agent : public arangodb::Thread {
 
   /// @brief Received by followers to replicate log entries ($5.3);
   ///        also used as heartbeat ($5.2).
-  bool recvAppendEntriesRPC(
-    term_t term, std::string const& leaderId, index_t prevIndex,
-    term_t prevTerm, index_t lastCommitIndex, query_t const& queries);
+  bool recvAppendEntriesRPC(term_t term, std::string const& leaderId,
+                            index_t prevIndex, term_t prevTerm,
+                            index_t lastCommitIndex, query_t const& queries);
 
   /// @brief Invoked by leader to replicate log entries ($5.3);
   ///        also used as heartbeat ($5.2).
-  priv_rpc_ret_t sendAppendEntriesRPC(std::string const& slave_id);
+  void sendAppendEntriesRPC();
 
   /// @brief 1. Deal with appendEntries to slaves.
   ///        2. Report success of write processes.
@@ -114,12 +115,15 @@ class Agent : public arangodb::Thread {
 
   /// @brief Persisted agents
   bool persistedAgents();
-  
+
+  /// @brief Activate new agent in pool to replace failed
+  void reportActivated(std::string const&, std::string const&, query_t);
+
+  /// @brief Activate new agent in pool to replace failed
+  void failedActivation(std::string const&, std::string const&);
+
   /// @brief Gossip in
   bool activeAgency();
-  
-  /// @brief Startup process of detection of agent pool, active agency, gossip etc
-//  void inception();
 
   /// @brief Start orderly shutdown of threads
   void beginShutdown() override final;
@@ -156,11 +160,23 @@ class Agent : public arangodb::Thread {
 
   /// @brief Get notification as inactve pool member
   void notify(query_t const&);
-  
-  /// State reads persisted state and prepares the agent
+
+  /// @brief Detect active agent failures
+  void detectActiveAgentFailures();
+
+  /// @brief All there is in the state machine
+  query_t allLogs() const;
+
+  /// @brief State reads persisted state and prepares the agent
   friend class State;
 
  private:
+
+  /// @brief Update my configuration as passive agent
+  void updateConfiguration();
+  
+  /// @brief Find out, if we've had acknowledged RPCs recent enough
+  bool challengeLeadership();
 
   /// @brief Notify inactive pool members of changes in configuration
   void notifyInactive() const;
@@ -220,10 +236,11 @@ class Agent : public arangodb::Thread {
   arangodb::basics::ConditionVariable _configCV;
 
   /// @brief Confirmed indices of all members of agency
-  //std::vector<index_t> _confirmed;
+  // std::vector<index_t> _confirmed;
   std::map<std::string, index_t> _confirmed;
   std::map<std::string, index_t> _lastHighest;
 
+  std::map<std::string, TimePoint> _lastAcked;
   std::map<std::string, TimePoint> _lastSent;
   arangodb::Mutex _ioLock; /**< @brief Read/Write lock */
 
@@ -236,10 +253,8 @@ class Agent : public arangodb::Thread {
   std::map<std::string, bool> _gossipTmp;
 
   std::unique_ptr<Inception> _inception;
-
-
+  std::unique_ptr<AgentActivator> _activator;
 };
-
 }
 }
 

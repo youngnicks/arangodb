@@ -47,9 +47,9 @@ class HttpResponse;
 namespace rest {
 class GeneralServer;
 
-size_t const HttpCommTask::MaximalHeaderSize = 1 * 1024 * 1024;      //   1 MB
-size_t const HttpCommTask::MaximalBodySize = 512 * 1024 * 1024;      // 512 MB
-size_t const HttpCommTask::MaximalPipelineSize = 512 * 1024 * 1024;  // 512 MB
+size_t const HttpCommTask::MaximalHeaderSize = 2 * 1024 * 1024;       //    2 MB
+size_t const HttpCommTask::MaximalBodySize = 1024 * 1024 * 1024;      // 1024 MB
+size_t const HttpCommTask::MaximalPipelineSize = 1024 * 1024 * 1024;  // 1024 MB
 size_t const HttpCommTask::RunCompactEvery = 500;
 
 HttpCommTask::HttpCommTask(GeneralServer* server, TRI_socket_t sock,
@@ -484,7 +484,7 @@ bool HttpCommTask::processRead() {
     LOG(DEBUG) << "connection close requested by client";
     _closeRequested = true;
   } else if (_requestAsHttp()->isHttp10() && connectionType != "keep-alive") {
-    // HTTP 1.0 request, and no "Connection: Keep-Alive" header sent
+    // HTTP 1.0 request, and no "Connection: keep-alive" header sent
     // we should close the connection
     LOG(DEBUG) << "no keep-alive, connection close requested by client";
     _closeRequested = true;

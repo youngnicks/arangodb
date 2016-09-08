@@ -516,16 +516,16 @@ void ClusterInfo::loadPlan() {
       _planProt.version++;  // such that others notice our change
       _planProt.isValid = true;  // will never be reset to false
     } else {
-      LOG(ERR) << "\"Plan\" is not an object in agency";
+      LOG_TOPIC(ERR, Logger::CLUSTER) << "\"Plan\" is not an object in agency";
     }
     return;
   }
 
-  LOG(DEBUG) << "Error while loading " << prefixPlan
-             << " httpCode: " << result.httpCode()
-             << " errorCode: " << result.errorCode()
-             << " errorMessage: " << result.errorMessage()
-             << " body: " << result.body();
+  LOG_TOPIC(DEBUG, Logger::CLUSTER) << "Error while loading " << prefixPlan
+                                    << " httpCode: " << result.httpCode()
+                                    << " errorCode: " << result.errorCode()
+                                    << " errorMessage: " << result.errorMessage()
+                                    << " body: " << result.body();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -609,9 +609,11 @@ void ClusterInfo::loadCurrent() {
               newShardIds.insert(make_pair(shardID, servers));
 
             }
-            databaseCollections.insert(std::make_pair(collectionName, collectionDataCurrent));
+            databaseCollections.insert(
+              std::make_pair(collectionName, collectionDataCurrent));
           }
-          newCollections.emplace(std::make_pair(databaseName, databaseCollections));
+          newCollections.emplace(
+            std::make_pair(databaseName, databaseCollections));
         }
         swapCollections = true;
       }
@@ -624,24 +626,25 @@ void ClusterInfo::loadCurrent() {
         _currentDatabases.swap(newDatabases);
       }
       if (swapCollections) {
-        LOG(TRACE) << "Have loaded new collections current cache!";
+        LOG_TOPIC(TRACE, Logger::CLUSTER)
+          << "Have loaded new collections current cache!";
         _currentCollections.swap(newCollections);
         _shardIds.swap(newShardIds);
       }
       _currentProt.version++;  // such that others notice our change
       _currentProt.isValid = true;  // will never be reset to false
     } else {
-      LOG(ERR) << "Current is not an object!";
+      LOG_TOPIC(ERR, Logger::CLUSTER) << "Current is not an object!";
     }
     
     return;
   }
   
-  LOG(ERR) << "Error while loading " << prefixCurrent
-           << " httpCode: " << result.httpCode()
-           << " errorCode: " << result.errorCode()
-           << " errorMessage: " << result.errorMessage()
-           << " body: " << result.body();
+  LOG_TOPIC(ERR, Logger::CLUSTER) << "Error while loading " << prefixCurrent
+                                  << " httpCode: " << result.httpCode()
+                                  << " errorCode: " << result.errorCode()
+                                  << " errorMessage: " << result.errorMessage()
+                                  << " body: " << result.body();
 }
 
 /// @brief ask about a collection
@@ -1103,7 +1106,7 @@ int ClusterInfo::createCollectionCoordinator(std::string const& databaseName,
   transaction.operations.push_back(createCollection);
   transaction.operations.push_back(increaseVersion);
   transaction.preconditions.push_back(precondition);
-  
+
   AgencyCommResult res = ac.sendTransactionWithFailover(transaction);
 
   if (!res.successful()) {
@@ -1917,11 +1920,11 @@ void ClusterInfo::loadServers() {
     }
   }
   
-  LOG(DEBUG) << "Error while loading " << prefixServers
-             << " httpCode: " << result.httpCode()
-             << " errorCode: " << result.errorCode()
-             << " errorMessage: " << result.errorMessage()
-             << " body: " << result.body();
+  LOG_TOPIC(DEBUG, Logger::CLUSTER) << "Error while loading " << prefixServers
+                                    << " httpCode: " << result.httpCode()
+                                    << " errorCode: " << result.errorCode()
+                                    << " errorMessage: " << result.errorMessage()
+                                    << " body: " << result.body();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2038,11 +2041,12 @@ void ClusterInfo::loadCurrentCoordinators() {
     }
   }
   
-  LOG(DEBUG) << "Error while loading " << prefixCurrentCoordinators
-             << " httpCode: " << result.httpCode()
-             << " errorCode: " << result.errorCode()
-             << " errorMessage: " << result.errorMessage()
-             << " body: " << result.body();
+  LOG_TOPIC(DEBUG, Logger::CLUSTER)
+    << "Error while loading " << prefixCurrentCoordinators
+    << " httpCode: " << result.httpCode()
+    << " errorCode: " << result.errorCode()
+    << " errorMessage: " << result.errorMessage()
+    << " body: " << result.body();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2051,6 +2055,8 @@ void ClusterInfo::loadCurrentCoordinators() {
 ////////////////////////////////////////////////////////////////////////////////
 
 static std::string const prefixCurrentDBServers = "Current/DBServers";
+static std::string const prefixTargetCleaned = "Target/CleanedOutServers";
+static std::string const prefixTargetFailed = "Target/FailedServers";
 
 void ClusterInfo::loadCurrentDBServers() {
   uint64_t storedVersion = _DBServersProt.version;
@@ -2062,17 +2068,50 @@ void ClusterInfo::loadCurrentDBServers() {
 
   // Now contact the agency:
   AgencyCommResult result = _agency.getValues(prefixCurrentDBServers);
+  AgencyCommResult failed = _agency.getValues(prefixTargetFailed);
+  AgencyCommResult cleaned = _agency.getValues(prefixTargetCleaned);
 
   if (result.successful()) {
 
     velocypack::Slice currentDBServers =
       result.slice()[0].get(std::vector<std::string>(
             {AgencyComm::prefix(), "Current", "DBServers"}));
+    velocypack::Slice failedDBServers =
+      failed.slice()[0].get(std::vector<std::string>(
+            {AgencyComm::prefix(), "Target", "FailedServers"}));
+    velocypack::Slice cleanedDBServers =
+      cleaned.slice()[0].get(std::vector<std::string>(
+            {AgencyComm::prefix(), "Target", "CleanedOutServers"}));
 
     if (currentDBServers.isObject()) {
       decltype(_DBServers) newDBServers;
 
       for (auto const& dbserver : VPackObjectIterator(currentDBServers)) {
+        if (failedDBServers.isArray()) {
+          bool found = false;
+          for (auto const& failedServer : VPackArrayIterator(failedDBServers)) {
+            if (dbserver.key == failedServer) {
+              found = true;
+              continue;
+            }
+          }
+          if (found) {
+            continue;
+          }
+        }
+        if (cleanedDBServers.isArray()) {
+          bool found = false;
+          for (auto const& cleanedServer : VPackArrayIterator(cleanedDBServers)) {
+            if (dbserver.key == cleanedServer) {
+              found = true;
+              continue;
+            }
+          }
+          if (found) {
+            continue;
+          }
+        }
+
         newDBServers.emplace(
           std::make_pair(dbserver.key.copyString(), dbserver.value.copyString()));
       }
@@ -2088,11 +2127,12 @@ void ClusterInfo::loadCurrentDBServers() {
     }
   }
 
-  LOG(DEBUG) << "Error while loading " << prefixCurrentDBServers
-             << " httpCode: " << result.httpCode()
-             << " errorCode: " << result.errorCode()
-             << " errorMessage: " << result.errorMessage()
-             << " body: " << result.body();
+  LOG_TOPIC(DEBUG, Logger::CLUSTER)
+    << "Error while loading " << prefixCurrentDBServers
+    << " httpCode: " << result.httpCode()
+    << " errorCode: " << result.errorCode()
+    << " errorMessage: " << result.errorMessage()
+    << " body: " << result.body();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2165,7 +2205,9 @@ std::shared_ptr<std::vector<ServerID>> ClusterInfo::getResponsibleServer(
           // This is a temporary situation in which the leader has already
           // resigned, let's wait half a second and try again.
           --tries;
-          LOG(INFO) << "getResponsibleServer: found resigned leader, waiting for half a second...";
+          LOG_TOPIC(INFO, Logger::CLUSTER)
+            << "getResponsibleServer: found resigned leader,"
+            << "waiting for half a second...";
           usleep(500000);
         } else {
           return (*it).second;
@@ -2493,9 +2535,10 @@ void FollowerInfo::add(ServerID const& sid) {
               _docColl->_info.name()}));
       
       if (!currentEntry.isObject()) {
-        LOG(ERR) << "FollowerInfo::add, did not find object in " << path;
+        LOG_TOPIC(ERR, Logger::CLUSTER)
+          << "FollowerInfo::add, did not find object in " << path;
         if (!currentEntry.isNone()) {
-          LOG(ERR) << "Found: " << currentEntry.toJson();
+          LOG_TOPIC(ERR, Logger::CLUSTER) << "Found: " << currentEntry.toJson();
         }
       } else {
         auto newValue = newShardEntry(currentEntry, sid, true);
@@ -2517,17 +2560,19 @@ void FollowerInfo::add(ServerID const& sid) {
           success = true;
           break;  //
         } else {
-          LOG(WARN) << "FollowerInfo::add, could not cas key " << path;
+          LOG_TOPIC(WARN, Logger::CLUSTER)
+            << "FollowerInfo::add, could not cas key " << path;
         }
       }
     } else {
-      LOG(ERR) << "FollowerInfo::add, could not read " << path << " in agency.";
+      LOG_TOPIC(ERR, Logger::CLUSTER)
+        << "FollowerInfo::add, could not read " << path << " in agency.";
     }
     usleep(500000);
   } while (TRI_microtime() < startTime + 30);
   if (!success) {
-    LOG(ERR) << "FollowerInfo::add, timeout in agency operation for key "
-             << path;
+    LOG_TOPIC(ERR, Logger::CLUSTER)
+      << "FollowerInfo::add, timeout in agency operation for key " << path;
   }
 }
 
@@ -2574,9 +2619,10 @@ void FollowerInfo::remove(ServerID const& sid) {
               _docColl->_info.name()}));
 
       if (!currentEntry.isObject()) {
-        LOG(ERR) << "FollowerInfo::remove, did not find object in " << path;
+        LOG_TOPIC(ERR, Logger::CLUSTER)
+          << "FollowerInfo::remove, did not find object in " << path;
         if (!currentEntry.isNone()) {
-          LOG(ERR) << "Found: " << currentEntry.toJson();
+          LOG_TOPIC(ERR, Logger::CLUSTER) << "Found: " << currentEntry.toJson();
         }
       } else {
         auto newValue = newShardEntry(currentEntry, sid, false);
@@ -2598,18 +2644,19 @@ void FollowerInfo::remove(ServerID const& sid) {
           success = true;
           break;  //
         } else {
-          LOG(WARN) << "FollowerInfo::remove, could not cas key " << path;
+          LOG_TOPIC(WARN, Logger::CLUSTER)
+            << "FollowerInfo::remove, could not cas key " << path;
         }
       }
     } else {
-      LOG(ERR) << "FollowerInfo::remove, could not read " << path
-               << " in agency.";
+      LOG_TOPIC(ERR, Logger::CLUSTER)
+        << "FollowerInfo::remove, could not read " << path << " in agency.";
     }
     usleep(500000);
   } while (TRI_microtime() < startTime + 30);
   if (!success) {
-    LOG(ERR) << "FollowerInfo::remove, timeout in agency operation for key "
-             << path;
+    LOG_TOPIC(ERR, Logger::CLUSTER)
+      << "FollowerInfo::remove, timeout in agency operation for key " << path;
   }
 }
 

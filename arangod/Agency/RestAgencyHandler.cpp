@@ -73,15 +73,17 @@ inline RestHandler::status RestAgencyHandler::reportUnknownMethod() {
 
 void RestAgencyHandler::redirectRequest(std::string const& leaderId) {
   try {
-    std::string url =
-      Endpoint::uriForm(_agent->config().poolAt(leaderId)) +
-        _request->requestPath();
+    std::string url = Endpoint::uriForm(_agent->config().poolAt(leaderId)) +
+                      _request->requestPath();
     setResponseCode(GeneralResponse::ResponseCode::TEMPORARY_REDIRECT);
     _response->setHeaderNC(StaticStrings::Location, url);
   } catch (std::exception const& e) {
     LOG_TOPIC(WARN, Logger::AGENCY) << e.what() << " " << __FILE__ << __LINE__;
-    generateError(GeneralResponse::ResponseCode::SERVER_ERROR,
-                  TRI_ERROR_INTERNAL, e.what());
+    Builder body;
+    body.openObject();
+    body.add("message", VPackValue(e.what()));
+    body.close();
+    generateResult(GeneralResponse::ResponseCode::SERVER_ERROR, body.slice());
   }
 }
 
@@ -139,11 +141,10 @@ RestHandler::status RestAgencyHandler::handleWrite() {
       return status::DONE;
     }
 
-    auto s = std::chrono::system_clock::now(); // Leadership established?
-    std::chrono::seconds timeout(1);
-    while(_agent->size() > 1 && _agent->leaderID() == "") {
-      std::this_thread::sleep_for(duration_t(100));
-      if ((std::chrono::system_clock::now()-s) > timeout) {
+    auto s = std::chrono::system_clock::now();  // Leadership established?
+    std::chrono::duration<double> timeout(_agent->config().minPing());
+    while (_agent->size() > 1 && _agent->leaderID() == NO_LEADER) {
+      if ((std::chrono::system_clock::now() - s) > timeout) {
         Builder body;
         body.openObject();
         body.add("message", VPackValue("No leader"));
@@ -153,12 +154,25 @@ RestHandler::status RestAgencyHandler::handleWrite() {
         LOG_TOPIC(ERR, Logger::AGENCY) << "We don't know who the leader is";
         return status::DONE;
       }
+      std::this_thread::sleep_for(duration_t(100));
     }
 
-    write_ret_t ret = _agent->write(query);
+    write_ret_t ret;
+
+    try {
+      ret = _agent->write(query);
+    } catch (std::exception const& e) {
+      LOG_TOPIC(DEBUG, Logger::AGENCY) << "Malformed write query " << query;
+      Builder body;
+      body.openObject();
+      body.add("message",
+               VPackValue(std::string("Malformed write query") + e.what()));
+      body.close();
+      generateResult(GeneralResponse::ResponseCode::BAD, body.slice());
+      return status::DONE;
+    }
 
     if (ret.accepted) {  // We're leading and handling the request
-
       bool found;
       std::string call_mode = _request->header("x-arangodb-agency-mode", found);
       if (!found) {
@@ -185,10 +199,10 @@ RestHandler::status RestAgencyHandler::handleWrite() {
           arangodb::consensus::index_t max_index = 0;
           try {
             max_index =
-              *std::max_element(ret.indices.begin(), ret.indices.end());
+                *std::max_element(ret.indices.begin(), ret.indices.end());
           } catch (std::exception const& e) {
-            LOG_TOPIC(WARN, Logger::AGENCY)
-              << e.what() << " " << __FILE__ << __LINE__;
+            LOG_TOPIC(WARN, Logger::AGENCY) << e.what() << " " << __FILE__
+                                            << __LINE__;
           }
 
           if (max_index > 0) {
@@ -206,7 +220,19 @@ RestHandler::status RestAgencyHandler::handleWrite() {
         generateResult(GeneralResponse::ResponseCode::OK, body.slice());
       }
     } else {  // Redirect to leader
-      redirectRequest(ret.redirect);
+      if (_agent->leaderID() == NO_LEADER) {
+        Builder body;
+        body.openObject();
+        body.add("message", VPackValue("No leader"));
+        body.close();
+        generateResult(GeneralResponse::ResponseCode::SERVICE_UNAVAILABLE,
+                       body.slice());
+        LOG_TOPIC(ERR, Logger::AGENCY) << "We don't know who the leader is";
+        return status::DONE;
+      } else {
+        
+        redirectRequest(ret.redirect);
+      }
     }
   } else {  // Unknown method
     generateError(GeneralResponse::ResponseCode::METHOD_NOT_ALLOWED, 405);
@@ -221,16 +247,16 @@ inline RestHandler::status RestAgencyHandler::handleRead() {
     try {
       query = _request->toVelocyPackBuilderPtr(&options);
     } catch (std::exception const& e) {
-      LOG_TOPIC(WARN, Logger::AGENCY) << e.what() << " " << __FILE__ << __LINE__;
+      LOG_TOPIC(WARN, Logger::AGENCY) << e.what() << " " << __FILE__
+                                      << __LINE__;
       generateError(GeneralResponse::ResponseCode::BAD, 400);
       return status::DONE;
     }
 
-    auto s = std::chrono::system_clock::now(); // Leadership established?
-    std::chrono::seconds timeout(1);
-    while(_agent->size() > 1 && _agent->leaderID() == "") {
-      std::this_thread::sleep_for(duration_t(100));
-      if ((std::chrono::system_clock::now()-s) > timeout) {
+    auto s = std::chrono::system_clock::now();  // Leadership established?
+    std::chrono::duration<double> timeout(_agent->config().minPing());
+    while (_agent->size() > 1 && _agent->leaderID() == NO_LEADER) {
+      if ((std::chrono::system_clock::now() - s) > timeout) {
         Builder body;
         body.openObject();
         body.add("message", VPackValue("No leader"));
@@ -240,6 +266,7 @@ inline RestHandler::status RestAgencyHandler::handleRead() {
         LOG_TOPIC(ERR, Logger::AGENCY) << "We don't know who the leader is";
         return status::DONE;
       }
+      std::this_thread::sleep_for(duration_t(100));
     }
 
     read_ret_t ret = _agent->read(query);
@@ -252,7 +279,19 @@ inline RestHandler::status RestAgencyHandler::handleRead() {
         generateResult(GeneralResponse::ResponseCode::OK, ret.result->slice());
       }
     } else {  // Redirect to leader
-      redirectRequest(ret.redirect);
+      if (_agent->leaderID() == NO_LEADER) {
+        Builder body;
+        body.openObject();
+        body.add("message", VPackValue("No leader"));
+        body.close();
+        generateResult(GeneralResponse::ResponseCode::SERVICE_UNAVAILABLE,
+                       body.slice());
+        LOG_TOPIC(ERR, Logger::AGENCY) << "We don't know who the leader is";
+        return status::DONE;
+
+      } else {
+        redirectRequest(ret.redirect);
+      }
       return status::DONE;
     }
   } else {

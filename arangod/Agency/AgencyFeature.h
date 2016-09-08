@@ -20,8 +20,8 @@
 /// @author Kaveh Vahedipour
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_AGENCY_APPLICATION_AGENCY_H
-#define ARANGOD_AGENCY_APPLICATION_AGENCY_H 1
+#ifndef ARANGOD_AGENCY_AGENCY_FEATURE_H
+#define ARANGOD_AGENCY_AGENCY_FEATURE_H 1
 
 #include "ApplicationFeatures/ApplicationFeature.h"
 
@@ -40,6 +40,7 @@ class AgencyFeature : virtual public application_features::ApplicationFeature {
   void validateOptions(std::shared_ptr<options::ProgramOptions>) override final;
   void prepare() override final;
   void start() override final;
+  void beginShutdown() override final;
   void unprepare() override final;
 
  private:
@@ -47,8 +48,8 @@ class AgencyFeature : virtual public application_features::ApplicationFeature {
   uint64_t _size;  // agency size (default: 5)
   uint64_t _poolSize;
   std::string _agentId;
-  double _minElectionTimeout;                 // min election timeout
-  double _maxElectionTimeout;                 // max election timeout
+  double _minElectionTimeout;  // min election timeout
+  double _maxElectionTimeout;  // max election timeout
   bool _supervision;
   bool _waitForSync;
   double _supervisionFrequency;
