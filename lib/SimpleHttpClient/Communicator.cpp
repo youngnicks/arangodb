@@ -96,8 +96,6 @@ int Communicator::work_once() {
   
   int stillRunning; 
   _mc = curl_multi_perform(_curl, &stillRunning);
-  std::cout << "RUNNING: " << stillRunning << std::endl;
-
   if (_mc != CURLM_OK) {
     // TODO?
     return 0;
@@ -153,6 +151,36 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   curl_easy_setopt(eh, CURLOPT_VERBOSE, 1L);
   curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, writeFunction);
   curl_easy_setopt(eh, CURLOPT_WRITEDATA, request.get());
+
+  switch(newRequest._request->requestType()) {
+    // mop: hmmm...why is this stuff in GeneralRequest? we are interested in HTTP only :S
+    case GeneralRequest::RequestType::POST:
+      curl_easy_setopt(eh, CURLOPT_POST, 1);
+      break;
+    case GeneralRequest::RequestType::PUT:
+      curl_easy_setopt(eh, CURLOPT_PUT, 1);
+      break;
+    case GeneralRequest::RequestType::DELETE_REQ:
+      curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, "DELETE");
+      break;
+    case GeneralRequest::RequestType::HEAD:
+      curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, "HEAD");
+      break;
+    case GeneralRequest::RequestType::PATCH:
+      curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, "PATCH");
+      break;
+    case GeneralRequest::RequestType::OPTIONS:
+      curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, "OPTIONS");
+      break;
+    case GeneralRequest::RequestType::GET:
+      break;
+    case GeneralRequest::RequestType::VSTREAM_CRED:
+    case GeneralRequest::RequestType::VSTREAM_REGISTER:
+    case GeneralRequest::RequestType::VSTREAM_STATUS:
+    case GeneralRequest::RequestType::ILLEGAL:
+      throw std::runtime_error("Invalid request type " +  GeneralRequest::translateMethod(newRequest._request->requestType()));
+      break;
+  }
 
   _requestsInProgress.emplace(newRequest._ticketId, std::move(request));
 
