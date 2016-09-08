@@ -105,7 +105,7 @@ class PhysicalCollection {
 
   /// @brief iterate all markers of a collection on load
   virtual int iterateMarkersOnLoad(arangodb::Transaction* trx) = 0;
-  
+
  protected:
   LogicalCollection* _logicalCollection;
 };

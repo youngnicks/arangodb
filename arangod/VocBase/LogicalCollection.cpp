@@ -2905,7 +2905,7 @@ int LogicalCollection::insertDocument(
 
 /// @brief creates a new entry in the primary index
 int LogicalCollection::insertPrimaryIndex(arangodb::Transaction* trx,
-                                         TRI_doc_mptr_t* header) {
+                                          TRI_doc_mptr_t* header) {
   TRI_IF_FAILURE("InsertPrimaryIndex") { return TRI_ERROR_DEBUG; }
 
   TRI_doc_mptr_t* found;
