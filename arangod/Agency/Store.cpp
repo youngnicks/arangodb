@@ -284,7 +284,7 @@ std::vector<bool> Store::apply(std::vector<VPackSlice> const& queries,
           std::make_unique<std::unordered_map<std::string, std::string>>();
 
       arangodb::ClusterComm::instance()->asyncRequest(
-          "1", 1, endpoint, GeneralRequest::RequestType::POST, path,
+          "1", 1, endpoint, rest::RequestType::POST, path,
           std::make_shared<std::string>(body.toString()), headerFields,
           std::make_shared<StoreCallback>(), 1.0, true);
 
@@ -521,7 +521,7 @@ void Store::run() {
     }
 
     toClear = clearExpired();
-    if (_agent && !_agent->isStopping()) {
+    if (_agent) {
       _agent->write(toClear);
     }
   }
