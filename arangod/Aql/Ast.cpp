@@ -2985,14 +2985,9 @@ void Ast::traverseReadOnly(AstNode const* node,
 std::pair<std::string, bool> Ast::normalizeFunctionName(char const* name) {
   TRI_ASSERT(name != nullptr);
 
-  char* upperName = TRI_UpperAsciiString(TRI_UNKNOWN_MEM_ZONE, name);
-
-  if (upperName == nullptr) {
-    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-  }
-
-  std::string functionName(upperName);
-  TRI_FreeString(TRI_UNKNOWN_MEM_ZONE, upperName);
+  std::string functionName(name);
+  // convert name to upper case
+  std::transform(functionName.begin(), functionName.end(), functionName.begin(), ::toupper);
 
   if (functionName.find(':') == std::string::npos) {
     // prepend default namespace for internal functions
