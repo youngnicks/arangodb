@@ -21,8 +21,8 @@
 /// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_VOCBASE_DOCUMENT_CACHE_H
-#define ARANGOD_VOCBASE_DOCUMENT_CACHE_H 1
+#ifndef ARANGOD_VOCBASE_REVISION_CACHE_H
+#define ARANGOD_VOCBASE_REVISION_CACHE_H 1
 
 #include "Basics/Common.h"
 #include "VocBase/RevisionCacheChunk.h"
@@ -60,10 +60,10 @@ class DocumentPosition {
   PositionType _type;
 };
 
-class DocumentCache {
+class CollectionRevisionCache {
  public:
-  DocumentCache();
-  ~DocumentCache();
+  CollectionRevisionCache();
+  ~CollectionRevisionCache();
   
  public:
   bool insertFromWal(TRI_voc_rid_t revisionId, TRI_voc_fid_t datafileId, uint32_t offset);

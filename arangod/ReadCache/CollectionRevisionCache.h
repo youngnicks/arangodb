@@ -24,6 +24,7 @@
 #ifndef ARANGOD_READ_CACHE_COLLECTION_REVISION_CACHE_H
 #define ARANGOD_READ_CACHE_COLLECTION_REVISION_CACHE_H 1
 
+/*
 #include "Basics/Common.h"
 #include "Basics/ReadWriteLock.h"
 #include "ReadCache/RevisionReader.h"
@@ -89,5 +90,5 @@ class CollectionRevisionCache {
 };
 
 }
-
+*/
 #endif

@@ -21,13 +21,13 @@
 /// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "DocumentCacheAllocator.h"
+#include "RevisionCacheAllocator.h"
 #include "Basics/WriteLocker.h"
 #include "Basics/ReadLocker.h"
 
 using namespace arangodb;
 
-DocumentCacheAllocator::DocumentCacheAllocator(size_t defaultChunkSize, size_t totalTargetSize)
+RevisionCacheAllocator::RevisionCacheAllocator(size_t defaultChunkSize, size_t totalTargetSize)
     : _defaultChunkSize(defaultChunkSize), 
       _totalTargetSize(totalTargetSize), 
       _totalAllocated(0) { 
@@ -37,7 +37,7 @@ DocumentCacheAllocator::DocumentCacheAllocator(size_t defaultChunkSize, size_t t
   _freeList.reserve(4);
 }
 
-DocumentCacheAllocator::~DocumentCacheAllocator() {
+RevisionCacheAllocator::~RevisionCacheAllocator() {
   // free all chunks
   WRITE_LOCKER(locker, _chunksLock);
   for (auto& chunk : _freeList) {
@@ -46,12 +46,12 @@ DocumentCacheAllocator::~DocumentCacheAllocator() {
 }
   
 // total number of bytes allocated by the cache
-size_t DocumentCacheAllocator::totalAllocated() {
+size_t RevisionCacheAllocator::totalAllocated() {
   READ_LOCKER(locker, _chunksLock);
   return _totalAllocated;
 }
 
-RevisionCacheChunk* DocumentCacheAllocator::orderChunk(size_t targetSize) {
+RevisionCacheChunk* RevisionCacheAllocator::orderChunk(size_t targetSize) {
   {
     // first check if there's a chunk ready on the freelist
     READ_LOCKER(locker, _chunksLock);
@@ -81,7 +81,7 @@ RevisionCacheChunk* DocumentCacheAllocator::orderChunk(size_t targetSize) {
   return c.release();
 }
 
-void DocumentCacheAllocator::returnChunk(RevisionCacheChunk* chunk) {
+void RevisionCacheAllocator::returnChunk(RevisionCacheChunk* chunk) {
   size_t const size = chunk->size();
   bool freeChunk = true;
 
@@ -110,6 +110,6 @@ void DocumentCacheAllocator::returnChunk(RevisionCacheChunk* chunk) {
 }
 
 /// @brief calculate the effective size for a new chunk
-size_t DocumentCacheAllocator::newChunkSize(size_t dataLength) const noexcept {
+size_t RevisionCacheAllocator::newChunkSize(size_t dataLength) const noexcept {
   return (std::max)(_defaultChunkSize, RevisionCacheChunk::size(dataLength));
 }

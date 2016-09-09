@@ -330,10 +330,9 @@ add_executable(${BIN_ARANGOD}
   V8Server/v8-voccursor.cpp
   V8Server/v8-vocindex.cpp
   VocBase/AuthInfo.cpp
+  VocBase/CollectionRevisionCache.cpp
   VocBase/DatafileStatisticsContainer.cpp
   VocBase/Ditch.cpp
-  VocBase/DocumentCache.cpp
-  VocBase/DocumentCacheAllocator.cpp
   VocBase/EdgeCollectionInfo.cpp
   VocBase/Graphs.cpp
   VocBase/IndexPoolFeature.cpp
@@ -341,6 +340,7 @@ add_executable(${BIN_ARANGOD}
   VocBase/LogicalCollection.cpp
   VocBase/MasterPointers.cpp
   VocBase/PathEnumerator.cpp
+  VocBase/RevisionCacheAllocator.cpp
   VocBase/RevisionCacheChunk.cpp
   VocBase/SingleServerTraverser.cpp
   VocBase/Traverser.cpp

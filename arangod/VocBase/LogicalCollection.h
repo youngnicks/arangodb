@@ -25,8 +25,7 @@
 #define ARANGOD_VOCBASE_LOGICAL_COLLECTION_H 1
 
 #include "Basics/Common.h"
-#include "VocBase/DatafileStatisticsContainer.h"
-#include "VocBase/DocumentCache.h"
+#include "VocBase/CollectionRevisionCache.h"
 #include "VocBase/MasterPointers.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/voc-types.h"
@@ -52,6 +51,7 @@ typedef std::string CollectionID;  // ID of a collection
 typedef std::string ShardID;       // ID of a shard
 typedef std::unordered_map<ShardID, std::vector<ServerID>> ShardMap;
 
+class DatafileStatisticsContainer;
 class Ditches;
 class FollowerInfo;
 class Index;
@@ -526,7 +526,7 @@ class LogicalCollection {
 
   TRI_voc_tick_t _maxTick;
 
-  DocumentCache _documentCache;
+  CollectionRevisionCache _revisionCache;
 
   std::unique_ptr<arangodb::KeyGenerator> _keyGenerator;
   

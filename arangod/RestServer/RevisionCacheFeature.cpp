@@ -25,14 +25,14 @@
 #include "ApplicationFeatures/ApplicationServer.h"
 #include "ProgramOptions/ProgramOptions.h"
 #include "ProgramOptions/Section.h"
-#include "VocBase/DocumentCacheAllocator.h"
+#include "VocBase/RevisionCacheAllocator.h"
 
 using namespace arangodb;
 using namespace arangodb::application_features;
 using namespace arangodb::basics;
 using namespace arangodb::options;
 
-DocumentCacheAllocator* RevisionCacheFeature::CACHE = nullptr;
+RevisionCacheAllocator* RevisionCacheFeature::CACHE = nullptr;
 
 RevisionCacheFeature::RevisionCacheFeature(ApplicationServer* server)
     : ApplicationFeature(server, "RevisionCache"),
@@ -73,7 +73,7 @@ void RevisionCacheFeature::validateOptions(std::shared_ptr<ProgramOptions> optio
 }
 
 void RevisionCacheFeature::prepare() {
-  _cache.reset(new DocumentCacheAllocator(_chunkSize, _targetSize));
+  _cache.reset(new RevisionCacheAllocator(_chunkSize, _targetSize));
   CACHE = _cache.get();
 }
 

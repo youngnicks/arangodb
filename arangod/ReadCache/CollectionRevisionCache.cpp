@@ -21,6 +21,7 @@
 /// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
+/*
 #include "CollectionRevisionCache.h"
 #include "Basics/Exceptions.h"
 #include "Basics/ReadLocker.h"
@@ -36,12 +37,10 @@ using namespace arangodb;
 CollectionRevisionCache::CollectionRevisionCache(TRI_voc_cid_t collectionId,
                                                  GlobalRevisionCache* globalCache,
                                                  arangodb::wal::LogfileManager* logfileManager) {}
-                                                 /*
     : _collectionId(collectionId),
       _globalCache(globalCache),
       _logfileManager(logfileManager) {
 }
-*/
 
 CollectionRevisionCache::~CollectionRevisionCache() {
   // TODO: decrease ref counts in global cache
@@ -147,4 +146,5 @@ RevisionReader CollectionRevisionCache::lookup(uint64_t revisionId) {
   // TODO
   return RevisionReader();
 }
-  
+
+*/  

@@ -21,21 +21,21 @@
 /// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "DocumentCache.h"
+#include "CollectionRevisionCache.h"
 
 using namespace arangodb;
 
-DocumentCache::DocumentCache() {}
-DocumentCache::~DocumentCache() {}
+CollectionRevisionCache::CollectionRevisionCache() {}
+CollectionRevisionCache::~CollectionRevisionCache() {}
   
-bool DocumentCache::insertFromWal(TRI_voc_rid_t revisionId, TRI_voc_fid_t datafileId, uint32_t offset) {
+bool CollectionRevisionCache::insertFromWal(TRI_voc_rid_t revisionId, TRI_voc_fid_t datafileId, uint32_t offset) {
   return _positions.emplace(revisionId, DocumentPosition(datafileId, offset)).second;
 }
    
-bool DocumentCache::insertFromChunk(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset) {
+bool CollectionRevisionCache::insertFromChunk(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset) {
   return _positions.emplace(revisionId, DocumentPosition(chunk, offset)).second;
 }
 
-bool DocumentCache::remove(TRI_voc_rid_t revisionId) {
+bool CollectionRevisionCache::remove(TRI_voc_rid_t revisionId) {
   return (_positions.erase(revisionId) != 0);
 }

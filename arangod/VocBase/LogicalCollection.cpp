@@ -50,7 +50,7 @@
 #include "Utils/CollectionWriteLocker.h"
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/StandaloneTransactionContext.h"
-#include "VocBase/DocumentCache.h"
+#include "VocBase/DatafileStatisticsContainer.h"
 #include "VocBase/IndexPoolFeature.h"
 #include "VocBase/KeyGenerator.h"
 #include "VocBase/PhysicalCollection.h"
