@@ -26,7 +26,7 @@
 #include "ApplicationFeatures/ApplicationFeature.h"
 
 namespace arangodb {
-class RevisionCacheAllocator;
+class RevisionCacheChunkAllocator;
 
 class RevisionCacheFeature final
     : public application_features::ApplicationFeature {
@@ -41,10 +41,10 @@ class RevisionCacheFeature final
   void unprepare() override final;
 
  public:
-  static RevisionCacheAllocator* CACHE;
+  static RevisionCacheChunkAllocator* CACHE;
 
  private:
-  std::unique_ptr<RevisionCacheAllocator> _cache;
+  std::unique_ptr<RevisionCacheChunkAllocator> _cache;
   uint64_t _chunkSize;
   uint64_t _targetSize;
 };

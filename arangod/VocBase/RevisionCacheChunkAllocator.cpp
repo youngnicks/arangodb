@@ -21,13 +21,13 @@
 /// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "RevisionCacheAllocator.h"
+#include "RevisionCacheChunkAllocator.h"
 #include "Basics/WriteLocker.h"
 #include "Basics/ReadLocker.h"
 
 using namespace arangodb;
 
-RevisionCacheAllocator::RevisionCacheAllocator(size_t defaultChunkSize, size_t totalTargetSize)
+RevisionCacheChunkAllocator::RevisionCacheChunkAllocator(size_t defaultChunkSize, size_t totalTargetSize)
     : _defaultChunkSize(defaultChunkSize), 
       _totalTargetSize(totalTargetSize), 
       _totalAllocated(0) { 
@@ -37,7 +37,7 @@ RevisionCacheAllocator::RevisionCacheAllocator(size_t defaultChunkSize, size_t t
   _freeList.reserve(4);
 }
 
-RevisionCacheAllocator::~RevisionCacheAllocator() {
+RevisionCacheChunkAllocator::~RevisionCacheChunkAllocator() {
   // free all chunks
   WRITE_LOCKER(locker, _chunksLock);
   for (auto& chunk : _freeList) {
@@ -46,12 +46,12 @@ RevisionCacheAllocator::~RevisionCacheAllocator() {
 }
   
 // total number of bytes allocated by the cache
-size_t RevisionCacheAllocator::totalAllocated() {
+size_t RevisionCacheChunkAllocator::totalAllocated() {
   READ_LOCKER(locker, _chunksLock);
   return _totalAllocated;
 }
 
-RevisionCacheChunk* RevisionCacheAllocator::orderChunk(size_t targetSize) {
+RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(size_t targetSize) {
   {
     // first check if there's a chunk ready on the freelist
     READ_LOCKER(locker, _chunksLock);
@@ -81,7 +81,7 @@ RevisionCacheChunk* RevisionCacheAllocator::orderChunk(size_t targetSize) {
   return c.release();
 }
 
-void RevisionCacheAllocator::returnChunk(RevisionCacheChunk* chunk) {
+void RevisionCacheChunkAllocator::returnChunk(RevisionCacheChunk* chunk) {
   size_t const size = chunk->size();
   bool freeChunk = true;
 
@@ -110,6 +110,6 @@ void RevisionCacheAllocator::returnChunk(RevisionCacheChunk* chunk) {
 }
 
 /// @brief calculate the effective size for a new chunk
-size_t RevisionCacheAllocator::newChunkSize(size_t dataLength) const noexcept {
+size_t RevisionCacheChunkAllocator::newChunkSize(size_t dataLength) const noexcept {
   return (std::max)(_defaultChunkSize, RevisionCacheChunk::size(dataLength));
 }

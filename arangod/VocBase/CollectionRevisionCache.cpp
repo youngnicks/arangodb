@@ -22,11 +22,21 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "CollectionRevisionCache.h"
+#include "VocBase/RevisionCacheChunk.h"
+#include "VocBase/RevisionCacheChunkAllocator.h"
 
 using namespace arangodb;
 
-CollectionRevisionCache::CollectionRevisionCache() {}
-CollectionRevisionCache::~CollectionRevisionCache() {}
+CollectionRevisionCache::CollectionRevisionCache(RevisionCacheChunkAllocator* allocator) 
+    : _allocator(allocator) {
+  TRI_ASSERT(allocator != nullptr);
+}
+
+CollectionRevisionCache::~CollectionRevisionCache() {
+  for (auto& it : _chunks) {
+    _allocator->returnChunk(it);
+  }
+}
   
 bool CollectionRevisionCache::insertFromWal(TRI_voc_rid_t revisionId, TRI_voc_fid_t datafileId, uint32_t offset) {
   return _positions.emplace(revisionId, DocumentPosition(datafileId, offset)).second;

@@ -25,10 +25,11 @@
 #define ARANGOD_VOCBASE_REVISION_CACHE_H 1
 
 #include "Basics/Common.h"
-#include "VocBase/RevisionCacheChunk.h"
 #include "VocBase/voc-types.h"
 
 namespace arangodb {
+class RevisionCacheChunk;
+class RevisionCacheChunkAllocator;
 
 class DocumentPosition {
   enum class PositionType : uint32_t {
@@ -62,7 +63,7 @@ class DocumentPosition {
 
 class CollectionRevisionCache {
  public:
-  CollectionRevisionCache();
+  explicit CollectionRevisionCache(RevisionCacheChunkAllocator* allocator);
   ~CollectionRevisionCache();
   
  public:
@@ -73,7 +74,9 @@ class CollectionRevisionCache {
   bool remove(TRI_voc_rid_t revisionId);
 
  private:
+  RevisionCacheChunkAllocator* _allocator;
   std::unordered_map<TRI_voc_rid_t, DocumentPosition> _positions;
+  std::vector<RevisionCacheChunk*> _chunks;
 };
 
 } // namespace arangodb

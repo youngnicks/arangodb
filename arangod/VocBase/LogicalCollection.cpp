@@ -43,6 +43,7 @@
 #include "Indexes/RocksDBIndex.h"
 #include "Indexes/SkiplistIndex.h"
 #include "RestServer/DatabaseFeature.h"
+#include "RestServer/RevisionCacheFeature.h"
 #include "StorageEngine/EngineSelectorFeature.h"
 #include "StorageEngine/StorageEngine.h"
 #include "Utils/CollectionNameResolver.h"
@@ -331,6 +332,7 @@ LogicalCollection::LogicalCollection(
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
+      _revisionCache(RevisionCacheFeature::CACHE),
       _keyGenerator(),
       _nextCompactionStartIndex(0),
       _lastCompactionStatus(nullptr),
@@ -394,6 +396,7 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase, VPackSlice const& i
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
+      _revisionCache(RevisionCacheFeature::CACHE),
       _keyGenerator(),
       _nextCompactionStartIndex(0),
       _lastCompactionStatus(nullptr),

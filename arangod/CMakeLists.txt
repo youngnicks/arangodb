@@ -340,8 +340,8 @@ add_executable(${BIN_ARANGOD}
   VocBase/LogicalCollection.cpp
   VocBase/MasterPointers.cpp
   VocBase/PathEnumerator.cpp
-  VocBase/RevisionCacheAllocator.cpp
   VocBase/RevisionCacheChunk.cpp
+  VocBase/RevisionCacheChunkAllocator.cpp
   VocBase/SingleServerTraverser.cpp
   VocBase/Traverser.cpp
   VocBase/TraverserOptions.cpp

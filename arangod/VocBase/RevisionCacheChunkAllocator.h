@@ -21,8 +21,8 @@
 /// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_VOCBASE_REVISION_CACHE_ALLOCATOR_H
-#define ARANGOD_VOCBASE_REVISION_CACHE_ALLOCATOR_H 1
+#ifndef ARANGOD_VOCBASE_REVISION_CACHE_CHUNK_ALLOCATOR_H
+#define ARANGOD_VOCBASE_REVISION_CACHE_CHUNK_ALLOCATOR_H 1
 
 #include "Basics/Common.h"
 #include "Basics/ReadWriteLock.h"
@@ -30,10 +30,14 @@
 
 namespace arangodb {
 
-class RevisionCacheAllocator {
+class RevisionCacheChunkAllocator {
  public:
-  RevisionCacheAllocator(size_t defaultChunkSize, size_t totalTargetSize);
-  ~RevisionCacheAllocator();
+  RevisionCacheChunkAllocator() = delete;
+  RevisionCacheChunkAllocator(RevisionCacheChunkAllocator const&) = delete;
+  RevisionCacheChunkAllocator& operator=(RevisionCacheChunkAllocator const&) = delete;
+
+  RevisionCacheChunkAllocator(size_t defaultChunkSize, size_t totalTargetSize);
+  ~RevisionCacheChunkAllocator();
   
  public:
   
