@@ -27,7 +27,7 @@
 
 using namespace arangodb;
 
-RevisionCacheChunkAllocator::RevisionCacheChunkAllocator(size_t defaultChunkSize, size_t totalTargetSize)
+RevisionCacheChunkAllocator::RevisionCacheChunkAllocator(uint32_t defaultChunkSize, uint64_t totalTargetSize)
     : _defaultChunkSize(defaultChunkSize), 
       _totalTargetSize(totalTargetSize), 
       _totalAllocated(0) { 
@@ -46,12 +46,12 @@ RevisionCacheChunkAllocator::~RevisionCacheChunkAllocator() {
 }
   
 // total number of bytes allocated by the cache
-size_t RevisionCacheChunkAllocator::totalAllocated() {
+uint64_t RevisionCacheChunkAllocator::totalAllocated() {
   READ_LOCKER(locker, _chunksLock);
   return _totalAllocated;
 }
 
-RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(size_t targetSize) {
+RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(uint32_t targetSize) {
   {
     // first check if there's a chunk ready on the freelist
     READ_LOCKER(locker, _chunksLock);
@@ -64,7 +64,7 @@ RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(size_t targetSize) {
 
   // could not find a chunk on the freelist
   // create a new chunk now
-  size_t const size = newChunkSize(targetSize);
+  uint32_t const size = newChunkSize(targetSize);
   auto c = std::make_unique<RevisionCacheChunk>(size);
 
   WRITE_LOCKER(locker, _chunksLock);
@@ -82,7 +82,7 @@ RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(size_t targetSize) {
 }
 
 void RevisionCacheChunkAllocator::returnChunk(RevisionCacheChunk* chunk) {
-  size_t const size = chunk->size();
+  uint32_t const size = chunk->size();
   bool freeChunk = true;
 
   {
@@ -110,6 +110,6 @@ void RevisionCacheChunkAllocator::returnChunk(RevisionCacheChunk* chunk) {
 }
 
 /// @brief calculate the effective size for a new chunk
-size_t RevisionCacheChunkAllocator::newChunkSize(size_t dataLength) const noexcept {
+uint32_t RevisionCacheChunkAllocator::newChunkSize(uint32_t dataLength) const noexcept {
   return (std::max)(_defaultChunkSize, RevisionCacheChunk::pieceSize(dataLength));
 }

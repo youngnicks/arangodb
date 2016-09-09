@@ -45,7 +45,7 @@ class RevisionCacheFeature final
 
  private:
   std::unique_ptr<RevisionCacheChunkAllocator> _cache;
-  uint64_t _chunkSize;
+  uint32_t _chunkSize;
   uint64_t _targetSize;
 };
 }

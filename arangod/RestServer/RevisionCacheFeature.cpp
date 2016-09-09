@@ -47,7 +47,7 @@ void RevisionCacheFeature::collectOptions(std::shared_ptr<ProgramOptions> option
   options->addSection("database", "Configure the database");
   
   options->addOption("--database.revision-cache-chunk-size", "chunk size for the document revision cache",
-                     new UInt64Parameter(&_chunkSize));
+                     new UInt32Parameter(&_chunkSize));
   options->addOption("--database.revision-cache-target-size", "total target size for the document revision cache",
                      new UInt64Parameter(&_targetSize));
 }

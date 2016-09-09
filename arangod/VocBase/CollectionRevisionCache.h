@@ -31,6 +31,10 @@
 #include <list>
 
 namespace arangodb {
+namespace velocypack {
+class Slice;
+}
+
 class RevisionCacheChunk;
 class RevisionCacheChunkAllocator;
 
@@ -72,14 +76,14 @@ class CollectionRevisionCache {
  public:
   bool insertFromWal(TRI_voc_rid_t revisionId, TRI_voc_fid_t datafileId, uint32_t offset);
 
-  bool insertFromChunk(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset);
+  bool insertFromEngine(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& data);
 
   bool remove(TRI_voc_rid_t revisionId);
 
   bool garbageCollect(size_t maxChunksToClear);
 
  private:
-  uint8_t* store(uint8_t const* data, size_t size);
+  DocumentPosition store(uint8_t const* data, uint32_t size);
 
  private:
   RevisionCacheChunkAllocator* _allocator;

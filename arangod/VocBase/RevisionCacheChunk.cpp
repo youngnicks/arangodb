@@ -26,36 +26,35 @@
 
 using namespace arangodb;
 
-RevisionCacheChunk::RevisionCacheChunk(size_t size)
-    : _memory(nullptr), _position(nullptr), _size(size) {
+RevisionCacheChunk::RevisionCacheChunk(uint32_t size)
+    : _memory(nullptr), _offset(0), _size(size) {
   _memory = new uint8_t[size];
-  _position = _memory;
 }
 
 RevisionCacheChunk::~RevisionCacheChunk() {
   delete[] _memory;
 }
 
-uint8_t* RevisionCacheChunk::advanceWritePosition(size_t size) {
-  uint8_t* position;
+uint32_t RevisionCacheChunk::advanceWritePosition(uint32_t size) {
+  uint32_t offset;
   {
     MUTEX_LOCKER(locker, _writeMutex);
 
-    if (_position + size > end()) {
+    if (_offset + size > _size) {
       // chunk would be full
-      _position = end(); // seal it
-      return nullptr;
+      _offset = _size; // seal it
+      return UINT32_MAX; // means: chunk is full
     }
-    position = _position;
-    _position += size;
+    offset = _offset;
+    _offset += size;
   }
 
-  return position;
+  return offset;
 }
 
 bool RevisionCacheChunk::isSealed() const {
   MUTEX_LOCKER(locker, _writeMutex);
-  return (_position == end());
+  return (_offset == _size);
 }
 
 bool RevisionCacheChunk::garbageCollect() {

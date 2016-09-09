@@ -26,6 +26,9 @@
 #include "VocBase/RevisionCacheChunk.h"
 #include "VocBase/RevisionCacheChunkAllocator.h"
 
+#include <velocypack/Slice.h>
+#include <velocypack/velocypack-aliases.h>
+
 using namespace arangodb;
 
 CollectionRevisionCache::CollectionRevisionCache(RevisionCacheChunkAllocator* allocator) 
@@ -41,19 +44,14 @@ CollectionRevisionCache::~CollectionRevisionCache() {
     _allocator->returnChunk(it);
   }
 }
-/*
-void CollectionRevisionCache::insertRevision(TRI_voc_rid_t revisionId, VPackSlice const& data) {
-  //LOG(ERR) << "ADJUSTWRITEPOSITION FOR LENGTH: " << length;
-  store(data.begin(), data.byteSize());
-}
-*/
-  
+
 bool CollectionRevisionCache::insertFromWal(TRI_voc_rid_t revisionId, TRI_voc_fid_t datafileId, uint32_t offset) {
   return _positions.emplace(revisionId, DocumentPosition(datafileId, offset)).second;
 }
    
-bool CollectionRevisionCache::insertFromChunk(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset) {
-  return _positions.emplace(revisionId, DocumentPosition(chunk, offset)).second;
+bool CollectionRevisionCache::insertFromEngine(TRI_voc_rid_t revisionId, VPackSlice const& data) {
+  DocumentPosition p(store(data.begin(), data.byteSize()));
+  return _positions.emplace(revisionId, p).second;
 }
 
 bool CollectionRevisionCache::remove(TRI_voc_rid_t revisionId) {
@@ -80,9 +78,11 @@ bool CollectionRevisionCache::garbageCollect(size_t maxChunksToClear) {
   return false;
 }
 
-uint8_t* CollectionRevisionCache::store(uint8_t const* data, size_t size) {
-  uint8_t* position = nullptr;
-  size_t pieceSize = RevisionCacheChunk::pieceSize(size);
+DocumentPosition CollectionRevisionCache::store(uint8_t const* data, uint32_t size) {
+  uint32_t const pieceSize = RevisionCacheChunk::pieceSize(size);
+  
+  RevisionCacheChunk* chunk = nullptr;
+  uint32_t offset = 0;
   
   while (true) {
     MUTEX_LOCKER(locker, _writeMutex);
@@ -92,8 +92,9 @@ uint8_t* CollectionRevisionCache::store(uint8_t const* data, size_t size) {
     }
 
     TRI_ASSERT(_writeChunk != nullptr);
-    position = _writeChunk->advanceWritePosition(pieceSize);
-    if (position != nullptr) {
+    offset = _writeChunk->advanceWritePosition(pieceSize);
+    if (offset != UINT32_MAX) {
+      chunk = _writeChunk;
       break;
     }
     // chunk is full
@@ -103,10 +104,11 @@ uint8_t* CollectionRevisionCache::store(uint8_t const* data, size_t size) {
     // try again in next iteration
   }
 
-  TRI_ASSERT(position != nullptr);
+  TRI_ASSERT(chunk != nullptr);
+  TRI_ASSERT(offset != UINT32_MAX);
 
   // copy data without lock. TODO: protect chunk from beign garbage collected and destroyed somewhere here!!!
-  memcpy(position, data, size);
+  memcpy(chunk->begin() + offset, data, size);
 
-  return position;
+  return DocumentPosition(chunk, offset);
 }

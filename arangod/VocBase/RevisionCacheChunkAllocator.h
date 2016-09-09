@@ -36,23 +36,23 @@ class RevisionCacheChunkAllocator {
   RevisionCacheChunkAllocator(RevisionCacheChunkAllocator const&) = delete;
   RevisionCacheChunkAllocator& operator=(RevisionCacheChunkAllocator const&) = delete;
 
-  RevisionCacheChunkAllocator(size_t defaultChunkSize, size_t totalTargetSize);
+  RevisionCacheChunkAllocator(uint32_t defaultChunkSize, uint64_t totalTargetSize);
   ~RevisionCacheChunkAllocator();
   
  public:
   
   /// @brief total number of bytes allocated by the cache
-  size_t totalAllocated();
+  uint64_t totalAllocated();
 
   /// @brief order a new chunk
-  RevisionCacheChunk* orderChunk(size_t targetSize);
+  RevisionCacheChunk* orderChunk(uint32_t targetSize);
 
   /// @brief return an unused chunk
   void returnChunk(RevisionCacheChunk* chunk);
 
  private:
   /// @brief calculate the effective size for a new chunk
-  size_t newChunkSize(size_t dataLength) const noexcept;
+  uint32_t newChunkSize(uint32_t dataSize) const noexcept;
 
  private:
   // lock for the lists of chunks
@@ -62,14 +62,13 @@ class RevisionCacheChunkAllocator {
   std::vector<RevisionCacheChunk*>        _freeList;
 
   // default size for new memory chunks
-  size_t                                  _defaultChunkSize;
+  uint32_t                                _defaultChunkSize;
 
   // total target size for all chunks
-  size_t                                  _totalTargetSize;
+  uint64_t                                _totalTargetSize;
 
   // total number of bytes allocated by chunks
-  size_t                                  _totalAllocated;
- 
+  uint64_t                                _totalAllocated;
 };
 
 } // namespace arangodb

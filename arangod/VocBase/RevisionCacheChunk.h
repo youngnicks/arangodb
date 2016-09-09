@@ -35,24 +35,30 @@ class RevisionCacheChunk {
   RevisionCacheChunk(RevisionCacheChunk const&) = delete;
   RevisionCacheChunk& operator=(RevisionCacheChunk const&) = delete;
 
-  explicit RevisionCacheChunk(size_t size);
+  explicit RevisionCacheChunk(uint32_t size);
   ~RevisionCacheChunk();
 
  public:
   // return the effective size for a piece of data
-  static size_t pieceSize(size_t dataSize) noexcept { return dataSize + 16; } // TODO
+  static uint32_t pieceSize(uint32_t dataSize) noexcept { return alignSize(dataSize + 16); } // TODO
 
-  inline size_t size() const noexcept { return _size; }
+  inline uint32_t size() const noexcept { return _size; }
 
-  uint8_t* advanceWritePosition(size_t size);
+  uint32_t advanceWritePosition(uint32_t size);
   
   bool garbageCollect();
 
   bool isSealed() const;
   
- private:
   inline uint8_t* begin() const noexcept { return _memory; }
   inline uint8_t* end() const noexcept { return _memory + _size; }
+ 
+ private:
+  
+  // align the length value to a multiple of 8
+  static constexpr inline uint32_t alignSize(uint32_t value) {
+    return (value + 7) - ((value + 7) & 7);
+  }
 
  private:
   mutable arangodb::Mutex _writeMutex;
@@ -61,10 +67,10 @@ class RevisionCacheChunk {
   uint8_t* _memory;
 
   // pointer to the current write position
-  uint8_t* _position;
+  uint32_t _offset;
 
   // size of the chunk's memory
-  size_t const _size;
+  uint32_t const _size;
 };
 
 } // namespace
