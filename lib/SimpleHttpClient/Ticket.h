@@ -30,6 +30,8 @@ class Ticket {
  public:
   explicit Ticket(uint64_t ticketId) : _ticketId(ticketId) {}
 
+  uint64_t ticketId() { return _ticketId; }
+
  private:
   uint64_t const _ticketId;
 };

@@ -11,11 +11,17 @@
 using namespace arangodb;
 using namespace arangodb::communicator;
 
+std::unique_ptr<HttpRequest> createRequest() {
+  HttpRequest* request = HttpRequest::createHttpRequest(ContentType::UNSET, "", 0, std::unordered_map<std::string, std::string> {});
+  request->setRequestType(RequestType::GET);
+  return std::unique_ptr<HttpRequest>(request);
+}
+
 std::function<void(int, std::unique_ptr<GeneralResponse>)> createUnexpectedError(std::string const& name) {
   return [name](int errorCode, std::unique_ptr<GeneralResponse> response) {
     std::string errorMsg("Unexpected error in " + name + ": " + std::to_string(errorCode));
     if (response) {
-      errorMsg += ". HTTP: " + GeneralResponse::responseString(response->responseCode()) + ": " + std::string(response->body().c_str(), response->body().length());
+      errorMsg += ". HTTP: " + GeneralResponse::responseString(((HttpResponse*)response.get())->responseCode()) + ": " + std::string(((HttpResponse*)response.get())->body().c_str(), ((HttpResponse*)response.get())->body().length());
     }
     throw std::runtime_error(errorMsg);
   };
@@ -24,7 +30,7 @@ std::function<void(int, std::unique_ptr<GeneralResponse>)> createUnexpectedError
 std::function<void(std::unique_ptr<GeneralResponse>)> createUnexpectedSuccess(std::string const& name) {
   return [name](std::unique_ptr<GeneralResponse> response) {
     std::string errorMsg("Unexpected success in " + name);
-    errorMsg += ". HTTP: " + GeneralResponse::responseString(response->responseCode()) + ": " + std::string(response->body().c_str(), response->body().length());
+    errorMsg += ". HTTP: " + GeneralResponse::responseString(response->responseCode()) + ": " + std::string(((HttpResponse*)response.get())->body().c_str(), ((HttpResponse*)response.get())->body().length());
     throw std::runtime_error(errorMsg);
   };
 }
@@ -32,7 +38,7 @@ std::function<void(std::unique_ptr<GeneralResponse>)> createUnexpectedSuccess(st
 Communicator c;
 
 void connectionRefusedTest() {
-  std::unique_ptr<GeneralRequest> request(new HttpRequest());
+  auto request = createRequest();
 
   communicator::Callbacks callbacks{
       ._onError = 
@@ -54,13 +60,13 @@ void connectionRefusedTest() {
 }
 
 void simpleGetTest() {
-  std::unique_ptr<GeneralRequest> request(new HttpRequest());
+  auto request = createRequest();
 
   communicator::Callbacks callbacks{
       ._onError = createUnexpectedError(__func__),
       ._onSuccess =
           [](std::unique_ptr<GeneralResponse> response) {
-            std::string body(response->body().c_str(), response->body().length());
+            std::string body(((HttpResponse*)response.get())->body().c_str(), ((HttpResponse*)response.get())->body().length());
             std::string check = body.substr(0, 18);
             if (check != "{\"server\":\"arango\"") {
               throw std::runtime_error("Excpected arangodb server response. Got " + check);
@@ -74,18 +80,16 @@ void simpleGetTest() {
 }
   
 void simplePostTest() {
-  HttpRequest* httpRequest = new HttpRequest();
-  httpRequest->setRequestType(GeneralRequest::RequestType::POST);
+  auto request = createRequest();
+  request->setRequestType(RequestType::POST);
 
   std::string body("{\"hasi\": \"hosi\"}");
-  httpRequest->setBody(body.c_str(), body.length());
-
-  std::unique_ptr<GeneralRequest> request(httpRequest);
-
+  request->setBody(body.c_str(), body.length());
+  
   std::string funcName(__func__);
   communicator::Callbacks callbacks {
       ._onError = [funcName](int errorCode, std::unique_ptr<GeneralResponse> response) {
-        if (response->responseCode() != GeneralResponse::ResponseCode::BAD) {
+        if (response->responseCode() != ResponseCode::BAD) {
           throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
         }
       },
@@ -99,23 +103,21 @@ void simplePostTest() {
 }
 
 void simplePostBodyTest() {
-  HttpRequest* httpRequest = new HttpRequest();
-  httpRequest->setRequestType(GeneralRequest::RequestType::POST);
+  auto request = createRequest();
+  request->setRequestType(RequestType::POST);
 
   std::string body("return {hase: true}");
-  httpRequest->setBody(body.c_str(), body.length());
-
-  std::unique_ptr<GeneralRequest> request(httpRequest);
+  request->setBody(body.c_str(), body.length());
 
   std::string funcName(__func__);
   communicator::Callbacks callbacks {
       ._onError = createUnexpectedError(__func__),
       ._onSuccess = [funcName](std::unique_ptr<GeneralResponse> response) {
-        if (response->responseCode() != GeneralResponse::ResponseCode::OK) {
+        if (response->responseCode() != ResponseCode::OK) {
           throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
         }
         
-        std::string body(response->body().c_str(), response->body().length());
+        std::string body(((HttpResponse*)response.get())->body().c_str(), ((HttpResponse*)response.get())->body().length());
         if (body != "{\"hase\":true,\"error\":false,\"code\":200}") {
           throw std::runtime_error("Got invalid response in " + funcName + ": Expecting hase in body but body was " + body);
         }
@@ -129,18 +131,67 @@ void simplePostBodyTest() {
 }
 
 void sendHeadersTest() {
-  HttpRequest* httpRequest = new HttpRequest();
-  httpRequest->setHeader("Accept-Encoding", 15, "wurst/curry", 11);
-  httpRequest->setHeader("Content-Type", 12, "wurst/curry", 11);
-  httpRequest->setRequestType(GeneralRequest::RequestType::POST);
+  auto request = createRequest();
+  request->setHeader("x-arango-async", 14, "true", 4);
 
-  std::string body("hasenmann");
-  httpRequest->setBody(body.c_str(), body.length());
-
-  std::unique_ptr<GeneralRequest> request(httpRequest);
-
+  std::string funcName(__func__);
   communicator::Callbacks callbacks {
       ._onError = createUnexpectedError(__func__),
+      ._onSuccess = [funcName](std::unique_ptr<GeneralResponse> response) {
+        if (response->responseCode() != ResponseCode::ACCEPTED) {
+          throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
+        }
+      }
+  };
+
+  communicator::Options opt;
+
+  c.addRequest(communicator::Destination{"http://localhost:8529/_api/collection"},
+               std::move(request), callbacks, opt);
+}
+
+void receiveHeadersTest() {
+  auto request = createRequest();
+  std::string const origin { "http://der.bunte.hund" };
+  request->setHeader("Origin", origin);
+
+  std::string funcName(__func__);
+  communicator::Callbacks callbacks {
+      ._onError = createUnexpectedError(__func__),
+      ._onSuccess = [funcName, origin](std::unique_ptr<GeneralResponse> response) {
+        auto headers = response->headers();
+        auto it = headers.find("access-control-allow-origin");
+        if (it == headers.end()) {
+          throw std::runtime_error("Got invalid response in " + funcName + ": Origin header is not present. " + std::to_string(headers.size()));
+        }
+        
+        if (it->second != origin) {
+          throw std::runtime_error("Got invalid response in " + funcName + ": Origin header is " + it->second + " HUIU " + origin);
+        }
+      }
+  };
+
+  communicator::Options opt;
+
+  c.addRequest(communicator::Destination{"http://localhost:8529/_api/collection"},
+               std::move(request), callbacks, opt);
+}
+
+void failOnError() {
+  auto request = createRequest();
+  request->setRequestType(RequestType::POST);
+
+  std::string body("{\"hasi\": \"hosi\"}");
+  request->setBody(body.c_str(), body.length());
+  
+  std::string funcName(__func__);
+  communicator::Callbacks callbacks {
+      ._onError = [funcName](int errorCode, std::unique_ptr<GeneralResponse> response) {
+        LOG(ERR) << "ERRORCODE IS " << errorCode;
+        if (response->responseCode() != ResponseCode::BAD) {
+          throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
+        }
+      },
       ._onSuccess = createUnexpectedSuccess(__func__)
   };
 
@@ -151,6 +202,7 @@ void sendHeadersTest() {
 }
 
 int main() {
+  Logger::setLogLevel("REQUESTS=DEBUG");
   std::atomic<bool> stopThread {false};
   std::atomic<int> numTasks {0};
   std::atomic<int> tasksDone {0};
@@ -160,6 +212,9 @@ int main() {
   simplePostTest();
   simplePostBodyTest();
   sendHeadersTest();
+  receiveHeadersTest();
+  failOnError();
+
   int stillRunning;
   try {
     do {

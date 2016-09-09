@@ -41,6 +41,9 @@ using namespace basics;
 
 namespace communicator {
 class Communicator {
+ private:
+  typedef std::unique_ptr<std::unordered_map<std::string, std::string>> HeadersInProgress;
+
  public:
   Communicator();
 
@@ -54,11 +57,14 @@ class Communicator {
  public:
   struct RequestInProgress {
     CURL* _eh;
+
     Destination _destination;
     Callbacks _callbacks;
     Options _options;
     uint64_t _ticketId;
-    std::unique_ptr<StringBuffer> buffer;
+    std::string const requestBody;
+    std::unique_ptr<StringBuffer> responseBody;
+    HeadersInProgress responseHeaders;
   };
 
  private:
@@ -87,8 +93,15 @@ class Communicator {
 
  private:
   void createRequestInProgress(NewRequest const& newRequest);
-  void handleResult(CURL* eh, CURLcode rc);
-  void transformResult(CURL*, std::unique_ptr<StringBuffer>, HttpResponse*);
+  void handleResult(CURL*, CURLcode);
+  void transformResult(CURL*, HeadersInProgress, std::unique_ptr<StringBuffer>, HttpResponse*);
+ 
+ private:
+  static size_t readBody(void*, size_t, size_t, void*);
+  static size_t readHeaders(char* buffer, size_t size, size_t nitems, void* userdata);
+  static int curlDebug(CURL*, curl_infotype, char*, size_t, void*);
+  static void logHttpHeaders(std::string const&, std::string const&);
+  static void logHttpBody(std::string const&, std::string const&);
 };
 }
 }
