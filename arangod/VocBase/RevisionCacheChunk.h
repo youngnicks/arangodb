@@ -25,6 +25,7 @@
 #define ARANGOD_VOCBASE_REVISION_CACHE_CHUNK_H 1
 
 #include "Basics/Common.h"
+#include "Basics/Mutex.h"
 #include "VocBase/voc-types.h"
 
 namespace arangodb {
@@ -38,17 +39,32 @@ class RevisionCacheChunk {
   ~RevisionCacheChunk();
 
  public:
-  // return the physical size for a piece of data
-  static size_t size(size_t dataLength) noexcept { return dataLength + 16; } // TODO
+  // return the effective size for a piece of data
+  static size_t pieceSize(size_t dataSize) noexcept { return dataSize + 16; } // TODO
 
   inline size_t size() const noexcept { return _size; }
 
+  uint8_t* advanceWritePosition(size_t size);
+  
+  bool garbageCollect();
+
+  bool isSealed() const;
+  
  private:
+  inline uint8_t* begin() const noexcept { return _memory; }
+  inline uint8_t* end() const noexcept { return _memory + _size; }
+
+ private:
+  mutable arangodb::Mutex _writeMutex;
+
   // pointer to the chunk's raw memory
-  char*                _memory;
+  uint8_t* _memory;
+
+  // pointer to the current write position
+  uint8_t* _position;
 
   // size of the chunk's memory
-  size_t const         _size;
+  size_t const _size;
 };
 
 } // namespace

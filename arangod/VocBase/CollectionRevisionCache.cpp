@@ -22,21 +22,31 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "CollectionRevisionCache.h"
+#include "Basics/MutexLocker.h"
 #include "VocBase/RevisionCacheChunk.h"
 #include "VocBase/RevisionCacheChunkAllocator.h"
 
 using namespace arangodb;
 
 CollectionRevisionCache::CollectionRevisionCache(RevisionCacheChunkAllocator* allocator) 
-    : _allocator(allocator) {
+    : _allocator(allocator),
+      _writeChunk(nullptr) {
   TRI_ASSERT(allocator != nullptr);
 }
 
 CollectionRevisionCache::~CollectionRevisionCache() {
-  for (auto& it : _chunks) {
+  MUTEX_LOCKER(locker, _writeMutex);
+
+  for (auto& it : _fullChunks) {
     _allocator->returnChunk(it);
   }
 }
+/*
+void CollectionRevisionCache::insertRevision(TRI_voc_rid_t revisionId, VPackSlice const& data) {
+  //LOG(ERR) << "ADJUSTWRITEPOSITION FOR LENGTH: " << length;
+  store(data.begin(), data.byteSize());
+}
+*/
   
 bool CollectionRevisionCache::insertFromWal(TRI_voc_rid_t revisionId, TRI_voc_fid_t datafileId, uint32_t offset) {
   return _positions.emplace(revisionId, DocumentPosition(datafileId, offset)).second;
@@ -48,4 +58,55 @@ bool CollectionRevisionCache::insertFromChunk(TRI_voc_rid_t revisionId, Revision
 
 bool CollectionRevisionCache::remove(TRI_voc_rid_t revisionId) {
   return (_positions.erase(revisionId) != 0);
+}
+
+bool CollectionRevisionCache::garbageCollect(size_t maxChunksToClear) {
+  size_t chunksCleared = 0;
+
+  MUTEX_LOCKER(locker, _writeMutex);
+ 
+  for (auto it = _fullChunks.begin(); it != _fullChunks.end(); /* no hoisting */) {
+    if ((*it)->garbageCollect()) {
+      _allocator->returnChunk(*it);
+      it = _fullChunks.erase(it);
+      if (++chunksCleared >= maxChunksToClear) {
+        return true;
+      }
+    } else {
+      ++it;
+    }
+  }
+
+  return false;
+}
+
+uint8_t* CollectionRevisionCache::store(uint8_t const* data, size_t size) {
+  uint8_t* position = nullptr;
+  size_t pieceSize = RevisionCacheChunk::pieceSize(size);
+  
+  while (true) {
+    MUTEX_LOCKER(locker, _writeMutex);
+
+    if (_writeChunk == nullptr) {
+      _writeChunk = _allocator->orderChunk(size);
+    }
+
+    TRI_ASSERT(_writeChunk != nullptr);
+    position = _writeChunk->advanceWritePosition(pieceSize);
+    if (position != nullptr) {
+      break;
+    }
+    // chunk is full
+    _fullChunks.push_back(_writeChunk); // if this fails then it will be retried next time
+    _writeChunk = nullptr;
+    
+    // try again in next iteration
+  }
+
+  TRI_ASSERT(position != nullptr);
+
+  // copy data without lock. TODO: protect chunk from beign garbage collected and destroyed somewhere here!!!
+  memcpy(position, data, size);
+
+  return position;
 }

@@ -22,15 +22,44 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "RevisionCacheChunk.h"
+#include "Basics/MutexLocker.h"
 
 using namespace arangodb;
 
 RevisionCacheChunk::RevisionCacheChunk(size_t size)
-    : _memory(nullptr), _size(size) {
-  _memory = new char[size];
+    : _memory(nullptr), _position(nullptr), _size(size) {
+  _memory = new uint8_t[size];
+  _position = _memory;
 }
 
 RevisionCacheChunk::~RevisionCacheChunk() {
   delete[] _memory;
+}
+
+uint8_t* RevisionCacheChunk::advanceWritePosition(size_t size) {
+  uint8_t* position;
+  {
+    MUTEX_LOCKER(locker, _writeMutex);
+
+    if (_position + size > end()) {
+      // chunk would be full
+      _position = end(); // seal it
+      return nullptr;
+    }
+    position = _position;
+    _position += size;
+  }
+
+  return position;
+}
+
+bool RevisionCacheChunk::isSealed() const {
+  MUTEX_LOCKER(locker, _writeMutex);
+  return (_position == end());
+}
+
+bool RevisionCacheChunk::garbageCollect() {
+  // TODO
+  return false;
 }
 

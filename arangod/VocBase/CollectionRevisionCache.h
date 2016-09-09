@@ -25,7 +25,10 @@
 #define ARANGOD_VOCBASE_REVISION_CACHE_H 1
 
 #include "Basics/Common.h"
+#include "Basics/Mutex.h"
 #include "VocBase/voc-types.h"
+
+#include <list>
 
 namespace arangodb {
 class RevisionCacheChunk;
@@ -73,10 +76,19 @@ class CollectionRevisionCache {
 
   bool remove(TRI_voc_rid_t revisionId);
 
+  bool garbageCollect(size_t maxChunksToClear);
+
+ private:
+  uint8_t* store(uint8_t const* data, size_t size);
+
  private:
   RevisionCacheChunkAllocator* _allocator;
+  
+  arangodb::Mutex _writeMutex;
   std::unordered_map<TRI_voc_rid_t, DocumentPosition> _positions;
-  std::vector<RevisionCacheChunk*> _chunks;
+ 
+  RevisionCacheChunk* _writeChunk; 
+  std::list<RevisionCacheChunk*> _fullChunks;
 };
 
 } // namespace arangodb
