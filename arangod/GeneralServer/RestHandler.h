@@ -48,7 +48,7 @@ class RestHandler : public RequestStatisticsAgent, public arangodb::WorkItem {
  public:
   RestHandler(GeneralRequest*, GeneralResponse*);
 
- protected:
+ public:
   ~RestHandler() = default;
 
  public:
@@ -83,6 +83,9 @@ class RestHandler : public RequestStatisticsAgent, public arangodb::WorkItem {
   virtual void addResponse(RestHandler*) {}
 
  public:
+  // returns the handler id
+  uint64_t handlerId() const { return _handlerId; }
+
   // returns the id of the underlying task
   uint64_t taskId() const { return _taskId; }
 
@@ -107,6 +110,23 @@ class RestHandler : public RequestStatisticsAgent, public arangodb::WorkItem {
   // steal the response
   std::unique_ptr<GeneralResponse> stealResponse() {
     return std::move(_response);
+  }
+
+  // find a suitable message id
+  uint64_t messageId() {
+    uint64_t messageId = 0UL;
+    auto req = _request.get();
+    auto res = _response.get();
+    if (req) {
+      messageId = req->messageId();
+    } else if (res) {
+      messageId = res->messageId();
+    } else {
+      LOG_TOPIC(WARN, Logger::COMMUNICATION)
+          << "could not find corresponding request/response";
+    }
+
+    return messageId;
   }
 
  protected:

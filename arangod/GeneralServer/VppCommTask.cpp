@@ -23,6 +23,15 @@
 
 #include "VppCommTask.h"
 
+#include <iostream>
+#include <limits>
+#include <stdexcept>
+
+#include <velocypack/Validator.h>
+#include <velocypack/velocypack-aliases.h>
+
+#include <boost/optional.hpp>
+
 #include "Basics/HybridLogicalClock.h"
 #include "Basics/StringBuffer.h"
 #include "Basics/VelocyPackHelper.h"
@@ -40,19 +49,15 @@
 #include <velocypack/Validator.h>
 #include <velocypack/velocypack-aliases.h>
 
-#include <boost/optional.hpp>
-#include <iostream>
-#include <limits>
-#include <stdexcept>
-
 using namespace arangodb;
 using namespace arangodb::basics;
 using namespace arangodb::rest;
 
-VppCommTask::VppCommTask(GeneralServer* server, TRI_socket_t sock,
-                         ConnectionInfo&& info, double timeout)
-    : Task("VppCommTask"),
-      GeneralCommTask(server, sock, std::move(info), timeout),
+VppCommTask::VppCommTask(EventLoop2 loop, GeneralServer* server,
+                         TRI_socket_t sock, ConnectionInfo&& info,
+                         double timeout)
+    : Task2(loop, "VppCommTask"),
+      GeneralCommTask(loop, server, sock, std::move(info), timeout),
       _authenticatedUser(),
       _authenticationEnabled(
           application_features::ApplicationServer::getFeature<
@@ -322,7 +327,7 @@ void VppCommTask::closeTask(rest::ResponseCode code) {
   //}
 
   _incompleteMessages.clear();
-  _clientClosed = true;
+  closeStream();
 }
 
 rest::ResponseCode VppCommTask::authenticateRequest(GeneralRequest* request) {
@@ -368,7 +373,7 @@ void VppCommTask::handleSimpleError(rest::ResponseCode responseCode,
     response.setPayload(builder.slice(), true, VPackOptions::Defaults);
     processResponse(&response);
   } catch (...) {
-    _clientClosed = true;
+    closeStream();
   }
 }
 

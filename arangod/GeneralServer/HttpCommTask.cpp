@@ -41,10 +41,11 @@ size_t const HttpCommTask::MaximalBodySize = 1024 * 1024 * 1024;      // 1024 MB
 size_t const HttpCommTask::MaximalPipelineSize = 1024 * 1024 * 1024;  // 1024 MB
 size_t const HttpCommTask::RunCompactEvery = 500;
 
-HttpCommTask::HttpCommTask(GeneralServer* server, TRI_socket_t sock,
-                           ConnectionInfo&& info, double timeout)
-    : Task("HttpCommTask"),
-      GeneralCommTask(server, sock, std::move(info), timeout),
+HttpCommTask::HttpCommTask(EventLoop2 loop, GeneralServer* server,
+                           TRI_socket_t sock, ConnectionInfo&& info,
+                           double timeout)
+    : Task2(loop, "HttpCommTask"),
+      GeneralCommTask(loop, server, sock, std::move(info), timeout),
       _readPosition(0),
       _startPosition(0),
       _bodyPosition(0),
@@ -91,11 +92,11 @@ void HttpCommTask::handleSimpleError(rest::ResponseCode code, int errorNum,
     LOG_TOPIC(WARN, Logger::COMMUNICATION)
         << "handleSimpleError received an exception, closing connection:"
         << ex.what();
-    _clientClosed = true;
+    // _clientClosed = true;
   } catch (...) {
     LOG_TOPIC(WARN, Logger::COMMUNICATION)
         << "handleSimpleError received an exception, closing connection";
-    _clientClosed = true;
+    // _clientClosed = true;
   }
 }
 
@@ -396,8 +397,8 @@ bool HttpCommTask::processRead() {
                     << "'";
 
           // force a socket close, response will be ignored!
-          TRI_CLOSE_SOCKET(_commSocket);
-          TRI_invalidatesocket(&_commSocket);
+          // TRI_CLOSE_SOCKET(_commSocket);
+          // TRI_invalidatesocket(&_commSocket);
 
           // bad request, method not allowed
           handleSimpleError(rest::ResponseCode::METHOD_NOT_ALLOWED, 1);
@@ -434,7 +435,7 @@ bool HttpCommTask::processRead() {
   // readRequestBody might have changed, so cannot use else
   if (_readRequestBody) {
     if (_readBuffer.length() - _bodyPosition < _bodyLength) {
-      armKeepAliveTimeout();
+      // TODO armKeepAliveTimeout();
 
       // let client send more
       return false;
@@ -489,11 +490,13 @@ bool HttpCommTask::processRead() {
     // we should close the connection
     LOG(DEBUG) << "no keep-alive, connection close requested by client";
     _closeRequested = true;
+#if 0
   } else if (_keepAliveTimeout <= 0.0) {
     // if keepAliveTimeout was set to 0.0, we'll close even keep-alive
     // connections immediately
     LOG(DEBUG) << "keep-alive disabled by admin";
     _closeRequested = true;
+#endif
   }
 
   // we keep the connection open in all other cases (HTTP 1.1 or Keep-Alive
@@ -664,8 +667,10 @@ void HttpCommTask::processCorsOptions(std::unique_ptr<HttpRequest> request) {
 
     if (!allowHeaders.empty()) {
       // allow all extra headers the client requested
-      // we don't verify them here. the worst that can happen is that the client
-      // sends some broken headers and then later cannot access the data on the
+      // we don't verify them here. the worst that can happen is that the
+      // client
+      // sends some broken headers and then later cannot access the data on
+      // the
       // server. that's a client problem.
       response.setHeaderNC(StaticStrings::AccessControlAllowHeaders,
                            allowHeaders);

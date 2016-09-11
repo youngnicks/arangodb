@@ -76,7 +76,9 @@ RestHandler::status RestHandler::executeFull() {
       handleError(ex);
     } catch (arangodb::velocypack::Exception const& ex) {
       requestStatisticsAgentSetExecuteError();
-      Exception err(TRI_ERROR_INTERNAL, std::string("VPack error: ") + ex.what(), __FILE__, __LINE__);
+      Exception err(TRI_ERROR_INTERNAL,
+                    std::string("VPack error: ") + ex.what(), __FILE__,
+                    __LINE__);
       handleError(err);
     } catch (std::bad_alloc const& ex) {
       requestStatisticsAgentSetExecuteError();

@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
 /// DISCLAIMER
 ///
 /// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
@@ -28,6 +28,7 @@
 #include "Basics/HybridLogicalClock.h"
 #include "Basics/MutexLocker.h"
 #include "Basics/StaticStrings.h"
+#include "GeneralServer/AsyncJobManager.h"
 #include "GeneralServer/GeneralServer.h"
 #include "GeneralServer/GeneralServerFeature.h"
 #include "GeneralServer/RestHandler.h"
@@ -35,6 +36,9 @@
 #include "Logger/Logger.h"
 #include "Meta/conversion.h"
 #include "Rest/VppResponse.h"
+#include "Scheduler/Job.h"
+#include "Scheduler/JobGuard.h"
+#include "Scheduler/JobQueue.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
 
@@ -42,39 +46,20 @@ using namespace arangodb;
 using namespace arangodb::basics;
 using namespace arangodb::rest;
 
-GeneralCommTask::GeneralCommTask(GeneralServer* server, TRI_socket_t socket,
-                                 ConnectionInfo&& info, double keepAliveTimeout)
-    : Task("GeneralCommTask"),
-      SocketTask(socket, std::move(info), keepAliveTimeout),
-      _server(server),
-      _agents(){};
+// -----------------------------------------------------------------------------
+// --SECTION--                                      constructors and destructors
+// -----------------------------------------------------------------------------
 
-void GeneralCommTask::signalTask(TaskData* data) {
-  // data response
-  if (data->_type == TaskData::TASK_DATA_RESPONSE) {
-    data->RequestStatisticsAgent::transferTo(
-        getAgent(data->_response->messageId()));
+GeneralCommTask::GeneralCommTask(EventLoop2 loop, GeneralServer* server,
+                                 TRI_socket_t socket, ConnectionInfo&& info,
+                                 double keepAliveTimeout)
+    : Task2(loop, "GeneralCommTask"),
+      SocketTask2(loop, socket, std::move(info), keepAliveTimeout),
+      _server(server) {}
 
-    processResponse(data->_response.get());
-  }
-
-  // data chunk
-  else if (data->_type == TaskData::TASK_DATA_CHUNK) {
-    handleChunk(data->_data.c_str(), data->_data.size());
-  }
-
-  // do not know, what to do - give up
-  else {
-    _clientClosed = true;
-  }
-
-  while (processRead()) {
-    if (_closeRequested) {
-      break;
-    }
-  }
-
-}
+// -----------------------------------------------------------------------------
+// --SECTION--                                                 protected methods
+// -----------------------------------------------------------------------------
 
 void GeneralCommTask::executeRequest(
     std::unique_ptr<GeneralRequest>&& request,
@@ -106,7 +91,8 @@ void GeneralCommTask::executeRequest(
     return;
   }
 
-  handler->setTaskId(_taskId, _loop);
+  EventLoop loop;
+  handler->setTaskId(_taskId, loop);
 
   // asynchronous request
   bool ok = false;
@@ -117,10 +103,10 @@ void GeneralCommTask::executeRequest(
 
     if (asyncExecution == "store") {
       // persist the responses
-      ok = _server->handleRequestAsync(this, std::move(handler), &jobId);
+      ok = handleRequestAsync(std::move(handler), &jobId);
     } else {
       // don't persist the responses
-      ok = _server->handleRequestAsync(this, std::move(handler));
+      ok = handleRequestAsync(std::move(handler));
     }
 
     if (ok) {
@@ -134,12 +120,15 @@ void GeneralCommTask::executeRequest(
 
       processResponse(response.get());
       return;
+    } else {
+      handleSimpleError(rest::ResponseCode::SERVER_ERROR, TRI_ERROR_QUEUE_FULL,
+                        TRI_errno_string(TRI_ERROR_QUEUE_FULL), messageId);
     }
   }
 
   // synchronous request
   else {
-    ok = _server->handleRequest(this, std::move(handler));
+    ok = handleRequest(std::move(handler));
   }
 
   if (!ok) {
@@ -151,8 +140,153 @@ void GeneralCommTask::processResponse(GeneralResponse* response) {
   if (response == nullptr) {
     LOG_TOPIC(WARN, Logger::COMMUNICATION)
         << "processResponse received a nullptr, closing connection";
-    _clientClosed = true;
+    closeStream();
   } else {
     addResponse(response);
   }
+}
+
+// -----------------------------------------------------------------------------
+// --SECTION--                                                   private methods
+// -----------------------------------------------------------------------------
+
+void GeneralCommTask::signalTask(std::unique_ptr<TaskData> data) {
+  // data response
+  if (data->_type == TaskData::TASK_DATA_RESPONSE) {
+    data->RequestStatisticsAgent::transferTo(
+        getAgent(data->_response->messageId()));
+    processResponse(data->_response.get());
+  }
+
+  // data chunk
+  else if (data->_type == TaskData::TASK_DATA_CHUNK) {
+    handleChunk(data->_data.c_str(), data->_data.size());
+  }
+
+  // do not know, what to do - give up
+  else {
+    closeStream();
+  }
+
+  while (processRead()) {
+    if (_closeRequested) {
+      break;
+    }
+  }
+}
+
+bool GeneralCommTask::handleRequest(WorkItem::uptr<RestHandler> handler) {
+  JobGuard guard(_loop);
+
+  if (handler->isDirect()) {
+    handleRequestDirectly(std::move(handler));
+    return true;
+  }
+
+  if (guard.isIdle()) {
+    handleRequestDirectly(std::move(handler));
+    return true;
+  }
+
+  bool startThread = handler->needsOwnThread();
+
+  if (startThread) {
+    guard.block();
+    handleRequestDirectly(std::move(handler));
+    return true;
+  }
+
+  // ok, we need to queue the request
+  LOG_TOPIC(DEBUG, Logger::THREADS) << "too much work, queuing handler";
+  size_t queue = handler->queue();
+  uint64_t messageId = handler->messageId();
+
+  auto job = new arangodb::Job(_server, std::move(handler),
+                               [this](WorkItem::uptr<RestHandler> h) {
+                                 handleRequestDirectly(std::move(h));
+                               });
+
+  bool ok = SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, job);
+
+  if (!ok) {
+    handleSimpleError(rest::ResponseCode::SERVER_ERROR, TRI_ERROR_QUEUE_FULL,
+                      TRI_errno_string(TRI_ERROR_QUEUE_FULL), messageId);
+  }
+
+  return ok;
+}
+
+void GeneralCommTask::handleRequestDirectly(WorkItem::uptr<RestHandler> h) {
+  JobGuard guard(_loop);
+  guard.work();
+
+  HandlerWorkStack work(std::move(h));
+  auto handler = work.handler();
+  uint64_t messageId = handler->messageId();
+  auto agent = getAgent(messageId);
+
+  agent->transferTo(handler);
+  RestHandler::status result = handler->executeFull();
+  handler->RequestStatisticsAgent::transferTo(agent);
+
+  switch (result) {
+    case RestHandler::status::FAILED:
+    case RestHandler::status::DONE: {
+      addResponse(handler->response());
+      break;
+    }
+
+    case RestHandler::status::ASYNC:
+      handler->release();
+      break;
+  }
+}
+
+bool GeneralCommTask::handleRequestAsync(WorkItem::uptr<RestHandler> handler,
+                                         uint64_t* jobId) {
+  // extract the coordinator flag
+  bool found;
+  std::string const& hdrStr =
+      handler->request()->header(StaticStrings::Coordinator, found);
+  char const* hdr = found ? hdrStr.c_str() : nullptr;
+
+  // use the handler id as identifier
+  bool store = false;
+
+  if (jobId != nullptr) {
+    store = true;
+    *jobId = handler->handlerId();
+    GeneralServerFeature::JOB_MANAGER->initAsyncJob(*jobId, hdr);
+  }
+
+  // queue this job
+  size_t queue = handler->queue();
+  auto job = new arangodb::Job(
+      _server, std::move(handler),
+      [this, store](WorkItem::uptr<RestHandler> h) {
+        JobGuard guard(_loop);
+        guard.work();
+
+        HandlerWorkStack work(std::move(h));
+        auto handler = work.handler();
+        RestHandler::status result = handler->executeFull();
+
+        switch (result) {
+          case RestHandler::status::FAILED:
+          case RestHandler::status::DONE: {
+            if (store) {
+              GeneralServerFeature::JOB_MANAGER->finishAsyncJob(
+                  handler->handlerId(), handler->stealResponse());
+            }
+
+            break;
+          }
+
+          case RestHandler::status::ASYNC:
+            handler->release();
+            break;
+        }
+      });
+
+  return SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, job);
 }

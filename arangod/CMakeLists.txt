@@ -203,7 +203,7 @@ add_executable(${BIN_ARANGOD}
   GeneralServer/GeneralServerFeature.cpp
   GeneralServer/HttpCommTask.cpp
   GeneralServer/GeneralServerJob.cpp
-  GeneralServer/HttpsCommTask.cpp
+  # GeneralServer/HttpsCommTask.cpp
   GeneralServer/PathHandler.cpp
   GeneralServer/RestHandler.cpp
   GeneralServer/RestHandlerFactory.cpp
@@ -274,17 +274,17 @@ add_executable(${BIN_ARANGOD}
   RestServer/VocbaseContext.cpp
   RestServer/WorkMonitorFeature.cpp
   RestServer/arangod.cpp
+  Scheduler/JobGuard.cpp
+  Scheduler/JobQueue.cpp
   Scheduler/ListenTask.cpp
-  Scheduler/PeriodicTask.cpp
   Scheduler/Scheduler.cpp
   Scheduler/SchedulerFeature.cpp
   Scheduler/SchedulerLibev.cpp
   Scheduler/SchedulerThread.cpp
-  Scheduler/SignalTask.cpp
-  Scheduler/SocketTask.cpp
+  Scheduler/SocketTask2.cpp
   Scheduler/Task.cpp
+  Scheduler/Task2.cpp
   Scheduler/TaskManager.cpp
-  Scheduler/TimerTask.cpp
   Statistics/StatisticsFeature.cpp
   Statistics/statistics.cpp
   StorageEngine/EngineSelectorFeature.cpp
@@ -311,10 +311,6 @@ add_executable(${BIN_ARANGOD}
   V8Server/FoxxQueuesFeature.cpp
   V8Server/V8Context.cpp
   V8Server/V8DealerFeature.cpp
-  V8Server/V8Job.cpp
-  V8Server/V8PeriodicTask.cpp
-  V8Server/V8QueueJob.cpp
-  V8Server/V8TimerTask.cpp
   V8Server/V8Traverser.cpp
   V8Server/v8-actions.cpp
   V8Server/v8-collection-util.cpp
@@ -367,6 +363,7 @@ target_link_libraries(${BIN_ARANGOD}
   ${LIB_ARANGO_V8}
   ${LIB_ARANGO}
   ${LIBEV_LIBS}
+  ${BOOST_LIBS}
   ${LINENOISE_LIBS}
   ${MSVC_LIBS}
   ${V8_LIBS}

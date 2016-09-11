@@ -133,14 +133,13 @@ class AsyncJobManager {
   /// @brief initializes an async job
   //////////////////////////////////////////////////////////////////////////////
 
-  void initAsyncJob(GeneralServerJob*, char const*);
+  void initAsyncJob(AsyncJobResult::IdType, char const*);
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief finishes the execution of an async job
   //////////////////////////////////////////////////////////////////////////////
 
-  void finishAsyncJob(AsyncJobResult::IdType jobId,
-                      std::unique_ptr<GeneralResponse>);
+  void finishAsyncJob(AsyncJobResult::IdType, std::unique_ptr<GeneralResponse>);
 
  private:
   //////////////////////////////////////////////////////////////////////////////

@@ -19,50 +19,56 @@
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
+/// @author Achim Brandt
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_V8_SERVER_V8_PERIODIC_TASK_H
-#define ARANGOD_V8_SERVER_V8_PERIODIC_TASK_H 1
+#ifndef ARANGOD_SCHEDULER_TASK2_H
+#define ARANGOD_SCHEDULER_TASK2_H 1
 
 #include "Basics/Common.h"
-#include "Scheduler/PeriodicTask.h"
-#include "VocBase/vocbase.h"
+
+#include "Scheduler/Task.h"
+#include "Scheduler/events.h"
 
 namespace arangodb {
-namespace rest {
-class Dispatcher;
+namespace velocypack {
+class Builder;
 }
 
-class V8PeriodicTask : public rest::PeriodicTask {
- public:
-  V8PeriodicTask(std::string const&, std::string const&, TRI_vocbase_t*, double,
-                 double, std::string const&,
-                 std::shared_ptr<arangodb::velocypack::Builder>, bool);
-
-  ~V8PeriodicTask() = default;
+namespace rest {
+class Task2 {
+  Task2(Task2 const&) = delete;
+  Task2& operator=(Task2 const&) = delete;
 
  public:
-  static void jobDone(Task*);
+  Task2(EventLoop2, std::string const& name);
+  virtual ~Task2() {}
+
+ public:
+  // returns the internal task identifier
+  uint64_t taskId() const { return _taskId; }
+
+  // returns the task name for debugging
+  std::string const& name() const { return _name; }
+
+  // returns the internal event loop
+  EventLoop2 eventLoop() const { return _loop; }
+
+  // get a VelocyPack representation of the task for reporting
+  std::shared_ptr<arangodb::velocypack::Builder> toVelocyPack() const;
+  void toVelocyPack(arangodb::velocypack::Builder&) const;
+
+ public:
+  virtual void signalTask(std::unique_ptr<TaskData>) = 0;
 
  protected:
-  void getDescription(arangodb::velocypack::Builder&) const override;
-  bool isUserDefined() const override { return true; }
-
- public:
-  bool handlePeriod() override;
+  EventLoop2 _loop;
+  uint64_t const _taskId;
 
  private:
-  static Mutex RUNNING_LOCK;
-  static std::unordered_set<Task*> RUNNING;
-
- private:
-  /// @brief guard to make sure the database is not dropped while used by us
-  VocbaseGuard _vocbaseGuard;
-  std::string const _command;
-  std::shared_ptr<arangodb::velocypack::Builder> _parameters;
-  double _created;
-  bool _allowUseDatabase;
+  std::string const _name;
 };
+}
 }
 
 #endif

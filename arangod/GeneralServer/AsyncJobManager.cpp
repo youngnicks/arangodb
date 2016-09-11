@@ -260,7 +260,8 @@ std::vector<AsyncJobResult::IdType> AsyncJobManager::byStatus(
 /// @brief initializes an async job
 ////////////////////////////////////////////////////////////////////////////////
 
-void AsyncJobManager::initAsyncJob(GeneralServerJob* job, char const* hdr) {
+void AsyncJobManager::initAsyncJob(AsyncJobResult::IdType jobId,
+                                   char const* hdr) {
   AsyncCallbackContext* ctx = nullptr;
 
   if (hdr != nullptr) {
@@ -268,12 +269,12 @@ void AsyncJobManager::initAsyncJob(GeneralServerJob* job, char const* hdr) {
     ctx = new AsyncCallbackContext(std::string(hdr));
   }
 
-  AsyncJobResult ajr(job->jobId(), nullptr, TRI_microtime(),
+  AsyncJobResult ajr(jobId, nullptr, TRI_microtime(),
                      AsyncJobResult::JOB_PENDING, ctx);
 
   WRITE_LOCKER(writeLocker, _lock);
 
-  _jobs.emplace(job->jobId(), ajr);
+  _jobs.emplace(jobId, ajr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

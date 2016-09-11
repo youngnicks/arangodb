@@ -24,9 +24,9 @@
 #ifndef ARANGOD_SCHEDULER_SCHEDULER_FEATURE_H
 #define ARANGOD_SCHEDULER_SCHEDULER_FEATURE_H 1
 
-#include "Basics/Common.h"
-
 #include "ApplicationFeatures/ApplicationFeature.h"
+
+#include <boost/asio.hpp>
 
 namespace arangodb {
 namespace rest {
@@ -56,7 +56,9 @@ class SchedulerFeature final : public application_features::ApplicationFeature {
 
  public:
   uint64_t backend() const { return _backend; }
-  size_t concurrency() const { return static_cast<size_t>(_nrSchedulerThreads); }
+  size_t concurrency() const {
+    return static_cast<size_t>(_nrSchedulerThreads);
+  }
   void setProcessorAffinity(std::vector<size_t> const& cores);
   void buildControlCHandler();
   void buildHangupHandler();
@@ -68,6 +70,15 @@ class SchedulerFeature final : public application_features::ApplicationFeature {
   std::vector<size_t> _affinityCores;
   rest::Scheduler* _scheduler;
   std::vector<rest::Task*> _tasks;
+
+#ifndef WIN32
+  std::function<void(const boost::system::error_code&, int)> _signalHandler;
+  std::function<void(const boost::system::error_code&, int)> _exitHandler;
+  std::unique_ptr<boost::asio::signal_set> _exitSignals;
+
+  std::function<void(const boost::system::error_code&, int)> _hangupHandler;
+  std::unique_ptr<boost::asio::signal_set> _hangupSignals;
+#endif
 };
 }
 

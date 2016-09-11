@@ -58,7 +58,8 @@ class SchedulerLibev : public Scheduler {
   /// @brief creates a scheduler
   //////////////////////////////////////////////////////////////////////////////
 
-  explicit SchedulerLibev(size_t nrThreads = 1, int backend = BACKEND_AUTO);
+  explicit SchedulerLibev(size_t nrThreads, size_t maxQueueSize,
+                          int backend = BACKEND_AUTO);
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief deletes a scheduler

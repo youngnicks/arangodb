@@ -28,12 +28,13 @@
 #include "Basics/Common.h"
 
 #include "Scheduler/events.h"
-#include "lib/Rest/HttpResponse.h"
 #include "Statistics/StatisticsAgent.h"
+#include "lib/Rest/HttpResponse.h"
 
 namespace arangodb {
 namespace rest {
 class Scheduler;
+class Task2;
 
 class TaskData : public RequestStatisticsAgent {
  public:
@@ -46,6 +47,7 @@ class TaskData : public RequestStatisticsAgent {
   uint64_t _type;
   std::string _data;
   std::unique_ptr<GeneralResponse> _response;
+  Task2* _task;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

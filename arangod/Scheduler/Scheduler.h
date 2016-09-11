@@ -27,12 +27,17 @@
 
 #include "Basics/Common.h"
 
-#include "Basics/socket-utils.h"
-#include "Scheduler/TaskManager.h"
+#include <boost/asio/steady_timer.hpp>
 
 #include "Basics/Mutex.h"
+#include "Basics/MutexLocker.h"
+#include "Basics/socket-utils.h"
+#include "Logger/Logger.h"
+#include "Scheduler/TaskManager.h"
 
 namespace arangodb {
+class JobQueue;
+
 namespace basics {
 class ConditionVariable;
 }
@@ -58,7 +63,7 @@ class Scheduler : private TaskManager {
   ///
   /// If the number of threads is one, then the scheduler is single-threaded.
   /// In this case the only methods, which can be called from a different thread
-  /// are beginShutdown, isShutdownInProgress, and isRunning. The method
+  /// are beginShutdown, isStopping, and isRunning. The method
   /// registerTask must be called before the Scheduler is started or from
   /// within the Scheduler thread.
   ///
@@ -67,11 +72,16 @@ class Scheduler : private TaskManager {
   /// threads other than the scheduler.
   //////////////////////////////////////////////////////////////////////////////
 
-  explicit Scheduler(size_t nrThreads);
+  Scheduler(size_t nrThreads, size_t maxQueueSize);
 
   virtual ~Scheduler();
 
  public:
+  boost::asio::io_service* ioService() const { return _ioService.get(); }
+  boost::asio::io_service* managerService() const {
+    return _managerService.get();
+  }
+
   //////////////////////////////////////////////////////////////////////////////
   /// @brief starts scheduler, keeps running
   ///
@@ -104,7 +114,7 @@ class Scheduler : private TaskManager {
   /// @brief checks if scheduler is shuting down
   //////////////////////////////////////////////////////////////////////////////
 
-  bool isShutdownInProgress();
+  bool isStopping() { return _stopping; }
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief shuts down the scheduler
@@ -287,6 +297,8 @@ class Scheduler : private TaskManager {
 
   virtual void signalTask(std::unique_ptr<TaskData>&) = 0;
 
+  void signalTask2(std::unique_ptr<TaskData>);
+
  private:
   //////////////////////////////////////////////////////////////////////////////
   /// @brief registers a new task
@@ -309,6 +321,8 @@ class Scheduler : private TaskManager {
 
   size_t nrThreads;
 
+  size_t _maxQueueSize;
+
   //////////////////////////////////////////////////////////////////////////////
   /// @brief scheduler threads
   //////////////////////////////////////////////////////////////////////////////
@@ -327,13 +341,7 @@ class Scheduler : private TaskManager {
   /// @brief true if scheduler is shutting down
   //////////////////////////////////////////////////////////////////////////////
 
-  volatile sig_atomic_t stopping;  // TODO(fc) XXX make this atomic
-
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief true if scheduler is multi-threaded
-  //////////////////////////////////////////////////////////////////////////////
-
-  bool multiThreading;
+  std::atomic<bool> _stopping;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief round-robin for event loops
@@ -363,7 +371,7 @@ class Scheduler : private TaskManager {
   /// @brief scheduler activity flag
   //////////////////////////////////////////////////////////////////////////////
 
-  bool _active;
+  bool _active = true;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief cores to use for affinity
@@ -376,6 +384,91 @@ class Scheduler : private TaskManager {
   //////////////////////////////////////////////////////////////////////////////
 
   size_t _affinityPos = 0;
+
+ public:
+  JobQueue* jobQueue() const { return _jobQueue.get(); }
+
+  bool isIdle() {
+    if (_nrWorking < _nrRunning && _nrWorking < _nrMaximal) {
+      return true;
+    }
+
+    return false;
+  }
+
+  bool tryBlocking() {
+    static int64_t const MIN_FREE = 2;
+
+    if (_nrWorking < (_nrRealMaximum - MIN_FREE)) {
+      ++_nrWorking;
+      return true;
+    }
+
+    return false;
+  }
+
+  void enterThread() { ++_nrBusy; }
+
+  void unenterThread() { --_nrBusy; }
+
+  void workThread() { ++_nrWorking; }
+
+  void unworkThread() { --_nrWorking; }
+
+  void blockThread() { ++_nrBlocked; }
+
+  void unblockThread() { --_nrBlocked; }
+
+  uint64_t incRunning() { return ++_nrRunning; }
+
+  uint64_t decRunning() { return --_nrRunning; }
+
+  std::string infoStatus() {
+    return "busy: " + std::to_string(_nrBusy) + ", working: " +
+           std::to_string(_nrWorking) + ", blocked: " +
+           std::to_string(_nrBlocked) + ", running: " +
+           std::to_string(_nrRunning) + ", maximal: " +
+           std::to_string(_nrMaximal) + ", real maximum: " +
+           std::to_string(_nrRealMaximum);
+  }
+
+  void startNewThread();
+  bool stopThread();
+  void threadDone(Thread*);
+  void deleteOldThreads();
+
+ private:
+  void startIoService();
+  void startRebalancer();
+  void startManagerThread();
+  void rebalanceThreads();
+
+ private:
+  std::atomic<int64_t> _randomizer;
+
+  std::atomic<int64_t> _nrBusy;
+  std::atomic<int64_t> _nrWorking;
+  std::atomic<int64_t> _nrBlocked;
+  std::atomic<int64_t> _nrRunning;
+  std::atomic<int64_t> _nrMaximal;
+  std::atomic<int64_t> _nrRealMaximum;
+
+  std::atomic<double> _lastThreadWarning;
+
+  std::unique_ptr<JobQueue> _jobQueue;
+
+  boost::shared_ptr<boost::asio::io_service::work> _serviceGuard;
+  std::unique_ptr<boost::asio::io_service> _ioService;
+
+  boost::shared_ptr<boost::asio::io_service::work> _managerGuard;
+  std::unique_ptr<boost::asio::io_service> _managerService;
+
+  std::unique_ptr<boost::asio::steady_timer> _threadManager;
+  std::function<void(const boost::system::error_code&)> _threadHandler;
+
+  Mutex _threadsLock;
+  std::unordered_set<Thread*> _threads;
+  std::unordered_set<Thread*> _deadThreads;
 };
 }
 }

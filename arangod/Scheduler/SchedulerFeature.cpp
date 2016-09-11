@@ -30,12 +30,12 @@
 
 #include "ApplicationFeatures/ApplicationServer.h"
 #include "Basics/ArangoGlobalContext.h"
+#include "Dispatcher/DispatcherFeature.h"
 #include "Logger/LogAppender.h"
 #include "ProgramOptions/ProgramOptions.h"
 #include "ProgramOptions/Section.h"
 #include "RestServer/ServerFeature.h"
 #include "Scheduler/SchedulerLibev.h"
-#include "Scheduler/SignalTask.h"
 
 using namespace arangodb;
 using namespace arangodb::basics;
@@ -107,7 +107,6 @@ void SchedulerFeature::validateOptions(
 void SchedulerFeature::start() {
   ArangoGlobalContext::CONTEXT->maskAllSignals();
   buildScheduler();
-  buildHangupHandler();
 
   bool ok = _scheduler->start(nullptr);
 
@@ -115,6 +114,8 @@ void SchedulerFeature::start() {
     LOG(FATAL) << "the scheduler cannot be started";
     FATAL_ERROR_EXIT();
   }
+
+  buildHangupHandler();
 
   while (!_scheduler->isStarted()) {
     LOG_TOPIC(DEBUG, Logger::STARTUP) << "waiting for scheduler to start";
@@ -222,54 +223,15 @@ bool CtrlHandler(DWORD eventType) {
   return true;
 }
 
-#else
-
-class ControlCTask : public SignalTask {
- public:
-  explicit ControlCTask(application_features::ApplicationServer* server)
-      : Task("Control-C"), SignalTask(), _server(server), _seen(0) {
-    addSignal(SIGINT);
-    addSignal(SIGTERM);
-    addSignal(SIGQUIT);
-  }
-
- public:
-  bool handleSignal() override {
-    if (_seen == 0) {
-      LOG(INFO) << "control-c received, beginning shut down sequence";
-      _server->beginShutdown();
-    } else {
-      LOG(FATAL) << "control-c received (again!), terminating";
-      FATAL_ERROR_EXIT();
-    }
-
-    ++_seen;
-
-    return true;
-  }
-
- private:
-  application_features::ApplicationServer* _server;
-  uint32_t _seen;
-};
-
-class HangupTask : public SignalTask {
- public:
-  HangupTask() : Task("Hangup"), SignalTask() { addSignal(SIGHUP); }
-
- public:
-  bool handleSignal() override {
-    LOG(INFO) << "hangup received, about to reopen logfile";
-    LogAppender::reopen();
-    LOG(INFO) << "hangup received, reopened logfile";
-    return true;
-  }
-};
-
 #endif
 
 void SchedulerFeature::buildScheduler() {
+  DispatcherFeature* dispatcher =
+      application_features::ApplicationServer::getFeature<DispatcherFeature>(
+          "Dispatcher");
+
   _scheduler = new SchedulerLibev(static_cast<size_t>(_nrSchedulerThreads),
+                                  static_cast<size_t>(dispatcher->queueSize()),
                                   static_cast<int>(_backend));
   _scheduler->setProcessorAffinity(_affinityCores);
 
@@ -286,29 +248,56 @@ void SchedulerFeature::buildControlCHandler() {
     }
   }
 #else
-  if (_scheduler != nullptr) {
-    Task* controlC = new ControlCTask(server());
+  auto ioService = _scheduler->managerService();
 
-    int res = _scheduler->registerTask(controlC);
+  _exitSignals.reset(new boost::asio::signal_set(*ioService));
+  _exitSignals->add(SIGINT);
+  _exitSignals->add(SIGTERM);
+  _exitSignals->add(SIGQUIT);
 
-    if (res == TRI_ERROR_NO_ERROR) {
-      _tasks.emplace_back(controlC);
+  _signalHandler = [this](const boost::system::error_code& error, int number) {
+    if (error) {
+      return;
     }
-  }
+
+    LOG(INFO) << "control-c received, beginning shut down sequence";
+    server()->beginShutdown();
+    _exitSignals->async_wait(_exitHandler);
+  };
+
+  _exitHandler = [this](const boost::system::error_code& error, int number) {
+    if (error) {
+      return;
+    }
+
+    LOG(FATAL) << "control-c received (again!), terminating";
+    FATAL_ERROR_EXIT();
+  };
+
+  _exitSignals->async_wait(_signalHandler);
 #endif
 }
 
 void SchedulerFeature::buildHangupHandler() {
 #ifndef WIN32
-  {
-    Task* hangup = new HangupTask();
+  auto ioService = _scheduler->managerService();
 
-    int res = _scheduler->registerTask(hangup);
+  _hangupSignals.reset(new boost::asio::signal_set(*ioService));
+  _hangupSignals->add(SIGHUP);
 
-    if (res == TRI_ERROR_NO_ERROR) {
-      _tasks.emplace_back(hangup);
+  _hangupHandler = [this](const boost::system::error_code& error, int number) {
+    if (error) {
+      return;
     }
-  }
+
+    LOG(INFO) << "hangup received, about to reopen logfile";
+    LogAppender::reopen();
+    LOG(INFO) << "hangup received, reopened logfile";
+
+    _hangupSignals->async_wait(_hangupHandler);
+  };
+
+  _hangupSignals->async_wait(_hangupHandler);
 #endif
 }
 

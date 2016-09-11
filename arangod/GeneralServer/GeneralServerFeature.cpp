@@ -71,6 +71,7 @@
 #include "RestServer/QueryRegistryFeature.h"
 #include "RestServer/ServerFeature.h"
 #include "RestServer/TraverserEngineRegistryFeature.h"
+#include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
 #include "Ssl/SslServerFeature.h"
 #include "V8Server/V8DealerFeature.h"
@@ -222,7 +223,9 @@ void GeneralServerFeature::validateOptions(std::shared_ptr<ProgramOptions>) {
 }
 
 static TRI_vocbase_t* LookupDatabaseFromRequest(GeneralRequest* request) {
-  auto databaseFeature = application_features::ApplicationServer::getFeature<DatabaseFeature>("Database");
+  auto databaseFeature =
+      application_features::ApplicationServer::getFeature<DatabaseFeature>(
+          "Database");
 
   // get database name from request
   std::string const& dbName = request->databaseName();
@@ -232,11 +235,12 @@ static TRI_vocbase_t* LookupDatabaseFromRequest(GeneralRequest* request) {
     // as a fallback
     request->setDatabaseName(StaticStrings::SystemDatabase);
     if (ServerState::instance()->isCoordinator()) {
-      return databaseFeature->useDatabaseCoordinator(StaticStrings::SystemDatabase);
+      return databaseFeature->useDatabaseCoordinator(
+          StaticStrings::SystemDatabase);
     }
     return databaseFeature->useDatabase(StaticStrings::SystemDatabase);
   }
-  
+
   if (ServerState::instance()->isCoordinator()) {
     return databaseFeature->useDatabaseCoordinator(dbName);
   }

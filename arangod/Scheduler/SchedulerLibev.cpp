@@ -28,6 +28,7 @@
 #include "Basics/win-utils.h"
 #endif
 
+#undef EV_ERROR
 #include <ev.h>
 
 #include "Basics/Exceptions.h"
@@ -204,7 +205,7 @@ void SchedulerLibev::switchAllocator() {
   }
 }
 
-static void LibEvErrorLogger(const char *msg) EV_THROW {
+static void LibEvErrorLogger(const char* msg) EV_THROW {
 #if _WIN32
   TRI_ERRORBUF;
   TRI_SYSTEM_ERROR();
@@ -216,8 +217,9 @@ static void LibEvErrorLogger(const char *msg) EV_THROW {
 /// @brief creates a scheduler
 ////////////////////////////////////////////////////////////////////////////////
 
-SchedulerLibev::SchedulerLibev(size_t concurrency, int backend)
-    : Scheduler(concurrency),
+SchedulerLibev::SchedulerLibev(size_t concurrency, size_t maxQueueSize,
+                               int backend)
+    : Scheduler(concurrency, maxQueueSize),
       _backend(backend),
       _loops(nullptr),
       _wakers(nullptr) {
@@ -232,7 +234,7 @@ SchedulerLibev::SchedulerLibev(size_t concurrency, int backend)
   LOG(TRACE) << "backend flags: " << backend;
 
   // construct the loops
-  _loops = new struct ev_loop* [nrThreads];
+  _loops = new struct ev_loop*[nrThreads];
 
   ev_set_syserr_cb(LibEvErrorLogger);
 
@@ -243,8 +245,8 @@ SchedulerLibev::SchedulerLibev(size_t concurrency, int backend)
   }
 
   // construct the scheduler threads
-  threads = new SchedulerThread* [nrThreads];
-  _wakers = new ev_async* [nrThreads];
+  threads = new SchedulerThread*[nrThreads];
+  _wakers = new ev_async*[nrThreads];
 
   for (size_t i = 0; i < nrThreads; ++i) {
     threads[i] = new SchedulerThread(this, EventLoop(i), i == 0);
@@ -267,7 +269,7 @@ SchedulerLibev::~SchedulerLibev() {
   for (size_t i = 0; i < nrThreads; ++i) {
     threads[i]->beginShutdown();
   }
-  
+
   for (size_t i = 0; i < nrThreads; ++i) {
     while (threads[i]->isRunning()) {
       usleep(1000);
@@ -298,7 +300,7 @@ SchedulerLibev::~SchedulerLibev() {
 
   // delete threads buffer and wakers
   delete[] threads;
-  delete[](ev_async**)_wakers;
+  delete[](ev_async**) _wakers;
 }
 
 void SchedulerLibev::eventLoop(EventLoop loop) {

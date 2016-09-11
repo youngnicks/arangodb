@@ -28,7 +28,9 @@
 
 #include "Scheduler/TaskManager.h"
 
-#include "Basics/Mutex.h"
+#include <boost/lockfree/queue.hpp>
+
+#include "Basics/ConditionVariable.h"
 #include "Endpoint/ConnectionInfo.h"
 #include "GeneralServer/GeneralDefinitions.h"
 #include "GeneralServer/HttpCommTask.h"
@@ -39,7 +41,6 @@ namespace arangodb {
 class EndpointList;
 
 namespace rest {
-
 class AsyncJobManager;
 class Dispatcher;
 class GeneralCommTask;
@@ -57,39 +58,18 @@ class GeneralServer : protected TaskManager {
 
  public:
   GeneralServer() = default;
-  virtual ~GeneralServer();
+  virtual ~GeneralServer() { stopListening(); }
 
  public:
-  // adds the endpoint list
   void setEndpointList(const EndpointList* list);
-
-  // starts listening
   void startListening();
-
-  // stops listining
   void stopListening();
 
-  // creates a job for asynchronous execution
-  bool handleRequestAsync(GeneralCommTask*,
-                          arangodb::WorkItem::uptr<RestHandler>,
-                          uint64_t* jobId = nullptr);
-
-  // executes the handler directly or add it to the queue
-  bool handleRequest(GeneralCommTask*, arangodb::WorkItem::uptr<RestHandler>);
-
  protected:
-  // opens a listen port
   bool openEndpoint(Endpoint* endpoint);
 
-  // handles request directly
-  void handleRequestDirectly(GeneralCommTask*,
-                             arangodb::WorkItem::uptr<RestHandler>);
-
  protected:
-  // active listen tasks
   std::vector<ListenTask*> _listenTasks;
-
-  // defined ports and addresses
   EndpointList const* _endpointList = nullptr;
 };
 }

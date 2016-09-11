@@ -34,6 +34,7 @@ namespace arangodb {
 namespace rest {
 class RestHandler;
 class GeneralServer;
+class Task2;
 
 class GeneralServerJob : public Job {
   GeneralServerJob(GeneralServerJob const&) = delete;
@@ -41,7 +42,7 @@ class GeneralServerJob : public Job {
 
  public:
   GeneralServerJob(GeneralServer*, arangodb::WorkItem::uptr<RestHandler>,
-                   bool isAsync = false);
+                   Task2*, bool isAsync = false);
 
   ~GeneralServerJob();
 
@@ -59,6 +60,7 @@ class GeneralServerJob : public Job {
   GeneralServer* _server;
   arangodb::WorkItem::uptr<RestHandler> _handler;
   arangodb::WorkDescription* _workDesc;
+  Task2* _task;
   bool _isAsync;
 };
 }

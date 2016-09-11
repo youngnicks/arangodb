@@ -27,8 +27,16 @@
 
 #include "Basics/Common.h"
 
+#include <boost/asio.hpp>
+
 namespace arangodb {
 namespace rest {
+class Scheduler;
+
+struct EventLoop2 {
+  boost::asio::io_service& _ioService;
+  Scheduler* _scheduler;
+};
 
 struct Watcher;
 
