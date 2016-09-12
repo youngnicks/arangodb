@@ -164,6 +164,13 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   curl_easy_setopt(handle, CURLOPT_HEADERDATA, request.get());
   curl_easy_setopt(handle, CURLOPT_DEBUGFUNCTION, Communicator::curlDebug);
 
+  curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, static_cast<long>(newRequest._options.requestTimeout * 1000));
+  long connectTimeout = static_cast<long>(newRequest._options.connectionTimeout);
+  if (connectTimeout < 1) {
+    connectTimeout = 1;
+  }
+  curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT, connectTimeout);
+
   switch(newRequest._request->requestType()) {
     // mop: hmmm...why is this stuff in GeneralRequest? we are interested in HTTP only :S
     case RequestType::POST:

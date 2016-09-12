@@ -478,17 +478,56 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
     return res;
   }
   
-  HttpRequest* requestPtr = HttpRequest::createHttpRequest(ContentType::UNSET, body.c_str(), body.length(), headerFields);
+  std::unordered_map<std::string, std::string> headersCopy(headerFields);
+  if (destination.substr(0, 6) == "shard:") {
+    if (arangodb::Transaction::_makeNolockHeaders != nullptr) {
+      // LOCKING-DEBUG
+      // std::cout << "Found Nolock header\n";
+      auto it = arangodb::Transaction::_makeNolockHeaders->find(res->shardID);
+      if (it != arangodb::Transaction::_makeNolockHeaders->end()) {
+        // LOCKING-DEBUG
+        // std::cout << "Found our shard\n";
+        headersCopy["X-Arango-Nolock"] = res->shardID;
+      }
+    }
+  }
+  headersCopy["Authorization"] = ServerState::instance()->getAuthentication();
+  TRI_voc_tick_t timeStamp = TRI_HybridLogicalClock();
+  headersCopy[StaticStrings::HLCHeader] =
+    arangodb::basics::HybridLogicalClock::encodeTimeStamp(timeStamp);
+  
+#ifdef DEBUG_CLUSTER_COMM
+#ifdef ARANGODB_ENABLE_MAINTAINER_MODE
+#if ARANGODB_ENABLE_BACKTRACE
+  std::string bt;
+  TRI_GetBacktrace(bt);
+  std::replace(bt.begin(), bt.end(), '\n', ';');  // replace all '\n' to ';'
+  headersCopy["X-Arango-BT-SYNC"] = bt;
+#endif
+#endif
+#endif
+
+  HttpRequest* requestPtr = HttpRequest::createHttpRequest(ContentType::UNSET, body.c_str(), body.length(), headersCopy);
   auto request = std::unique_ptr<HttpRequest>(requestPtr);
   request->setRequestType(reqtype);
 
   arangodb::basics::ConditionVariable cv;
+  bool doLogConnectionErrors = logConnectionErrors();
   CONDITION_LOCKER(isen, cv);
   communicator::Callbacks callbacks{
-    ._onError = [&cv, &res](int errorCode, std::unique_ptr<GeneralResponse> response) {
+    ._onError = [&cv, &res, &doLogConnectionErrors](int errorCode, std::unique_ptr<GeneralResponse> response) {
       switch(errorCode) {
         case TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT:
           res->status = CL_COMM_BACKEND_UNAVAILABLE;
+          if (doLogConnectionErrors) {
+            LOG_TOPIC(ERR, Logger::CLUSTER)
+              << "cannot create connection to server '" << res->serverID
+              << "' at endpoint '" << res->endpoint << "'";
+          } else {
+            LOG_TOPIC(INFO, Logger::CLUSTER)
+              << "cannot create connection to server '" << res->serverID
+              << "' at endpoint '" << res->endpoint << "'";
+          }
           break;
         default:
           res->status = CL_COMM_ERROR;
@@ -515,115 +554,11 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
     httpEndpoint = "https://" + res->endpoint.substr(6);
   }
   communicator::Options opt;
+  opt.requestTimeout = timeout;
   _communicator->addRequest(communicator::Destination{httpEndpoint + path},
                std::move(request), callbacks, opt);
   
   cv.wait();
-  return res;
-  std::unordered_map<std::string, std::string> headersCopy(headerFields);
-
-  res->clientTransactionID = clientTransactionID;
-  res->coordTransactionID = coordTransactionID;
-  do {
-    res->operationID = getOperationID();
-  } while (res->operationID == 0);  // just to make sure
-  res->status = CL_COMM_SENDING;
-
-  double currentTime = TRI_microtime();
-  double endTime =
-      timeout == 0.0 ? currentTime + 24 * 60 * 60.0 : currentTime + timeout;
-
-  res->setDestination(destination, logConnectionErrors());
-
-  if (res->status == CL_COMM_BACKEND_UNAVAILABLE) {
-    return res;
-  }
-
-  if (destination.substr(0, 6) == "shard:") {
-    if (arangodb::Transaction::_makeNolockHeaders != nullptr) {
-      // LOCKING-DEBUG
-      // std::cout << "Found Nolock header\n";
-      auto it = arangodb::Transaction::_makeNolockHeaders->find(res->shardID);
-      if (it != arangodb::Transaction::_makeNolockHeaders->end()) {
-        // LOCKING-DEBUG
-        // std::cout << "Found our shard\n";
-        headersCopy["X-Arango-Nolock"] = res->shardID;
-      }
-    }
-  }
-
-  httpclient::ConnectionManager* cm = httpclient::ConnectionManager::instance();
-  httpclient::ConnectionManager::SingleServerConnection* connection =
-      cm->leaseConnection(res->endpoint);
-
-  if (nullptr == connection) {
-    res->status = CL_COMM_BACKEND_UNAVAILABLE;
-    res->errorMessage =
-        "cannot create connection to server '" + res->serverID + "'";
-    if (logConnectionErrors()) {
-      LOG_TOPIC(ERR, Logger::CLUSTER)
-        << "cannot create connection to server '" << res->serverID
-        << "' at endpoint '" << res->endpoint << "'";
-    } else {
-      LOG_TOPIC(INFO, Logger::CLUSTER)
-        << "cannot create connection to server '" << res->serverID
-        << "' at endpoint '" << res->endpoint << "'";
-    }
-  } else {
-    LOG_TOPIC(DEBUG, Logger::CLUSTER)
-      << "sending " << arangodb::HttpRequest::translateMethod(reqtype)
-      << " request to DB server '" << res->serverID << "' at endpoint '"
-      << res->endpoint << "': " << body;
-    // LOCKING-DEBUG
-    // std::cout << "syncRequest: sending " <<
-    // arangodb::rest::HttpRequest::translateMethod(reqtype, Logger::CLUSTER) << " request to
-    // DB server '" << res->serverID << ":" << path << "\n" << body << "\n";
-    // for (auto& h : headersCopy) {
-    //   std::cout << h.first << ":" << h.second << std::endl;
-    // }
-    // std::cout << std::endl;
-    auto client = std::make_unique<arangodb::httpclient::SimpleHttpClient>(
-        connection->_connection, endTime - currentTime, false);
-    client->keepConnectionOnDestruction(true);
-
-    headersCopy["Authorization"] = ServerState::instance()->getAuthentication();
-    TRI_voc_tick_t timeStamp = TRI_HybridLogicalClock();
-    headersCopy[StaticStrings::HLCHeader] =
-        arangodb::basics::HybridLogicalClock::encodeTimeStamp(timeStamp);
-#ifdef DEBUG_CLUSTER_COMM
-#ifdef ARANGODB_ENABLE_MAINTAINER_MODE
-#if ARANGODB_ENABLE_BACKTRACE
-    std::string bt;
-    TRI_GetBacktrace(bt);
-    std::replace(bt.begin(), bt.end(), '\n', ';');  // replace all '\n' to ';'
-    headersCopy["X-Arango-BT-SYNC"] = bt;
-#endif
-#endif
-#endif
-    res->result.reset(
-        client->request(reqtype, path, body.c_str(), body.size(), headersCopy));
-
-    if (res->result == nullptr || !res->result->isComplete()) {
-      res->errorMessage = client->getErrorMessage();
-      if (res->errorMessage == "Request timeout reached") {
-        res->status = CL_COMM_TIMEOUT;
-      } else {
-        res->status = CL_COMM_BACKEND_UNAVAILABLE;
-      }
-      cm->brokenConnection(connection);
-      client->invalidateConnection();
-    } else {
-      cm->returnConnection(connection);
-      if (res->result->wasHttpError()) {
-        res->status = CL_COMM_ERROR;
-        res->errorMessage = client->getErrorMessage();
-      }
-    }
-  }
-  if (res->status == CL_COMM_SENDING) {
-    // Everything was OK
-    res->status = CL_COMM_SENT;
-  }
   return res;
 }
 

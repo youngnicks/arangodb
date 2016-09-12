@@ -60,7 +60,7 @@ class SimpleHttpResult {
  public:
   SimpleHttpResult();
 
-  ~SimpleHttpResult();
+  virtual ~SimpleHttpResult();
 
  public:
   //////////////////////////////////////////////////////////////////////////////

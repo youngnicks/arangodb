@@ -27,9 +27,9 @@
 namespace arangodb {
 namespace communicator {
 class Options {
- private:
-  double requestTimeout;
-  double connectionTimeout;
+ public:
+  double requestTimeout = 120.0;
+  double connectionTimeout = 2.0;
 };
 }
 }

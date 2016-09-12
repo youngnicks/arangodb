@@ -30,9 +30,11 @@ namespace httpclient {
 
 class SimpleHttpCommunicatorResult: public SimpleHttpResult {
   public:
-    SimpleHttpCommunicatorResult(HttpResponse* response)
-      : _response(response) {
+    SimpleHttpCommunicatorResult() = delete;
+    explicit SimpleHttpCommunicatorResult(HttpResponse* response)
+      : SimpleHttpResult(), _response(response) {
     }
+    virtual ~SimpleHttpCommunicatorResult() {}
 
   public:
     virtual bool wasHttpError() const override { return getHttpReturnCode() >= 400; }
