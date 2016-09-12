@@ -202,7 +202,9 @@ char const* ClusterCommResult::stringifyStatus(ClusterCommOpStatus status) {
 ////////////////////////////////////////////////////////////////////////////////
 
 ClusterComm::ClusterComm()
-    : _backgroundThread(nullptr), _logConnectionErrors(false) {}
+    : _backgroundThread(nullptr), _logConnectionErrors(false) {
+  _communicator = std::make_shared<communicator::Communicator>();    
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief ClusterComm destructor
@@ -466,10 +468,41 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
     std::string const& body,
     std::unordered_map<std::string, std::string> const& headerFields,
     ClusterCommTimeout timeout) {
-  std::unordered_map<std::string, std::string> headersCopy(headerFields);
-
   auto res = std::make_unique<ClusterCommResult>();
-  res->clientTransactionID = clientTransactionID;
+  std::unordered_map<std::string, std::string> headersCopy(headerFields);
+  /*
+
+  LOG(ERR) << "HEHE " << destination;
+
+  HttpRequest* requestPtr = HttpRequest::createHttpRequest(ContentType::UNSET, "", 0, std::unordered_map<std::string, std::string> {});
+  auto request = std::unique_ptr<HttpRequest>(requestPtr);
+  request->setRequestType(RequestType::GET);
+
+
+  arangodb::basics::ConditionVariable cv;
+  CONDITION_LOCKER(isen, cv);
+  communicator::Callbacks callbacks{
+    ._onError = [&cv, &res](int errorCode, std::unique_ptr<GeneralResponse> response) {
+      if (errorCode != TRI_ERROR_CLUSTER_CONNECTION_LOST) {
+        throw std::runtime_error("Errorcode is supposed to be " + std::to_string(TRI_ERROR_CLUSTER_CONNECTION_LOST) + ". But is " + std::to_string(errorCode));
+      }
+
+      if (response.get() != nullptr) {
+        throw std::runtime_error("Response is not null!");
+      }
+      cv.signal();
+    },
+    ._onSuccess = [&cv, &res](std::unique_ptr<GeneralResponse> response) {
+      cv.signal();
+    }
+  };
+  communicator::Options opt;
+  _communicator->addRequest(communicator::Destination{destination},
+               std::move(request), callbacks, opt);
+  
+  cv.wait();
+  return res;
+  */res->clientTransactionID = clientTransactionID;
   res->coordTransactionID = coordTransactionID;
   do {
     res->operationID = getOperationID();
@@ -1394,7 +1427,7 @@ size_t ClusterComm::performSingleRequest(
   //                              static_cast<int64_t>(buffer.length()));
   // answer->setHeaders(req.result.result->getHeaderFields());
 
-  auto answer = HttpRequest::createFakeRequest(
+  auto answer = HttpRequest::createHttpRequest(
       type, buffer.c_str(), static_cast<int64_t>(buffer.length()),
       req.result.result->getHeaderFields());
 
@@ -1421,6 +1454,8 @@ void ClusterCommThread::run() {
   LOG_TOPIC(DEBUG, Logger::CLUSTER) << "starting ClusterComm thread";
 
   while (!isStopping()) {
+    cc->communicator()->work_once();
+    cc->communicator()->wait();
     // First check the sending queue, as long as it is not empty, we send
     // a request via SimpleHttpClient:
     while (true) {  // left via break when there is no job in send queue

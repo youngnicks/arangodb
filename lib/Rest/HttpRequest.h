@@ -113,10 +113,14 @@ class HttpRequest final : public GeneralRequest {
   //  key that do not get special treatment end um in the _headers map.
   void setHeader(char const* key, size_t keyLength, char const* value,
                  size_t valueLength);
+  
+  void setHeader(std::string const& key, std::string const& value) {
+    setHeader(key.c_str(), key.length(), value.c_str(), value.length());
+  }
   /// @brief sets a key-only header
   void setHeader(char const* key, size_t keyLength);
 
-  static HttpRequest* createFakeRequest(
+  static HttpRequest* createHttpRequest(
       ContentType contentType, char const* body, int64_t contentLength,
       std::unordered_map<std::string, std::string> const& headers);
 

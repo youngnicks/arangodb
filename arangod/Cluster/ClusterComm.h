@@ -36,6 +36,7 @@
 #include "Rest/GeneralResponse.h"
 #include "Rest/HttpRequest.h"
 #include "Rest/HttpResponse.h"
+#include "SimpleHttpClient/Communicator.h"
 #include "SimpleHttpClient/SimpleHttpResult.h"
 #include "Utils/Transaction.h"
 #include "VocBase/voc-types.h"
@@ -464,7 +465,10 @@ class ClusterComm {
   /// optimization for the single document operation case.
   /// Exact same semantics as performRequests.
   //////////////////////////////////////////////////////////////////////////////
-
+  std::shared_ptr<communicator::Communicator> communicator() {
+    return _communicator;
+  }
+  
  private:
   size_t performSingleRequest(std::vector<ClusterCommRequest>& requests,
                               ClusterCommTimeout timeout, size_t& nrDone,
@@ -549,6 +553,8 @@ class ClusterComm {
   //////////////////////////////////////////////////////////////////////////////
 
   bool _logConnectionErrors;
+
+  std::shared_ptr<communicator::Communicator> _communicator;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
