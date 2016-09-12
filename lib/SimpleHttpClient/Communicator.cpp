@@ -86,8 +86,7 @@ int Communicator::work_once() {
   int stillRunning; 
   _mc = curl_multi_perform(_curl, &stillRunning);
   if (_mc != CURLM_OK) {
-    // TODO?
-    return 0;
+    throw std::runtime_error("Invalid curl multi result while performing! Result was " + std::to_string(_mc));
   }
 
   // handle all messages received
@@ -108,6 +107,9 @@ void Communicator::wait() {
   static int const MAX_WAIT_MSECS = 1000;  // wait max. 1 seconds
 
   int res = curl_multi_wait(_curl, &_wakeup, 1, MAX_WAIT_MSECS, &_numFds);
+  if (res != CURLM_OK) {
+    throw std::runtime_error("Invalid curl multi result while waiting! Result was " + std::to_string(res));
+  }
 
   // drain the pipe
   char a[16];
@@ -130,6 +132,23 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
                             std::make_unique<std::unordered_map<std::string, std::string>>()});
   
   struct curl_slist *headers = nullptr;
+  
+  switch(newRequest._request->contentType()) {
+    case ContentType::UNSET:
+    case ContentType::CUSTOM:
+    case ContentType::VPACK:
+    case ContentType::DUMP:
+      break;
+    case ContentType::JSON:
+      headers = curl_slist_append(headers, "Content-Type: application/json");
+      break;
+    case ContentType::HTML:
+      headers = curl_slist_append(headers, "Content-Type: text/html");
+      break;
+    case ContentType::TEXT:
+      headers = curl_slist_append(headers, "Content-Type: text/plain");
+      break;
+  }
   for (auto const& header: newRequest._request->headers()) {
     std::string thisHeader(header.first + ": " + header.second);
     headers = curl_slist_append(headers, thisHeader.c_str());
@@ -151,7 +170,10 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
       curl_easy_setopt(handle, CURLOPT_POST, 1);
       break;
     case RequestType::PUT:
-      curl_easy_setopt(handle, CURLOPT_PUT, 1);
+      // mop: apparently CURLOPT_PUT implies more stuff in curl
+      // (for example it adds an expect 100 header)
+      // this is not what we want so we make it a custom request
+      curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, "PUT");
       break;
     case RequestType::DELETE_REQ:
       curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, "DELETE");
@@ -215,7 +237,8 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
       break;
     }
     case CURLE_COULDNT_CONNECT:
-      request->_callbacks._onError(TRI_ERROR_CLUSTER_CONNECTION_LOST, {nullptr});
+    case CURLE_COULDNT_RESOLVE_HOST:
+      request->_callbacks._onError(TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT, {nullptr});
       break;
 
     default:
@@ -277,6 +300,7 @@ int Communicator::curlDebug(CURL *handle, curl_infotype type, char *data, size_t
   
   std::string dataStr(data, size);
   std::string prefix("Communicator("  + std::to_string(request->_ticketId) + ") // ");
+  
   switch (type) {
     case CURLINFO_TEXT:
       LOG_TOPIC(TRACE, Logger::REQUESTS) << prefix << "Text: " << data;

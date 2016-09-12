@@ -31,6 +31,7 @@
 #include "Dispatcher/DispatcherThread.h"
 #include "Logger/Logger.h"
 #include "SimpleHttpClient/ConnectionManager.h"
+#include "SimpleHttpClient/SimpleHttpCommunicatorResult.h"
 #include "SimpleHttpClient/SimpleHttpClient.h"
 #include "Utils/Transaction.h"
 #include "VocBase/ticks.h"
@@ -469,40 +470,59 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
     std::unordered_map<std::string, std::string> const& headerFields,
     ClusterCommTimeout timeout) {
   auto res = std::make_unique<ClusterCommResult>();
-  std::unordered_map<std::string, std::string> headersCopy(headerFields);
-  /*
+  res->setDestination(destination, logConnectionErrors());
 
-  LOG(ERR) << "HEHE " << destination;
-
-  HttpRequest* requestPtr = HttpRequest::createHttpRequest(ContentType::UNSET, "", 0, std::unordered_map<std::string, std::string> {});
+  if (res->endpoint.empty()) {
+    res->errorMessage =
+        "cannot create connection to server '" + res->serverID + "'";
+    return res;
+  }
+  
+  HttpRequest* requestPtr = HttpRequest::createHttpRequest(ContentType::UNSET, body.c_str(), body.length(), headerFields);
   auto request = std::unique_ptr<HttpRequest>(requestPtr);
-  request->setRequestType(RequestType::GET);
-
+  request->setRequestType(reqtype);
 
   arangodb::basics::ConditionVariable cv;
   CONDITION_LOCKER(isen, cv);
   communicator::Callbacks callbacks{
     ._onError = [&cv, &res](int errorCode, std::unique_ptr<GeneralResponse> response) {
-      if (errorCode != TRI_ERROR_CLUSTER_CONNECTION_LOST) {
-        throw std::runtime_error("Errorcode is supposed to be " + std::to_string(TRI_ERROR_CLUSTER_CONNECTION_LOST) + ". But is " + std::to_string(errorCode));
+      switch(errorCode) {
+        case TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT:
+          res->status = CL_COMM_BACKEND_UNAVAILABLE;
+          break;
+        default:
+          res->status = CL_COMM_ERROR;
       }
-
-      if (response.get() != nullptr) {
-        throw std::runtime_error("Response is not null!");
+      if (response != nullptr) {
+        res->result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.get()));
       }
+      res->errorMessage = TRI_errno_string(errorCode);
       cv.signal();
     },
     ._onSuccess = [&cv, &res](std::unique_ptr<GeneralResponse> response) {
+      res->result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.get()));
+      res->status = CL_COMM_SENT;
+      res->result->wasHttpError();
+      response.release();
       cv.signal();
     }
   };
+  
+  std::string httpEndpoint;
+  if (res->endpoint.substr(0, 6) == "tcp://") {
+    httpEndpoint = "http://" + res->endpoint.substr(6);
+  } else if (res->endpoint.substr(0, 6) == "ssl://") {
+    httpEndpoint = "https://" + res->endpoint.substr(6);
+  }
   communicator::Options opt;
-  _communicator->addRequest(communicator::Destination{destination},
+  _communicator->addRequest(communicator::Destination{httpEndpoint + path},
                std::move(request), callbacks, opt);
   
   cv.wait();
   return res;
-  */res->clientTransactionID = clientTransactionID;
+  std::unordered_map<std::string, std::string> headersCopy(headerFields);
+
+  res->clientTransactionID = clientTransactionID;
   res->coordTransactionID = coordTransactionID;
   do {
     res->operationID = getOperationID();
@@ -1455,7 +1475,7 @@ void ClusterCommThread::run() {
 
   while (!isStopping()) {
     cc->communicator()->work_once();
-    cc->communicator()->wait();
+    //cc->communicator()->wait();
     // First check the sending queue, as long as it is not empty, we send
     // a request via SimpleHttpClient:
     while (true) {  // left via break when there is no job in send queue

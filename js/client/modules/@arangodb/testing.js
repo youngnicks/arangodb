@@ -1395,6 +1395,7 @@ function startArango (protocol, options, addArgs, rootDir, role) {
   } else {
     args['log.level'] = 'error';
   }
+  //args['log.level=requests=trace'] = null;
 
   // flush log messages directly and not asynchronously
   // (helps debugging)
