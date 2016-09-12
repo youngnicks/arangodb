@@ -363,12 +363,13 @@ target_link_libraries(${BIN_ARANGOD}
   ${LIB_ARANGO_V8}
   ${LIB_ARANGO}
   ${LIBEV_LIBS}
-  ${BOOST_LIBS}
   ${LINENOISE_LIBS}
   ${MSVC_LIBS}
   ${V8_LIBS}
   ${ROCKSDB_LIBS}
   ${SYSTEM_LIBRARIES}
+  boost_system
+  boost_boost
 )
 
 install(
