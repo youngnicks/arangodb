@@ -23,22 +23,25 @@
 
 #include "CollectionRevisionCache.h"
 #include "Basics/MutexLocker.h"
+#include "Basics/WriteLocker.h"
 #include "VocBase/RevisionCacheChunk.h"
 #include "VocBase/RevisionCacheChunkAllocator.h"
+#include "Wal/LogfileManager.h"
 
 #include <velocypack/Slice.h>
 #include <velocypack/velocypack-aliases.h>
 
 using namespace arangodb;
 
-CollectionRevisionCache::CollectionRevisionCache(RevisionCacheChunkAllocator* allocator) 
+CollectionRevisionCache::CollectionRevisionCache(RevisionCacheChunkAllocator* allocator, wal::LogfileManager* logfileManager) 
     : _allocator(allocator),
+      _logfileManager(logfileManager),
       _writeChunk(nullptr) {
   TRI_ASSERT(allocator != nullptr);
 }
 
 CollectionRevisionCache::~CollectionRevisionCache() {
-  MUTEX_LOCKER(locker, _writeMutex);
+  MUTEX_LOCKER(locker, _chunksMutex);
 
   for (auto& it : _fullChunks) {
     _allocator->returnChunk(it);
@@ -46,7 +49,38 @@ CollectionRevisionCache::~CollectionRevisionCache() {
 }
 
 bool CollectionRevisionCache::insertFromWal(TRI_voc_rid_t revisionId, TRI_voc_fid_t datafileId, uint32_t offset) {
-  return _positions.emplace(revisionId, DocumentPosition(datafileId, offset)).second;
+  DocumentPosition position(datafileId, offset);
+
+  // TODO: _logfileManager->addReference(datafileId);
+  
+  try {
+    WRITE_LOCKER(locker, _lock);
+    auto it = _positions.emplace(revisionId, position);
+
+    if (!it.second) {
+      // insertion unsuccessful because there is already a previous value. 
+      // now look up the previous value and handle it
+      DocumentPosition& previous = (*(it.first)).second;
+      /*
+      // TODO
+      if (previous.isInWal()) {
+        // previous entry points into a WAL file
+        // TODO: _logfileManager->removeReference(previous.datafileId());
+      } else {
+        // previous entry points into the global revision cache
+        previous.chunk()->removeReference();
+      }
+      */
+
+      // update value in place with new location
+      previous = position;
+    }
+    return true;
+  } catch (...) {
+    // roll back
+    // TODO: _logfileManager->removeReference(datafileId);
+    throw;
+  }
 }
    
 bool CollectionRevisionCache::insertFromEngine(TRI_voc_rid_t revisionId, VPackSlice const& data) {
@@ -61,7 +95,7 @@ bool CollectionRevisionCache::remove(TRI_voc_rid_t revisionId) {
 bool CollectionRevisionCache::garbageCollect(size_t maxChunksToClear) {
   size_t chunksCleared = 0;
 
-  MUTEX_LOCKER(locker, _writeMutex);
+  MUTEX_LOCKER(locker, _chunksMutex);
  
   for (auto it = _fullChunks.begin(); it != _fullChunks.end(); /* no hoisting */) {
     if ((*it)->garbageCollect()) {
@@ -85,7 +119,7 @@ DocumentPosition CollectionRevisionCache::store(uint8_t const* data, uint32_t si
   uint32_t offset = 0;
   
   while (true) {
-    MUTEX_LOCKER(locker, _writeMutex);
+    MUTEX_LOCKER(locker, _chunksMutex);
 
     if (_writeChunk == nullptr) {
       _writeChunk = _allocator->orderChunk(size);

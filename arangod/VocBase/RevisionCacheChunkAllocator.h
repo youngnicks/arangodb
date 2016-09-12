@@ -56,19 +56,19 @@ class RevisionCacheChunkAllocator {
 
  private:
   // lock for the lists of chunks
-  arangodb::basics::ReadWriteLock         _chunksLock;
+  arangodb::basics::ReadWriteLock _chunksLock;
 
   // completely (or partially unused) chunks that can still be written to
-  std::vector<RevisionCacheChunk*>        _freeList;
+  std::vector<RevisionCacheChunk*> _freeList;
 
   // default size for new memory chunks
-  uint32_t                                _defaultChunkSize;
+  uint32_t _defaultChunkSize;
 
   // total target size for all chunks
-  uint64_t                                _totalTargetSize;
+  uint64_t _totalTargetSize;
 
   // total number of bytes allocated by chunks
-  uint64_t                                _totalAllocated;
+  uint64_t _totalAllocated;
 };
 
 } // namespace arangodb

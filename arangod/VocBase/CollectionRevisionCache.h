@@ -26,6 +26,7 @@
 
 #include "Basics/Common.h"
 #include "Basics/Mutex.h"
+#include "Basics/ReadWriteLock.h"
 #include "VocBase/voc-types.h"
 
 #include <list>
@@ -33,6 +34,10 @@
 namespace arangodb {
 namespace velocypack {
 class Slice;
+}
+
+namespace wal {
+class LogfileManager;
 }
 
 class RevisionCacheChunk;
@@ -70,7 +75,7 @@ class DocumentPosition {
 
 class CollectionRevisionCache {
  public:
-  explicit CollectionRevisionCache(RevisionCacheChunkAllocator* allocator);
+  CollectionRevisionCache(RevisionCacheChunkAllocator* allocator, wal::LogfileManager* logfileManager);
   ~CollectionRevisionCache();
   
  public:
@@ -87,10 +92,12 @@ class CollectionRevisionCache {
 
  private:
   RevisionCacheChunkAllocator* _allocator;
-  
-  arangodb::Mutex _writeMutex;
+  wal::LogfileManager* _logfileManager;
+ 
+  arangodb::basics::ReadWriteLock _lock; 
   std::unordered_map<TRI_voc_rid_t, DocumentPosition> _positions;
  
+  arangodb::Mutex _chunksMutex;
   RevisionCacheChunk* _writeChunk; 
   std::list<RevisionCacheChunk*> _fullChunks;
 };

@@ -32,7 +32,7 @@ using namespace arangodb::application_features;
 using namespace arangodb::basics;
 using namespace arangodb::options;
 
-RevisionCacheChunkAllocator* RevisionCacheFeature::CACHE = nullptr;
+RevisionCacheChunkAllocator* RevisionCacheFeature::ALLOCATOR = nullptr;
 
 RevisionCacheFeature::RevisionCacheFeature(ApplicationServer* server)
     : ApplicationFeature(server, "RevisionCache"),
@@ -73,11 +73,11 @@ void RevisionCacheFeature::validateOptions(std::shared_ptr<ProgramOptions> optio
 }
 
 void RevisionCacheFeature::prepare() {
-  _cache.reset(new RevisionCacheChunkAllocator(_chunkSize, _targetSize));
-  CACHE = _cache.get();
+  _allocator.reset(new RevisionCacheChunkAllocator(_chunkSize, _targetSize));
+  ALLOCATOR = _allocator.get();
 }
 
 void RevisionCacheFeature::unprepare() {
-  CACHE = nullptr;
-  _cache.reset();
+  ALLOCATOR = nullptr;
+  _allocator.reset();
 }

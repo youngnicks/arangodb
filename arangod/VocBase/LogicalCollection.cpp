@@ -51,6 +51,7 @@
 #include "Utils/CollectionWriteLocker.h"
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/StandaloneTransactionContext.h"
+#include "VocBase/CollectionRevisionCache.h"
 #include "VocBase/DatafileStatisticsContainer.h"
 #include "VocBase/IndexPoolFeature.h"
 #include "VocBase/KeyGenerator.h"
@@ -332,7 +333,7 @@ LogicalCollection::LogicalCollection(
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
-      _revisionCache(RevisionCacheFeature::CACHE),
+      _revisionCache(new CollectionRevisionCache(RevisionCacheFeature::ALLOCATOR, wal::LogfileManager::instance())),
       _keyGenerator(),
       _nextCompactionStartIndex(0),
       _lastCompactionStatus(nullptr),
@@ -396,7 +397,7 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase, VPackSlice const& i
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
-      _revisionCache(RevisionCacheFeature::CACHE),
+      _revisionCache(new CollectionRevisionCache(RevisionCacheFeature::ALLOCATOR, wal::LogfileManager::instance())),
       _keyGenerator(),
       _nextCompactionStartIndex(0),
       _lastCompactionStatus(nullptr),

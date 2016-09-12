@@ -40,6 +40,7 @@ RevisionCacheChunkAllocator::RevisionCacheChunkAllocator(uint32_t defaultChunkSi
 RevisionCacheChunkAllocator::~RevisionCacheChunkAllocator() {
   // free all chunks
   WRITE_LOCKER(locker, _chunksLock);
+
   for (auto& chunk : _freeList) {
     delete chunk;
   }
@@ -70,7 +71,7 @@ RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(uint32_t targetSize)
   WRITE_LOCKER(locker, _chunksLock);
   // check freelist again
   if (!_freeList.empty()) {
-    // a chunk arrived on the freelist
+    // a free chunk arrived on the freelist
     RevisionCacheChunk* chunk = _freeList.back();
     _freeList.pop_back();
     return chunk;

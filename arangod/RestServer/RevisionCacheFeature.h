@@ -41,10 +41,10 @@ class RevisionCacheFeature final
   void unprepare() override final;
 
  public:
-  static RevisionCacheChunkAllocator* CACHE;
+  static RevisionCacheChunkAllocator* ALLOCATOR;
 
  private:
-  std::unique_ptr<RevisionCacheChunkAllocator> _cache;
+  std::unique_ptr<RevisionCacheChunkAllocator> _allocator;
   uint32_t _chunkSize;
   uint64_t _targetSize;
 };
