@@ -450,11 +450,6 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase, VPackSlice const& i
       }
     }
   
-   /* 
-    if (!isCluster) {
-      createInitialIndexes();
-    }
-*/
     auto indexesSlice = info.get("indexes");
     if (indexesSlice.isArray()) {
       bool const isCluster = ServerState::instance()->isRunningInCluster();
@@ -472,12 +467,6 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase, VPackSlice const& i
         if (isCluster) {
           addIndexCoordinator(idx, false);
         } else {
-/*          if (idx->type() == Index::IndexType::TRI_IDX_TYPE_PRIMARY_INDEX ||
-              idx->type() == Index::IndexType::TRI_IDX_TYPE_EDGE_INDEX) {
-            // already added those types earlier
-            continue;
-          }
-*/          
           addIndex(idx);
         }
       }
