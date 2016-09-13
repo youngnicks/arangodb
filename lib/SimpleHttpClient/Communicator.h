@@ -42,7 +42,7 @@ using namespace basics;
 namespace communicator {
 class Communicator {
  private:
-  typedef std::unique_ptr<std::unordered_map<std::string, std::string>> HeadersInProgress;
+  typedef std::unordered_map<std::string, std::string> HeadersInProgress;
 
  public:
   Communicator();
@@ -55,16 +55,30 @@ class Communicator {
   void wait();
  
  public:
+  // mop: TODO explicit constructor
   struct RequestInProgress {
-    CURL* _eh;
+    RequestInProgress(Destination const& destination, Callbacks callbacks, Options options, uint64_t ticketId, std::string const& requestBody) : _handle(nullptr), _destination(destination), _callbacks(callbacks), _options(options), _ticketId(ticketId), _requestBody(requestBody), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)) {
+      _handle = curl_easy_init();
+      if (_handle == nullptr) {
+        THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+      }
+    }
+
+    RequestInProgress(RequestInProgress const& other) = delete;
+    RequestInProgress& operator=(RequestInProgress const& other) = delete;
+
+    ~RequestInProgress() {
+      curl_easy_cleanup(_handle);
+    }
+    CURL* _handle;
 
     Destination _destination;
     Callbacks _callbacks;
     Options _options;
     uint64_t _ticketId;
-    std::string const requestBody;
-    std::unique_ptr<StringBuffer> responseBody;
-    HeadersInProgress responseHeaders;
+    std::string const _requestBody;
+    std::unique_ptr<StringBuffer> _responseBody;
+    HeadersInProgress _responseHeaders;
   };
 
  private:
@@ -94,7 +108,7 @@ class Communicator {
  private:
   void createRequestInProgress(NewRequest const& newRequest);
   void handleResult(CURL*, CURLcode);
-  void transformResult(CURL*, HeadersInProgress, std::unique_ptr<StringBuffer>, HttpResponse*);
+  void transformResult(CURL*, HeadersInProgress&&, std::unique_ptr<StringBuffer>, HttpResponse*);
  
  private:
   static size_t readBody(void*, size_t, size_t, void*);

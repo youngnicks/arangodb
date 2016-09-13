@@ -99,9 +99,8 @@ class GeneralResponse {
     _responseCode = responseCode;
   }
 
-  void setHeaders(std::unordered_map<std::string, std::string>* headers) {
-    TRI_ASSERT(headers != nullptr);
-    _headers = *headers;
+  void setHeaders(std::unordered_map<std::string, std::string>&& headers) {
+    _headers = std::move(headers);
   }
 
   std::unordered_map<std::string, std::string> headers() const {

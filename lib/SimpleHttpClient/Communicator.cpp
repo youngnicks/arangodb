@@ -123,14 +123,11 @@ void Communicator::wait() {
 // -----------------------------------------------------------------------------
 
 void Communicator::createRequestInProgress(NewRequest const& newRequest) {
-  CURL* handle = curl_easy_init();
-
-  std::unique_ptr<RequestInProgress> request(
-      new RequestInProgress{handle, newRequest._destination, newRequest._callbacks,
-                            newRequest._options, newRequest._ticketId, ((HttpRequest*) newRequest._request.get())->body(),
-                            std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE, false),
-                            std::make_unique<std::unordered_map<std::string, std::string>>()});
+  auto request = std::make_unique<RequestInProgress>(newRequest._destination, newRequest._callbacks,
+                            newRequest._options, newRequest._ticketId, ((HttpRequest*) newRequest._request.get())->body());
   
+  CURL* handle = request->_handle;
+
   struct curl_slist *headers = nullptr;
   
   switch(newRequest._request->contentType()) {
@@ -205,12 +202,11 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   }
   
   if (((HttpRequest*)newRequest._request.get())->body().length() > 0) {
-    curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, request->requestBody.length());
-    curl_easy_setopt(handle, CURLOPT_POSTFIELDS, request->requestBody.c_str());
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, request->_requestBody.length());
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDS, request->_requestBody.c_str());
   }
   
   _requestsInProgress.emplace(newRequest._ticketId, std::move(request));
-
   curl_multi_add_handle(_curl, handle);
   // mop: TODO we are leaking here!
   //curl_slist_free_all(headers);
@@ -220,10 +216,8 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
   RequestInProgress* request = nullptr;
 
   curl_easy_getinfo(handle, CURLINFO_PRIVATE, &request);
-
   if (request == nullptr) {
     curl_multi_remove_handle(_curl, handle);
-    curl_easy_cleanup(handle);
     return;
   }
   
@@ -234,7 +228,8 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
 
       std::unique_ptr<GeneralResponse> response(new HttpResponse(
           static_cast<ResponseCode>(httpStatusCode)));
-      transformResult(handle, std::move(request->responseHeaders), std::move(request->responseBody), dynamic_cast<HttpResponse*>(response.get()));
+
+      transformResult(handle, std::move(request->_responseHeaders), std::move(request->_responseBody), dynamic_cast<HttpResponse*>(response.get()));
 
       if (httpStatusCode < 400) {
         request->_callbacks._onSuccess(std::move(response));
@@ -256,15 +251,15 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
 
   // and remove easy handle
   curl_multi_remove_handle(_curl, handle);
-  curl_easy_cleanup(handle);
   
   // remove request in progress
   _requestsInProgress.erase(request->_ticketId);
 }
 
-void Communicator::transformResult(CURL* handle, HeadersInProgress responseHeaders, std::unique_ptr<StringBuffer> responseBody, HttpResponse* response) {
+void Communicator::transformResult(CURL* handle, HeadersInProgress&& responseHeaders, std::unique_ptr<StringBuffer> responseBody, HttpResponse* response) {
   response->body().swap(responseBody.get());
-  response->setHeaders(responseHeaders.get());
+  response->setHeaders(std::move(responseHeaders));
+  responseBody.release();
 }
 
 size_t Communicator::readBody(void* data, size_t size, size_t nitems, void* userp) {
@@ -272,7 +267,7 @@ size_t Communicator::readBody(void* data, size_t size, size_t nitems, void* user
 
   Communicator::RequestInProgress* rip = (struct Communicator::RequestInProgress*) userp;
   try {
-    rip->responseBody->appendText((char*) data, realsize);
+    rip->_responseBody->appendText((char*) data, realsize);
     return realsize;
   } catch (std::bad_alloc& ba) {
     return 0;
@@ -304,13 +299,14 @@ int Communicator::curlDebug(CURL *handle, curl_infotype type, char *data, size_t
   arangodb::communicator::Communicator::RequestInProgress* request = nullptr;
   curl_easy_getinfo(handle, CURLINFO_PRIVATE, &request);
   TRI_ASSERT(request != nullptr);
+  TRI_ASSERT(data != nullptr);
   
   std::string dataStr(data, size);
   std::string prefix("Communicator("  + std::to_string(request->_ticketId) + ") // ");
   
   switch (type) {
     case CURLINFO_TEXT:
-      LOG_TOPIC(TRACE, Logger::REQUESTS) << prefix << "Text: " << data;
+      LOG_TOPIC(TRACE, Logger::REQUESTS) << prefix << "Text: " << dataStr;
       break;
     case CURLINFO_HEADER_OUT:
       logHttpHeaders(prefix + "Header >>", dataStr); 
@@ -342,7 +338,7 @@ size_t Communicator::readHeaders(char* buffer, size_t size, size_t nitems, void*
   if (pivot != std::string::npos) {
     // mop: hmm response needs lowercased headers
     std::string headerKey = basics::StringUtils::tolower(std::string(header.c_str(), pivot));
-    rip->responseHeaders->emplace(headerKey, header.substr(pivot + 2, header.length() - pivot -4));
+    rip->_responseHeaders.emplace(headerKey, header.substr(pivot + 2, header.length() - pivot -4));
   }
   return realsize;
 }

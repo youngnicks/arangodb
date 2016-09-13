@@ -507,42 +507,57 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
 #endif
 #endif
 
-  HttpRequest* requestPtr = HttpRequest::createHttpRequest(ContentType::UNSET, body.c_str(), body.length(), headersCopy);
+  HttpRequest* requestPtr = HttpRequest::createHttpRequest(ContentType::JSON, body.c_str(), body.length(), headersCopy);
   auto request = std::unique_ptr<HttpRequest>(requestPtr);
   request->setRequestType(reqtype);
 
   arangodb::basics::ConditionVariable cv;
   bool doLogConnectionErrors = logConnectionErrors();
-  CONDITION_LOCKER(isen, cv);
+
+  bool wasSignaled = false;
   communicator::Callbacks callbacks{
-    ._onError = [&cv, &res, &doLogConnectionErrors](int errorCode, std::unique_ptr<GeneralResponse> response) {
-      switch(errorCode) {
-        case TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT:
-          res->status = CL_COMM_BACKEND_UNAVAILABLE;
-          if (doLogConnectionErrors) {
-            LOG_TOPIC(ERR, Logger::CLUSTER)
-              << "cannot create connection to server '" << res->serverID
-              << "' at endpoint '" << res->endpoint << "'";
-          } else {
-            LOG_TOPIC(INFO, Logger::CLUSTER)
-              << "cannot create connection to server '" << res->serverID
-              << "' at endpoint '" << res->endpoint << "'";
-          }
-          break;
-        default:
-          res->status = CL_COMM_ERROR;
+    ._onError = [&cv, &res, &doLogConnectionErrors, &wasSignaled](int errorCode, std::unique_ptr<GeneralResponse> response) {
+      try {
+        switch(errorCode) {
+          case TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT:
+            res->status = CL_COMM_BACKEND_UNAVAILABLE;
+            if (doLogConnectionErrors) {
+              LOG_TOPIC(ERR, Logger::CLUSTER)
+                << "cannot create connection to server '" << res->serverID
+                << "' at endpoint '" << res->endpoint << "'";
+            } else {
+              LOG_TOPIC(INFO, Logger::CLUSTER)
+                << "cannot create connection to server '" << res->serverID
+                << "' at endpoint '" << res->endpoint << "'";
+            }
+            break;
+          default:
+            res->status = CL_COMM_ERROR;
+        }
+        if (response != nullptr) {
+          res->result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.get()));
+          response.release();
+        }
+        res->errorMessage = TRI_errno_string(errorCode);
+      } catch (...) {
+        res->status = CL_COMM_DROPPED;
       }
-      if (response != nullptr) {
-        res->result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.get()));
-      }
-      res->errorMessage = TRI_errno_string(errorCode);
+      CONDITION_LOCKER(isen, cv);
+      wasSignaled = true;
       cv.signal();
     },
-    ._onSuccess = [&cv, &res](std::unique_ptr<GeneralResponse> response) {
-      res->result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.get()));
-      res->status = CL_COMM_SENT;
-      res->result->wasHttpError();
-      response.release();
+    ._onSuccess = [&cv, &res, &wasSignaled](std::unique_ptr<GeneralResponse> response) {
+      try {
+        res->result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.get()));
+        res->status = CL_COMM_SENT;
+        res->result->wasHttpError();
+        
+        response.release();
+      } catch (...) {
+        res->status = CL_COMM_DROPPED;
+      }
+      CONDITION_LOCKER(isen, cv); 
+      wasSignaled = true;
       cv.signal();
     }
   };
@@ -558,7 +573,10 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
   _communicator->addRequest(communicator::Destination{httpEndpoint + path},
                std::move(request), callbacks, opt);
   
-  cv.wait();
+  CONDITION_LOCKER(isen, cv);
+  while (!wasSignaled) {
+    cv.wait(1000000);
+  }
   return res;
 }
 
@@ -1586,6 +1604,8 @@ void ClusterCommThread::run() {
       locker.wait(100000);
     }
   }
+  // mop: TODO stop all outstanding requests
+  // // communicator->killRequests()
 
   LOG_TOPIC(DEBUG, Logger::CLUSTER) << "stopped ClusterComm thread";
 }
