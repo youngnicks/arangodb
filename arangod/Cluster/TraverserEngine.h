@@ -49,7 +49,7 @@ struct TraverserOptions;
 class TraverserEngine {
 
   friend class TraverserEngineRegistry;
-  private:
+  protected:
   // These are private on purpose.
   // Only the Registry (friend) is allowed
   // to create and destroy engines.
@@ -59,9 +59,8 @@ class TraverserEngine {
     TraverserEngine(TRI_vocbase_t*, arangodb::velocypack::Slice);
 
   public:
-    ~TraverserEngine();
+    virtual ~TraverserEngine();
 
-  public:
    // The engine is NOT copyable.
    TraverserEngine(TraverserEngine const&) = delete;
 
@@ -73,6 +72,9 @@ class TraverserEngine {
 
    void getVertexData(arangodb::velocypack::Slice, size_t,
                       arangodb::velocypack::Builder&);
+
+   virtual void smartSearch(arangodb::velocypack::Slice,
+                            arangodb::velocypack::Builder&);
 
    bool lockCollection(std::string const&);
 
