@@ -91,7 +91,7 @@ void GeneralCommTask::executeRequest(
     return;
   }
 
-  EventLoop loop;
+  EventLoop loop{};
   handler->setTaskId(_taskId, loop);
 
   // asynchronous request

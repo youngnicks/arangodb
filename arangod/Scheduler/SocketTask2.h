@@ -36,12 +36,23 @@
 
 #include "Basics/socket-utils.h"
 
+#ifdef ARANGODB_SSL_ENABLED
+#include <boost/asio/ssl.hpp>
+#include <boost/optional.hpp>
+#endif
+
 namespace arangodb {
 namespace basics {
 class StringBuffer;
 }
 
 namespace rest {
+namespace asio = ::boost::asio;
+using asioSocket = asio::ip::tcp::socket;
+#ifdef ARANGODB_SSL_ENABLED
+using asioSslStream = asio::ssl::stream<asioSocket>;
+using asioSslContext = asio::ssl::context;
+#endif
 
 class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
   explicit SocketTask2(SocketTask2 const&) = delete;
@@ -51,7 +62,8 @@ class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
   static size_t const READ_BLOCK_SIZE = 10000;
 
  public:
-  SocketTask2(EventLoop2, TRI_socket_t, ConnectionInfo&&, double keepAliveTimeout);
+  SocketTask2(EventLoop2, TRI_socket_t, ConnectionInfo&&,
+              double keepAliveTimeout);
   ~SocketTask2() {}
 
  public:
@@ -84,8 +96,24 @@ class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
 
   std::deque<basics::StringBuffer*> _writeBuffers;
   std::deque<TRI_request_statistics_t*> _writeBuffersStats;
+  bool _encypted;
 
-  boost::asio::ip::tcp::socket _stream;
+#ifdef ARANGODB_SSL_ENABLED
+  asioSslContext _context;
+  asioSslStream _sslSocket;
+  asioSocket& getSocket() {
+    return _sslSocket.next_layer();
+  }  // we need this for the unencrypted case
+     // typeerasure like any_socket is impossible
+     // due to templates in fucntions like read_some
+  typename asioSslStream::lowest_layer_type& getBaseSocket() {
+    return _sslSocket.lowest_layer();
+  }
+#else
+  asioSocket _socket;
+  asioSocket getSocket() { return _socket; }
+  asioSocket::lowest_layer getBaseSocket() { return _socket.lowest_layer(); }
+#endif
 
  protected:
   bool _closeRequested = false;

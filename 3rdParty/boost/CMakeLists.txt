@@ -15,7 +15,7 @@ else()
     add_library(boost_boost INTERFACE)
     target_include_directories(boost_boost INTERFACE "${boost_src}")
 
-    #build boost_system
+    #build boost_system - there seems to be just one cpp file:)
     add_library(boost_system
         ${boost_src}/libs/system/src/error_code.cpp
     )

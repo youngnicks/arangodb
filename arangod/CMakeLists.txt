@@ -358,6 +358,10 @@ add_executable(${BIN_ARANGOD}
   ${ADDITIONAL_BIN_ARANGOD_SOURCES}
 )
 
+if(USE_SSL)
+    target_compile_definitions(${BIN_ARANGOD} PUBLIC "ARANGODB_SSL_ENABLED=1")
+endif()
+
 target_link_libraries(${BIN_ARANGOD}
   ${LIB_ARANGO_FE}
   ${LIB_ARANGO_V8}

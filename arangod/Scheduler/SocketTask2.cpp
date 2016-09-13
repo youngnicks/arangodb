@@ -36,20 +36,38 @@ using namespace arangodb::rest;
 // --SECTION--                                      constructors and destructors
 // -----------------------------------------------------------------------------
 
+// loop contains an asioio::service
+// stream is an asio socket and instead of opening
+// and operating system socket we assign the socket
+// given to us as TRI_socket_t to the asio::socket
 SocketTask2::SocketTask2(EventLoop2 loop, TRI_socket_t socket,
                          ConnectionInfo&& connectionInfo,
                          double keepAliveTimeout)
     : Task2(loop, "SocketTask2"),
       _connectionInfo(connectionInfo),
       _readBuffer(TRI_UNKNOWN_MEM_ZONE, READ_BLOCK_SIZE + 1, false),
-      _stream(loop._ioService) {
+      _encypted(false),
+#ifdef ARANGODB_SSL_ENABLED
+      _context(asioSslContext::sslv23),
+      _sslSocket(loop._ioService, _context)
+#else
+      _socket(loop._ioService)
+#endif
+{
+
+#ifndef ARANGODB_SSL_ENABLED
+  if (_encypted) {
+    throw std::logic_error(
+        "server compiled without ssl no encyption available");
+  }
+#endif
+
   ConnectionStatisticsAgent::acquire();
   connectionStatisticsAgentSetStart();
 
   boost::system::error_code ec;
-  _stream.assign(boost::asio::ip::tcp::v4(), socket.fileDescriptor, ec);
-
-  _stream.non_blocking(true);
+  getBaseSocket().assign(boost::asio::ip::tcp::v4(), socket.fileDescriptor, ec);
+  getBaseSocket().non_blocking(true);  // does this work as intened ()
 
   if (ec) {
     LOG_TOPIC(ERR, Logger::COMMUNICATION)
@@ -76,7 +94,7 @@ void SocketTask2::start() {
   }
 
   LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "starting communication on "
-                                          << _stream.native_handle();
+                                          << getBaseSocket().native_handle();
 
   _loop._ioService.post([this]() { asyncReadSome(); });
 }
@@ -123,9 +141,18 @@ void SocketTask2::addWriteBuffer(basics::StringBuffer* buffer,
     size_t written = 0;
 
     try {
-      written = _stream.write_some(
-          boost::asio::buffer(_writeBuffer->begin(), _writeBuffer->length()));
+      // written = _stream.write_some(
 
+      if (!_encypted) {
+        written = getSocket().write_some(
+            boost::asio::buffer(_writeBuffer->begin(), _writeBuffer->length()));
+      }
+#ifdef ARANGODB_SSL_ENABLED
+      else {
+        written = _sslSocket.write_some(
+            boost::asio::buffer(_writeBuffer->begin(), _writeBuffer->length()));
+      }
+#endif
       if (written == total) {
         completedWriteBuffer();
         return;
@@ -133,26 +160,45 @@ void SocketTask2::addWriteBuffer(basics::StringBuffer* buffer,
     } catch (boost::system::system_error err) {
       if (err.code() != boost::asio::error::would_block) {
         LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-            << "write on stream " << _stream.native_handle() << " failed with "
-            << err.what();
+            << "write on stream " << getBaseSocket().native_handle()
+            << " failed with " << err.what();
         closeStream();
         return;
       }
     }
 
-    boost::asio::async_write(
-        _stream,
-        boost::asio::buffer(_writeBuffer->begin() + written, total - written),
-        [this](const boost::system::error_code& ec, std::size_t transferred) {
-          if (ec) {
-            LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "write on stream "
-                                                    << _stream.native_handle()
-                                                    << " failed with " << ec;
-            closeStream();
-          } else {
-            completedWriteBuffer();
-          }
-        });
+    if (!_encypted) {
+      boost::asio::async_write(  // is ok
+          getSocket(),
+          boost::asio::buffer(_writeBuffer->begin() + written, total - written),
+          [this](const boost::system::error_code& ec, std::size_t transferred) {
+            if (ec) {
+              LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+                  << "write on stream " << getBaseSocket().native_handle()
+                  << " failed with " << ec;
+              closeStream();
+            } else {
+              completedWriteBuffer();
+            }
+          });
+    }
+#ifdef ARANGODB_SSL_ENABLED
+    else {
+      boost::asio::async_write(
+          _sslSocket,
+          boost::asio::buffer(_writeBuffer->begin() + written, total - written),
+          [this](const boost::system::error_code& ec, std::size_t transferred) {
+            if (ec) {
+              LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+                  << "write on stream " << getBaseSocket().native_handle()
+                  << " failed with " << ec;
+              closeStream();
+            } else {
+              completedWriteBuffer();
+            }
+          });
+    }
+#endif
   }
 }
 
@@ -189,10 +235,10 @@ void SocketTask2::completedWriteBuffer() {
 void SocketTask2::closeStream() {
   if (!_closedSend) {
     try {
-      _stream.shutdown(boost::asio::ip::tcp::socket::shutdown_send);
+      getBaseSocket().shutdown(boost::asio::ip::tcp::socket::shutdown_send);
     } catch (boost::system::system_error err) {
       LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "shutdown send stream "
-                                              << _stream.native_handle()
+                                              << getBaseSocket().native_handle()
                                               << " failed with " << err.what();
     }
 
@@ -201,10 +247,10 @@ void SocketTask2::closeStream() {
 
   if (!_closedReceive) {
     try {
-      _stream.shutdown(boost::asio::ip::tcp::socket::shutdown_receive);
+      getBaseSocket().shutdown(boost::asio::ip::tcp::socket::shutdown_receive);
     } catch (boost::system::system_error err) {
       LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "shutdown send stream "
-                                              << _stream.native_handle()
+                                              << getBaseSocket().native_handle()
                                               << " failed with " << err.what();
     }
 
@@ -212,10 +258,10 @@ void SocketTask2::closeStream() {
   }
 
   try {
-    _stream.close();
+    getBaseSocket().close();
   } catch (boost::system::system_error err) {
     LOG_TOPIC(WARN, Logger::COMMUNICATION)
-        << "close stream " << _stream.native_handle() << " failed with "
+        << "close stream " << getBaseSocket().native_handle() << " failed with "
         << err.what();
   }
 
@@ -238,12 +284,21 @@ bool SocketTask2::reserveMemory() {
 
 bool SocketTask2::trySyncRead() {
   try {
-    if (0 == _stream.available()) {
+    if (0 == getBaseSocket().available()) {
       return false;
     }
 
-    size_t bytesRead = _stream.read_some(
-        boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE));
+    size_t bytesRead = 0;
+    if (!_encypted) {
+      bytesRead = getSocket().read_some(
+          boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE));
+    }
+#ifdef ARANGODB_SSL_ENABLED
+    else {
+      bytesRead = _sslSocket.read_some(
+          boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE));
+    }
+#endif
 
     if (0 == bytesRead) {
       return false;  // should not happen
@@ -261,7 +316,7 @@ bool SocketTask2::trySyncRead() {
 }
 
 void SocketTask2::asyncReadSome() {
-  auto info = _stream.native_handle();
+  auto info = getBaseSocket().native_handle();
 
   try {
     JobGuard guard(_loop);
@@ -320,44 +375,80 @@ void SocketTask2::asyncReadSome() {
     return;
   }
 
-  _stream.async_read_some(
-      boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE),
-      [this, info](const boost::system::error_code& ec,
-                   std::size_t transferred) {
-        if (ec) {
-          LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "read on stream " << info
-                                                  << " failed with " << ec;
-          closeStream();
-        } else {
-          JobGuard guard(_loop);
-          guard.enterLoop();
+  if (!_encypted) {
+    getSocket().async_read_some(
+        boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE),
+        [this, info](const boost::system::error_code& ec,
+                     std::size_t transferred) {
+          if (ec) {
+            LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "read on stream " << info
+                                                    << " failed with " << ec;
+            closeStream();
+          } else {
+            JobGuard guard(_loop);
+            guard.enterLoop();
 
-          _readBuffer.increaseLength(transferred);
+            _readBuffer.increaseLength(transferred);
 
-          while (processRead()) {
+            while (processRead()) {
+              if (_closeRequested) {
+                break;
+              }
+            }
+
             if (_closeRequested) {
-              break;
+              LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+                  << "close requested, closing receive stream";
+
+              closeReceiveStream();
+            } else {
+              asyncReadSome();
             }
           }
-
-          if (_closeRequested) {
-            LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-                << "close requested, closing receive stream";
-
-            closeReceiveStream();
+        });
+  }
+#ifdef ARANGODB_SSL_ENABLED
+  else {
+    _sslSocket.async_read_some(
+        boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE),
+        [this, info](const boost::system::error_code& ec,
+                     std::size_t transferred) {
+          if (ec) {
+            LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "read on stream " << info
+                                                    << " failed with " << ec;
+            closeStream();
           } else {
-            asyncReadSome();
+            JobGuard guard(_loop);
+            guard.enterLoop();
+
+            _readBuffer.increaseLength(transferred);
+
+            while (processRead()) {
+              if (_closeRequested) {
+                break;
+              }
+            }
+
+            if (_closeRequested) {
+              LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+                  << "close requested, closing receive stream";
+
+              closeReceiveStream();
+            } else {
+              asyncReadSome();
+            }
           }
-        }
-      });
+        });
+  }
+#endif
 }
 
 void SocketTask2::closeReceiveStream() {
-  auto info = _stream.native_handle();
+  auto info = getBaseSocket().native_handle();
 
   if (!_closedReceive) {
     try {
-      _stream.shutdown(boost::asio::ip::tcp::socket::shutdown_receive);
+      getBaseSocket().shutdown(boost::asio::ip::tcp::socket::shutdown_receive);
     } catch (boost::system::system_error err) {
       LOG(WARN) << "shutdown receive stream " << info << " failed with "
                 << err.what();
