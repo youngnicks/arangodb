@@ -280,9 +280,9 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
   }
 
   // make sure we clean up before we leave this method
-  auto cleanup = [&elements] {
+  auto cleanup = [this, &elements] {
     for (auto& it : elements) {
-      TRI_index_element_t::freeElement(it);
+      it->free(numPaths());
     }
   };
 
@@ -437,9 +437,9 @@ int RocksDBIndex::remove(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
   }
   
   // make sure we clean up before we leave this method
-  auto cleanup = [&elements] {
+  auto cleanup = [this, &elements] {
     for (auto& it : elements) {
-      TRI_index_element_t::freeElement(it);
+      it->free(numPaths());
     }
   };
 
@@ -600,11 +600,7 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
   // _collection at least as long as trx is running.
   // Same for the iterator
   auto idx = _collection->primaryIndex();
-  auto iterator = std::make_unique<RocksDBIterator>(
-      trx, this, idx, _db, reverse,
-      leftBorder, rightBorder);
-
-  return iterator.release();
+  return new RocksDBIterator(trx, this, idx, _db, reverse, leftBorder, rightBorder);
 }
 
 bool RocksDBIndex::accessFitsIndex(

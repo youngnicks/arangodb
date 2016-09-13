@@ -315,8 +315,6 @@ class SkiplistIterator2 final : public IndexIterator {
   bool intervalValid(Node*, Node*) const;
 };
 
-
-
 class SkiplistIndex final : public PathBasedIndex {
   struct KeyElementComparator {
     int operator()(VPackSlice const* leftKey,
@@ -394,8 +392,8 @@ class SkiplistIndex final : public PathBasedIndex {
   /// the velocypack::Slice and the SkiplistIterator* results
   //////////////////////////////////////////////////////////////////////////////
 
-  SkiplistIterator* lookup(arangodb::Transaction*, arangodb::velocypack::Slice const,
-                           bool) const;
+  IndexIterator* lookup(arangodb::Transaction*, arangodb::velocypack::Slice const,
+                        bool) const;
 
   bool supportsFilterCondition(arangodb::aql::AstNode const*,
                                arangodb::aql::Variable const*, size_t, size_t&,

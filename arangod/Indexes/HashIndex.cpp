@@ -203,15 +203,6 @@ void LookupBuilder::buildNextSearchValue() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief Frees an index element
-////////////////////////////////////////////////////////////////////////////////
-
-static inline bool FreeElement(TRI_index_element_t* element) {
-  TRI_index_element_t::freeElement(element);
-  return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief determines if two elements are equal
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -394,11 +385,13 @@ void HashIndexIteratorVPack::reset() {
 ////////////////////////////////////////////////////////////////////////////////
 
 HashIndex::UniqueArray::UniqueArray(
+    size_t numPaths,
     TRI_HashArray_t* hashArray, HashElementFunc* hashElement,
     IsEqualElementElementByKey* isEqualElElByKey)
     : _hashArray(hashArray),
       _hashElement(hashElement),
-      _isEqualElElByKey(isEqualElElByKey) {
+      _isEqualElElByKey(isEqualElElByKey),
+      _numPaths(numPaths) {
   TRI_ASSERT(_hashArray != nullptr);
   TRI_ASSERT(_hashElement != nullptr);
   TRI_ASSERT(_isEqualElElByKey != nullptr);
@@ -410,7 +403,7 @@ HashIndex::UniqueArray::UniqueArray(
 
 HashIndex::UniqueArray::~UniqueArray() {
   if (_hashArray != nullptr) {
-    _hashArray->invokeOnAllElements(FreeElement);
+    _hashArray->invokeOnAllElements([this](TRI_index_element_t* element) -> bool { element->free(_numPaths); return true; });
   }
 
   delete _hashArray;
@@ -422,12 +415,14 @@ HashIndex::UniqueArray::~UniqueArray() {
 /// @brief create the multi array
 ////////////////////////////////////////////////////////////////////////////////
 
-HashIndex::MultiArray::MultiArray(TRI_HashArrayMulti_t* hashArray,
+HashIndex::MultiArray::MultiArray(size_t numPaths,
+                                  TRI_HashArrayMulti_t* hashArray,
                                   HashElementFunc* hashElement,
                                   IsEqualElementElementByKey* isEqualElElByKey)
     : _hashArray(hashArray),
       _hashElement(hashElement),
-      _isEqualElElByKey(isEqualElElByKey) {
+      _isEqualElElByKey(isEqualElElByKey),
+      _numPaths(numPaths) {
   TRI_ASSERT(_hashArray != nullptr);
   TRI_ASSERT(_hashElement != nullptr);
   TRI_ASSERT(_isEqualElElByKey != nullptr);
@@ -439,7 +434,7 @@ HashIndex::MultiArray::MultiArray(TRI_HashArrayMulti_t* hashArray,
 
 HashIndex::MultiArray::~MultiArray() {
   if (_hashArray != nullptr) {
-    _hashArray->invokeOnAllElements(FreeElement);
+    _hashArray->invokeOnAllElements([this](TRI_index_element_t* element) -> bool { element->free(_numPaths); return true; });
   }
 
   delete _hashArray;
@@ -474,7 +469,7 @@ HashIndex::HashIndex(
         []() -> std::string { return "unique hash-array"; });
 
     _uniqueArray =
-        new HashIndex::UniqueArray(array.get(), func.get(), compare.get());
+        new HashIndex::UniqueArray(numPaths(), array.get(), func.get(), compare.get());
     array.release();
   } else {
     _multiArray = nullptr;
@@ -485,7 +480,7 @@ HashIndex::HashIndex(
         []() -> std::string { return "multi hash-array"; });
 
     _multiArray =
-        new HashIndex::MultiArray(array.get(), func.get(), compare.get());
+        new HashIndex::MultiArray(numPaths(), array.get(), func.get(), compare.get());
 
     array.release();
   }
@@ -515,7 +510,7 @@ HashIndex::HashIndex(TRI_idx_iid_t iid, LogicalCollection* collection,
         []() -> std::string { return "unique hash-array"; });
 
     _uniqueArray =
-        new HashIndex::UniqueArray(array.get(), func.get(), compare.get());
+        new HashIndex::UniqueArray(numPaths(), array.get(), func.get(), compare.get());
     array.release();
   } else {
     _multiArray = nullptr;
@@ -526,7 +521,7 @@ HashIndex::HashIndex(TRI_idx_iid_t iid, LogicalCollection* collection,
         []() -> std::string { return "multi hash-array"; });
 
     _multiArray =
-        new HashIndex::MultiArray(array.get(), func.get(), compare.get());
+        new HashIndex::MultiArray(numPaths(), array.get(), func.get(), compare.get());
 
     array.release();
   }
@@ -712,10 +707,11 @@ int HashIndex::batchInsert(arangodb::Transaction* trx,
 }
   
 int HashIndex::unload() {
+  size_t const n = numPaths();
   if (_unique) {
-    _uniqueArray->_hashArray->truncate(FreeElement);
+    _uniqueArray->_hashArray->truncate([&n](TRI_index_element_t* element) -> bool { element->free(n); return true; });
   } else {
-    _multiArray->_hashArray->truncate(FreeElement);
+    _multiArray->_hashArray->truncate([&n](TRI_index_element_t* element) -> bool { element->free(n); return true; });
   }
   return TRI_ERROR_NO_ERROR;
 }
@@ -785,7 +781,7 @@ int HashIndex::insertUnique(arangodb::Transaction* trx,
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& it : elements) {
       // free all elements to prevent leak
-      FreeElement(it);
+      it->free(numPaths());
     }
 
     return res;
@@ -806,7 +802,7 @@ int HashIndex::insertUnique(arangodb::Transaction* trx,
     if (res != TRI_ERROR_NO_ERROR) {
       for (size_t j = i; j < n; ++j) {
         // Free all elements that are not yet in the index
-        FreeElement(elements[j]);
+        elements[j]->free(numPaths());
       }
       // Already indexed elements will be removed by the rollback
       break;
@@ -827,7 +823,7 @@ int HashIndex::batchInsertUnique(
     if (res != TRI_ERROR_NO_ERROR) {
       for (auto& it : elements) {
         // free all elements to prevent leak
-        FreeElement(it);
+        it->free(numPaths());
       }
       return res;
     }
@@ -843,7 +839,7 @@ int HashIndex::batchInsertUnique(
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& it : elements) {
       // free all elements to prevent leak
-      FreeElement(it);
+      it->free(numPaths());
     }
   }
 
@@ -857,7 +853,7 @@ int HashIndex::insertMulti(arangodb::Transaction* trx,
 
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& hashElement : elements) {
-      FreeElement(hashElement);
+      hashElement->free(numPaths());
     }
     return res;
   }
@@ -872,7 +868,7 @@ int HashIndex::insertMulti(arangodb::Transaction* trx,
 
     if (found != nullptr) {
       // already got the exact same index entry. now free our local element...
-      FreeElement(element);
+      element->free(numPaths());
       // we're not responsible for this element anymore
       element = nullptr;
     }
@@ -894,7 +890,7 @@ int HashIndex::insertMulti(arangodb::Transaction* trx,
     if (res != TRI_ERROR_NO_ERROR) {
       for (size_t j = i; j < n; ++j) {
         // Free all elements that are not yet in the index
-        FreeElement(elements[j]);
+        elements[j]->free(numPaths());
       }
       for (size_t j = 0; j < i; ++j) {
         // Remove all already indexed elements and free them
@@ -923,7 +919,7 @@ int HashIndex::batchInsertMulti(
       // Filling the elements failed for some reason. Assume loading as failed
       for (auto& el : elements) {
         // Free all elements that are not yet in the index
-        FreeElement(el);
+        el->free(numPaths());
       }
       return res;
     }
@@ -951,7 +947,7 @@ int HashIndex::removeUniqueElement(arangodb::Transaction* trx,
     return TRI_ERROR_INTERNAL;
   }
 
-  FreeElement(old);
+  old->free(numPaths());
 
   return TRI_ERROR_NO_ERROR;
 }
@@ -963,7 +959,7 @@ int HashIndex::removeUnique(arangodb::Transaction* trx,
 
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& hashElement : elements) {
-      FreeElement(hashElement);
+      hashElement->free(numPaths());
     }
     return res;
   }
@@ -976,7 +972,7 @@ int HashIndex::removeUnique(arangodb::Transaction* trx,
     if (result != TRI_ERROR_NO_ERROR) {
       res = result;
     }
-    FreeElement(hashElement);
+    hashElement->free(numPaths());
   }
 
   return res;
@@ -996,7 +992,7 @@ int HashIndex::removeMultiElement(arangodb::Transaction* trx,
     }
     return TRI_ERROR_INTERNAL;
   }
-  FreeElement(old);
+  old->free(numPaths());
 
   return TRI_ERROR_NO_ERROR;
 }
@@ -1008,7 +1004,7 @@ int HashIndex::removeMulti(arangodb::Transaction* trx,
 
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& hashElement : elements) {
-      FreeElement(hashElement);
+      hashElement->free(numPaths());
     }
   }
 
@@ -1021,7 +1017,7 @@ int HashIndex::removeMulti(arangodb::Transaction* trx,
       res = result;
     }
 
-    FreeElement(hashElement);
+    hashElement->free(numPaths());
   }
 
   return res;

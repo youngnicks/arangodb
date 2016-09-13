@@ -157,7 +157,7 @@ int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
       }
       TRI_IF_FAILURE("FillElementOOM") {
         // clean up manually
-        TRI_index_element_t::freeElement(element);
+        element->free(n);
         return TRI_ERROR_OUT_OF_MEMORY;
       }
 
@@ -165,7 +165,7 @@ int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
       TRI_vpack_sub_t* subObjects = element->subObjects();
 
       for (size_t i = 0; i < n; ++i) {
-        TRI_FillVPackSub(&subObjects[i], slice, slices[i]);
+        subObjects[i].fill(slices[i]);
       }
 
       try {
@@ -175,7 +175,7 @@ int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
 
         elements.emplace_back(element);
       } catch (...) {
-        TRI_index_element_t::freeElement(element);
+        element->free(n);
         return TRI_ERROR_OUT_OF_MEMORY;
       }
     }
@@ -198,7 +198,7 @@ int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
         }
         TRI_IF_FAILURE("FillElementOOM") {
           // clean up manually
-          TRI_index_element_t::freeElement(element);
+          element->free(n);
           return TRI_ERROR_OUT_OF_MEMORY;
         }
 
@@ -206,7 +206,7 @@ int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
         TRI_vpack_sub_t* subObjects = element->subObjects();
 
         for (size_t j = 0; j < n; ++j) {
-          TRI_FillVPackSub(&subObjects[j], slice, info[j]);
+          subObjects[j].fill(info[j]);
         }
 
         try {
@@ -216,7 +216,7 @@ int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
 
           elements.emplace_back(element);
         } catch (...) {
-          TRI_index_element_t::freeElement(element);
+          element->free(n);
           return TRI_ERROR_OUT_OF_MEMORY;
         }
       }

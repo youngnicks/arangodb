@@ -1219,29 +1219,6 @@ std::vector<arangodb::LogicalCollection*> TRI_vocbase_t::collections(bool includ
   return collections;
 }
 
-/// @brief velocypack sub-object (for indexes, as part of TRI_index_element_t, 
-/// if offset is non-zero, then it is an offset into the VelocyPack data in
-/// the data or WAL file. If offset is 0, then data contains the actual data
-/// in place.
-VPackSlice TRI_vpack_sub_t::slice(TRI_doc_mptr_t const* mptr) const {
-  if (isValue()) {
-    return VPackSlice(&value.data[0]);
-  } 
-  return VPackSlice(mptr->vpack() + value.offset);
-}
-
-/// @brief fill a TRI_vpack_sub_t structure with a subvalue
-void TRI_FillVPackSub(TRI_vpack_sub_t* sub,
-                      VPackSlice const base, VPackSlice const value) noexcept {
-  if (value.byteSize() <= TRI_vpack_sub_t::maxValueLength()) {
-    sub->setValue(value.start(), static_cast<size_t>(value.byteSize()));
-  } else {
-    size_t off = value.start() - base.start();
-    TRI_ASSERT(off <= UINT32_MAX);
-    sub->setOffset(static_cast<uint32_t>(off));
-  }
-}
-
 /// @brief extract the _rev attribute from a slice
 TRI_voc_rid_t TRI_ExtractRevisionId(VPackSlice slice) {
   slice = slice.resolveExternal();

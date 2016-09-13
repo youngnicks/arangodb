@@ -335,7 +335,7 @@ class HashIndex final : public PathBasedIndex {
 
   struct UniqueArray {
     UniqueArray() = delete;
-    UniqueArray(TRI_HashArray_t*, HashElementFunc*,
+    UniqueArray(size_t numPaths, TRI_HashArray_t*, HashElementFunc*,
                 IsEqualElementElementByKey*);
 
     ~UniqueArray();
@@ -343,6 +343,7 @@ class HashIndex final : public PathBasedIndex {
     TRI_HashArray_t* _hashArray;    // the hash array itself, unique values
     HashElementFunc* _hashElement;  // hash function for elements
     IsEqualElementElementByKey* _isEqualElElByKey;  // comparison func
+    size_t _numPaths;
   };
 
   //////////////////////////////////////////////////////////////////////////////
@@ -355,7 +356,8 @@ class HashIndex final : public PathBasedIndex {
 
   struct MultiArray {
     MultiArray() = delete;
-    MultiArray(TRI_HashArrayMulti_t*, HashElementFunc*,
+    MultiArray(size_t numPaths,
+               TRI_HashArrayMulti_t*, HashElementFunc*,
                IsEqualElementElementByKey*);
     ~MultiArray();
 
@@ -363,6 +365,7 @@ class HashIndex final : public PathBasedIndex {
         _hashArray;                 // the hash array itself, non-unique values
     HashElementFunc* _hashElement;  // hash function for elements
     IsEqualElementElementByKey* _isEqualElElByKey;  // comparison func
+    size_t _numPaths;
   };
 
   union {

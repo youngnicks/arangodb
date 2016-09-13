@@ -54,15 +54,6 @@ static size_t sortWeight(arangodb::aql::AstNode const* node) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief frees an element in the skiplist
-////////////////////////////////////////////////////////////////////////////////
-
-static void FreeElm(void* e) {
-  auto element = static_cast<TRI_index_element_t*>(e);
-  TRI_index_element_t::freeElement(element);
-}
-
 // .............................................................................
 // recall for all of the following comparison functions:
 //
@@ -719,7 +710,7 @@ SkiplistIndex::SkiplistIndex(
       CmpKeyElm(this),
       _skiplistIndex(nullptr) {
   _skiplistIndex =
-      new TRI_Skiplist(CmpElmElm, CmpKeyElm, FreeElm, unique, _useExpansion);
+      new TRI_Skiplist(CmpElmElm, CmpKeyElm, [this](TRI_index_element_t* element) { element->free(numPaths()); }, unique, _useExpansion);
 }
 
 /// @brief create the skiplist index
@@ -731,7 +722,7 @@ SkiplistIndex::SkiplistIndex(TRI_idx_iid_t iid,
       CmpKeyElm(this),
       _skiplistIndex(nullptr) {
   _skiplistIndex =
-      new TRI_Skiplist(CmpElmElm, CmpKeyElm, FreeElm, _unique, _useExpansion);
+      new TRI_Skiplist(CmpElmElm, CmpKeyElm, [this](TRI_index_element_t* element) { element->free(numPaths()); }, _unique, _useExpansion);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -795,7 +786,7 @@ int SkiplistIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& it : elements) {
       // free all elements to prevent leak
-      TRI_index_element_t::freeElement(it);
+      it->free(numPaths());
     }
 
     return res;
@@ -810,10 +801,10 @@ int SkiplistIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
     res = _skiplistIndex->insert(elements[i]);
 
     if (res != TRI_ERROR_NO_ERROR) {
-      TRI_index_element_t::freeElement(elements[i]);
+      elements[i]->free(numPaths());
       // Note: this element is freed already
       for (size_t j = i + 1; j < count; ++j) {
-        TRI_index_element_t::freeElement(elements[j]);
+        elements[j]->free(numPaths());
       }
       for (size_t j = 0; j < i; ++j) {
         _skiplistIndex->remove(elements[j]);
@@ -848,7 +839,7 @@ int SkiplistIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& it : elements) {
       // free all elements to prevent leak
-      TRI_index_element_t::freeElement(it);
+      it->free(numPaths());
     }
 
     return res;
@@ -868,7 +859,7 @@ int SkiplistIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
       res = result;
     }
 
-    TRI_index_element_t::freeElement(elements[i]);
+    elements[i]->free(numPaths());
   }
 
   return res;
@@ -909,9 +900,9 @@ bool SkiplistIndex::intervalValid(Node* left, Node* right) const {
 /// the SkiplistIterator* results
 ////////////////////////////////////////////////////////////////////////////////
 
-SkiplistIterator* SkiplistIndex::lookup(arangodb::Transaction* trx,
-                                        VPackSlice const searchValues,
-                                        bool reverse) const {
+IndexIterator* SkiplistIndex::lookup(arangodb::Transaction* trx,
+                                     VPackSlice const searchValues,
+                                     bool reverse) const {
   TRI_ASSERT(searchValues.isArray());
   TRI_ASSERT(searchValues.length() <= _fields.size());
 
@@ -1034,7 +1025,7 @@ SkiplistIterator* SkiplistIndex::lookup(arangodb::Transaction* trx,
   }
 
   // Creates an empty iterator
-  return new SkiplistIterator(reverse, nullptr, nullptr);
+  return new EmptyIndexIterator();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

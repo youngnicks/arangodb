@@ -99,47 +99,6 @@ enum TRI_edge_direction_e {
   TRI_EDGE_OUT = 2
 };
 
-/// @brief velocypack sub-object (for indexes, as part of TRI_index_element_t, 
-/// if the last byte in data[] is 0, then it is an offset into the VelocyPack 
-/// data in the datafile or WAL file. If the last byte in data[] is 1, then 
-/// value.data contains the actual VelocyPack data in place.
-struct TRI_vpack_sub_t {
-  union {
-    uint8_t data[12];
-    uint32_t offset;
-  } value;
-  
-  static constexpr size_t maxValueLength() noexcept {
-    return sizeof(value.data) - 1;
-  }
-  
-  void setOffset(uint32_t offset) noexcept {
-    value.offset = offset;
-    value.data[maxValueLength()] = 0; // type = offset
-  }
-    
-  void setValue(uint8_t const* data, size_t length) noexcept {
-    memcpy(&value.data[0], data, length);
-    value.data[maxValueLength()] = 1; // type = value
-  }
-
-  inline bool isOffset() const noexcept {
-    return value.data[maxValueLength()] == 0;
-  }
-
-  inline bool isValue() const noexcept {
-    return value.data[maxValueLength()] == 1;
-  }
-
-  VPackSlice slice(TRI_doc_mptr_t const* mptr) const;
-};
-
-static_assert(sizeof(TRI_vpack_sub_t) == 12, "invalid size of TRI_vpack_sub_t");
-
-/// @brief fill a TRI_vpack_sub_t structure with a subvalue
-void TRI_FillVPackSub(TRI_vpack_sub_t* sub, 
-                      VPackSlice const base, VPackSlice const value) noexcept;
-
 /// @brief Hash and Equal comparison for a vector of VPackSlice
 namespace std {
 
