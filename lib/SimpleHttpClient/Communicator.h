@@ -57,28 +57,26 @@ class Communicator {
  public:
   // mop: TODO explicit constructor
   struct RequestInProgress {
-    RequestInProgress(Destination const& destination, Callbacks callbacks, Options options, uint64_t ticketId, std::string const& requestBody) : _handle(nullptr), _destination(destination), _callbacks(callbacks), _options(options), _ticketId(ticketId), _requestBody(requestBody), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)) {
-      _handle = curl_easy_init();
-      if (_handle == nullptr) {
-        THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+    RequestInProgress(Callbacks callbacks, uint64_t ticketId, std::string const& requestBody)
+      : _callbacks(callbacks), _ticketId(ticketId), _requestBody(requestBody), _requestHeaders(nullptr), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)) {
+    }
+    
+    ~RequestInProgress() {
+      if (_requestHeaders != nullptr) {
+        curl_slist_free_all(_requestHeaders);
       }
     }
 
     RequestInProgress(RequestInProgress const& other) = delete;
     RequestInProgress& operator=(RequestInProgress const& other) = delete;
 
-    ~RequestInProgress() {
-      curl_easy_cleanup(_handle);
-    }
-    CURL* _handle;
-
-    Destination _destination;
     Callbacks _callbacks;
-    Options _options;
     uint64_t _ticketId;
-    std::string const _requestBody;
-    std::unique_ptr<StringBuffer> _responseBody;
+    std::string _requestBody;
+    struct curl_slist* _requestHeaders = nullptr;
+
     HeadersInProgress _responseHeaders;
+    std::unique_ptr<StringBuffer> _responseBody;
   };
 
  private:
@@ -109,6 +107,7 @@ class Communicator {
   void createRequestInProgress(NewRequest const& newRequest);
   void handleResult(CURL*, CURLcode);
   void transformResult(CURL*, HeadersInProgress&&, std::unique_ptr<StringBuffer>, HttpResponse*);
+  void cleanMultiHandle(CURL*);
  
  private:
   static size_t readBody(void*, size_t, size_t, void*);

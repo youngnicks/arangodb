@@ -123,43 +123,47 @@ void Communicator::wait() {
 // -----------------------------------------------------------------------------
 
 void Communicator::createRequestInProgress(NewRequest const& newRequest) {
-  auto request = std::make_unique<RequestInProgress>(newRequest._destination, newRequest._callbacks,
-                            newRequest._options, newRequest._ticketId, ((HttpRequest*) newRequest._request.get())->body());
+  auto request = (HttpRequest*) newRequest._request.get();
+  auto rip = std::make_unique<RequestInProgress>(newRequest._callbacks, newRequest._ticketId, std::string(request->body().c_str(), request->body().length()));
   
-  CURL* handle = request->_handle;
+  CURL* handle = curl_easy_init();
+  if (handle == nullptr) {
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+  }
 
-  struct curl_slist *headers = nullptr;
+  struct curl_slist* requestHeaders = rip->_requestHeaders;
   
-  switch(newRequest._request->contentType()) {
+  switch(request->contentType()) {
     case ContentType::UNSET:
     case ContentType::CUSTOM:
     case ContentType::VPACK:
     case ContentType::DUMP:
       break;
     case ContentType::JSON:
-      headers = curl_slist_append(headers, "Content-Type: application/json");
+      requestHeaders = curl_slist_append(requestHeaders, "Content-Type: application/json");
       break;
     case ContentType::HTML:
-      headers = curl_slist_append(headers, "Content-Type: text/html");
+      requestHeaders = curl_slist_append(requestHeaders, "Content-Type: text/html");
       break;
     case ContentType::TEXT:
-      headers = curl_slist_append(headers, "Content-Type: text/plain");
+      requestHeaders = curl_slist_append(requestHeaders, "Content-Type: text/plain");
       break;
   }
-  for (auto const& header: newRequest._request->headers()) {
+  for (auto const& header: request->headers()) {
     std::string thisHeader(header.first + ": " + header.second);
-    headers = curl_slist_append(headers, thisHeader.c_str());
+    requestHeaders = curl_slist_append(requestHeaders, thisHeader.c_str());
   }
-  curl_easy_setopt(handle, CURLOPT_HTTPHEADER, headers); 
+  curl_easy_setopt(handle, CURLOPT_HTTPHEADER, requestHeaders); 
   curl_easy_setopt(handle, CURLOPT_HEADER, 0L);
   curl_easy_setopt(handle, CURLOPT_URL, newRequest._destination.url().c_str());
-  curl_easy_setopt(handle, CURLOPT_PRIVATE, request.get());
+  curl_easy_setopt(handle, CURLOPT_PRIVATE, rip.get());
   curl_easy_setopt(handle, CURLOPT_VERBOSE, 1L);
   curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, Communicator::readBody);
-  curl_easy_setopt(handle, CURLOPT_WRITEDATA, request.get());
+  curl_easy_setopt(handle, CURLOPT_WRITEDATA, rip.get());
   curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, Communicator::readHeaders);
-  curl_easy_setopt(handle, CURLOPT_HEADERDATA, request.get());
+  curl_easy_setopt(handle, CURLOPT_HEADERDATA, rip.get());
   curl_easy_setopt(handle, CURLOPT_DEBUGFUNCTION, Communicator::curlDebug);
+  curl_easy_setopt(handle, CURLOPT_DEBUGDATA, rip.get());
 
   curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, static_cast<long>(newRequest._options.requestTimeout * 1000));
   long connectTimeout = static_cast<long>(newRequest._options.connectionTimeout);
@@ -168,7 +172,7 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   }
   curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT, connectTimeout);
 
-  switch(newRequest._request->requestType()) {
+  switch(request->requestType()) {
     // mop: hmmm...why is this stuff in GeneralRequest? we are interested in HTTP only :S
     case RequestType::POST:
       curl_easy_setopt(handle, CURLOPT_POST, 1);
@@ -197,27 +201,28 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
     case RequestType::VSTREAM_REGISTER:
     case RequestType::VSTREAM_STATUS:
     case RequestType::ILLEGAL:
-      throw std::runtime_error("Invalid request type " +  GeneralRequest::translateMethod(newRequest._request->requestType()));
+      throw std::runtime_error("Invalid request type " +  GeneralRequest::translateMethod(request->requestType()));
       break;
   }
   
-  if (((HttpRequest*)newRequest._request.get())->body().length() > 0) {
-    curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, request->_requestBody.length());
-    curl_easy_setopt(handle, CURLOPT_POSTFIELDS, request->_requestBody.c_str());
+  if (request->body().length() > 0) {
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, rip->_requestBody.length());
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDS, rip->_requestBody.c_str());
   }
   
-  _requestsInProgress.emplace(newRequest._ticketId, std::move(request));
-  curl_multi_add_handle(_curl, handle);
-  // mop: TODO we are leaking here!
-  //curl_slist_free_all(headers);
+  try {
+    _requestsInProgress.emplace(newRequest._ticketId, std::move(rip));
+    curl_multi_add_handle(_curl, handle);
+  } catch (std::bad_alloc const& e) {
+    curl_easy_cleanup(handle);
+  }
 }
 
 void Communicator::handleResult(CURL* handle, CURLcode rc) {
   RequestInProgress* request = nullptr;
-
   curl_easy_getinfo(handle, CURLINFO_PRIVATE, &request);
   if (request == nullptr) {
-    curl_multi_remove_handle(_curl, handle);
+    cleanMultiHandle(handle);
     return;
   }
   
@@ -249,11 +254,16 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
       break;
   }
 
-  // and remove easy handle
-  curl_multi_remove_handle(_curl, handle);
+  cleanMultiHandle(handle);
   
   // remove request in progress
   _requestsInProgress.erase(request->_ticketId);
+}
+
+void Communicator::cleanMultiHandle(CURL* handle) {
+  // and remove easy handle
+  curl_multi_remove_handle(_curl, handle);
+  curl_easy_cleanup(handle);
 }
 
 void Communicator::transformResult(CURL* handle, HeadersInProgress&& responseHeaders, std::unique_ptr<StringBuffer> responseBody, HttpResponse* response) {
@@ -330,7 +340,6 @@ int Communicator::curlDebug(CURL *handle, curl_infotype type, char *data, size_t
 
 size_t Communicator::readHeaders(char* buffer, size_t size, size_t nitems, void* userptr) {
   size_t realsize = size * nitems;
-
   Communicator::RequestInProgress* rip = (struct Communicator::RequestInProgress*) userptr;
   
   std::string const header(buffer, realsize);
