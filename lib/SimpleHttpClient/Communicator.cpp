@@ -136,7 +136,7 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
   }
 
-  struct curl_slist* requestHeaders = rip->_requestHeaders;
+  struct curl_slist* requestHeaders = nullptr;
   
   switch(request->contentType()) {
     case ContentType::UNSET:
@@ -158,6 +158,7 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
     std::string thisHeader(header.first + ": " + header.second);
     requestHeaders = curl_slist_append(requestHeaders, thisHeader.c_str());
   }
+  rip->_requestHeaders = requestHeaders;
   curl_easy_setopt(handle, CURLOPT_HTTPHEADER, requestHeaders); 
   curl_easy_setopt(handle, CURLOPT_HEADER, 0L);
   curl_easy_setopt(handle, CURLOPT_URL, newRequest._destination.url().c_str());

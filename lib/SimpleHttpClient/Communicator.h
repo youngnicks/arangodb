@@ -58,7 +58,7 @@ namespace communicator {
     Callbacks _callbacks;
     uint64_t _ticketId;
     std::string _requestBody;
-    struct curl_slist* _requestHeaders = nullptr;
+    struct curl_slist* _requestHeaders;
 
     HeadersInProgress _responseHeaders;
     std::unique_ptr<StringBuffer> _responseBody;
