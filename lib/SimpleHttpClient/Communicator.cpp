@@ -124,9 +124,14 @@ void Communicator::wait() {
 
 void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   auto request = (HttpRequest*) newRequest._request.get();
-  auto rip = std::make_unique<RequestInProgress>(newRequest._callbacks, newRequest._ticketId, std::string(request->body().c_str(), request->body().length()));
-  
-  CURL* handle = curl_easy_init();
+
+  // mop: the curl handle will be managed safely via unique_ptr and hold ownership for rip
+  auto rip = new RequestInProgress(newRequest._callbacks, newRequest._ticketId, std::string(request->body().c_str(), request->body().length()));
+
+  std::unique_ptr<CURL> handleInProgress(curl_easy_init());
+
+  CURL* handle = handleInProgress.get();
+  curl_easy_setopt(handle, CURLOPT_PRIVATE, rip);
   if (handle == nullptr) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
   }
@@ -156,14 +161,13 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   curl_easy_setopt(handle, CURLOPT_HTTPHEADER, requestHeaders); 
   curl_easy_setopt(handle, CURLOPT_HEADER, 0L);
   curl_easy_setopt(handle, CURLOPT_URL, newRequest._destination.url().c_str());
-  curl_easy_setopt(handle, CURLOPT_PRIVATE, rip.get());
   curl_easy_setopt(handle, CURLOPT_VERBOSE, 1L);
   curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, Communicator::readBody);
-  curl_easy_setopt(handle, CURLOPT_WRITEDATA, rip.get());
+  curl_easy_setopt(handle, CURLOPT_WRITEDATA, rip);
   curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, Communicator::readHeaders);
-  curl_easy_setopt(handle, CURLOPT_HEADERDATA, rip.get());
+  curl_easy_setopt(handle, CURLOPT_HEADERDATA, rip);
   curl_easy_setopt(handle, CURLOPT_DEBUGFUNCTION, Communicator::curlDebug);
-  curl_easy_setopt(handle, CURLOPT_DEBUGDATA, rip.get());
+  curl_easy_setopt(handle, CURLOPT_DEBUGDATA, rip);
 
   curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, static_cast<long>(newRequest._options.requestTimeout * 1000));
   long connectTimeout = static_cast<long>(newRequest._options.connectionTimeout);
@@ -210,19 +214,18 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
     curl_easy_setopt(handle, CURLOPT_POSTFIELDS, rip->_requestBody.c_str());
   }
   
-  try {
-    _requestsInProgress.emplace(newRequest._ticketId, std::move(rip));
-    curl_multi_add_handle(_curl, handle);
-  } catch (std::bad_alloc const& e) {
-    curl_easy_cleanup(handle);
-  }
+   
+  _handlesInProgress.emplace(newRequest._ticketId, std::move(handleInProgress));
+  curl_multi_add_handle(_curl, handle);
 }
 
 void Communicator::handleResult(CURL* handle, CURLcode rc) {
+  // remove request in progress
+  curl_multi_remove_handle(_curl, handle);
+
   RequestInProgress* request = nullptr;
   curl_easy_getinfo(handle, CURLINFO_PRIVATE, &request);
   if (request == nullptr) {
-    cleanMultiHandle(handle);
     return;
   }
   
@@ -254,16 +257,7 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
       break;
   }
 
-  cleanMultiHandle(handle);
-  
-  // remove request in progress
-  _requestsInProgress.erase(request->_ticketId);
-}
-
-void Communicator::cleanMultiHandle(CURL* handle) {
-  // and remove easy handle
-  curl_multi_remove_handle(_curl, handle);
-  curl_easy_cleanup(handle);
+  _handlesInProgress.erase(request->_ticketId);
 }
 
 void Communicator::transformResult(CURL* handle, HeadersInProgress&& responseHeaders, std::unique_ptr<StringBuffer> responseBody, HttpResponse* response) {
@@ -275,7 +269,7 @@ void Communicator::transformResult(CURL* handle, HeadersInProgress&& responseHea
 size_t Communicator::readBody(void* data, size_t size, size_t nitems, void* userp) {
   size_t realsize = size * nitems;
 
-  Communicator::RequestInProgress* rip = (struct Communicator::RequestInProgress*) userp;
+  RequestInProgress* rip = (struct RequestInProgress*) userp;
   try {
     rip->_responseBody->appendText((char*) data, realsize);
     return realsize;
@@ -306,7 +300,7 @@ void Communicator::logHttpHeaders(std::string const& prefix, std::string const& 
 }
 
 int Communicator::curlDebug(CURL *handle, curl_infotype type, char *data, size_t size, void *userptr) {
-  arangodb::communicator::Communicator::RequestInProgress* request = nullptr;
+  arangodb::communicator::RequestInProgress* request = nullptr;
   curl_easy_getinfo(handle, CURLINFO_PRIVATE, &request);
   TRI_ASSERT(request != nullptr);
   TRI_ASSERT(data != nullptr);
@@ -340,7 +334,7 @@ int Communicator::curlDebug(CURL *handle, curl_infotype type, char *data, size_t
 
 size_t Communicator::readHeaders(char* buffer, size_t size, size_t nitems, void* userptr) {
   size_t realsize = size * nitems;
-  Communicator::RequestInProgress* rip = (struct Communicator::RequestInProgress*) userptr;
+  RequestInProgress* rip = (struct RequestInProgress*) userptr;
   
   std::string const header(buffer, realsize);
   size_t pivot = header.find_first_of(':');

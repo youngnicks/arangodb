@@ -24,7 +24,7 @@
 #ifndef ARANGODB_SIMPLE_HTTP_CLIENT_COMMUNICATOR_H
 #define ARANGODB_SIMPLE_HTTP_CLIENT_COMMUNICATOR_H 1
 
-#include "curl/multi.h"
+#include "curl/curl.h"
 
 #include "Basics/Common.h"
 #include "Basics/Mutex.h"
@@ -38,29 +38,14 @@
 
 namespace arangodb {
 using namespace basics;
-
 namespace communicator {
-class Communicator {
- private:
   typedef std::unordered_map<std::string, std::string> HeadersInProgress;
 
- public:
-  Communicator();
-
- public:
-  Ticket addRequest(Destination, std::unique_ptr<GeneralRequest>, Callbacks,
-                    Options);
-
-  int work_once();
-  void wait();
- 
- public:
-  // mop: TODO explicit constructor
   struct RequestInProgress {
     RequestInProgress(Callbacks callbacks, uint64_t ticketId, std::string const& requestBody)
       : _callbacks(callbacks), _ticketId(ticketId), _requestBody(requestBody), _requestHeaders(nullptr), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)) {
-    }
-    
+      }
+
     ~RequestInProgress() {
       if (_requestHeaders != nullptr) {
         curl_slist_free_all(_requestHeaders);
@@ -78,6 +63,45 @@ class Communicator {
     HeadersInProgress _responseHeaders;
     std::unique_ptr<StringBuffer> _responseBody;
   };
+}
+}
+
+namespace std {
+template <>
+class default_delete<CURL> {
+ public:
+  void operator()(CURL* handle) {
+    if (handle != nullptr) {
+      arangodb::communicator::RequestInProgress* request = nullptr;
+      curl_easy_getinfo(handle, CURLINFO_PRIVATE, &request);
+      TRI_ASSERT(request != nullptr);
+      // mop: without assertions we should continue operation but free safely
+      if (request != nullptr) {
+        delete request;
+      }
+      curl_easy_cleanup(handle);
+    }
+  }
+};
+}
+
+namespace arangodb {
+using namespace basics;
+
+namespace communicator {
+
+class Communicator {
+ public:
+  Communicator();
+
+ public:
+  Ticket addRequest(Destination, std::unique_ptr<GeneralRequest>, Callbacks,
+                    Options);
+
+  int work_once();
+  void wait();
+ 
+ public:
 
  private:
   struct NewRequest {
@@ -94,8 +118,8 @@ class Communicator {
  private:
   Mutex _newRequestsLock;
   std::vector<NewRequest> _newRequests;
-  std::unordered_map<uint64_t, std::unique_ptr<RequestInProgress>>
-      _requestsInProgress;
+  std::unordered_map<uint64_t, std::unique_ptr<CURL>>
+      _handlesInProgress;
   CURLM* _curl;
   CURLMcode _mc;
   curl_waitfd _wakeup;
@@ -107,7 +131,6 @@ class Communicator {
   void createRequestInProgress(NewRequest const& newRequest);
   void handleResult(CURL*, CURLcode);
   void transformResult(CURL*, HeadersInProgress&&, std::unique_ptr<StringBuffer>, HttpResponse*);
-  void cleanMultiHandle(CURL*);
  
  private:
   static size_t readBody(void*, size_t, size_t, void*);
