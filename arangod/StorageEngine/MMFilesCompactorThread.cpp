@@ -358,10 +358,10 @@ void MMFilesCompactorThread::compactDatafiles(LogicalCollection* collection,
 
       // check if the document is still active
       auto primaryIndex = collection->primaryIndex();
-      IndexElement* f = primaryIndex->lookupKey(context->_trx, keySlice);
+      IndexElement* element = primaryIndex->lookupKey(context->_trx, keySlice);
       TRI_doc_mptr_t* found = nullptr;
-      if (f != nullptr) {
-        found = f->document();
+      if (element != nullptr) {
+        found = element->document();
       }
       bool deleted = (found == nullptr || marker != found->getMarkerPtr());
 
@@ -384,15 +384,14 @@ void MMFilesCompactorThread::compactDatafiles(LogicalCollection* collection,
         FATAL_ERROR_EXIT();
       }
 
-      TRI_doc_mptr_t* found2 = const_cast<TRI_doc_mptr_t*>(found);
-      TRI_ASSERT(found2->vpack() != nullptr);
-      TRI_ASSERT(found2->vpackSize() > 0);
+      TRI_ASSERT(found->vpack() != nullptr);
+      TRI_ASSERT(found->vpackSize() > 0);
 
       // let marker point to the new position
-      found2->setVPackFromMarker(result);
+      found->setVPackFromMarker(result);
       // update fid in case it changes
-      if (found2->getFid() != targetFid) {
-        found2->setFid(targetFid, false);
+      if (found->getFid() != targetFid) {
+        found->setFid(targetFid, false);
       }
 
       context->_dfi.numberAlive++;

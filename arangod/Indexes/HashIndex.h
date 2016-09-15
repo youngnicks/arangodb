@@ -277,7 +277,8 @@ class HashIndex final : public PathBasedIndex {
         return hash;
       }
 
-      return fasthash64(&element, sizeof(element), hash);
+      TRI_doc_mptr_t* ptr = element->document();
+      return fasthash64(&ptr, sizeof(ptr), hash);
     }
   };
 

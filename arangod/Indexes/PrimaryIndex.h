@@ -193,15 +193,6 @@ class PrimaryIndex final : public Index {
 
   int insertKey(arangodb::Transaction*, TRI_doc_mptr_t*);
 
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief adds a key/element to the index
-  /// this is a special, optimized version that receives the target slot index
-  /// from a previous lookupKey call
-  //////////////////////////////////////////////////////////////////////////////
-
-  int insertKey(arangodb::Transaction*, IndexElement*,
-                arangodb::basics::BucketPosition const&);
-
   int removeKey(arangodb::Transaction* trx, TRI_doc_mptr_t const*);
 
   int resize(arangodb::Transaction*, size_t);

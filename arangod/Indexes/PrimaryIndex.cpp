@@ -174,7 +174,17 @@ PrimaryIndex::PrimaryIndex(arangodb::LogicalCollection* collection)
 PrimaryIndex::PrimaryIndex(VPackSlice const& slice)
     : Index(slice), _primaryIndex(nullptr) {}
 
-PrimaryIndex::~PrimaryIndex() { delete _primaryIndex; }
+PrimaryIndex::~PrimaryIndex() { 
+  auto cb = [this](IndexElement* element) -> bool { 
+    element->free(1);
+    return true; 
+  };
+
+  // must invoke the free callback on all index elements to prevent leaks :snake:
+  _primaryIndex->invokeOnAllElements(cb);
+  
+  delete _primaryIndex; 
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief return the number of documents from the index
@@ -206,10 +216,16 @@ void PrimaryIndex::toVelocyPackFigures(VPackBuilder& builder) const {
 }
 
 int PrimaryIndex::insert(arangodb::Transaction*, DocumentWrapper const&, bool) {
+#ifdef ARANGODB_ENABLE_MAINTAINER_MODE
+  LOG(WARN) << "insert() called for primary index";
+#endif
   THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "insert() called for primary index");
 }
 
 int PrimaryIndex::remove(arangodb::Transaction*, DocumentWrapper const&, bool) {
+#ifdef ARANGODB_ENABLE_MAINTAINER_MODE
+  LOG(WARN) << "remove() called for primary index";
+#endif
   THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "remove() called for primary index");
 }
 
@@ -310,27 +326,21 @@ int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* header) 
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief adds a key/element to the index
-/// this is a special, optimized version that receives the target slot index
-/// from a previous lookupKey call
-////////////////////////////////////////////////////////////////////////////////
-
-int PrimaryIndex::insertKey(arangodb::Transaction* trx, IndexElement* header,
-                            arangodb::basics::BucketPosition const& position) {
-  return _primaryIndex->insertAtPosition(trx, header, position);
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief removes an key/element from the index
 ////////////////////////////////////////////////////////////////////////////////
 
 int PrimaryIndex::removeKey(arangodb::Transaction* trx,
                             TRI_doc_mptr_t const* mptr) {
   IndexElementGuard element(buildKeyElement(mptr), 1);
-  
-  IndexElementGuard found(_primaryIndex->removeByKey(trx, element.get()->slice().begin()), 1);
+  if (!element) {
+    return TRI_ERROR_OUT_OF_MEMORY;
+  }
 
-  if (found == nullptr) {
+  uint8_t const* key = element.get()->slice().begin();
+  
+  IndexElementGuard found(_primaryIndex->removeByKey(trx, key), 1);
+
+  if (!found) {
     return TRI_ERROR_ARANGO_DOCUMENT_NOT_FOUND;
   }
 

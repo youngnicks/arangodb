@@ -132,8 +132,7 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
   VPackSlice const slice(document.slice());
 
   if (slice.isNone()) {
-    LOG(WARN) << "encountered invalid marker with slice of type None";
-
+    LOG(ERR) << "encountered invalid marker with slice of type None";
     return TRI_ERROR_INTERNAL;
   }
 
@@ -161,7 +160,12 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
       element->document(const_cast<TRI_doc_mptr_t*>(document.mptr()));
 
       for (size_t i = 0; i < n; ++i) {
-        element->subObject(i)->fill(slices[i]);
+        try { 
+          element->subObject(i)->fill(slices[i]);
+        } catch (...) {
+          element->free(n);
+          throw;
+        }
       }
 
       try {
@@ -201,7 +205,12 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
         element->document(const_cast<TRI_doc_mptr_t*>(document.mptr()));
 
         for (size_t j = 0; j < n; ++j) {
-          element->subObject(j)->fill(info[j]);
+          try {
+            element->subObject(j)->fill(info[j]);
+          } catch (...) {
+            element->free(n);
+            throw;
+          }
         }
 
         try {

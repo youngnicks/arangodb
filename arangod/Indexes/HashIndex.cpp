@@ -216,8 +216,7 @@ static bool IsEqualElementElement(void*,
 /// @brief given a key generates a hash integer
 ////////////////////////////////////////////////////////////////////////////////
 
-static uint64_t HashKey(void*,
-                        VPackSlice const* key) {
+static uint64_t HashKey(void*, VPackSlice const* key) {
   TRI_ASSERT(key->isArray());
   uint64_t hash = 0x0123456789abcdef;
   size_t const n = key->length();
@@ -227,7 +226,7 @@ static uint64_t HashKey(void*,
     // of arrays/objects/numbers
     hash = (*key)[j].normalizedHash(hash);
   }
-
+  
   return hash;
 }
 
@@ -246,7 +245,7 @@ static bool IsEqualKeyElement(void*,
   for (size_t j = 0; j < n; ++j) {
     VPackSlice const leftVPack = (*left)[j];
     VPackSlice const rightVPack = right->subObject(j)->slice();
-
+  
     int res = arangodb::basics::VelocyPackHelper::compare(leftVPack, rightVPack, false);
     if (res != 0) {
       return false;
@@ -402,7 +401,10 @@ HashIndex::UniqueArray::UniqueArray(
 
 HashIndex::UniqueArray::~UniqueArray() {
   if (_hashArray != nullptr) {
-    _hashArray->invokeOnAllElements([this](IndexElement* element) -> bool { element->free(_numPaths); return true; });
+    auto cb = [this](IndexElement* element) -> bool { 
+      element->free(_numPaths); return true; 
+    };
+    _hashArray->invokeOnAllElements(cb);
   }
 
   delete _hashArray;
@@ -433,7 +435,10 @@ HashIndex::MultiArray::MultiArray(size_t numPaths,
 
 HashIndex::MultiArray::~MultiArray() {
   if (_hashArray != nullptr) {
-    _hashArray->invokeOnAllElements([this](IndexElement* element) -> bool { element->free(_numPaths); return true; });
+    auto cb = [this](IndexElement* element) -> bool { 
+      element->free(_numPaths); return true; 
+    };
+    _hashArray->invokeOnAllElements(cb);
   }
 
   delete _hashArray;
@@ -938,14 +943,13 @@ int HashIndex::removeUniqueElement(arangodb::Transaction* trx,
   TRI_IF_FAILURE("RemoveHashIndex") { return TRI_ERROR_DEBUG; }
   IndexElement* old = _uniqueArray->_hashArray->remove(trx, element);
 
-  // this might happen when rolling back
   if (old == nullptr) {
-    if (isRollback) {
+    // not found
+    if (isRollback) {  // ignore in this case, because it can happen
       return TRI_ERROR_NO_ERROR;
     }
     return TRI_ERROR_INTERNAL;
   }
-
   old->free(numPaths());
 
   return TRI_ERROR_NO_ERROR;
@@ -981,7 +985,6 @@ int HashIndex::removeMultiElement(arangodb::Transaction* trx,
                                   IndexElement* element,
                                   bool isRollback) {
   TRI_IF_FAILURE("RemoveHashIndex") { return TRI_ERROR_DEBUG; }
-
   IndexElement* old = _multiArray->_hashArray->remove(trx, element);
 
   if (old == nullptr) {
@@ -1005,6 +1008,7 @@ int HashIndex::removeMulti(arangodb::Transaction* trx,
     for (auto& hashElement : elements) {
       hashElement->free(numPaths());
     }
+    return res;
   }
 
   for (auto& hashElement : elements) {

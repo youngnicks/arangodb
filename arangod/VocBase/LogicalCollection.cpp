@@ -220,7 +220,7 @@ static std::shared_ptr<Index> PrepareIndexFromSlice(VPackSlice info,
     if (generateKey) {
       THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
     } else {
-      THROW_ARANGO_EXCEPTION(TRI_ERROR_INTERNAL);
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "invalid index type definition");
     }
   }
 
@@ -2336,6 +2336,9 @@ int LogicalCollection::rollbackOperation(arangodb::Transaction* trx,
     return res;
   }
 
+#ifdef ARANGODB_ENABLE_MAINTAINER_MODE
+  LOG(ERR) << "logic error. invalid operation type on rollback";
+#endif
   return TRI_ERROR_INTERNAL;
 }
 
@@ -2375,7 +2378,11 @@ int LogicalCollection::fillIndex(arangodb::Transaction* trx,
     return ex.code();
   } catch (std::bad_alloc const&) {
     return TRI_ERROR_OUT_OF_MEMORY;
+  } catch (std::exception const& ex) {
+    LOG(WARN) << "caught exception while filling indexes: " << ex.what();
+    return TRI_ERROR_INTERNAL;
   } catch (...) {
+    LOG(WARN) << "caught unknown exception while filling indexes";
     return TRI_ERROR_INTERNAL;
   }
 }

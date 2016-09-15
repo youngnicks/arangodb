@@ -39,6 +39,8 @@
 #include <velocypack/velocypack-aliases.h>
 
 using namespace arangodb;
+
+static constexpr uint64_t hashSeed = 0x87654321;
    
 /// @brief hard-coded vector of the index attributes
 /// note that the attribute names must be hard-coded here to avoid an init-order
@@ -54,38 +56,31 @@ static std::vector<std::vector<arangodb::basics::AttributeName>> const IndexAttr
 static uint64_t HashElementKey(void*, VPackSlice const* key) {
   // TODO: Can we unify all HashElementKey functions for VPack?
   TRI_ASSERT(key != nullptr);
-  uint64_t hash = 0x87654321;
   if (!key->isString()) {
     // Illegal edge entry, key has to be string.
     TRI_ASSERT(false);
-    return hash;
+    return hashSeed;
   }
   // we can get away with the fast hash function here, as edge
   // index values are restricted to strings
-  return key->hashString(hash);
+  return key->hashString(hashSeed);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief hashes an edge
 ////////////////////////////////////////////////////////////////////////////////
 
-static uint64_t HashElementEdge(void*, IndexElement const* element, bool byKey) {
+static uint64_t HashElementEdge(void* userData, IndexElement const* element, bool byKey) {
   TRI_ASSERT(element != nullptr);
 
-  uint64_t hash = 0x87654321;
-
   if (!byKey) {
-    hash = (uint64_t) element;
-    hash = fasthash64(&hash, sizeof(hash), 0x56781234);
-  } else {
-    // Is identical to HashElementKey
-    VPackSlice tmp = element->slice(0);
-    TRI_ASSERT(tmp.isString());
-    // we can get away with the fast hash function here, as edge
-    // index values are restricted to strings
-    hash = tmp.hashString(hash);
+    uint64_t hash = (uint64_t) element->document();
+    return fasthash64(&hash, sizeof(hash), 0x56781234);
   }
-  return hash;
+
+  // Is identical to HashElementKey
+  VPackSlice tmp = element->slice(0);
+  return HashElementKey(userData, &tmp);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -100,15 +95,15 @@ static bool IsEqualKeyEdge(void*, VPackSlice const* left, IndexElement const* ri
   // right is an element, that is a master pointer
   VPackSlice tmp = right->slice(0);
   TRI_ASSERT(tmp.isString());
-  return (*left).equals(tmp);
+  return left->equals(tmp);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks for elements are equal (_from and _to case)
+/// @brief checks for elements are equal
 ////////////////////////////////////////////////////////////////////////////////
 
 static bool IsEqualElementEdge(void*, IndexElement const* left, IndexElement const* right) {
-  return left == right;
+  return left->document() == right->document();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -278,8 +273,17 @@ EdgeIndex::EdgeIndex(VPackSlice const& slice)
     : Index(slice), _edgesFrom(nullptr), _edgesTo(nullptr), _numBuckets(1) {}
 
 EdgeIndex::~EdgeIndex() {
-  delete _edgesTo;
+  auto cb = [this](IndexElement* element) -> bool { 
+    element->free(1);
+    return true; 
+  };
+
+  // must invoke the free callback on all index elements to prevent leaks :snake:
+  _edgesFrom->invokeOnAllElements(cb);
   delete _edgesFrom;
+
+  _edgesTo->invokeOnAllElements(cb);
+  delete _edgesTo;
 }
 
 void EdgeIndex::buildSearchValue(TRI_edge_direction_e dir,
@@ -470,6 +474,7 @@ int EdgeIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
   try {
     _edgesTo->insert(trx, toElement.get(), true, isRollback);
   } catch (...) {
+    // roll back partial insert
     _edgesFrom->remove(trx, fromElement.get());
     return TRI_ERROR_OUT_OF_MEMORY;
   }
@@ -490,6 +495,7 @@ int EdgeIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc,
     return TRI_ERROR_OUT_OF_MEMORY;
   }
 
+  // will free the elements that were removed from the index...
   IndexElementGuard oldFrom(_edgesFrom->remove(trx, fromElement.get()), 1);
   IndexElementGuard oldTo(_edgesTo->remove(trx, toElement.get()), 1);
 
@@ -535,7 +541,7 @@ int EdgeIndex::batchInsert(arangodb::Transaction* trx,
   for (auto const& it : documents) {
     IndexElementGuard toElement(buildToElement(it), 1);
     if (toElement == nullptr) {
-      // TODO: OOM
+      // TODO: remove the elements that were inserted into _edgesFrom!
       return TRI_ERROR_OUT_OF_MEMORY;
     }
     elements.emplace_back(toElement.get());

@@ -660,7 +660,7 @@ class AssocUnique {
             (*it2).second.emplace_back(std::move(it.second));
           }
         } catch (...) {
-          res = TRI_ERROR_INTERNAL;
+          res = TRI_ERROR_OUT_OF_MEMORY;
         }
       };
 
@@ -682,7 +682,7 @@ class AssocUnique {
           threads.emplace_back(std::thread(partitioner, lower, upper));
         }
       } catch (...) {
-        res = TRI_ERROR_INTERNAL;
+        res = TRI_ERROR_OUT_OF_MEMORY;
       }
 
       for (size_t i = 0; i < threads.size(); ++i) {
@@ -729,7 +729,7 @@ class AssocUnique {
             }
           }
         } catch (...) {
-          res = TRI_ERROR_INTERNAL;
+          res = TRI_ERROR_OUT_OF_MEMORY;
         }
       };
 
@@ -741,7 +741,7 @@ class AssocUnique {
           threads.emplace_back(std::thread(inserter, i));
         }
       } catch (...) {
-        res = TRI_ERROR_INTERNAL;
+        res = TRI_ERROR_OUT_OF_MEMORY;
       }
 
       for (size_t i = 0; i < threads.size(); ++i) {

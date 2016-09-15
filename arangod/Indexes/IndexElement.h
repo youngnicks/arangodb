@@ -60,7 +60,7 @@ struct TRI_vpack_sub_t {
 
   void free() {
     if (isManaged()) {
-      delete value.managed;
+      delete[] value.managed;
     }
   }
   
@@ -83,6 +83,8 @@ struct TRI_vpack_sub_t {
   }
     
   void setValue(uint8_t const* data, size_t length) noexcept {
+    TRI_ASSERT(length > 0);
+    TRI_ASSERT(length <= maxValueLength());
     memcpy(&value.data[0], data, length);
     value.data[maxValueLength()] = 1; // type = value
   }
@@ -164,7 +166,9 @@ struct IndexElement {
       return nullptr;
     }
 
+    // will not fail
     IndexElement* element = new (space) IndexElement();
+
     element->init(numSubs);
     return element;
   }
