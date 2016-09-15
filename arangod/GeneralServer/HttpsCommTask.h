@@ -27,7 +27,6 @@
 #define ARANGOD_HTTP_SERVER_HTTPS_COMM_TASK_H 1
 
 #include "GeneralServer/HttpCommTask.h"
-
 #include <openssl/ssl.h>
 
 namespace arangodb {

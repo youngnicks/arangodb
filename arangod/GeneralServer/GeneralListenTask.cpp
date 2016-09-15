@@ -46,16 +46,16 @@ GeneralListenTask::GeneralListenTask(GeneralServer* server, Endpoint* endpoint,
       _connectionType(connectionType) {
   _keepAliveTimeout = GeneralServerFeature::keepAliveTimeout();
 
-  SslServerFeature* ssl =
-      application_features::ApplicationServer::getFeature<SslServerFeature>(
-          "SslServer");
+  //SslServerFeature* ssl =
+  //    application_features::ApplicationServer::getFeature<SslServerFeature>(
+  //        "SslServer");
 
-  if (ssl != nullptr) {
-    _sslContext = ssl->sslContext();
-  }
+  //if (ssl != nullptr) {
+  //  _sslContext = ssl->sslContext();
+  //}
 
-  _verificationMode = GeneralServerFeature::verificationMode();
-  _verificationCallback = GeneralServerFeature::verificationCallback();
+  //_verificationMode = GeneralServerFeature::verificationMode();
+  //_verificationCallback = GeneralServerFeature::verificationCallback();
 }
 
 extern EventLoop2* EVENTLOOP2;
