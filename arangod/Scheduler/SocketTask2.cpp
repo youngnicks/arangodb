@@ -80,14 +80,24 @@ SocketTask2::SocketTask2(EventLoop2 loop, TRI_socket_t socket,
   _socket.assign(boost::asio::ip::tcp::v4(), socket.fileDescriptor, ec);
   _socket.non_blocking(true);  // does this work as intened ()
 
+  if (ec) {
+    LOG_TOPIC(ERR, Logger::COMMUNICATION)
+        << "cannot create stream from socket: " << ec;
+    _closedSend = true;
+    _closedReceive = true;
+  }
 
   if (_encrypted) {
-    _sslSocket.handshake(boost::asio::ssl::stream_base::handshake_type::server);
+    do {
+      ec.assign(boost::system::errc::success, boost::system::generic_category());
+      _sslSocket.handshake(boost::asio::ssl::stream_base::handshake_type::server, ec);
+    } while (ec.value() == 11);
   }
 
   if (ec) {
     LOG_TOPIC(ERR, Logger::COMMUNICATION)
-        << "cannot create stream from socket: " << ec;
+        << "unable to perform ssl handshake: "
+        << ec.message() << " : " << ec.value();
     _closedSend = true;
     _closedReceive = true;
   }

@@ -350,17 +350,26 @@ void GeneralServerFeature::buildServers() {
   auto const& endpointList = endpoint->endpointList();
 
   // check if endpointList contains ssl featured server
-  //if (endpointList.hasSsl()) {
-  //  SslServerFeature* ssl =
-  //      application_features::ApplicationServer::getFeature<SslServerFeature>(
-  //          "SslServer");
+  if (endpointList.hasSsl()) {
+    SslServerFeature* ssl =
+        application_features::ApplicationServer::getFeature<SslServerFeature>(
+            "SslServer");
 
-  //  if (ssl->sslContext() == nullptr) {
-  //    LOG(FATAL) << "no ssl context is known, cannot create https server, "
-  //                  "please use the '--ssl.keyfile' option";
-  //    FATAL_ERROR_EXIT();
-  //  }
-  //}
+    try {
+      ssl->sslContext();
+    }
+    catch (std::exception& e) {
+      LOG(ERR) << e.what();
+      LOG(FATAL) << "no ssl context is known, cannot create https server, "
+                    "please use the '--ssl.keyfile' option";
+      FATAL_ERROR_EXIT();
+    }
+    catch (...) {
+      LOG(FATAL) << "no ssl context is known, cannot create https server, "
+                    "please use the '--ssl.keyfile' option";
+      FATAL_ERROR_EXIT();
+    }
+  }
 
   GeneralServer* server = new GeneralServer();
 
