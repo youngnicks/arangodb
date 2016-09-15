@@ -372,8 +372,8 @@ target_link_libraries(${BIN_ARANGOD}
   ${V8_LIBS}
   ${ROCKSDB_LIBS}
   ${SYSTEM_LIBRARIES}
-  boost_system
   boost_boost
+  boost_system
 )
 
 install(

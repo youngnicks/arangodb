@@ -34,6 +34,7 @@ target_link_libraries(${BIN_ARANGOBENCH}
   ${LINENOISE_LIBS}
   ${MSVC_LIBS}
   ${SYSTEM_LIBRARIES}
+  boost_system
 )
 
 install(
