@@ -203,7 +203,6 @@ add_executable(${BIN_ARANGOD}
   GeneralServer/GeneralServerFeature.cpp
   GeneralServer/HttpCommTask.cpp
   GeneralServer/GeneralServerJob.cpp
-  # GeneralServer/HttpsCommTask.cpp
   GeneralServer/PathHandler.cpp
   GeneralServer/RestHandler.cpp
   GeneralServer/RestHandlerFactory.cpp
