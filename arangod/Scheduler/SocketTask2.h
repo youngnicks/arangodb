@@ -91,8 +91,8 @@ class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
 
   std::deque<basics::StringBuffer*> _writeBuffers;
   std::deque<TRI_request_statistics_t*> _writeBuffersStats;
-  bool _encypted;
 
+  bool _encrypted;
   asioSslContext _context;
   asioSslStream _sslSocket;
   asioSocket&  _socket;

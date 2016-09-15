@@ -44,7 +44,7 @@ using namespace arangodb::rest;
 // given to us as TRI_socket_t to the asio::socket
 namespace arangodb {
 namespace rest {
-asioSslContext createSslContext(){
+asioSslContext createSslContextFreestanding(){
   asioSslContext context(asioSslContext::sslv23); //generic ssl/tls context
 
   SslServerFeature* ssl = application_features::ApplicationServer::getFeature<SslServerFeature>("SslServer");
@@ -64,8 +64,11 @@ SocketTask2::SocketTask2(EventLoop2 loop, TRI_socket_t socket,
     : Task2(loop, "SocketTask2"),
       _connectionInfo(connectionInfo),
       _readBuffer(TRI_UNKNOWN_MEM_ZONE, READ_BLOCK_SIZE + 1, false),
-      _encypted(application_features::ApplicationServer::getFeature<SslServerFeature>("SslServer") != nullptr),
-      _context(createSslContext()),
+      _encrypted(_connectionInfo.encryptionType == arangodb::Endpoint::EncryptionType::SSL),
+      _context( _encrypted ?
+                createSslContextFreestanding() :
+                boost::asio::ssl::context(boost::asio::ssl::context::method::sslv23)
+              ),
       _sslSocket(loop._ioService, _context),
       _socket(_sslSocket.next_layer())
 {
@@ -78,7 +81,7 @@ SocketTask2::SocketTask2(EventLoop2 loop, TRI_socket_t socket,
   _socket.non_blocking(true);  // does this work as intened ()
 
 
-  if (_encypted) {
+  if (_encrypted) {
     _sslSocket.handshake(boost::asio::ssl::stream_base::handshake_type::server);
   }
 
@@ -157,7 +160,7 @@ void SocketTask2::addWriteBuffer(basics::StringBuffer* buffer,
     try {
       // written = _stream.write_some(
 
-      if (!_encypted) {
+      if (!_encrypted) {
         written = _socket.write_some(
             boost::asio::buffer(_writeBuffer->begin(), _writeBuffer->length()));
       }
@@ -179,7 +182,7 @@ void SocketTask2::addWriteBuffer(basics::StringBuffer* buffer,
       }
     }
 
-    if (!_encypted) {
+    if (!_encrypted) {
       boost::asio::async_write(  // is ok
           _socket,
           boost::asio::buffer(_writeBuffer->begin() + written, total - written),
@@ -299,7 +302,7 @@ bool SocketTask2::trySyncRead() {
     }
 
     size_t bytesRead = 0;
-    if (!_encypted) {
+    if (!_encrypted) {
       bytesRead = _socket.read_some(
           boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE));
     }
@@ -383,7 +386,7 @@ void SocketTask2::asyncReadSome() {
     return;
   }
 
-  if (!_encypted) {
+  if (!_encrypted) {
     _socket.async_read_some(
         boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE),
         [this, info](const boost::system::error_code& ec,

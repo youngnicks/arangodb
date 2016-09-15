@@ -66,20 +66,11 @@ bool GeneralListenTask::handleConnected(TRI_socket_t socket,
 
   switch (_connectionType) {
     case ProtocolType::VPPS:
-      commTask = new VppCommTask(*EVENTLOOP2, _server, socket, std::move(info),
-                                 _keepAliveTimeout);
-      break;
     case ProtocolType::VPP:
       commTask = new VppCommTask(*EVENTLOOP2, _server, socket, std::move(info),
                                  _keepAliveTimeout);
       break;
     case ProtocolType::HTTPS:
-      /*
-      commTask = new HttpsCommTask(_server, socket, std::move(info),
-                                   _keepAliveTimeout, _sslContext,
-                                   _verificationMode, _verificationCallback);
-      */
-      break;
     case ProtocolType::HTTP:
       commTask = new HttpCommTask(*EVENTLOOP2, _server, socket, std::move(info),
                                   _keepAliveTimeout);

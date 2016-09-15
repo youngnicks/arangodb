@@ -263,6 +263,7 @@ bool ListenTask::handleEvent(EventToken token, EventType revents) {
     // set the endpoint
     info.endpoint = _endpoint->specification();
     info.endpointType = _endpoint->domainType();
+    info.encryptionType = _endpoint->encryption();
 
     return handleConnected(connectionSocket, std::move(info));
   }
