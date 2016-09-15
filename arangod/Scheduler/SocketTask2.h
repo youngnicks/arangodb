@@ -27,22 +27,11 @@
 
 #include "Scheduler/Task2.h"
 
-#include "Basics/Thread.h"
+#include "Basics/StringBuffer.h"
 #include "Statistics/StatisticsAgent.h"
 
-#ifdef _WIN32
-#include "Basics/win-utils.h"
-#endif
-
-#include "Basics/socket-utils.h"
-
 namespace arangodb {
-namespace basics {
-class StringBuffer;
-}
-
 namespace rest {
-
 class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
   explicit SocketTask2(SocketTask2 const&) = delete;
   SocketTask2& operator=(SocketTask2 const&) = delete;
@@ -51,8 +40,8 @@ class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
   static size_t const READ_BLOCK_SIZE = 10000;
 
  public:
-  SocketTask2(EventLoop2, TRI_socket_t, ConnectionInfo&&, double keepAliveTimeout);
-  ~SocketTask2() {}
+  SocketTask2(EventLoop2, boost::asio::ip::tcp::socket&&, ConnectionInfo&&,
+              double keepAliveTimeout);
 
  public:
   void start();

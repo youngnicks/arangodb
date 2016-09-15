@@ -94,7 +94,10 @@ RestHandler::status RestSimpleHandler::execute() {
   return status::DONE;
 }
 
-bool RestSimpleHandler::cancel() { return cancelQuery(); }
+bool RestSimpleHandler::cancel() {
+  RestHandler::cancel();
+  return cancelQuery();
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief register the currently running query

@@ -50,7 +50,7 @@ class HttpsCommTask : public HttpCommTask {
   ~HttpsCommTask();
 
  protected:
-  bool setup(Scheduler*, EventLoop) /* override */ ;
+  // bool setup(Scheduler*, EventLoop) /* override */ ;
   bool handleEvent(EventToken, EventType) /* override */ ;
   bool fillReadBuffer() /* override */;
   bool handleWrite() /* override */;

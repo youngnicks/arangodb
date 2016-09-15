@@ -35,7 +35,7 @@
 #include "Logger/Logger.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
-#include "Scheduler/Task.h"
+#include "Scheduler/TaskData.h"
 #include "VocBase/vocbase.h"
 
 using namespace arangodb;
@@ -244,11 +244,11 @@ void WorkMonitor::sendWorkOverview(
   auto data = std::make_unique<TaskData>();
 
   data->_taskId = handler->taskId();
-  data->_loop = handler->eventLoop();
   data->_type = TaskData::TASK_DATA_RESPONSE;
   data->_response = handler->stealResponse();
 
-  SchedulerFeature::SCHEDULER->signalTask(data);
+#warning TODO
+  // SchedulerFeature::SCHEDULER->signalTask(data);
 
   delete static_cast<WorkItem*>(handler);
 }

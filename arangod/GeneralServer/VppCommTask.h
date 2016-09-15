@@ -37,8 +37,8 @@ namespace rest {
 
 class VppCommTask : public GeneralCommTask {
  public:
-  VppCommTask(EventLoop2, GeneralServer*, TRI_socket_t, ConnectionInfo&&,
-              double timeout);
+  VppCommTask(EventLoop2, GeneralServer*, boost::asio::ip::tcp::socket&& socket,
+              ConnectionInfo&&, double timeout);
 
   // convert from GeneralResponse to vppResponse ad dispatch request to class
   // internal addResponse

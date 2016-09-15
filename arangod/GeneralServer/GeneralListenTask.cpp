@@ -38,10 +38,11 @@ using namespace arangodb::rest;
 /// @brief listen to given port
 ////////////////////////////////////////////////////////////////////////////////
 
-GeneralListenTask::GeneralListenTask(GeneralServer* server, Endpoint* endpoint,
+GeneralListenTask::GeneralListenTask(EventLoop2 loop, GeneralServer* server,
+                                     Endpoint* endpoint,
                                      ProtocolType connectionType)
-    : Task("GeneralListenTask"),
-      ListenTask(endpoint),
+    : Task2(loop, "GeneralListenTask"),
+      ListenTask(loop, endpoint),
       _server(server),
       _connectionType(connectionType) {
   _keepAliveTimeout = GeneralServerFeature::keepAliveTimeout();
@@ -58,21 +59,23 @@ GeneralListenTask::GeneralListenTask(GeneralServer* server, Endpoint* endpoint,
   _verificationCallback = GeneralServerFeature::verificationCallback();
 }
 
-extern EventLoop2* EVENTLOOP2;
-
-bool GeneralListenTask::handleConnected(TRI_socket_t socket,
+void GeneralListenTask::handleConnected(boost::asio::ip::tcp::socket&& socket,
                                         ConnectionInfo&& info) {
   GeneralCommTask* commTask = nullptr;
 
   switch (_connectionType) {
     case ProtocolType::VPPS:
-      commTask = new VppCommTask(*EVENTLOOP2, _server, socket, std::move(info),
-                                 _keepAliveTimeout);
+      /*
+      commTask = new VppsCommTask(_loop, _server, std::move(socket),
+                                 std::move(info), _keepAliveTimeout);
+      */
       break;
+
     case ProtocolType::VPP:
-      commTask = new VppCommTask(*EVENTLOOP2, _server, socket, std::move(info),
-                                 _keepAliveTimeout);
+      commTask = new VppCommTask(_loop, _server, std::move(socket),
+                                 std::move(info), _keepAliveTimeout);
       break;
+
     case ProtocolType::HTTPS:
       /*
       commTask = new HttpsCommTask(_server, socket, std::move(info),
@@ -80,15 +83,16 @@ bool GeneralListenTask::handleConnected(TRI_socket_t socket,
                                    _verificationMode, _verificationCallback);
       */
       break;
+
     case ProtocolType::HTTP:
-      commTask = new HttpCommTask(*EVENTLOOP2, _server, socket, std::move(info),
-                                  _keepAliveTimeout);
+      commTask = new HttpCommTask(_loop, _server, std::move(socket),
+                                  std::move(info), _keepAliveTimeout);
       break;
+
     default:
-      return false;
+      socket.close();
+      return;
   }
 
   commTask->start();
-
-  return true;
 }

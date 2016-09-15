@@ -31,6 +31,7 @@
 #include "GeneralServer/RestHandlerFactory.h"
 #include "Meta/conversion.h"
 #include "VocBase/ticks.h"
+#include "Rest/HttpRequest.h"
 
 using namespace arangodb;
 using namespace arangodb::basics;
@@ -42,10 +43,10 @@ size_t const HttpCommTask::MaximalPipelineSize = 1024 * 1024 * 1024;  // 1024 MB
 size_t const HttpCommTask::RunCompactEvery = 500;
 
 HttpCommTask::HttpCommTask(EventLoop2 loop, GeneralServer* server,
-                           TRI_socket_t sock, ConnectionInfo&& info,
+                           boost::asio::ip::tcp::socket&& socket, ConnectionInfo&& info,
                            double timeout)
     : Task2(loop, "HttpCommTask"),
-      GeneralCommTask(loop, server, sock, std::move(info), timeout),
+      GeneralCommTask(loop, server, std::move(socket), std::move(info), timeout),
       _readPosition(0),
       _startPosition(0),
       _bodyPosition(0),

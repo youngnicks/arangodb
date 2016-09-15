@@ -73,15 +73,15 @@ inline RestHandler::status RestAgencyHandler::reportUnknownMethod() {
 
 void RestAgencyHandler::redirectRequest(std::string const& leaderId) {
   try {
-    std::string url =
-      Endpoint::uriForm(_agent->config().poolAt(leaderId)) +
-        _request->requestPath();
+    std::string url = Endpoint::uriForm(_agent->config().poolAt(leaderId)) +
+                      _request->requestPath();
     _response->setResponseCode(rest::ResponseCode::TEMPORARY_REDIRECT);
     _response->setHeaderNC(StaticStrings::Location, url);
   } catch (std::exception const& e) {
-    LOG_TOPIC(WARN, Logger::AGENCY) << e.what() << " " << __FILE__ << __LINE__;
-    generateError(rest::ResponseCode::SERVER_ERROR,
-                  TRI_ERROR_INTERNAL, e.what());
+    LOG_TOPIC(WARN, Logger::AGENCY) << e.what() << " " << __FILE__ << ":"
+                                    << __LINE__;
+    generateError(rest::ResponseCode::SERVER_ERROR, TRI_ERROR_INTERNAL,
+                  e.what());
   }
 }
 
@@ -111,7 +111,8 @@ RestHandler::status RestAgencyHandler::handleWrite() {
     try {
       query = _request->toVelocyPackBuilderPtr(&options);
     } catch (std::exception const& e) {
-      LOG_TOPIC(ERR, Logger::AGENCY) << e.what() << " " << __FILE__ << __LINE__;
+      LOG_TOPIC(ERR, Logger::AGENCY) << e.what() << " " << __FILE__ << ":"
+                                     << __LINE__;
       Builder body;
       body.openObject();
       body.add("message", VPackValue(e.what()));
@@ -147,8 +148,7 @@ RestHandler::status RestAgencyHandler::handleWrite() {
         body.openObject();
         body.add("message", VPackValue("No leader"));
         body.close();
-        generateResult(rest::ResponseCode::SERVICE_UNAVAILABLE,
-                       body.slice());
+        generateResult(rest::ResponseCode::SERVICE_UNAVAILABLE, body.slice());
         LOG_TOPIC(DEBUG, Logger::AGENCY) << "We don't know who the leader is";
         return status::DONE;
       }
@@ -200,7 +200,7 @@ RestHandler::status RestAgencyHandler::handleWrite() {
                 *std::max_element(ret.indices.begin(), ret.indices.end());
           } catch (std::exception const& e) {
             LOG_TOPIC(WARN, Logger::AGENCY) << e.what() << " " << __FILE__
-                                            << __LINE__;
+                                            << ":" << __LINE__;
           }
 
           if (max_index > 0) {
@@ -212,8 +212,7 @@ RestHandler::status RestAgencyHandler::handleWrite() {
       body.close();
 
       if (errors > 0) {  // Some/all requests failed
-        generateResult(rest::ResponseCode::PRECONDITION_FAILED,
-                       body.slice());
+        generateResult(rest::ResponseCode::PRECONDITION_FAILED, body.slice());
       } else {  // All good
         generateResult(rest::ResponseCode::OK, body.slice());
       }
@@ -223,12 +222,10 @@ RestHandler::status RestAgencyHandler::handleWrite() {
         body.openObject();
         body.add("message", VPackValue("No leader"));
         body.close();
-        generateResult(rest::ResponseCode::SERVICE_UNAVAILABLE,
-                       body.slice());
+        generateResult(rest::ResponseCode::SERVICE_UNAVAILABLE, body.slice());
         LOG_TOPIC(DEBUG, Logger::AGENCY) << "We don't know who the leader is";
         return status::DONE;
       } else {
-        
         redirectRequest(ret.redirect);
       }
     }
@@ -245,7 +242,8 @@ inline RestHandler::status RestAgencyHandler::handleRead() {
     try {
       query = _request->toVelocyPackBuilderPtr(&options);
     } catch (std::exception const& e) {
-      LOG_TOPIC(WARN, Logger::AGENCY) << e.what() << " " << __FILE__ << ":" << __LINE__;
+      LOG_TOPIC(WARN, Logger::AGENCY) << e.what() << " " << __FILE__ << ":"
+                                      << __LINE__;
       generateError(rest::ResponseCode::BAD, 400);
       return status::DONE;
     }
@@ -258,8 +256,7 @@ inline RestHandler::status RestAgencyHandler::handleRead() {
         body.openObject();
         body.add("message", VPackValue("No leader"));
         body.close();
-        generateResult(rest::ResponseCode::SERVICE_UNAVAILABLE,
-                       body.slice());
+        generateResult(rest::ResponseCode::SERVICE_UNAVAILABLE, body.slice());
         LOG_TOPIC(DEBUG, Logger::AGENCY) << "We don't know who the leader is";
         return status::DONE;
       }
@@ -270,8 +267,7 @@ inline RestHandler::status RestAgencyHandler::handleRead() {
 
     if (ret.accepted) {  // I am leading
       if (ret.success.size() == 1 && !ret.success.at(0)) {
-        generateResult(rest::ResponseCode::I_AM_A_TEAPOT,
-                       ret.result->slice());
+        generateResult(rest::ResponseCode::I_AM_A_TEAPOT, ret.result->slice());
       } else {
         generateResult(rest::ResponseCode::OK, ret.result->slice());
       }
@@ -281,8 +277,7 @@ inline RestHandler::status RestAgencyHandler::handleRead() {
         body.openObject();
         body.add("message", VPackValue("No leader"));
         body.close();
-        generateResult(rest::ResponseCode::SERVICE_UNAVAILABLE,
-                       body.slice());
+        generateResult(rest::ResponseCode::SERVICE_UNAVAILABLE, body.slice());
         LOG_TOPIC(DEBUG, Logger::AGENCY) << "We don't know who the leader is";
         return status::DONE;
 

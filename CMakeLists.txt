@@ -682,10 +682,6 @@ endif ()
 # ICU_LIBS
 # ICU_INCLUDE_DIR
 #
-# LIBEV_VERSION
-# LIBEV_LIBS
-# LIBEV_INCLUDE_DIR
-#
 # ZLIB_VERSION
 # ZLIB_LIBS
 # ZLIB_INCLUDE_DIR
@@ -730,13 +726,6 @@ set(BOOST_LIBS
 ################################################################################
 
 include_directories(${ICU_INCLUDE_DIR})
-
-################################################################################
-## LIBEV
-################################################################################
-
-include_directories(${LIBEV_INCLUDE_DIR})
-add_definitions("-DARANGODB_LIBEV_VERSION=\"${LIBEV_VERSION}\"")
 
 ################################################################################
 ## OPENSSL

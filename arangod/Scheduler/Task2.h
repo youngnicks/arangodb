@@ -27,10 +27,11 @@
 
 #include "Basics/Common.h"
 
-#include "Scheduler/Task.h"
-#include "Scheduler/events.h"
+#include "Scheduler/EventLoop.h"
 
 namespace arangodb {
+class TaskData;
+
 namespace velocypack {
 class Builder;
 }
@@ -45,14 +46,9 @@ class Task2 {
   virtual ~Task2() {}
 
  public:
-  // returns the internal task identifier
   uint64_t taskId() const { return _taskId; }
-
-  // returns the task name for debugging
-  std::string const& name() const { return _name; }
-
-  // returns the internal event loop
   EventLoop2 eventLoop() const { return _loop; }
+  std::string const& name() const { return _name; }
 
   // get a VelocyPack representation of the task for reporting
   std::shared_ptr<arangodb::velocypack::Builder> toVelocyPack() const;

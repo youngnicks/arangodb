@@ -1,7 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 /// DISCLAIMER
 ///
-/// Copyright 2016 ArangoDB GmbH, Cologne, Germany
+/// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
+/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
 /// you may not use this file except in compliance with the License.
@@ -18,32 +19,24 @@
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
+/// @author Achim Brandt
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef APPLICATION_FEATURES_AFFINITY_FEATURE_H
-#define APPLICATION_FEATURES_AFFINITY_FEATURE_H 1
+#ifndef ARANGOD_SCHEDULER_EVENTS_H
+#define ARANGOD_SCHEDULER_EVENTS_H 1
 
-#include "ApplicationFeatures/ApplicationFeature.h"
+#include "Basics/Common.h"
+
+#include <boost/asio.hpp>
 
 namespace arangodb {
-class AffinityFeature final : public application_features::ApplicationFeature {
- public:
-  explicit AffinityFeature(application_features::ApplicationServer* server);
+namespace rest {
+class Scheduler;
+}
 
- public:
-  void collectOptions(std::shared_ptr<options::ProgramOptions>) override final;
-  void prepare() override final;
-  void start() override final;
-
- private:
-  uint32_t _threadAffinity;
-
- private:
-  size_t _n;
-  size_t _nd;
-  size_t _ns;
-  std::vector<size_t> _ps;
-  std::vector<size_t> _pd;
+struct EventLoop2 {
+  boost::asio::io_service& _ioService;
+  rest::Scheduler* _scheduler;
 };
 }
 

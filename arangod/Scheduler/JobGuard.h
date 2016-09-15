@@ -25,7 +25,7 @@
 
 #include "Basics/Common.h"
 
-#include "Scheduler/events.h"
+#include "Scheduler/EventLoop.h"
 #include "Scheduler/Scheduler.h"
 
 namespace arangodb {
@@ -35,7 +35,8 @@ class Scheduler;
 
 class JobGuard {
  public:
-  JobGuard(rest::EventLoop2 const& loop) : _scheduler(loop._scheduler) {}
+  explicit JobGuard(EventLoop2 const& loop) : _scheduler(loop._scheduler) {}
+  explicit JobGuard(rest::Scheduler* scheduler) : _scheduler(scheduler) {}
   ~JobGuard() { release(); }
 
  public:

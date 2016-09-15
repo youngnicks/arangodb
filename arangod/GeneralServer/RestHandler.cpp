@@ -23,12 +23,11 @@
 
 #include "RestHandler.h"
 
+#include <velocypack/Exception.h>
+
 #include "Basics/StringUtils.h"
-#include "Dispatcher/Dispatcher.h"
 #include "Logger/Logger.h"
 #include "Rest/GeneralRequest.h"
-
-#include <velocypack/Exception.h>
 
 using namespace arangodb;
 using namespace arangodb::basics;
@@ -39,8 +38,13 @@ std::atomic_uint_fast64_t NEXT_HANDLER_ID(
     static_cast<uint64_t>(TRI_microtime() * 100000.0));
 }
 
+// -----------------------------------------------------------------------------
+// --SECTION--                                      constructors and destructors
+// -----------------------------------------------------------------------------
+
 RestHandler::RestHandler(GeneralRequest* request, GeneralResponse* response)
     : _handlerId(NEXT_HANDLER_ID.fetch_add(1, std::memory_order_seq_cst)),
+      _canceled(false),
       _request(request),
       _response(response) {
   bool found;
@@ -52,9 +56,12 @@ RestHandler::RestHandler(GeneralRequest* request, GeneralResponse* response)
   }
 }
 
-void RestHandler::setTaskId(uint64_t id, EventLoop loop) {
+// -----------------------------------------------------------------------------
+// --SECTION--                                                    public methods
+// -----------------------------------------------------------------------------
+
+void RestHandler::setTaskId(uint64_t id) {
   _taskId = id;
-  _loop = loop;
 }
 
 RestHandler::status RestHandler::executeFull() {
@@ -65,6 +72,14 @@ RestHandler::status RestHandler::executeFull() {
 #ifdef USE_DEV_TIMERS
   TRI_request_statistics_t::STATS = _statistics;
 #endif
+
+  if (_canceled) {
+    requestStatisticsAgentSetExecuteError();
+    Exception err(TRI_ERROR_REQUEST_CANCELED,
+                  "request has been canceled by user", __FILE__, __LINE__);
+    handleError(err);
+    return result;
+  }
 
   try {
     prepareExecute();
@@ -124,6 +139,10 @@ RestHandler::status RestHandler::executeFull() {
 
   return result;
 }
+
+// -----------------------------------------------------------------------------
+// --SECTION--                                                 protected methods
+// -----------------------------------------------------------------------------
 
 void RestHandler::resetResponse(rest::ResponseCode code) {
   TRI_ASSERT(_response != nullptr);

@@ -36,27 +36,17 @@ using namespace arangodb::rest;
 // --SECTION--                                      constructors and destructors
 // -----------------------------------------------------------------------------
 
-SocketTask2::SocketTask2(EventLoop2 loop, TRI_socket_t socket,
+SocketTask2::SocketTask2(EventLoop2 loop, boost::asio::ip::tcp::socket&& socket,
                          ConnectionInfo&& connectionInfo,
                          double keepAliveTimeout)
     : Task2(loop, "SocketTask2"),
       _connectionInfo(connectionInfo),
       _readBuffer(TRI_UNKNOWN_MEM_ZONE, READ_BLOCK_SIZE + 1, false),
-      _stream(loop._ioService) {
+      _stream(std::move(socket)) {
   ConnectionStatisticsAgent::acquire();
   connectionStatisticsAgentSetStart();
 
-  boost::system::error_code ec;
-  _stream.assign(boost::asio::ip::tcp::v4(), socket.fileDescriptor, ec);
-
   _stream.non_blocking(true);
-
-  if (ec) {
-    LOG_TOPIC(ERR, Logger::COMMUNICATION)
-        << "cannot create stream from socket: " << ec;
-    _closedSend = true;
-    _closedReceive = true;
-  }
 }
 
 // -----------------------------------------------------------------------------

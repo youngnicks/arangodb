@@ -1,8 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /// DISCLAIMER
 ///
-/// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
-/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
+/// Copyright 2016 ArangoDB GmbH, Cologne, Germany
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
 /// you may not use this file except in compliance with the License.
@@ -19,23 +18,20 @@
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
-/// @author Achim Brandt
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "Task.h"
+#include "Job.h"
 
-#include "Scheduler/Scheduler.h"
+#include "GeneralServer/RestHandler.h"
 
-using namespace arangodb::rest;
+using namespace arangodb;
 
-// -----------------------------------------------------------------------------
-// TaskManager
-// -----------------------------------------------------------------------------
+Job::Job(std::function<void(WorkItem::uptr<rest::RestHandler>)> callback)
+    : _server(nullptr), _handler(nullptr), _callback(callback) {}
 
-void TaskManager::deleteTask(Task* task) { delete task; }
+Job::Job(rest::GeneralServer* server, WorkItem::uptr<rest::RestHandler> handler,
+         std::function<void(WorkItem::uptr<rest::RestHandler>)> callback)
+    : _server(server), _handler(std::move(handler)), _callback(callback) {}
 
-bool TaskManager::setupTask(Task* task, Scheduler* scheduler, EventLoop loop) {
-  return task->setup(scheduler, loop);
-}
-
-void TaskManager::cleanupTask(Task* task) { task->cleanup(); }
+// trival, but needs definition of RestHandler
+Job::~Job() {}

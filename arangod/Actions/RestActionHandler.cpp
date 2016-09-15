@@ -88,7 +88,10 @@ RestHandler::status RestActionHandler::execute() {
   return result.isValid ? status::DONE : status::FAILED;
 }
 
-bool RestActionHandler::cancel() { return _action->cancel(&_dataLock, &_data); }
+bool RestActionHandler::cancel() {
+  RestHandler::cancel();
+  return _action->cancel(&_dataLock, &_data);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief executes an action

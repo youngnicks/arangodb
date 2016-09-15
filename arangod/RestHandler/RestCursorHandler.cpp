@@ -74,7 +74,10 @@ RestHandler::status RestCursorHandler::execute() {
   return status::DONE;
 }
 
-bool RestCursorHandler::cancel() { return cancelQuery(); }
+bool RestCursorHandler::cancel() {
+  RestHandler::cancel();
+  return cancelQuery();
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief processes the query and returns the results/cursor

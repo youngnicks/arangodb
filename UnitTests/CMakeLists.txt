@@ -39,6 +39,7 @@ include_directories(
 
 target_link_libraries(${TEST_BASICS_SUITE}
   ${LIB_ARANGO}
+  ${BOOST_LIBS}
   ${MSVC_LIBS}
   ${SYSTEM_LIBRARIES}
 )

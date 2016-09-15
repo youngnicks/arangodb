@@ -25,7 +25,6 @@
 #include "Basics/StaticStrings.h"
 #include "Cluster/ServerState.h"
 #include "Cluster/ClusterComm.h"
-#include "Dispatcher/Dispatcher.h"
 #include "Rest/HttpRequest.h"
 #include "Rest/HttpResponse.h"
 
