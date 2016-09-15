@@ -72,7 +72,9 @@ using Helper = arangodb::basics::VelocyPackHelper;
 
 /// forward
 int TRI_AddOperationTransaction(TRI_transaction_t*,
-                                arangodb::wal::DocumentOperation&, bool&);
+                                arangodb::wal::DocumentOperation&, 
+                                arangodb::wal::Marker const* marker,
+                                bool&);
 
 /// @brief helper struct for filling indexes
 class IndexFiller {
@@ -1834,10 +1836,7 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
     }
 
     arangodb::wal::DocumentOperation operation(
-        trx, marker, this, TRI_VOC_DOCUMENT_OPERATION_INSERT);
-
-    // DocumentOperation has taken over the ownership for the marker
-    TRI_ASSERT(operation.marker != nullptr);
+        trx, this, TRI_VOC_DOCUMENT_OPERATION_INSERT);
 
     TRI_IF_FAILURE("InsertDocumentNoHeader") {
       // test what happens if no header can be acquired
@@ -1861,7 +1860,7 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
     }
 
     // update the header we got
-    void* mem = operation.marker->vpack();
+    void* mem = marker->vpack();
     TRI_ASSERT(mem != nullptr);
     header->setHash(hash);
     header->setVPack(mem);  // PROTECTED by trx in trxCollection
@@ -1869,7 +1868,7 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
     TRI_ASSERT(VPackSlice(header->vpack()).isObject());
 
     // insert into indexes
-    res = insertDocument(trx, header, operation, mptr, options.waitForSync);
+    res = insertDocument(trx, header, operation, marker, mptr, options.waitForSync);
 
     if (res != TRI_ERROR_NO_ERROR) {
       operation.revert();
@@ -1999,15 +1998,12 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
     }
     
     arangodb::wal::DocumentOperation operation(
-        trx, marker, this, TRI_VOC_DOCUMENT_OPERATION_UPDATE);
-
-    // DocumentOperation has taken over the ownership for the marker
-    TRI_ASSERT(operation.marker != nullptr);
+        trx, this, TRI_VOC_DOCUMENT_OPERATION_UPDATE);
 
     operation.header = oldHeader;
     operation.init();
 
-    res = updateDocument(trx, revisionId, oldHeader, operation, mptr, options.waitForSync);
+    res = updateDocument(trx, revisionId, oldHeader, operation, marker, mptr, options.waitForSync);
 
     if (res != TRI_ERROR_NO_ERROR) {
       operation.revert();
@@ -2141,15 +2137,12 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
       marker = options.recoveryMarker;
     }
 
-    arangodb::wal::DocumentOperation operation(trx, marker, this, TRI_VOC_DOCUMENT_OPERATION_REPLACE);
-    
-    // DocumentOperation has taken over the ownership for the marker
-    TRI_ASSERT(operation.marker != nullptr);
+    arangodb::wal::DocumentOperation operation(trx, this, TRI_VOC_DOCUMENT_OPERATION_REPLACE);
     
     operation.header = oldHeader;
     operation.init();
 
-    res = updateDocument(trx, revisionId, oldHeader, operation, mptr, options.waitForSync);
+    res = updateDocument(trx, revisionId, oldHeader, operation, marker, mptr, options.waitForSync);
 
     if (res != TRI_ERROR_NO_ERROR) {
       operation.revert();
@@ -2226,10 +2219,7 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
       return TRI_ERROR_DEBUG;
     }
 
-    arangodb::wal::DocumentOperation operation(trx, marker, this, TRI_VOC_DOCUMENT_OPERATION_REMOVE);
-
-    // DocumentOperation has taken over the ownership for the marker
-    TRI_ASSERT(operation.marker != nullptr);
+    arangodb::wal::DocumentOperation operation(trx, this, TRI_VOC_DOCUMENT_OPERATION_REMOVE);
 
     VPackSlice key;
     if (slice.isString()) {
@@ -2291,7 +2281,7 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
     }
   
-    res = TRI_AddOperationTransaction(trx->getInternals(), operation, options.waitForSync);
+    res = TRI_AddOperationTransaction(trx->getInternals(), operation, marker, options.waitForSync);
 
     if (res != TRI_ERROR_NO_ERROR) {
       operation.revert();
@@ -2805,6 +2795,7 @@ int LogicalCollection::checkRevision(Transaction* trx,
 int LogicalCollection::updateDocument(
     arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
     TRI_doc_mptr_t* oldHeader, arangodb::wal::DocumentOperation& operation,
+    arangodb::wal::Marker const* marker,
     TRI_doc_mptr_t* mptr, bool& waitForSync) {
   // save the old data, remember
   TRI_doc_mptr_t oldData = *oldHeader;
@@ -2823,7 +2814,8 @@ int LogicalCollection::updateDocument(
   TRI_doc_mptr_t* newHeader = oldHeader;
 
   // update the header. this will modify oldHeader, too !!!
-  void* mem = operation.marker->vpack(); 
+  TRI_ASSERT(marker != nullptr);
+  void* mem = marker->vpack(); 
   TRI_ASSERT(mem != nullptr);
   newHeader->setVPack(mem);
 
@@ -2850,7 +2842,7 @@ int LogicalCollection::updateDocument(
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
 
-  res = TRI_AddOperationTransaction(trx->getInternals(), operation, waitForSync);
+  res = TRI_AddOperationTransaction(trx->getInternals(), operation, marker, waitForSync);
 
   if (res == TRI_ERROR_NO_ERROR) {
     // write new header into result
@@ -2864,8 +2856,8 @@ int LogicalCollection::updateDocument(
 /// the caller must make sure the write lock on the collection is held
 int LogicalCollection::insertDocument(
     arangodb::Transaction* trx, TRI_doc_mptr_t* header,
-    arangodb::wal::DocumentOperation& operation, TRI_doc_mptr_t* mptr,
-    bool& waitForSync) {
+    arangodb::wal::DocumentOperation& operation, arangodb::wal::Marker const* marker,
+    TRI_doc_mptr_t* mptr, bool& waitForSync) {
   TRI_ASSERT(header != nullptr);
   TRI_ASSERT(mptr != nullptr);
 
@@ -2900,7 +2892,7 @@ int LogicalCollection::insertDocument(
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
 
-  res = TRI_AddOperationTransaction(trx->getInternals(), operation, waitForSync);
+  res = TRI_AddOperationTransaction(trx->getInternals(), operation, marker, waitForSync);
 
   if (res == TRI_ERROR_NO_ERROR) {
     *mptr = *header;
