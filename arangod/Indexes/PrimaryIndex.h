@@ -191,7 +191,7 @@ class PrimaryIndex final : public Index {
   IndexElement* lookupSequentialReverse(
       arangodb::Transaction*, arangodb::basics::BucketPosition& position);
 
-  int insertKey(arangodb::Transaction*, TRI_doc_mptr_t*, TRI_doc_mptr_t*&);
+  int insertKey(arangodb::Transaction*, TRI_doc_mptr_t*);
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief adds a key/element to the index
@@ -202,7 +202,7 @@ class PrimaryIndex final : public Index {
   int insertKey(arangodb::Transaction*, IndexElement*,
                 arangodb::basics::BucketPosition const&);
 
-  IndexElement* removeKey(arangodb::Transaction* trx, VPackSlice const&);
+  int removeKey(arangodb::Transaction* trx, TRI_doc_mptr_t const*);
 
   int resize(arangodb::Transaction*, size_t);
 
@@ -264,6 +264,8 @@ class PrimaryIndex final : public Index {
                      VPackBuilder* keys,
                      arangodb::aql::AstNode const* valNode,
                      bool isId) const; 
+
+  IndexElement* buildKeyElement(TRI_doc_mptr_t const* mptr) const;
 
  private:
   /// @brief the actual index

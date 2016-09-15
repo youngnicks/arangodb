@@ -51,7 +51,6 @@ static std::vector<std::vector<arangodb::basics::AttributeName>> const IndexAttr
 
 static inline uint64_t HashKey(void*, uint8_t const* key) {
   // can use fast hash-function here, as index values are restricted to strings
-  LOG(ERR) << "HASH KEY: " << VPackSlice(key).copyString();
   return VPackSlice(key).hashString(hashSeed);
 }
 
@@ -294,22 +293,17 @@ IndexElement* PrimaryIndex::lookupSequentialReverse(
 /// returns a status code, and *found will contain a found element (if any)
 ////////////////////////////////////////////////////////////////////////////////
 
-int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* header,
-                            TRI_doc_mptr_t*& found) {
-  found = nullptr;
-  // TODO
-  IndexElement* element = IndexElement::allocate(1);
-  if (element == nullptr) {
+int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* header) {
+  IndexElementGuard element(buildKeyElement(header), 1);
+  if (!element) {
     return TRI_ERROR_OUT_OF_MEMORY;
   }
-  element->document(header);
-  LOG(ERR) << "ELEMENT: " << element << "; " << element->subObject(0);
-  element->subObject(0)->fill(Transaction::extractKeyFromDocument(VPackSlice(header->vpack())));
-  LOG(ERR) << "ELEMENT SLICE: " << element->slice(0).toJson();
-  int res = _primaryIndex->insert(trx, element);
 
-  if (res == TRI_ERROR_ARANGO_UNIQUE_CONSTRAINT_VIOLATED) {
-    found = _primaryIndex->find(trx, element)->document();
+  int res = _primaryIndex->insert(trx, element.get());
+  
+  if (res == TRI_ERROR_NO_ERROR) {
+    // ownership transfer
+    element.release();
   }
 
   return res;
@@ -330,9 +324,17 @@ int PrimaryIndex::insertKey(arangodb::Transaction* trx, IndexElement* header,
 /// @brief removes an key/element from the index
 ////////////////////////////////////////////////////////////////////////////////
 
-IndexElement* PrimaryIndex::removeKey(arangodb::Transaction* trx,
-                                      VPackSlice const& slice) {
-  return _primaryIndex->removeByKey(trx, slice.begin());
+int PrimaryIndex::removeKey(arangodb::Transaction* trx,
+                            TRI_doc_mptr_t const* mptr) {
+  IndexElementGuard element(buildKeyElement(mptr), 1);
+  
+  IndexElementGuard found(_primaryIndex->removeByKey(trx, element.get()->slice().begin()), 1);
+
+  if (found == nullptr) {
+    return TRI_ERROR_ARANGO_DOCUMENT_NOT_FOUND;
+  }
+
+  return TRI_ERROR_NO_ERROR;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -554,4 +556,8 @@ void PrimaryIndex::handleValNode(IndexIteratorContext* context,
   } else {
     keys->add(VPackValuePair(valNode->getStringValue(), valNode->getStringLength(), VPackValueType::String));
   }
+}
+
+IndexElement* PrimaryIndex::buildKeyElement(TRI_doc_mptr_t const* mptr) const {
+  return IndexElement::allocate(mptr, Transaction::extractKeyFromDocument(VPackSlice(mptr->vpack())));
 }

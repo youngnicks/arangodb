@@ -313,6 +313,10 @@ class Index {
   virtual void expandInSearchValues(arangodb::velocypack::Slice const,
                                     arangodb::velocypack::Builder&) const;
 
+ protected:
+  IndexElement* buildStringElement(DocumentWrapper const& doc, 
+                                   arangodb::velocypack::Slice const& value) const;
+
  private:
   /// @brief set fields from slice
   void setFields(VPackSlice const& slice, bool allowExpansion);

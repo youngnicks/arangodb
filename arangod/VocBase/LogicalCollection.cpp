@@ -2906,24 +2906,11 @@ int LogicalCollection::insertPrimaryIndex(arangodb::Transaction* trx,
                                           TRI_doc_mptr_t* header) {
   TRI_IF_FAILURE("InsertPrimaryIndex") { return TRI_ERROR_DEBUG; }
 
-  TRI_doc_mptr_t* found;
-
   TRI_ASSERT(header != nullptr);
   TRI_ASSERT(header->vpack() != nullptr); 
 
   // insert into primary index
-  int res = primaryIndex()->insertKey(trx, header, found);
-
-  if (res != TRI_ERROR_NO_ERROR) {
-    return res;
-  }
-
-  if (found == nullptr) {
-    // success
-    return TRI_ERROR_NO_ERROR;
-  }
-
-  return TRI_ERROR_ARANGO_UNIQUE_CONSTRAINT_VIOLATED;
+  return primaryIndex()->insertKey(trx, header);
 }
 
 /// @brief deletes an entry from the primary index
@@ -2931,14 +2918,7 @@ int LogicalCollection::deletePrimaryIndex(
     arangodb::Transaction* trx, TRI_doc_mptr_t const* header) {
   TRI_IF_FAILURE("DeletePrimaryIndex") { return TRI_ERROR_DEBUG; }
 
-  auto found = primaryIndex()->removeKey(
-      trx, Transaction::extractKeyFromDocument(VPackSlice(header->vpack())));
-
-  if (found == nullptr) {
-    return TRI_ERROR_ARANGO_DOCUMENT_NOT_FOUND;
-  }
-
-  return TRI_ERROR_NO_ERROR;
+  return primaryIndex()->removeKey(trx, header);
 }
 
 /// @brief creates a new entry in the secondary indexes

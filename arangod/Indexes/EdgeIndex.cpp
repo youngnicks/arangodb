@@ -107,8 +107,7 @@ static bool IsEqualKeyEdge(void*, VPackSlice const* left, IndexElement const* ri
 /// @brief checks for elements are equal (_from and _to case)
 ////////////////////////////////////////////////////////////////////////////////
 
-static bool IsEqualElementEdge(void*, IndexElement const* left,
-                               IndexElement const* right) {
+static bool IsEqualElementEdge(void*, IndexElement const* left, IndexElement const* right) {
   return left == right;
 }
 
@@ -121,10 +120,10 @@ static bool IsEqualElementEdgeByKey(void*, IndexElement const* left, IndexElemen
   TRI_ASSERT(right != nullptr);
 
   VPackSlice lSlice = left->slice(0);
-  TRI_ASSERT(lSlice.isString());
-
   VPackSlice rSlice = right->slice(0);
+  
   TRI_ASSERT(rSlice.isString());
+  TRI_ASSERT(lSlice.isString());
 
   return lSlice.equals(rSlice);
 }
@@ -459,62 +458,40 @@ void EdgeIndex::toVelocyPackFigures(VPackBuilder& builder) const {
 
 int EdgeIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
                       bool isRollback) {
-  // TODO: OOM!!!!
-  VPackSlice from = Transaction::extractFromFromDocument(doc.slice());
-  TRI_ASSERT(from.isString());
-  IndexElement* fromElement = IndexElement::allocate(1);
-  if (fromElement == nullptr) {
-    return TRI_ERROR_OUT_OF_MEMORY;
-  }
-  fromElement->document(doc.mptr());
-  fromElement->subObject(0)->fill(from);
-  
-  VPackSlice to = Transaction::extractToFromDocument(doc.slice());
-  TRI_ASSERT(to.isString());
-  IndexElement* toElement = IndexElement::allocate(1);
-  if (toElement == nullptr) {
-    return TRI_ERROR_OUT_OF_MEMORY;
-  }
-  toElement->document(doc.mptr());
-  toElement->subObject(0)->fill(to);
+  IndexElementGuard fromElement(buildFromElement(doc), 1);
+  IndexElementGuard toElement(buildToElement(doc), 1);
 
-  _edgesFrom->insert(trx, fromElement, true, isRollback);
+  if (!fromElement || !toElement) {
+    return TRI_ERROR_OUT_OF_MEMORY;
+  }
+  
+  _edgesFrom->insert(trx, fromElement.get(), true, isRollback);
 
   try {
-    _edgesTo->insert(trx, toElement, true, isRollback);
+    _edgesTo->insert(trx, toElement.get(), true, isRollback);
   } catch (...) {
-    _edgesFrom->remove(trx, fromElement);
-    // TODO: free
-    throw;
+    _edgesFrom->remove(trx, fromElement.get());
+    return TRI_ERROR_OUT_OF_MEMORY;
   }
+
+  // transfer ownership
+  fromElement.release();
+  toElement.release();
 
   return TRI_ERROR_NO_ERROR;
 }
 
 int EdgeIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc,
                       bool) {
-  // TODO: OOM!!
-  VPackSlice from = Transaction::extractFromFromDocument(doc.slice());
-  TRI_ASSERT(from.isString());
-  IndexElement* fromElement = IndexElement::allocate(1);
-  if (fromElement == nullptr) {
-    return TRI_ERROR_OUT_OF_MEMORY;
-  }
-  fromElement->document(doc.mptr());
-  fromElement->subObject(0)->fill(from);
-  _edgesFrom->remove(trx, fromElement);
-  fromElement->free(1);
+  IndexElementGuard fromElement(buildFromElement(doc), 1);
+  IndexElementGuard toElement(buildToElement(doc), 1);
   
-  VPackSlice to = Transaction::extractToFromDocument(doc.slice());
-  TRI_ASSERT(to.isString());
-  IndexElement* toElement = IndexElement::allocate(1);
-  if (toElement == nullptr) {
+  if (!fromElement || !toElement) {
     return TRI_ERROR_OUT_OF_MEMORY;
   }
-  toElement->document(doc.mptr());
-  toElement->subObject(0)->fill(to);
 
-  _edgesTo->remove(trx, toElement);
+  IndexElementGuard oldFrom(_edgesFrom->remove(trx, fromElement.get()), 1);
+  IndexElementGuard oldTo(_edgesTo->remove(trx, toElement.get()), 1);
 
   return TRI_ERROR_NO_ERROR;
 }
@@ -522,12 +499,57 @@ int EdgeIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc,
 int EdgeIndex::batchInsert(arangodb::Transaction* trx,
                            std::vector<DocumentWrapper> const& documents,
                            size_t numThreads) {
-  /* TODO
-  if (!documents.empty()) {
-    _edgesFrom->batchInsert(trx, &documents, numThreads);
-    _edgesTo->batchInsert(trx, &documents, numThreads);
+  if (documents.empty()) {
+    return TRI_ERROR_NO_ERROR;
   }
-  */
+
+  // TODO: OOM 
+  std::vector<IndexElement*> elements;
+  elements.reserve(documents.size());
+
+  auto cleanup = [&elements]() {
+    for (auto& it : elements) { it->free(1); }
+  };
+
+  // clean up the vector of elements when we leave
+  TRI_DEFER(cleanup());
+  
+  for (auto const& it : documents) {
+    IndexElementGuard fromElement(buildFromElement(it), 1);
+    if (!fromElement) {
+      return TRI_ERROR_OUT_OF_MEMORY;
+    }
+    elements.emplace_back(fromElement.get());
+    fromElement.release();
+  }
+
+  int res = _edgesFrom->batchInsert(trx, &elements, numThreads);
+
+  if (res != TRI_ERROR_NO_ERROR) {
+    return res;
+  }
+  // ownership for _from elements is now in index
+  // prevent cleaning up of what we just inserted
+  elements.clear();
+  
+  for (auto const& it : documents) {
+    IndexElementGuard toElement(buildToElement(it), 1);
+    if (toElement == nullptr) {
+      // TODO: OOM
+      return TRI_ERROR_OUT_OF_MEMORY;
+    }
+    elements.emplace_back(toElement.get());
+    toElement.release();
+  }
+
+  res = _edgesTo->batchInsert(trx, &elements, numThreads);
+
+  if (res != TRI_ERROR_NO_ERROR) {
+    return res;
+  }
+  // ownership for _to elements is now in index
+  // prevent cleaning up of what we just inserted
+  elements.clear();
 
   return TRI_ERROR_NO_ERROR;
 }
@@ -811,4 +833,12 @@ void EdgeIndex::handleValNode(VPackBuilder* keys,
   TRI_IF_FAILURE("EdgeIndex::collectKeys") {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
+}
+
+IndexElement* EdgeIndex::buildFromElement(DocumentWrapper const& doc) const {
+  return buildStringElement(doc, Transaction::extractFromFromDocument(doc.slice()));
+}
+
+IndexElement* EdgeIndex::buildToElement(DocumentWrapper const& doc) const {
+  return buildStringElement(doc, Transaction::extractToFromDocument(doc.slice()));
 }

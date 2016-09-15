@@ -140,8 +140,7 @@ static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
     header->setVPackFromMarker(marker);  
 
     // insert into primary index
-    TRI_doc_mptr_t* result = nullptr;
-    int res = primaryIndex->insertKey(trx, header, result);
+    int res = primaryIndex->insertKey(trx, header);
 
     if (res != TRI_ERROR_NO_ERROR) {
       collection->releaseMasterpointer(header);

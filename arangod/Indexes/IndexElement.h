@@ -114,6 +114,12 @@ struct IndexElement {
   ~IndexElement() = delete;
 
  public:
+  void init(size_t numSubs) {
+    for (size_t i = 0; i < numSubs; ++i) {
+      subObject(i)->fill(arangodb::velocypack::Slice::noneSlice());
+    }
+  }
+
   /// @brief get a pointer to the document's masterpointer
   TRI_doc_mptr_t* document() const { return _document; }
 
@@ -157,10 +163,35 @@ struct IndexElement {
     if (space == nullptr) {
       return nullptr;
     }
-    return new (space) IndexElement();
+
+    IndexElement* element = new (space) IndexElement();
+    element->init(numSubs);
+    return element;
+  }
+
+  /// @brief allocate a new index element from a slice
+  static IndexElement* allocate(TRI_doc_mptr_t const* mptr, arangodb::velocypack::Slice const& value) {
+    IndexElement* element = allocate(1);
+    
+    if (element == nullptr) {
+      return nullptr;
+    }
+
+    element->document(mptr);
+
+    try {
+      element->subObject(0)->fill(value);
+      return element;
+    } catch (...) {
+      element->free(1);
+      return nullptr;
+    }
   }
 
   void free(size_t numSubs) {
+    for (size_t i = 0; i < numSubs; ++i) {
+      subObject(i)->free();
+    }
     TRI_Free(TRI_UNKNOWN_MEM_ZONE, this);
   }
 
@@ -168,6 +199,30 @@ struct IndexElement {
   static constexpr size_t memoryUsage(size_t numSubs) {
     return sizeof(TRI_doc_mptr_t*) + (sizeof(TRI_vpack_sub_t) * numSubs);
   }
+};
+
+class IndexElementGuard {
+ public:
+  IndexElementGuard(IndexElement* element, size_t numSubs) : _element(element), _numSubs(numSubs) {}
+  ~IndexElementGuard() {
+    if (_element != nullptr) {
+      _element->free(_numSubs);
+    }
+  }
+  IndexElement* get() const { return _element; }
+  IndexElement* release() { 
+    IndexElement* tmp = _element;
+    _element = nullptr;
+    return tmp;
+  }
+
+  operator bool() const { return _element != nullptr; }
+  
+  bool operator==(nullptr_t) const { return _element == nullptr; }
+
+ private:
+  IndexElement* _element;
+  size_t const _numSubs;
 };
 
 #endif

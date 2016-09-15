@@ -225,6 +225,9 @@ class EdgeIndex final : public Index {
     
   void handleValNode(VPackBuilder* keys, arangodb::aql::AstNode const* valNode) const;
 
+  IndexElement* buildFromElement(DocumentWrapper const& doc) const;
+  IndexElement* buildToElement(DocumentWrapper const& doc) const;
+
  private:
   //////////////////////////////////////////////////////////////////////////////
   /// @brief the hash table for _from
