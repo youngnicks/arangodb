@@ -44,7 +44,7 @@ namespace communicator {
   struct RequestInProgress {
     RequestInProgress(Callbacks callbacks, Ticket ticketId, std::string const& requestBody)
       : _callbacks(callbacks), _ticketId(ticketId), _requestBody(requestBody), _requestHeaders(nullptr), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)) {
-      }
+    }
 
     ~RequestInProgress() {
       if (_requestHeaders != nullptr) {
@@ -61,28 +61,32 @@ namespace communicator {
     struct curl_slist* _requestHeaders;
 
     HeadersInProgress _responseHeaders;
+    double _startTime;
     std::unique_ptr<StringBuffer> _responseBody;
   };
-}
-}
-
-namespace std {
-template <>
-class default_delete<CURL> {
- public:
-  void operator()(CURL* handle) {
-    if (handle != nullptr) {
-      arangodb::communicator::RequestInProgress* request = nullptr;
-      curl_easy_getinfo(handle, CURLINFO_PRIVATE, &request);
-      TRI_ASSERT(request != nullptr);
-      // mop: without assertions we should continue operation but free safely
-      if (request != nullptr) {
-        delete request;
+  
+  struct CurlHandle {
+    explicit CurlHandle(RequestInProgress* rip) : _handle(nullptr), _rip(rip) {
+      _handle = curl_easy_init();
+      if (_handle == nullptr) {
+        THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
       }
-      curl_easy_cleanup(handle);
+      curl_easy_setopt(_handle, CURLOPT_PRIVATE, _rip.get());
     }
-  }
-};
+    ~CurlHandle() {
+      if (_handle != nullptr) {
+        curl_easy_cleanup(_handle);
+      }
+    }
+
+    CurlHandle(CurlHandle& other) = delete;
+    CurlHandle& operator=(CurlHandle& other) = delete;
+    
+    CURL* _handle;
+    std::unique_ptr<RequestInProgress> _rip;
+  };
+
+}
 }
 
 namespace arangodb {
@@ -118,7 +122,7 @@ class Communicator {
  private:
   Mutex _newRequestsLock;
   std::vector<NewRequest> _newRequests;
-  std::unordered_map<uint64_t, std::unique_ptr<CURL>>
+  std::unordered_map<uint64_t, std::unique_ptr<CurlHandle>>
       _handlesInProgress;
   CURLM* _curl;
   CURLMcode _mc;

@@ -226,7 +226,7 @@ struct ClusterCommResult {
   /// @brief stringify a cluster comm status
   static char const* stringifyStatus(ClusterCommOpStatus status);
   
-  void fromError(int errorCode, HttpResponse* response) {
+  void fromError(int errorCode, std::unique_ptr<GeneralResponse> response) {
     try {
       switch(errorCode) {
         case TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT:
@@ -236,7 +236,7 @@ struct ClusterCommResult {
           status = CL_COMM_ERROR;
       }
       if (response != nullptr) {
-        result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(response);
+        result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.release()));
       }
       errorMessage = TRI_errno_string(errorCode);
     } catch (...) {
@@ -244,10 +244,27 @@ struct ClusterCommResult {
     }
   }
 
-  void fromResponse(HttpResponse* response) {
+  void fromResponse(std::unique_ptr<GeneralResponse> response) {
+    // mop: simulate the old behaviour where the original request
+    // was sent to the recipient and was simply accepted. Then the backend would
+    // do its work and send a request to the target containing the result of that
+    // operation in this request. This is mind boggling but this is how it used to
+    // work....now it gets even funnier: as the new system only does
+    // request => response we simulate the old behaviour now and fake a request
+    // containing the body of our response
+    // :snake: OPST_CIRCUS
+    HttpRequest* request = HttpRequest::createHttpRequest(ContentType::JSON, dynamic_cast<HttpResponse*>(response.get())->body().c_str(), dynamic_cast<HttpResponse*>(response.get())->body().length(), {});
+    answer.reset(request);
+    answer_code = dynamic_cast<HttpResponse*>(response.get())->responseCode();
     TRI_ASSERT(response != nullptr);
-    result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(response);
-    status = result->wasHttpError() ? CL_COMM_ERROR: CL_COMM_RECEIVED;
+    result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.release()));
+    // mop: well single requests were processed differently formerly and got
+    // result was available in different status code situations :S
+    if (single) {
+      status = result->wasHttpError() ? CL_COMM_ERROR: CL_COMM_SENT;
+    } else {
+      status = result->wasHttpError() ? CL_COMM_ERROR: CL_COMM_RECEIVED;
+    }
   }
 };
 
@@ -504,7 +521,7 @@ class ClusterComm {
   communicator::Destination createCommunicatorDestination(std::string const& destination, std::string const& path);
   std::pair<ClusterCommResult*, HttpRequest*> prepareRequest(std::string const& destination,
       arangodb::rest::RequestType reqtype,
-      std::string const& body,
+      std::string const* body,
       std::unordered_map<std::string, std::string> const& headerFields);
   //////////////////////////////////////////////////////////////////////////////
   /// @brief the pointer to the singleton instance

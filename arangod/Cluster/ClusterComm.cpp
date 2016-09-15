@@ -327,7 +327,7 @@ OperationID ClusterComm::asyncRequest(
     std::unique_ptr<std::unordered_map<std::string, std::string>>& headerFields,
     std::shared_ptr<ClusterCommCallback> callback, ClusterCommTimeout timeout,
     bool singleRequest, ClusterCommTimeout initTimeout) {
-  auto prepared = prepareRequest(destination, reqtype, *body.get(), *headerFields.get());
+  auto prepared = prepareRequest(destination, reqtype, body.get(), *headerFields.get());
   std::shared_ptr<ClusterCommResult> result(prepared.first);
   result->clientTransactionID = clientTransactionID;
   result->coordTransactionID = coordTransactionID;
@@ -341,7 +341,7 @@ OperationID ClusterComm::asyncRequest(
   bool doLogConnectionErrors = logConnectionErrors();
   if (callback) {
     callbacks._onError = [callback, result, doLogConnectionErrors](int errorCode, std::unique_ptr<GeneralResponse> response) {
-      result->fromError(errorCode, dynamic_cast<HttpResponse*>(response.get()));
+      result->fromError(errorCode, std::move(response));
       if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
         if (doLogConnectionErrors) {
           LOG_TOPIC(ERR, Logger::CLUSTER)
@@ -352,21 +352,17 @@ OperationID ClusterComm::asyncRequest(
             << "cannot create connection to server '" << result->serverID
             << "' at endpoint '" << result->endpoint << "'";
         }
-      }
-      if (response != nullptr) {
-        response.release();
       }
       bool ret = ((*callback.get())(result.get()));
       TRI_ASSERT(ret == true);
     };
     callbacks._onSuccess = [result](std::unique_ptr<GeneralResponse> response) {
       TRI_ASSERT(response.get() != nullptr);
-      result->fromResponse(dynamic_cast<HttpResponse*>(response.get()));
-      response.release();
+      result->fromResponse(std::move(response));
     };
   } else {
     callbacks._onError = [callback, result, doLogConnectionErrors, this](int errorCode, std::unique_ptr<GeneralResponse> response) {
-      result->fromError(errorCode, dynamic_cast<HttpResponse*>(response.get()));
+      result->fromError(errorCode, std::move(response));
       if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
         if (doLogConnectionErrors) {
           LOG_TOPIC(ERR, Logger::CLUSTER)
@@ -378,26 +374,25 @@ OperationID ClusterComm::asyncRequest(
             << "' at endpoint '" << result->endpoint << "'";
         }
       }
-      if (response != nullptr) {
-        response.release();
-      }
-      bool ret = ((*callback.get())(result.get()));
-      TRI_ASSERT(ret == true);
-      
+      CONDITION_LOCKER(locker, somethingReceived);
       somethingReceived.broadcast();
     };
     callbacks._onSuccess = [result, this](std::unique_ptr<GeneralResponse> response) {
       TRI_ASSERT(response.get() != nullptr);
-      result->fromResponse(dynamic_cast<HttpResponse*>(response.get()));
-      response.release();
-      
+      result->fromResponse(std::move(response));
+       
+      CONDITION_LOCKER(locker, somethingReceived);
       somethingReceived.broadcast();
     };
   }
 
-  auto ticketId = _communicator->addRequest(createCommunicatorDestination(destination, path),
+  auto ticketId = _communicator->addRequest(createCommunicatorDestination(result->endpoint, path),
                std::move(request), callbacks, opt);
   
+  // mop: this is used to distinguish a syncRequest from an asyncRequest while processing
+  // the answer...
+  result->single = false;
+  result->status = CL_COMM_SUBMITTED;
   result->operationID = ticketId;
   CONDITION_LOCKER(locker, somethingReceived);
   responses.emplace(ticketId, AsyncResponse{TRI_microtime(), result});
@@ -547,7 +542,7 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
     std::string const& body,
     std::unordered_map<std::string, std::string> const& headerFields,
     ClusterCommTimeout timeout) {
-  auto prepared = prepareRequest(destination, reqtype, body, headerFields);
+  auto prepared = prepareRequest(destination, reqtype, &body, headerFields);
   std::unique_ptr<ClusterCommResult> result(prepared.first);
   std::unique_ptr<HttpRequest> request(prepared.second);
 
@@ -557,7 +552,7 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
   bool wasSignaled = false;
   communicator::Callbacks callbacks{
     ._onError = [&cv, &result, &doLogConnectionErrors, &wasSignaled](int errorCode, std::unique_ptr<GeneralResponse> response) {
-      result->fromError(errorCode, dynamic_cast<HttpResponse*>(response.get()));
+      result->fromError(errorCode, std::move(response));
       if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
         if (doLogConnectionErrors) {
           LOG_TOPIC(ERR, Logger::CLUSTER)
@@ -569,22 +564,14 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
             << "' at endpoint '" << result->endpoint << "'";
         }
       }
-      if (response != nullptr) {
-        response.release();
-      }
+      response.release();
       CONDITION_LOCKER(isen, cv);
       wasSignaled = true;
       cv.signal();
     },
     ._onSuccess = [&cv, &result, &wasSignaled](std::unique_ptr<GeneralResponse> response) {
-      try {
-        result->result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.get()));
-        result->status = CL_COMM_RECEIVED;
-        
-        response.release();
-      } catch (...) {
-        result->status = CL_COMM_DROPPED;
-      }
+      result->fromResponse(std::move(response));
+      response.release();
       CONDITION_LOCKER(isen, cv); 
       wasSignaled = true;
       cv.signal();
@@ -593,8 +580,12 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
   
   communicator::Options opt;
   opt.requestTimeout = timeout;
-  _communicator->addRequest(createCommunicatorDestination(destination, path),
+  _communicator->addRequest(createCommunicatorDestination(result->endpoint, path),
                std::move(request), callbacks, opt);
+  result->status = CL_COMM_SENDING;
+  // mop: this is used to distinguish a syncRequest from an asyncRequest while processing
+  // the answer...
+  result->single = true;
   
   CONDITION_LOCKER(isen, cv);
   while (!wasSignaled) {
@@ -689,7 +680,7 @@ ClusterCommResult const ClusterComm::wait(
     ShardID const& shardID, ClusterCommTimeout timeout) {
   
   ResponseIterator i;
-  AsyncResponse q;
+  AsyncResponse response;
   double endtime;
   double timeleft;
 
@@ -706,72 +697,52 @@ ClusterCommResult const ClusterComm::wait(
   if (dt != nullptr) {
     dt->block();
   }
-
-  if (0 != ticketId) {
-    // In this case we only have to look into at most one operation.
+  
+  {
     CONDITION_LOCKER(locker, somethingReceived);
-
-    while (true) {  // will be left by return or break on timeout
-      i = responses.find(ticketId);
-      
-      if (i == responses.end()) {
-        // Nothing known about this operation, return with failure:
-        ClusterCommResult res;
-        res.operationID = ticketId;
-        res.status = CL_COMM_DROPPED;
-        // tell Dispatcher that we are back in business
-        if (dt != nullptr) {
-          dt->unblock();
-        }
-        return res;
-      } else {
-        // It is in the receive queue, now look at the status:
-        q = i->second;
-        if (q.result->status >= CL_COMM_TIMEOUT ||
-            (q.result->single && q.result->status == CL_COMM_SENT)) {
-          // It is done, let's remove it from the queue and return it:
-          responses.erase(i);
-          // tell Dispatcher that we are back in business
-          if (dt != nullptr) {
-            dt->unblock();
-          }
-          return *q.result.get();
-        }
-        // It is in the receive queue but still waiting, now wait actually
-      }
-      // Here it could either be in the receive or the send queue, let's wait
-      timeleft = endtime - TRI_microtime();
-      if (timeleft <= 0) {
-        break;
-      }
-      somethingReceived.wait(uint64_t(timeleft * 1000000.0));
-    }
-    // This place is only reached on timeout
-  } else {
-    // here, operationID == 0, so we have to do matching, we are only
-    // interested, if at least one operation matches, if it is ready,
-    // we return it immediately, otherwise, we report an error or wait.
-    CONDITION_LOCKER(locker, somethingReceived);
-
-    while (true) {  // will be left by return or break on timeout
-      bool found = false;
+    if (ticketId == 0) {
       for (i = responses.begin(); i != responses.end(); i++) {
-        q = i->second;
-        if (match(clientTransactionID, coordTransactionID, shardID, q.result.get())) {
-          found = true;
-          if (q.result->status >= CL_COMM_TIMEOUT ||
-              (q.result->single && q.result->status == CL_COMM_SENT)) {
-            responses.erase(i);
-            // tell Dispatcher that we are back in business
-            if (dt != nullptr) {
-              dt->unblock();
-            }
-            return *q.result.get();
-          }
+        if (match(clientTransactionID, coordTransactionID, shardID, i->second.result.get())) {
+          break;
         }
       }
+    } else {
+      i = responses.find(ticketId);
     }
-    // This place is only reached on timeout
+    if (i == responses.end()) {
+      // Nothing known about this operation, return with failure:
+      ClusterCommResult res;
+      res.operationID = ticketId;
+      res.status = CL_COMM_DROPPED;
+      // tell Dispatcher that we are back in business
+      if (dt != nullptr) {
+        dt->unblock();
+      }
+      return res;
+    }
+  }
+  response = i->second;
+  
+  while (true) {
+    if (response.result->status >= CL_COMM_TIMEOUT ||
+        (!response.result->single && response.result->status == CL_COMM_RECEIVED) ||
+        (response.result->single && response.result->status == CL_COMM_SENT)) {
+      // It is done, let's remove it from the queue and return it:
+      CONDITION_LOCKER(locker, somethingReceived);
+      responses.erase(i);
+      // tell Dispatcher that we are back in business
+      if (dt != nullptr) {
+        dt->unblock();
+      }
+      return *response.result.get();
+    }
+    // Here it could either be in the receive or the send queue, let's wait
+    timeleft = endtime - TRI_microtime();
+    if (timeleft <= 0) {
+      break;
+    }
+    CONDITION_LOCKER(locker, somethingReceived);
+    somethingReceived.wait(uint64_t(timeleft * 1000000.0));
   }
   // Now we have to react on timeout:
   ClusterCommResult res;
@@ -1396,14 +1367,16 @@ communicator::Destination ClusterComm::createCommunicatorDestination(std::string
     httpEndpoint = "https://" + endpoint.substr(6);
   }
   httpEndpoint += path;
+  LOG(ERR) << "URL " << endpoint << " => " << httpEndpoint;
   return communicator::Destination{httpEndpoint};
 }
 
 std::pair<ClusterCommResult*, HttpRequest*> ClusterComm::prepareRequest(std::string const& destination,
-      arangodb::rest::RequestType reqtype, std::string const& body,
+      arangodb::rest::RequestType reqtype, std::string const* body,
       std::unordered_map<std::string, std::string> const& headerFields) {
   HttpRequest* request = nullptr;
   auto result = new ClusterCommResult();
+  result->status = CL_COMM_SUBMITTED;
   result->setDestination(destination, logConnectionErrors());
   if (result->endpoint.empty()) {
     return std::make_pair(result, request);
@@ -1437,8 +1410,12 @@ std::pair<ClusterCommResult*, HttpRequest*> ClusterComm::prepareRequest(std::str
 #endif
 #endif
 #endif
-
-  request = HttpRequest::createHttpRequest(ContentType::JSON, body.c_str(), body.length(), headersCopy);
+  
+  if (body == nullptr) {
+    request = HttpRequest::createHttpRequest(ContentType::JSON, "", 0, headersCopy);
+  } else {
+    request = HttpRequest::createHttpRequest(ContentType::JSON, body->c_str(), body->length(), headersCopy);
+  }
   request->setRequestType(reqtype);
 
   return std::make_pair(result, request);
@@ -1458,7 +1435,8 @@ void ClusterCommThread::run() {
 
   while (!isStopping()) {
     cc->communicator()->work_once();
-    //cc->communicator()->wait();
+    cc->communicator()->wait();
+    continue;
     // First check the sending queue, as long as it is not empty, we send
     // a request via SimpleHttpClient:
     while (true) {  // left via break when there is no job in send queue
