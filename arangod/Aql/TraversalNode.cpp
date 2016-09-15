@@ -1,3 +1,4 @@
+////////////////////////////////////////////////////////////////////////////////
 /// @brief Implementation of Traversal Execution Node
 ///
 /// @file arangod/Aql/TraversalNode.cpp
@@ -902,6 +903,9 @@ void TraversalNode::prepareOptions() {
         info.idxHandles[0]);
     TRI_ASSERT(res);  // Right now we have an enforced edge index which will
                       // always fit.
+    if (!res) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected edge index not found");
+    }
 
     // We now have to check if we need _from / _to inside the index lookup and which position
     // it is used in. Such that the traverser can update the respective string value
@@ -932,9 +936,6 @@ void TraversalNode::prepareOptions() {
     auto ins = _options->_depthLookupInfo.emplace(
         it.first, std::vector<traverser::TraverserOptions::LookupInfo>());
     // We probably have to adopt minDepth. We cannot fulfill a condition of larger depth anyway
-    if (_options->minDepth < it.first + 1) {
-      _options->minDepth = it.first + 1;
-    }
     TRI_ASSERT(ins.second);
     auto& infos = ins.first->second;
     infos.reserve(numEdgeColls);
@@ -966,6 +967,10 @@ void TraversalNode::prepareOptions() {
           info.idxHandles[0]);
       TRI_ASSERT(res);  // Right now we have an enforced edge index which will
                         // always fit.
+      if (!res) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected edge index not found");
+      }
+
       // We now have to check if we need _from / _to inside the index lookup and which position
       // it is used in. Such that the traverser can update the respective string value
       // in-place
@@ -999,9 +1004,6 @@ void TraversalNode::prepareOptions() {
       it.second->addMember(jt);
     }
     _options->_vertexExpressions.emplace(it.first, new Expression(ast, it.second));
-    if (_options->minDepth < it.first) {
-      _options->minDepth = it.first;
-    }
     TRI_ASSERT(!_options->_vertexExpressions[it.first]->isV8());
   }
   if (!_globalVertexConditions.empty()) {
@@ -1096,8 +1098,16 @@ void TraversalNode::getConditionVariables(
   }
 }
 
+void TraversalNode::enhanceEngineInfo(VPackBuilder& builder) const {
+  if (_graphObj != nullptr) {
+    _graphObj->enhanceEngineInfo(builder);
+  } else {
+    // TODO enhance the Info based on EdgeCollections.
+  }
+}
+
 #ifdef TRI_ENABLE_MAINTAINER_MODE
-void checkConditionsDefined() const {
+void TraversalNode::checkConditionsDefined() const {
   TRI_ASSERT(_tmpObjVariable != nullptr);
   TRI_ASSERT(_tmpObjVarNode != nullptr);
   TRI_ASSERT(_tmpIdNode != nullptr);

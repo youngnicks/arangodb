@@ -53,7 +53,6 @@ HttpCommTask::HttpCommTask(EventLoop2 loop, GeneralServer* server,
       _readRequestBody(false),
       _allowMethodOverride(GeneralServerFeature::allowMethodOverride()),
       _denyCredentials(true),
-      _acceptDeflate(false),
       _newRequest(true),
       _requestType(rest::RequestType::ILLEGAL),  // TODO(fc) remove
       _fullUrl(),                                // TODO(fc) remove
@@ -226,7 +225,6 @@ bool HttpCommTask::processRead() {
       _requestType = rest::RequestType::ILLEGAL;
       _fullUrl = "";
       _denyCredentials = true;
-      _acceptDeflate = false;
 
       _sinceCompactification++;
     }
@@ -543,18 +541,6 @@ bool HttpCommTask::processRead() {
 }
 
 void HttpCommTask::processRequest(std::unique_ptr<HttpRequest> request) {
-  // check for deflate
-  bool found;
-
-  std::string const& acceptEncoding =
-      request->header(StaticStrings::AcceptEncoding, found);
-
-  if (found) {
-    if (acceptEncoding.find("deflate") != std::string::npos) {
-      _acceptDeflate = true;
-    }
-  }
-
   {
     LOG_TOPIC(DEBUG, Logger::REQUESTS)
         << "\"http-request-begin\",\"" << (void*)this << "\",\""
@@ -573,6 +559,7 @@ void HttpCommTask::processRequest(std::unique_ptr<HttpRequest> request) {
   }
 
   // check for an HLC time stamp
+  bool found;
   std::string const& timeStamp =
       request->header(StaticStrings::HLCHeader, found);
 
