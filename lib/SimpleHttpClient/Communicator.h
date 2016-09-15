@@ -34,15 +34,15 @@
 #include "SimpleHttpClient/Callbacks.h"
 #include "SimpleHttpClient/Destination.h"
 #include "SimpleHttpClient/Options.h"
-#include "SimpleHttpClient/Ticket.h"
 
 namespace arangodb {
 using namespace basics;
 namespace communicator {
   typedef std::unordered_map<std::string, std::string> HeadersInProgress;
+  typedef uint64_t Ticket;
 
   struct RequestInProgress {
-    RequestInProgress(Callbacks callbacks, uint64_t ticketId, std::string const& requestBody)
+    RequestInProgress(Callbacks callbacks, Ticket ticketId, std::string const& requestBody)
       : _callbacks(callbacks), _ticketId(ticketId), _requestBody(requestBody), _requestHeaders(nullptr), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)) {
       }
 
@@ -56,7 +56,7 @@ namespace communicator {
     RequestInProgress& operator=(RequestInProgress const& other) = delete;
 
     Callbacks _callbacks;
-    uint64_t _ticketId;
+    Ticket _ticketId;
     std::string _requestBody;
     struct curl_slist* _requestHeaders;
 
@@ -109,7 +109,7 @@ class Communicator {
     std::unique_ptr<GeneralRequest> _request;
     Callbacks _callbacks;
     Options _options;
-    uint64_t _ticketId;
+    Ticket _ticketId;
   };
 
   struct CurlData {

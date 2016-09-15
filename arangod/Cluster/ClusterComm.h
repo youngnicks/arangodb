@@ -37,11 +37,14 @@
 #include "Rest/HttpRequest.h"
 #include "Rest/HttpResponse.h"
 #include "SimpleHttpClient/Communicator.h"
+#include "SimpleHttpClient/SimpleHttpCommunicatorResult.h"
 #include "SimpleHttpClient/SimpleHttpResult.h"
 #include "Utils/Transaction.h"
 #include "VocBase/voc-types.h"
 
 namespace arangodb {
+using namespace communicator;
+
 class ClusterCommThread;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -60,7 +63,7 @@ typedef TRI_voc_tick_t CoordTransactionID;
 /// @brief trype of an operation ID
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef TRI_voc_tick_t OperationID;
+typedef Ticket OperationID;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief status of an (a-)synchronous cluster operation
@@ -222,6 +225,30 @@ struct ClusterCommResult {
 
   /// @brief stringify a cluster comm status
   static char const* stringifyStatus(ClusterCommOpStatus status);
+  
+  void fromError(int errorCode, HttpResponse* response) {
+    try {
+      switch(errorCode) {
+        case TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT:
+          status = CL_COMM_BACKEND_UNAVAILABLE;
+          break;
+        default:
+          status = CL_COMM_ERROR;
+      }
+      if (response != nullptr) {
+        result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(response);
+      }
+      errorMessage = TRI_errno_string(errorCode);
+    } catch (...) {
+      status = CL_COMM_DROPPED;
+    }
+  }
+
+  void fromResponse(HttpResponse* response) {
+    TRI_ASSERT(response != nullptr);
+    result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(response);
+    status = result->wasHttpError() ? CL_COMM_ERROR: CL_COMM_RECEIVED;
+  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -474,6 +501,11 @@ class ClusterComm {
                               ClusterCommTimeout timeout, size_t& nrDone,
                               arangodb::LogTopic const& logTopic);
 
+  communicator::Destination createCommunicatorDestination(std::string const& destination, std::string const& path);
+  std::pair<ClusterCommResult*, HttpRequest*> prepareRequest(std::string const& destination,
+      arangodb::rest::RequestType reqtype,
+      std::string const& body,
+      std::unordered_map<std::string, std::string> const& headerFields);
   //////////////////////////////////////////////////////////////////////////////
   /// @brief the pointer to the singleton instance
   //////////////////////////////////////////////////////////////////////////////
@@ -498,6 +530,14 @@ class ClusterComm {
   //////////////////////////////////////////////////////////////////////////////
   /// @brief received queue with lock and index
   //////////////////////////////////////////////////////////////////////////////
+  
+  struct AsyncResponse {
+    double timestamp;
+    std::shared_ptr<ClusterCommResult> result;
+  };
+
+  typedef std::unordered_map<Ticket, AsyncResponse>::iterator ResponseIterator;
+  std::unordered_map<Ticket, AsyncResponse> responses;
 
   // Receiving answers:
   std::list<ClusterCommOperation*> received;
@@ -528,7 +568,7 @@ class ClusterComm {
 
   bool match(ClientTransactionID const& clientTransactionID,
              CoordTransactionID const coordTransactionID,
-             ShardID const& shardID, ClusterCommOperation* op);
+             ShardID const& shardID, ClusterCommResult* res);
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief move an operation from the send to the receive queue

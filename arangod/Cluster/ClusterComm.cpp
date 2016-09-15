@@ -327,6 +327,83 @@ OperationID ClusterComm::asyncRequest(
     std::unique_ptr<std::unordered_map<std::string, std::string>>& headerFields,
     std::shared_ptr<ClusterCommCallback> callback, ClusterCommTimeout timeout,
     bool singleRequest, ClusterCommTimeout initTimeout) {
+  auto prepared = prepareRequest(destination, reqtype, *body.get(), *headerFields.get());
+  std::shared_ptr<ClusterCommResult> result(prepared.first);
+  result->clientTransactionID = clientTransactionID;
+  result->coordTransactionID = coordTransactionID;
+  std::unique_ptr<HttpRequest> request(prepared.second);
+
+  communicator::Options opt;
+  opt.connectionTimeout = initTimeout;
+  opt.requestTimeout = timeout;
+
+  Callbacks callbacks;
+  bool doLogConnectionErrors = logConnectionErrors();
+  if (callback) {
+    callbacks._onError = [callback, result, doLogConnectionErrors](int errorCode, std::unique_ptr<GeneralResponse> response) {
+      result->fromError(errorCode, dynamic_cast<HttpResponse*>(response.get()));
+      if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
+        if (doLogConnectionErrors) {
+          LOG_TOPIC(ERR, Logger::CLUSTER)
+            << "cannot create connection to server '" << result->serverID
+            << "' at endpoint '" << result->endpoint << "'";
+        } else {
+          LOG_TOPIC(INFO, Logger::CLUSTER)
+            << "cannot create connection to server '" << result->serverID
+            << "' at endpoint '" << result->endpoint << "'";
+        }
+      }
+      if (response != nullptr) {
+        response.release();
+      }
+      bool ret = ((*callback.get())(result.get()));
+      TRI_ASSERT(ret == true);
+    };
+    callbacks._onSuccess = [result](std::unique_ptr<GeneralResponse> response) {
+      TRI_ASSERT(response.get() != nullptr);
+      result->fromResponse(dynamic_cast<HttpResponse*>(response.get()));
+      response.release();
+    };
+  } else {
+    callbacks._onError = [callback, result, doLogConnectionErrors, this](int errorCode, std::unique_ptr<GeneralResponse> response) {
+      result->fromError(errorCode, dynamic_cast<HttpResponse*>(response.get()));
+      if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
+        if (doLogConnectionErrors) {
+          LOG_TOPIC(ERR, Logger::CLUSTER)
+            << "cannot create connection to server '" << result->serverID
+            << "' at endpoint '" << result->endpoint << "'";
+        } else {
+          LOG_TOPIC(INFO, Logger::CLUSTER)
+            << "cannot create connection to server '" << result->serverID
+            << "' at endpoint '" << result->endpoint << "'";
+        }
+      }
+      if (response != nullptr) {
+        response.release();
+      }
+      bool ret = ((*callback.get())(result.get()));
+      TRI_ASSERT(ret == true);
+      
+      somethingReceived.broadcast();
+    };
+    callbacks._onSuccess = [result, this](std::unique_ptr<GeneralResponse> response) {
+      TRI_ASSERT(response.get() != nullptr);
+      result->fromResponse(dynamic_cast<HttpResponse*>(response.get()));
+      response.release();
+      
+      somethingReceived.broadcast();
+    };
+  }
+
+  auto ticketId = _communicator->addRequest(createCommunicatorDestination(destination, path),
+               std::move(request), callbacks, opt);
+  
+  result->operationID = ticketId;
+  CONDITION_LOCKER(locker, somethingReceived);
+  responses.emplace(ticketId, AsyncResponse{TRI_microtime(), result});
+  return ticketId;
+
+  /*
   TRI_ASSERT(headerFields.get() != nullptr);
 
   auto op = std::make_unique<ClusterCommOperation>();
@@ -440,6 +517,7 @@ OperationID ClusterComm::asyncRequest(
   somethingToSend.signal();
 
   return opId;
+  */
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -469,92 +547,43 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
     std::string const& body,
     std::unordered_map<std::string, std::string> const& headerFields,
     ClusterCommTimeout timeout) {
-  auto res = std::make_unique<ClusterCommResult>();
-  res->setDestination(destination, logConnectionErrors());
-
-  if (res->endpoint.empty()) {
-    res->errorMessage =
-        "cannot create connection to server '" + res->serverID + "'";
-    return res;
-  }
-  
-  std::unordered_map<std::string, std::string> headersCopy(headerFields);
-  if (destination.substr(0, 6) == "shard:") {
-    if (arangodb::Transaction::_makeNolockHeaders != nullptr) {
-      // LOCKING-DEBUG
-      // std::cout << "Found Nolock header\n";
-      auto it = arangodb::Transaction::_makeNolockHeaders->find(res->shardID);
-      if (it != arangodb::Transaction::_makeNolockHeaders->end()) {
-        // LOCKING-DEBUG
-        // std::cout << "Found our shard\n";
-        headersCopy["X-Arango-Nolock"] = res->shardID;
-      }
-    }
-  }
-  headersCopy["Authorization"] = ServerState::instance()->getAuthentication();
-  TRI_voc_tick_t timeStamp = TRI_HybridLogicalClock();
-  headersCopy[StaticStrings::HLCHeader] =
-    arangodb::basics::HybridLogicalClock::encodeTimeStamp(timeStamp);
-  
-#ifdef DEBUG_CLUSTER_COMM
-#ifdef ARANGODB_ENABLE_MAINTAINER_MODE
-#if ARANGODB_ENABLE_BACKTRACE
-  std::string bt;
-  TRI_GetBacktrace(bt);
-  std::replace(bt.begin(), bt.end(), '\n', ';');  // replace all '\n' to ';'
-  headersCopy["X-Arango-BT-SYNC"] = bt;
-#endif
-#endif
-#endif
-
-  HttpRequest* requestPtr = HttpRequest::createHttpRequest(ContentType::JSON, body.c_str(), body.length(), headersCopy);
-  auto request = std::unique_ptr<HttpRequest>(requestPtr);
-  request->setRequestType(reqtype);
+  auto prepared = prepareRequest(destination, reqtype, body, headerFields);
+  std::unique_ptr<ClusterCommResult> result(prepared.first);
+  std::unique_ptr<HttpRequest> request(prepared.second);
 
   arangodb::basics::ConditionVariable cv;
   bool doLogConnectionErrors = logConnectionErrors();
 
   bool wasSignaled = false;
   communicator::Callbacks callbacks{
-    ._onError = [&cv, &res, &doLogConnectionErrors, &wasSignaled](int errorCode, std::unique_ptr<GeneralResponse> response) {
-      try {
-        switch(errorCode) {
-          case TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT:
-            res->status = CL_COMM_BACKEND_UNAVAILABLE;
-            if (doLogConnectionErrors) {
-              LOG_TOPIC(ERR, Logger::CLUSTER)
-                << "cannot create connection to server '" << res->serverID
-                << "' at endpoint '" << res->endpoint << "'";
-            } else {
-              LOG_TOPIC(INFO, Logger::CLUSTER)
-                << "cannot create connection to server '" << res->serverID
-                << "' at endpoint '" << res->endpoint << "'";
-            }
-            break;
-          default:
-            res->status = CL_COMM_ERROR;
+    ._onError = [&cv, &result, &doLogConnectionErrors, &wasSignaled](int errorCode, std::unique_ptr<GeneralResponse> response) {
+      result->fromError(errorCode, dynamic_cast<HttpResponse*>(response.get()));
+      if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
+        if (doLogConnectionErrors) {
+          LOG_TOPIC(ERR, Logger::CLUSTER)
+            << "cannot create connection to server '" << result->serverID
+            << "' at endpoint '" << result->endpoint << "'";
+        } else {
+          LOG_TOPIC(INFO, Logger::CLUSTER)
+            << "cannot create connection to server '" << result->serverID
+            << "' at endpoint '" << result->endpoint << "'";
         }
-        if (response != nullptr) {
-          res->result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.get()));
-          response.release();
-        }
-        res->errorMessage = TRI_errno_string(errorCode);
-      } catch (...) {
-        res->status = CL_COMM_DROPPED;
+      }
+      if (response != nullptr) {
+        response.release();
       }
       CONDITION_LOCKER(isen, cv);
       wasSignaled = true;
       cv.signal();
     },
-    ._onSuccess = [&cv, &res, &wasSignaled](std::unique_ptr<GeneralResponse> response) {
+    ._onSuccess = [&cv, &result, &wasSignaled](std::unique_ptr<GeneralResponse> response) {
       try {
-        res->result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.get()));
-        res->status = CL_COMM_SENT;
-        res->result->wasHttpError();
+        result->result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.get()));
+        result->status = CL_COMM_RECEIVED;
         
         response.release();
       } catch (...) {
-        res->status = CL_COMM_DROPPED;
+        result->status = CL_COMM_DROPPED;
       }
       CONDITION_LOCKER(isen, cv); 
       wasSignaled = true;
@@ -562,22 +591,16 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
     }
   };
   
-  std::string httpEndpoint;
-  if (res->endpoint.substr(0, 6) == "tcp://") {
-    httpEndpoint = "http://" + res->endpoint.substr(6);
-  } else if (res->endpoint.substr(0, 6) == "ssl://") {
-    httpEndpoint = "https://" + res->endpoint.substr(6);
-  }
   communicator::Options opt;
   opt.requestTimeout = timeout;
-  _communicator->addRequest(communicator::Destination{httpEndpoint + path},
+  _communicator->addRequest(createCommunicatorDestination(destination, path),
                std::move(request), callbacks, opt);
   
   CONDITION_LOCKER(isen, cv);
   while (!wasSignaled) {
     cv.wait(1000000);
   }
-  return res;
+  return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -586,12 +609,12 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
 
 bool ClusterComm::match(ClientTransactionID const& clientTransactionID,
                         CoordTransactionID const coordTransactionID,
-                        ShardID const& shardID, ClusterCommOperation* op) {
+                        ShardID const& shardID, ClusterCommResult* res) {
   return ((clientTransactionID == "" ||
-           clientTransactionID == op->result.clientTransactionID) &&
+           clientTransactionID == res->clientTransactionID) &&
           (0 == coordTransactionID ||
-           coordTransactionID == op->result.coordTransactionID) &&
-          (shardID == "" || shardID == op->result.shardID));
+           coordTransactionID == res->coordTransactionID) &&
+          (shardID == "" || shardID == res->shardID));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -662,10 +685,11 @@ ClusterCommResult const ClusterComm::enquire(OperationID const operationID) {
 
 ClusterCommResult const ClusterComm::wait(
     ClientTransactionID const& clientTransactionID,
-    CoordTransactionID const coordTransactionID, OperationID const operationID,
+    CoordTransactionID const coordTransactionID, Ticket const ticketId,
     ShardID const& shardID, ClusterCommTimeout timeout) {
-  IndexIterator i;
-  QueueIterator q;
+  
+  ResponseIterator i;
+  AsyncResponse q;
   double endtime;
   double timeleft;
 
@@ -683,47 +707,35 @@ ClusterCommResult const ClusterComm::wait(
     dt->block();
   }
 
-  if (0 != operationID) {
+  if (0 != ticketId) {
     // In this case we only have to look into at most one operation.
     CONDITION_LOCKER(locker, somethingReceived);
 
     while (true) {  // will be left by return or break on timeout
-      i = receivedByOpID.find(operationID);
-      if (i == receivedByOpID.end()) {
-        // It could be that the operation is still in the send queue:
-        CONDITION_LOCKER(sendLocker, somethingToSend);
-
-        i = toSendByOpID.find(operationID);
-        if (i == toSendByOpID.end()) {
-          // Nothing known about this operation, return with failure:
-          ClusterCommResult res;
-          res.operationID = operationID;
-          res.status = CL_COMM_DROPPED;
-          // tell Dispatcher that we are back in business
-          if (dt != nullptr) {
-            dt->unblock();
-          }
-          return res;
+      i = responses.find(ticketId);
+      
+      if (i == responses.end()) {
+        // Nothing known about this operation, return with failure:
+        ClusterCommResult res;
+        res.operationID = ticketId;
+        res.status = CL_COMM_DROPPED;
+        // tell Dispatcher that we are back in business
+        if (dt != nullptr) {
+          dt->unblock();
         }
+        return res;
       } else {
         // It is in the receive queue, now look at the status:
         q = i->second;
-        if ((*q)->result.status >= CL_COMM_TIMEOUT ||
-            ((*q)->result.single && (*q)->result.status == CL_COMM_SENT)) {
-          std::unique_ptr<ClusterCommOperation> op(*q);
+        if (q.result->status >= CL_COMM_TIMEOUT ||
+            (q.result->single && q.result->status == CL_COMM_SENT)) {
           // It is done, let's remove it from the queue and return it:
-          try {
-            receivedByOpID.erase(i);
-            received.erase(q);
-          } catch (...) {
-            op.release();
-            throw;
-          }
+          responses.erase(i);
           // tell Dispatcher that we are back in business
           if (dt != nullptr) {
             dt->unblock();
           }
-          return op->result;
+          return *q.result.get();
         }
         // It is in the receive queue but still waiting, now wait actually
       }
@@ -743,59 +755,21 @@ ClusterCommResult const ClusterComm::wait(
 
     while (true) {  // will be left by return or break on timeout
       bool found = false;
-      for (q = received.begin(); q != received.end(); q++) {
-        if (match(clientTransactionID, coordTransactionID, shardID, *q)) {
+      for (i = responses.begin(); i != responses.end(); i++) {
+        q = i->second;
+        if (match(clientTransactionID, coordTransactionID, shardID, q.result.get())) {
           found = true;
-          if ((*q)->result.status >= CL_COMM_TIMEOUT ||
-              ((*q)->result.single && (*q)->result.status == CL_COMM_SENT)) {
-            ClusterCommOperation* op = *q;
-            // It is done, let's remove it from the queue and return it:
-            i = receivedByOpID.find(op->result.operationID);  // cannot fail!
-            TRI_ASSERT(i != receivedByOpID.end());
-            TRI_ASSERT(i->second == q);
-            receivedByOpID.erase(i);
-            received.erase(q);
-            std::unique_ptr<ClusterCommOperation> opPtr(op);
-            ClusterCommResult res = op->result;
+          if (q.result->status >= CL_COMM_TIMEOUT ||
+              (q.result->single && q.result->status == CL_COMM_SENT)) {
+            responses.erase(i);
             // tell Dispatcher that we are back in business
             if (dt != nullptr) {
               dt->unblock();
             }
-            return res;
+            return *q.result.get();
           }
         }
       }
-      // If we found nothing, we have to look through the send queue:
-      if (!found) {
-        CONDITION_LOCKER(sendLocker, somethingToSend);
-
-        for (q = toSend.begin(); q != toSend.end(); q++) {
-          if (match(clientTransactionID, coordTransactionID, shardID, *q)) {
-            found = true;
-            break;
-          }
-        }
-      }
-      if (!found) {
-        // Nothing known about this operation, return with failure:
-        ClusterCommResult res;
-        res.clientTransactionID = clientTransactionID;
-        res.coordTransactionID = coordTransactionID;
-        res.operationID = operationID;
-        res.shardID = shardID;
-        res.status = CL_COMM_DROPPED;
-        // tell Dispatcher that we are back in business
-        if (dt != nullptr) {
-          dt->unblock();
-        }
-        return res;
-      }
-      // Here it could either be in the receive or the send queue, let's wait
-      timeleft = endtime - TRI_microtime();
-      if (timeleft <= 0) {
-        break;
-      }
-      somethingReceived.wait(uint64_t(timeleft * 1000000.0));
     }
     // This place is only reached on timeout
   }
@@ -803,7 +777,7 @@ ClusterCommResult const ClusterComm::wait(
   ClusterCommResult res;
   res.clientTransactionID = clientTransactionID;
   res.coordTransactionID = coordTransactionID;
-  res.operationID = operationID;
+  res.operationID = ticketId;
   res.shardID = shardID;
   res.status = CL_COMM_TIMEOUT;
   // tell Dispatcher that we are back in business
@@ -841,7 +815,7 @@ void ClusterComm::drop(ClientTransactionID const& clientTransactionID,
     for (q = toSend.begin(); q != toSend.end();) {
       ClusterCommOperation* op = *q;
       if ((0 != operationID && operationID == op->result.operationID) ||
-          match(clientTransactionID, coordTransactionID, shardID, op)) {
+          match(clientTransactionID, coordTransactionID, shardID, &op->result)) {
         if (op->result.status == CL_COMM_SENDING) {
           op->result.dropped = true;
           q++;
@@ -867,7 +841,7 @@ void ClusterComm::drop(ClientTransactionID const& clientTransactionID,
     for (q = received.begin(); q != received.end();) {
       ClusterCommOperation* op = *q;
       if ((0 != operationID && operationID == op->result.operationID) ||
-          match(clientTransactionID, coordTransactionID, shardID, op)) {
+          match(clientTransactionID, coordTransactionID, shardID, &op->result)) {
         nextq = q;
         nextq++;
         i = receivedByOpID.find(op->result.operationID);  // cannot fail
@@ -1412,6 +1386,62 @@ size_t ClusterComm::performSingleRequest(
           req.result.answer_code == rest::ResponseCode::ACCEPTED)
              ? 1
              : 0;
+}
+
+communicator::Destination ClusterComm::createCommunicatorDestination(std::string const& endpoint, std::string const& path) {
+  std::string httpEndpoint;
+  if (endpoint.substr(0, 6) == "tcp://") {
+    httpEndpoint = "http://" + endpoint.substr(6);
+  } else if (endpoint.substr(0, 6) == "ssl://") {
+    httpEndpoint = "https://" + endpoint.substr(6);
+  }
+  httpEndpoint += path;
+  return communicator::Destination{httpEndpoint};
+}
+
+std::pair<ClusterCommResult*, HttpRequest*> ClusterComm::prepareRequest(std::string const& destination,
+      arangodb::rest::RequestType reqtype, std::string const& body,
+      std::unordered_map<std::string, std::string> const& headerFields) {
+  HttpRequest* request = nullptr;
+  auto result = new ClusterCommResult();
+  result->setDestination(destination, logConnectionErrors());
+  if (result->endpoint.empty()) {
+    return std::make_pair(result, request);
+  }
+  
+  std::unordered_map<std::string, std::string> headersCopy(headerFields);
+  if (destination.substr(0, 6) == "shard:") {
+    if (arangodb::Transaction::_makeNolockHeaders != nullptr) {
+      // LOCKING-DEBUG
+      // std::cout << "Found Nolock header\n";
+      auto it = arangodb::Transaction::_makeNolockHeaders->find(result->shardID);
+      if (it != arangodb::Transaction::_makeNolockHeaders->end()) {
+        // LOCKING-DEBUG
+        // std::cout << "Found our shard\n";
+        headersCopy["X-Arango-Nolock"] = result->shardID;
+      }
+    }
+  }
+  headersCopy["Authorization"] = ServerState::instance()->getAuthentication();
+  TRI_voc_tick_t timeStamp = TRI_HybridLogicalClock();
+  headersCopy[StaticStrings::HLCHeader] =
+    arangodb::basics::HybridLogicalClock::encodeTimeStamp(timeStamp);
+  
+#ifdef DEBUG_CLUSTER_COMM
+#ifdef ARANGODB_ENABLE_MAINTAINER_MODE
+#if ARANGODB_ENABLE_BACKTRACE
+  std::string bt;
+  TRI_GetBacktrace(bt);
+  std::replace(bt.begin(), bt.end(), '\n', ';');  // replace all '\n' to ';'
+  headersCopy["X-Arango-BT-SYNC"] = bt;
+#endif
+#endif
+#endif
+
+  request = HttpRequest::createHttpRequest(ContentType::JSON, body.c_str(), body.length(), headersCopy);
+  request->setRequestType(reqtype);
+
+  return std::make_pair(result, request);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
