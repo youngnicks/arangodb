@@ -59,7 +59,8 @@ const functionsDocumentation = {
   'single_server': 'run one test suite on the server; options required\n' +
     '            run without arguments to get more detail',
   'ssl_server': 'https server tests',
-  'upgrade': 'upgrade tests'
+  'upgrade': 'upgrade tests',
+  'fail': 'this job will always produce a failed result'
 };
 
 const optionsDocumentation = [
@@ -238,6 +239,7 @@ let JS_DIR;
 let LOGS_DIR;
 let PEM_FILE;
 let UNITTESTS_DIR;
+let GDB_OUTPUT;
 
 function makeResults (testname) {
   const startTime = time();
@@ -418,8 +420,9 @@ function readImportantLogLines (logPath) {
 // //////////////////////////////////////////////////////////////////////////////
 
 function analyzeCoreDump (instanceInfo, options, storeArangodPath, pid) {
-  let command;
+  let gdbOutputFile = fs.getTempFile();
 
+  let command;
   command = '(';
   command += "printf 'bt full\\n thread apply all bt\\n';";
   command += 'sleep 10;';
@@ -432,11 +435,14 @@ function analyzeCoreDump (instanceInfo, options, storeArangodPath, pid) {
   } else {
     command += options.coreDirectory + '/*core*' + pid + '*';
   }
-
+  command += " > " + gdbOutputFile + " 2>&1";
   const args = ['-c', command];
   print(JSON.stringify(args));
 
   executeExternalAndWait('/bin/bash', args);
+  GDB_OUTPUT = fs.read(gdbOutputFile);
+  print(GDB_OUTPUT);
+  
 }
 
 // //////////////////////////////////////////////////////////////////////////////
@@ -1303,6 +1309,7 @@ function startInstanceCluster (instanceInfo, protocol, options,
     return [subArgs, subDir];
   };
 
+//  options.agencySize = 1;
   options.agencyWaitForSync = false;
   startInstanceAgency(instanceInfo, protocol, options, ...makeArgs('agency', {}));
 
@@ -1733,99 +1740,55 @@ let testsCases = {
 };
 
 function findTests () {
+  function doOnePathInner(path) {
+    return _.filter(fs.list(makePathUnix(path)),
+                    function (p) {
+                      return p.substr(-3) === '.js';
+                    })
+            .map(function (x) {
+                   return fs.join(makePathUnix(path), x);
+                 }).sort();
+  }
+
+  function doOnePath(path) {
+    var community = doOnePathInner(path);
+    if (global.ARANGODB_CLIENT_VERSION(true)['enterprise-version']) {
+      return community.concat(doOnePathInner('enterprise/' + path));
+    } else {
+      return community;
+    }
+  }
+
+
   if (testsCases.setup) {
     return;
   }
 
-  testsCases.common = _.filter(fs.list(makePathUnix('js/common/tests/shell')),
-    function (p) {
-      return p.substr(-3) === '.js';
-    }).map(
-    function (x) {
-      return fs.join(makePathUnix('js/common/tests/shell'), x);
-    }).sort();
+  testsCases.common = doOnePath('js/common/tests/shell');
 
-  testsCases.server_only = _.filter(fs.list(makePathUnix('js/server/tests/shell')),
-    function (p) {
-      return p.substr(-3) === '.js';
-    }).map(
-    function (x) {
-      return fs.join(makePathUnix('js/server/tests/shell'), x);
-    }).sort();
+  testsCases.server_only = doOnePath('js/server/tests/shell');
 
-  testsCases.client_only = _.filter(fs.list(makePathUnix('js/client/tests/shell')),
-    function (p) {
-      return p.substr(-3) === '.js';
-    }).map(
-    function (x) {
-      return fs.join(makePathUnix('js/client/tests/shell'), x);
-    }).sort();
+  testsCases.client_only = doOnePath('js/client/tests/shell');
 
-  testsCases.server_aql = _.filter(fs.list(makePathUnix('js/server/tests/aql')),
-    function (p) {
-      return p.substr(-3) === '.js' && p.indexOf('ranges-combined') === -1;
-    }).map(
-    function (x) {
-      return fs.join(makePathUnix('js/server/tests/aql'), x);
-    }).sort();
+  testsCases.server_aql = doOnePath('js/server/tests/aql');
+  testsCases.server_aql = _.filter(testsCases.server_aql,
+    function(p) { return p.indexOf('ranges-combined') === -1; });
 
-  testsCases.server_aql_extended =
-    _.filter(fs.list(makePathUnix('js/server/tests/aql')),
-      function (p) {
-        return p.substr(-3) === '.js' && p.indexOf('ranges-combined') !== -1;
-      }).map(
-      function (x) {
-        return fs.join(makePathUnix('js/server/tests/aql'), x);
-      }).sort();
+  testsCases.server_aql_extended = doOnePath('js/server/tests/aql');
+  testsCases.server_aql_extended = _.filter(testsCases.server_aql_extended,
+    function(p) { return p.indexOf('ranges-combined') !== -1; });
 
-  testsCases.server_aql_performance =
-    _.filter(fs.list(makePathUnix('js/server/perftests')),
-      function (p) {
-        return p.substr(-3) === '.js';
-      }).map(
-      function (x) {
-        return fs.join(makePathUnix('js/server/perftests'), x);
-      }).sort();
+  testsCases.server_aql_performance = doOnePath('js/server/perftests');
 
-  testsCases.server_http = _.filter(fs.list(makePathUnix('js/common/tests/http')),
-    function (p) {
-      return p.substr(-3) === '.js';
-    }).map(
-    function (x) {
-      return fs.join(makePathUnix('js/common/tests/http'), x);
-    }).sort();
+  testsCases.server_http = doOnePath('js/common/tests/http');
 
-  testsCases.replication = _.filter(fs.list(makePathUnix('js/common/tests/replication')),
-    function (p) {
-      return p.substr(-3) === '.js';
-    }).map(
-    function (x) {
-      return fs.join(makePathUnix('js/common/tests/replication'), x);
-    }).sort();
+  testsCases.replication = doOnePath('js/common/tests/replication');
 
-  testsCases.agency = _.filter(fs.list(makePathUnix('js/client/tests/agency')),
-    function (p) {
-      return p.substr(-3) === '.js';
-    }).map(
-    function (x) {
-      return fs.join(makePathUnix('js/client/tests/agency'), x);
-    }).sort();
+  testsCases.agency = doOnePath('js/client/tests/agency');
 
-  testsCases.resilience = _.filter(fs.list(makePathUnix('js/server/tests/resilience')),
-    function (p) {
-      return p.substr(-3) === '.js';
-    }).map(
-    function (x) {
-      return fs.join(makePathUnix('js/server/tests/resilience'), x);
-    }).sort();
+  testsCases.resilience = doOnePath('js/server/tests/resilience');
 
-  testsCases.client_resilience = _.filter(fs.list(makePathUnix('js/client/tests/resilience')),
-    function (p) {
-      return p.substr(-3) === '.js';
-    }).map(
-    function (x) {
-      return fs.join(makePathUnix('js/client/tests/resilience'), x);
-    }).sort();
+  testsCases.client_resilience = doOnePath('js/client/tests/resilience');
 
   testsCases.server = testsCases.common.concat(testsCases.server_only);
   testsCases.client = testsCases.common.concat(testsCases.client_only);
@@ -2001,6 +1964,42 @@ let testFuncs = {
   'all': function () {}
 };
 
+testFuncs.fail = function (options) {
+
+  return {
+    failSuite: {
+      status: false,
+      total: 1,
+      message: "this suite will always fail.",
+      duration: 2,
+      failed: 1,
+      failTest: {
+        status: false,
+        total: 1,
+        duration: 1,
+        message: "this testcase will always fail."
+      },
+      failSuccessTest: {
+        status: true,
+        duration: 1,
+        message: "this testcase will always succeed, though its in the fail testsuite."
+      }
+    },
+    successSuite: {
+      status: true,
+      total: 1,
+      message: "this suite will always be successfull",
+      duration: 1,
+      failed: 0,
+      success: {
+        status: true,
+        message: "this testcase will always be successfull",
+        duration: 1       
+      }
+    }
+  };
+};
+
 // //////////////////////////////////////////////////////////////////////////////
 // / @brief TEST: arangosh
 // //////////////////////////////////////////////////////////////////////////////
@@ -2116,7 +2115,6 @@ testFuncs.arangosh = function (options) {
   }
 
   print();
-
   return ret;
 };
 
@@ -3931,6 +3929,8 @@ function unitTestPrettyPrintResults (r) {
     }
     print(SuccessMessages);
     print(failedMessages);
+    fs.write("out/testfailures.txt", failedMessages);
+    fs.write("out/testfailures.txt", GDB_OUTPUT);
     /* jshint forin: true */
 
     let color = (!r.crashed && r.status === true) ? GREEN : RED;
@@ -4115,7 +4115,6 @@ function unitTest (cases, options) {
 
     let result = testFuncs[currentTest](options);
     results[currentTest] = result;
-
     let status = true;
 
     for (let i in result) {
