@@ -27,6 +27,7 @@
 #include "Basics/Common.h"
 #include "Basics/AttributeNameParser.h"
 #include "Basics/Exceptions.h"
+#include "Indexes/IndexElement.h"
 #include "VocBase/MasterPointer.h"
 #include "VocBase/vocbase.h"
 #include "VocBase/voc-types.h"
@@ -55,118 +56,18 @@ struct Variable;
 class Transaction;
 }
 
-
-/// @brief velocypack sub-object (for indexes, as part of TRI_index_element_t, 
-/// if the last byte in data[] is 0, then the VelocyPack data is managed 
-/// by the index element. If the last byte in data[] is 1, then 
-/// value.data contains the actual VelocyPack data in place.
-struct TRI_vpack_sub_t {
-  union {
-    uint8_t data[16];
-    uint8_t* managed;
-  } value;
-  
-  /// @brief fill a TRI_vpack_sub_t structure with a subvalue
-  void fill(VPackSlice const value) noexcept {
-    VPackValueLength len = value.byteSize();
-    if (len <= maxValueLength()) {
-      setValue(value.start(), static_cast<size_t>(len));
-    } else {
-      setManaged(value.start(), static_cast<size_t>(len));
-    }
-  }
-
-  void free() {
-    if (isManaged()) {
-      delete value.managed;
-    }
-  }
-  
-  /// @brief velocypack sub-object (for indexes, as part of TRI_index_element_t, 
-  /// if offset is non-zero, then it is an offset into the VelocyPack data in
-  /// the data or WAL file. If offset is 0, then data contains the actual data
-  /// in place.
-  arangodb::velocypack::Slice slice(TRI_doc_mptr_t const* mptr) const {
-    if (isValue()) {
-      return arangodb::velocypack::Slice(&value.data[0]);
-    } 
-    return arangodb::velocypack::Slice(value.managed);
-  }
-
- private:
-  void setManaged(uint8_t const* data, size_t length) {
-    value.managed = new uint8_t[length];
-    memcpy(value.managed, data, length);
-    value.data[maxValueLength()] = 0; // type = offset
-  }
-    
-  void setValue(uint8_t const* data, size_t length) noexcept {
-    memcpy(&value.data[0], data, length);
-    value.data[maxValueLength()] = 1; // type = value
-  }
-  
-  inline bool isManaged() const noexcept {
-    return !isValue();
-  }
-
-  inline bool isValue() const noexcept {
-    return value.data[maxValueLength()] == 1;
-  }
-  
-  static constexpr size_t maxValueLength() noexcept {
-    return sizeof(value.data) - 1;
-  }
-};
-
-static_assert(sizeof(TRI_vpack_sub_t) == 16, "invalid size of TRI_vpack_sub_t");
-
-/// @brief Unified index element. Do not directly construct it.
-struct TRI_index_element_t {
- private:
-  TRI_doc_mptr_t* _document;
-
-  // Do not use new for this struct, use allocate!
-  TRI_index_element_t() {}
-
-  ~TRI_index_element_t() = delete;
-
+class DocumentWrapper {
  public:
-  /// @brief Get a pointer to the Document's masterpointer.
-  TRI_doc_mptr_t* document() const { return _document; }
+  explicit DocumentWrapper(TRI_doc_mptr_t const* mptr) 
+    : _mptr(mptr) {}
 
-  /// @brief Set the pointer to the Document's masterpointer.
-  void document(TRI_doc_mptr_t* doc) noexcept { _document = doc; }
+  TRI_voc_rid_t revisionId() const { return _mptr->revisionId(); }
+  arangodb::velocypack::Slice slice() const { return arangodb::velocypack::Slice(_mptr->vpack()); }
 
-  /// @brief Get a pointer to sub objects
-  TRI_vpack_sub_t* subObjects() const {
-    return reinterpret_cast<TRI_vpack_sub_t*>((char*)&_document +
-                                               sizeof(TRI_doc_mptr_t*));
-  }
+  TRI_doc_mptr_t const* mptr() const { return _mptr; }
 
-  /// @brief Allocate a new index Element
-  static TRI_index_element_t* allocate(size_t numSubs) {
-    void* space = TRI_Allocate(
-        TRI_UNKNOWN_MEM_ZONE,
-        sizeof(TRI_doc_mptr_t*) + (sizeof(TRI_vpack_sub_t) * numSubs), false);
-    if (space == nullptr) {
-      return nullptr;
-    }
-    // FIXME: catch nullptr case?
-    return new (space) TRI_index_element_t();
-  }
-
-  void free(size_t numSubs) {
-    TRI_ASSERT(document() != nullptr);
-    TRI_ASSERT(subObjects() != nullptr);
-
-    TRI_Free(TRI_UNKNOWN_MEM_ZONE, this);
-  }
-
-  /// @brief Memory usage of an index element
-  static constexpr size_t memoryUsage(size_t numSubs) {
-    return sizeof(TRI_doc_mptr_t*) + (sizeof(TRI_vpack_sub_t) * numSubs);
-  }
-
+ private:
+  TRI_doc_mptr_t const* _mptr;
 };
 
 namespace arangodb {
@@ -356,13 +257,11 @@ class Index {
   virtual void toVelocyPackFigures(arangodb::velocypack::Builder&) const;
   std::shared_ptr<arangodb::velocypack::Builder> toVelocyPackFigures() const;
 
-  virtual int insert(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
-                     bool) = 0;
-  virtual int remove(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
-                     bool) = 0;
-  virtual int batchInsert(arangodb::Transaction*,
-                          std::vector<TRI_doc_mptr_t const*> const*, size_t);
-
+  virtual int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) = 0;
+  virtual int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) = 0;
+  
+  virtual int batchInsert(arangodb::Transaction*, std::vector<DocumentWrapper> const&, size_t);
+  
   virtual int unload() = 0;
 
   // a garbage collection function for the index

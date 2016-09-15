@@ -393,16 +393,16 @@ bool IndexBlock::readIndex(size_t atMost) {
     
     for (auto const& mptr : _result) {
       if (!hasMultipleIndexes) {
-        _documents.emplace_back(mptr->vpack());
+        _documents.emplace_back(mptr->document()->vpack());
       } else {
-        VPackSlice doc(mptr->vpack());
+        VPackSlice doc(mptr->document()->vpack());
         VPackSlice keySlice = Transaction::extractKeyFromDocument(doc);
         std::string key = keySlice.copyString();
         if (_alreadyReturned.find(key) == _alreadyReturned.end()) {
           if (!isLastIndex) {
             _alreadyReturned.emplace(std::move(key));
           }
-          _documents.emplace_back(mptr->vpack());
+          _documents.emplace_back(mptr->document()->vpack());
         }
       } 
     }

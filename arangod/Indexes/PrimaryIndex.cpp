@@ -40,23 +40,23 @@
 
 using namespace arangodb;
 
-////////////////////////////////////////////////////////////////////////////////
+static constexpr uint64_t hashSeed = 0x87654321;
+
 /// @brief hard-coded vector of the index attributes
 /// note that the attribute names must be hard-coded here to avoid an init-order
 /// fiasco with StaticStrings::FromString etc.
-////////////////////////////////////////////////////////////////////////////////
-
 static std::vector<std::vector<arangodb::basics::AttributeName>> const IndexAttributes
     {{arangodb::basics::AttributeName("_id", false)},
      {arangodb::basics::AttributeName("_key", false)}};
 
 static inline uint64_t HashKey(void*, uint8_t const* key) {
   // can use fast hash-function here, as index values are restricted to strings
-  return VPackSlice(key).hashString();
+  LOG(ERR) << "HASH KEY: " << VPackSlice(key).copyString();
+  return VPackSlice(key).hashString(hashSeed);
 }
 
-static inline uint64_t HashElement(void*, TRI_doc_mptr_t const* element) {
-  return element->getHash();
+static inline uint64_t HashElement(void*, IndexElement const* element) {
+  return element->hashString(hashSeed);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -64,28 +64,26 @@ static inline uint64_t HashElement(void*, TRI_doc_mptr_t const* element) {
 ////////////////////////////////////////////////////////////////////////////////
 
 static bool IsEqualKeyElement(void*, uint8_t const* key,
-                              uint64_t const hash,
-                              TRI_doc_mptr_t const* element) {
-  if (hash != element->getHash()) {
+                              uint64_t hash,
+                              IndexElement const* element) {
+  if (hash != element->hashString(hashSeed)) {
     return false;
   }
- 
-  return Transaction::extractKeyFromDocument(VPackSlice(element->vpack())).equals(VPackSlice(key)); 
+
+  return element->slice().equals(VPackSlice(key)); 
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief determines if two elements are equal
 ////////////////////////////////////////////////////////////////////////////////
 
-static bool IsEqualElementElement(void*, TRI_doc_mptr_t const* left,
-                                  TRI_doc_mptr_t const* right) {
-  if (left->getHash() != right->getHash()) {
+static bool IsEqualElementElement(void*, IndexElement const* left,
+                                  IndexElement const* right) {
+  if (left->hashString(hashSeed) != right->hashString(hashSeed)) {
     return false;
   }
 
-  VPackSlice l = Transaction::extractKeyFromDocument(VPackSlice(left->vpack()));
-  VPackSlice r = Transaction::extractKeyFromDocument(VPackSlice(right->vpack()));
-  return l.equals(r);
+  return left->slice().equals(right->slice());
 }
 
 PrimaryIndexIterator::~PrimaryIndexIterator() {
@@ -95,7 +93,7 @@ PrimaryIndexIterator::~PrimaryIndexIterator() {
   }
 }
 
-TRI_doc_mptr_t* PrimaryIndexIterator::next() {
+IndexElement* PrimaryIndexIterator::next() {
   while (_iterator.valid()) {
     auto result = _index->lookupKey(_trx, _iterator.value());
     _iterator.next();
@@ -113,14 +111,14 @@ TRI_doc_mptr_t* PrimaryIndexIterator::next() {
 
 void PrimaryIndexIterator::reset() { _iterator.reset(); }
 
-TRI_doc_mptr_t* AllIndexIterator::next() {
+IndexElement* AllIndexIterator::next() {
   if (_reverse) {
     return _index->findSequentialReverse(_trx, _position);
   }
   return _index->findSequential(_trx, _position, _total);
 };
 
-void AllIndexIterator::nextBabies(std::vector<TRI_doc_mptr_t*>& buffer, size_t limit) {
+void AllIndexIterator::nextBabies(std::vector<IndexElement*>& buffer, size_t limit) {
   size_t atMost = limit;
 
   buffer.clear();
@@ -139,7 +137,7 @@ void AllIndexIterator::nextBabies(std::vector<TRI_doc_mptr_t*>& buffer, size_t l
 
 void AllIndexIterator::reset() { _position.reset(); }
 
-TRI_doc_mptr_t* AnyIndexIterator::next() {
+IndexElement* AnyIndexIterator::next() {
   return _index->findRandom(_trx, _initial, _position, _step, _total);
 }
 
@@ -163,7 +161,7 @@ PrimaryIndex::PrimaryIndex(arangodb::LogicalCollection* collection)
     indexBuckets = collection->indexBuckets();
   }
 
-  _primaryIndex = new TRI_PrimaryIndex_t(
+  _primaryIndex = new PrimaryIndexImpl(
       HashKey, HashElement, IsEqualKeyElement, IsEqualElementElement,
       IsEqualElementElement, indexBuckets,
       []() -> std::string { return "primary"; });
@@ -208,23 +206,28 @@ void PrimaryIndex::toVelocyPackFigures(VPackBuilder& builder) const {
   _primaryIndex->appendToVelocyPack(builder);
 }
 
-int PrimaryIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const*, bool) {
+int PrimaryIndex::insert(arangodb::Transaction*, DocumentWrapper const&, bool) {
   THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "insert() called for primary index");
 }
 
-int PrimaryIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const*, bool) {
+int PrimaryIndex::remove(arangodb::Transaction*, DocumentWrapper const&, bool) {
   THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "remove() called for primary index");
 }
 
 /// @brief unload the index data from memory
 int PrimaryIndex::unload() {
-  _primaryIndex->truncate([](TRI_doc_mptr_t*) -> bool { return true; });
+  auto cb = [](IndexElement* element) {
+    element->free(1);
+    return true;
+  };
+
+  _primaryIndex->truncate(cb);
   return TRI_ERROR_NO_ERROR;
 }
 
 /// @brief looks up an element given a key
-TRI_doc_mptr_t* PrimaryIndex::lookup(arangodb::Transaction* trx,
-                                     VPackSlice const& slice) const {
+IndexElement* PrimaryIndex::lookup(arangodb::Transaction* trx,
+                                   VPackSlice const& slice) const {
   TRI_ASSERT(slice.isArray() && slice.length() == 1);
   VPackSlice tmp = slice.at(0);
   TRI_ASSERT(tmp.isObject() && tmp.hasKey(StaticStrings::IndexEq));
@@ -233,8 +236,8 @@ TRI_doc_mptr_t* PrimaryIndex::lookup(arangodb::Transaction* trx,
 }
 
 /// @brief looks up an element given a key
-TRI_doc_mptr_t* PrimaryIndex::lookupKey(arangodb::Transaction* trx,
-                                        VPackSlice const& key) const {
+IndexElement* PrimaryIndex::lookupKey(arangodb::Transaction* trx,
+                                      VPackSlice const& key) const {
   TRI_ASSERT(key.isString());
   return _primaryIndex->findByKey(trx, key.begin());
 }
@@ -247,7 +250,7 @@ TRI_doc_mptr_t* PrimaryIndex::lookupKey(arangodb::Transaction* trx,
 ///        DEPRECATED
 ////////////////////////////////////////////////////////////////////////////////
 
-TRI_doc_mptr_t* PrimaryIndex::lookupSequential(
+IndexElement* PrimaryIndex::lookupSequential(
     arangodb::Transaction* trx, arangodb::basics::BucketPosition& position,
     uint64_t& total) {
   return _primaryIndex->findSequential(trx, position, total);
@@ -281,7 +284,7 @@ IndexIterator* PrimaryIndex::anyIterator(arangodb::Transaction* trx) const {
 ///        DEPRECATED
 ////////////////////////////////////////////////////////////////////////////////
 
-TRI_doc_mptr_t* PrimaryIndex::lookupSequentialReverse(
+IndexElement* PrimaryIndex::lookupSequentialReverse(
     arangodb::Transaction* trx, arangodb::basics::BucketPosition& position) {
   return _primaryIndex->findSequentialReverse(trx, position);
 }
@@ -292,12 +295,21 @@ TRI_doc_mptr_t* PrimaryIndex::lookupSequentialReverse(
 ////////////////////////////////////////////////////////////////////////////////
 
 int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* header,
-                            void const** found) {
-  *found = nullptr;
-  int res = _primaryIndex->insert(trx, header);
+                            TRI_doc_mptr_t*& found) {
+  found = nullptr;
+  // TODO
+  IndexElement* element = IndexElement::allocate(1);
+  if (element == nullptr) {
+    return TRI_ERROR_OUT_OF_MEMORY;
+  }
+  element->document(header);
+  LOG(ERR) << "ELEMENT: " << element << "; " << element->subObject(0);
+  element->subObject(0)->fill(Transaction::extractKeyFromDocument(VPackSlice(header->vpack())));
+  LOG(ERR) << "ELEMENT SLICE: " << element->slice(0).toJson();
+  int res = _primaryIndex->insert(trx, element);
 
   if (res == TRI_ERROR_ARANGO_UNIQUE_CONSTRAINT_VIOLATED) {
-    *found = _primaryIndex->find(trx, header);
+    found = _primaryIndex->find(trx, element)->document();
   }
 
   return res;
@@ -309,7 +321,7 @@ int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* header,
 /// from a previous lookupKey call
 ////////////////////////////////////////////////////////////////////////////////
 
-int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* header,
+int PrimaryIndex::insertKey(arangodb::Transaction* trx, IndexElement* header,
                             arangodb::basics::BucketPosition const& position) {
   return _primaryIndex->insertAtPosition(trx, header, position);
 }
@@ -318,8 +330,8 @@ int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* header,
 /// @brief removes an key/element from the index
 ////////////////////////////////////////////////////////////////////////////////
 
-TRI_doc_mptr_t* PrimaryIndex::removeKey(arangodb::Transaction* trx,
-                                        VPackSlice const& slice) {
+IndexElement* PrimaryIndex::removeKey(arangodb::Transaction* trx,
+                                      VPackSlice const& slice) {
   return _primaryIndex->removeByKey(trx, slice.begin());
 }
 
@@ -343,12 +355,12 @@ uint64_t PrimaryIndex::calculateHash(arangodb::Transaction* trx,
 }
 
 void PrimaryIndex::invokeOnAllElements(
-    std::function<bool(TRI_doc_mptr_t*)> work) {
+    std::function<bool(IndexElement*)> work) {
   _primaryIndex->invokeOnAllElements(work);
 }
 
 void PrimaryIndex::invokeOnAllElementsForRemoval(
-    std::function<bool(TRI_doc_mptr_t*)> work) {
+    std::function<bool(IndexElement*)> work) {
   _primaryIndex->invokeOnAllElementsForRemoval(work);
 }
 

@@ -2423,24 +2423,27 @@ int LogicalCollection::fillIndexBatch(arangodb::Transaction* trx,
 
   int res = TRI_ERROR_NO_ERROR;
 
-  std::vector<TRI_doc_mptr_t const*> documents;
+  std::vector<DocumentWrapper> documents;
   documents.reserve(blockSize);
 
   if (nrUsed > 0) {
     arangodb::basics::BucketPosition position;
     uint64_t total = 0;
     while (true) {
-      TRI_doc_mptr_t const* mptr =
-          primaryIndex->lookupSequential(trx, position, total);
+      TRI_doc_mptr_t const* mptr = nullptr;
+      IndexElement* m = primaryIndex->lookupSequential(trx, position, total);
+      if (m != nullptr) {
+        mptr = m->document();
+      } 
 
       if (mptr == nullptr) {
         break;
       }
 
-      documents.emplace_back(mptr);
+      documents.emplace_back(DocumentWrapper(mptr));
 
       if (documents.size() == blockSize) {
-        res = idx->batchInsert(trx, &documents, indexPool->numThreads());
+        res = idx->batchInsert(trx, documents, indexPool->numThreads());
         documents.clear();
 
         // some error occurred
@@ -2453,7 +2456,7 @@ int LogicalCollection::fillIndexBatch(arangodb::Transaction* trx,
 
   // process the remainder of the documents
   if (res == TRI_ERROR_NO_ERROR && !documents.empty()) {
-    res = idx->batchInsert(trx, &documents, indexPool->numThreads());
+    res = idx->batchInsert(trx, documents, indexPool->numThreads());
   }
 
   LOG_TOPIC(TRACE, Logger::PERFORMANCE)
@@ -2495,14 +2498,17 @@ int LogicalCollection::fillIndexSequential(arangodb::Transaction* trx,
     uint64_t total = 0;
 
     while (true) {
-      TRI_doc_mptr_t const* mptr =
-          primaryIndex->lookupSequential(trx, position, total);
+      IndexElement* m = primaryIndex->lookupSequential(trx, position, total);
+      TRI_doc_mptr_t const* mptr = nullptr;
+      if (m != nullptr) {
+        mptr = m->document();
+      }
 
       if (mptr == nullptr) {
         break;
       }
 
-      int res = idx->insert(trx, mptr, false);
+      int res = idx->insert(trx, DocumentWrapper(mptr), false);
 
       if (res != TRI_ERROR_NO_ERROR) {
         return res;
@@ -2771,7 +2777,11 @@ int LogicalCollection::lookupDocument(
     return TRI_ERROR_ARANGO_DOCUMENT_KEY_BAD;
   }
 
-  header = primaryIndex()->lookupKey(trx, key);
+  IndexElement* h = primaryIndex()->lookupKey(trx, key);
+  header = nullptr;
+  if (h != nullptr) {
+    header = h->document();
+  }
 
   if (header == nullptr) {
     return TRI_ERROR_ARANGO_DOCUMENT_NOT_FOUND;
@@ -2910,7 +2920,7 @@ int LogicalCollection::insertPrimaryIndex(arangodb::Transaction* trx,
   TRI_ASSERT(header->vpack() != nullptr); 
 
   // insert into primary index
-  int res = primaryIndex()->insertKey(trx, header, (void const**)&found);
+  int res = primaryIndex()->insertKey(trx, header, found);
 
   if (res != TRI_ERROR_NO_ERROR) {
     return res;
@@ -2963,7 +2973,7 @@ int LogicalCollection::insertSecondaryIndexes(
       continue;
     }
 
-    int res = idx->insert(trx, header, isRollback);
+    int res = idx->insert(trx, DocumentWrapper(header), isRollback);
 
     // in case of no-memory, return immediately
     if (res == TRI_ERROR_OUT_OF_MEMORY) {
@@ -3006,7 +3016,7 @@ int LogicalCollection::deleteSecondaryIndexes(
       continue;
     }
 
-    int res = idx->remove(trx, header, isRollback);
+    int res = idx->remove(trx, DocumentWrapper(header), isRollback);
 
     if (res != TRI_ERROR_NO_ERROR) {
       // an error occurred

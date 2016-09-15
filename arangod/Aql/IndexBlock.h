@@ -28,6 +28,7 @@
 #include "Aql/ExecutionBlock.h"
 #include "Aql/ExecutionNode.h"
 #include "Aql/IndexNode.h"
+#include "Indexes/IndexElement.h"
 
 namespace arangodb {
 struct OperationCursor;
@@ -108,7 +109,7 @@ class IndexBlock : public ExecutionBlock {
   Collection const* _collection;
 
   /// @brief document result
-  std::vector<TRI_doc_mptr_t*> _result;
+  std::vector<IndexElement*> _result;
   
   /// @brief document buffer
   std::vector<arangodb::velocypack::Slice> _documents;

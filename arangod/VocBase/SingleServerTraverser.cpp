@@ -67,7 +67,7 @@ bool SingleServerEdgeCursor::next(std::vector<VPackSlice>& result,
   }
   _cachePos++;
   if (_cachePos < _cache.size()) {
-    result.emplace_back(_cache[_cachePos]->vpack());
+    result.emplace_back(_cache[_cachePos]->document()->vpack());
     cursorId = _currentCursor;
     return true;
   }
@@ -107,7 +107,7 @@ bool SingleServerEdgeCursor::next(std::vector<VPackSlice>& result,
     }
   } while (_cache.empty());
   TRI_ASSERT(_cachePos < _cache.size());
-  result.emplace_back(_cache[_cachePos]->vpack());
+  result.emplace_back(_cache[_cachePos]->document()->vpack());
   cursorId = _currentCursor;
   return true;
 }
@@ -125,7 +125,7 @@ bool SingleServerEdgeCursor::readAll(std::unordered_set<VPackSlice>& result,
       // because the cursor expect's it to be filled.
       cursor->getMoreMptr(_cache);
       for (auto const& mptr : _cache) {
-        result.emplace(mptr->vpack());
+        result.emplace(mptr->document()->vpack());
       }
     }
   }

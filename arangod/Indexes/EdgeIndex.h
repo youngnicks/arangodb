@@ -35,16 +35,16 @@
 #include <velocypack/Slice.h>
 
 namespace arangodb {
+  
+typedef arangodb::basics::AssocMulti<arangodb::velocypack::Slice, IndexElement,
+                                     uint32_t, true> TRI_EdgeIndexHash_t;
+
 
 class EdgeIndexIterator final : public IndexIterator {
  public:
-  typedef arangodb::basics::AssocMulti<arangodb::velocypack::Slice,
-                                       TRI_doc_mptr_t, uint32_t,
-                                       true> TRI_EdgeIndexHash_t;
+  IndexElement* next() override;
 
-  TRI_doc_mptr_t* next() override;
-
-  void nextBabies(std::vector<TRI_doc_mptr_t*>&, size_t) override;
+  void nextBabies(std::vector<IndexElement*>&, size_t) override;
 
   void reset() override;
 
@@ -68,16 +68,16 @@ class EdgeIndexIterator final : public IndexIterator {
   TRI_EdgeIndexHash_t const* _index;
   std::unique_ptr<arangodb::velocypack::Builder> _keys;
   arangodb::velocypack::ArrayIterator _iterator;
-  std::vector<TRI_doc_mptr_t*> _buffer;
+  std::vector<IndexElement*> _buffer;
   size_t _posInBuffer;
   size_t _batchSize;
 };
 
 class AnyDirectionEdgeIndexIterator final : public IndexIterator {
  public:
-  TRI_doc_mptr_t* next() override;
+  IndexElement* next() override;
 
-  void nextBabies(std::vector<TRI_doc_mptr_t*>&, size_t) override;
+  void nextBabies(std::vector<IndexElement*>&, size_t) override;
 
   void reset() override;
 
@@ -95,7 +95,7 @@ class AnyDirectionEdgeIndexIterator final : public IndexIterator {
  private:
   EdgeIndexIterator* _outbound;
   EdgeIndexIterator* _inbound;
-  std::unordered_set<TRI_doc_mptr_t*> _seen;
+  std::unordered_set<TRI_voc_rid_t> _seen;
   bool _useInbound;
 };
 
@@ -125,45 +125,38 @@ class EdgeIndex final : public Index {
   /// @brief typedef for hash tables
   //////////////////////////////////////////////////////////////////////////////
 
-  typedef arangodb::basics::AssocMulti<arangodb::velocypack::Slice, TRI_doc_mptr_t,
-                                       uint32_t, true> TRI_EdgeIndexHash_t;
-
  public:
-  IndexType type() const override final {
+  IndexType type() const override {
     return Index::TRI_IDX_TYPE_EDGE_INDEX;
   }
   
-  bool allowExpansion() const override final { return false; }
+  bool allowExpansion() const override { return false; }
   
-  bool canBeDropped() const override final { return false; }
+  bool canBeDropped() const override { return false; }
 
-  bool isSorted() const override final { return false; }
+  bool isSorted() const override { return false; }
 
-  bool hasSelectivityEstimate() const override final { return true; }
+  bool hasSelectivityEstimate() const override { return true; }
 
-  double selectivityEstimate() const override final;
+  double selectivityEstimate() const override;
 
-  size_t memory() const override final;
+  size_t memory() const override;
 
-  void toVelocyPack(VPackBuilder&, bool) const override final;
+  void toVelocyPack(VPackBuilder&, bool) const override;
 
-  void toVelocyPackFigures(VPackBuilder&) const override final;
+  void toVelocyPackFigures(VPackBuilder&) const override;
 
-  int insert(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
-             bool) override final;
+  int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
 
-  int remove(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
-             bool) override final;
+  int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
 
-  int batchInsert(arangodb::Transaction*,
-                  std::vector<TRI_doc_mptr_t const*> const*,
-                  size_t) override final;
+  int batchInsert(arangodb::Transaction*, std::vector<DocumentWrapper> const&, size_t) override;
   
-  int unload() override final;
+  int unload() override;
 
-  int sizeHint(arangodb::Transaction*, size_t) override final;
+  int sizeHint(arangodb::Transaction*, size_t) override;
 
-  bool hasBatchInsert() const override final { return true; }
+  bool hasBatchInsert() const override { return true; }
 
   TRI_EdgeIndexHash_t* from() { return _edgesFrom; }
 

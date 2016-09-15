@@ -571,7 +571,11 @@ void CollectorThread::processCollectionMarker(
     TRI_voc_rid_t revisionId = 0;
     Transaction::extractKeyAndRevFromDocument(slice, keySlice, revisionId);
   
-    auto found = colection->primaryIndex()->lookupKey(&trx, keySlice);
+    IndexElement* f = colection->primaryIndex()->lookupKey(&trx, keySlice);
+    TRI_doc_mptr_t* found = nullptr;
+    if (f != nullptr) {
+      found = f->document();
+    }
 
     if (found == nullptr || found->revisionId() != revisionId ||
         found->getMarkerPtr() != walMarker) {

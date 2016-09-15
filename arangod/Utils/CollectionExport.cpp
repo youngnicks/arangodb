@@ -116,12 +116,12 @@ void CollectionExport::run(uint64_t maxWaitTime, size_t limit) {
     }
     _documents->reserve(maxDocuments);
 
-    trx.invokeOnAllElements(_collection->name(), [this, &limit](TRI_doc_mptr_t const* mptr) {
+    trx.invokeOnAllElements(_collection->name(), [this, &limit](IndexElement const* element) {
       if (limit == 0) {
         return false;
       }
-      if (!mptr->pointsToWal()) {
-        _documents->emplace_back(mptr->vpack());
+      if (!element->document()->pointsToWal()) {
+        _documents->emplace_back(element->document()->vpack());
         --limit;
       }
       return true;

@@ -224,8 +224,7 @@ bool FulltextIndex::matchesDefinition(VPackSlice const& info) const {
   return true;
 }
 
-
-int FulltextIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
+int FulltextIndex::insert(arangodb::Transaction*, DocumentWrapper const& doc,
                           bool isRollback) {
   int res = TRI_ERROR_NO_ERROR;
 
@@ -239,17 +238,17 @@ int FulltextIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
 
   // TODO: use status codes
   if (!TRI_InsertWordsFulltextIndex(
-          _fulltextIndex, (TRI_fulltext_doc_t)((uintptr_t)doc), words)) {
+          _fulltextIndex, (TRI_fulltext_doc_t)((uintptr_t)doc.mptr()), words)) {
     LOG(ERR) << "adding document to fulltext index failed";
     res = TRI_ERROR_INTERNAL;
   }
   return res;
 }
 
-int FulltextIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc,
+int FulltextIndex::remove(arangodb::Transaction*, DocumentWrapper const& doc,
                           bool) {
   TRI_DeleteDocumentFulltextIndex(_fulltextIndex,
-                                  (TRI_fulltext_doc_t)((uintptr_t)doc));
+                                  (TRI_fulltext_doc_t)((uintptr_t)doc.mptr()));
 
   return TRI_ERROR_NO_ERROR;
 }
@@ -277,11 +276,10 @@ int FulltextIndex::cleanup() {
 /// words to index for a specific document
 ////////////////////////////////////////////////////////////////////////////////
 
-std::vector<std::string> FulltextIndex::wordlist(
-    TRI_doc_mptr_t const* document) {
+std::vector<std::string> FulltextIndex::wordlist(DocumentWrapper const& document) {
   std::vector<std::string> words;
   try {
-    VPackSlice const slice(document->vpack());
+    VPackSlice const slice(document.slice());
     VPackSlice const value = slice.get(_attr);
 
     if (!value.isString() && !value.isArray() && !value.isObject()) {

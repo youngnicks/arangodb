@@ -96,17 +96,17 @@ IndexIterator::~IndexIterator() {}
 /// @brief default implementation for next
 ////////////////////////////////////////////////////////////////////////////////
 
-TRI_doc_mptr_t* IndexIterator::next() { return nullptr; }
+IndexElement* IndexIterator::next() { return nullptr; }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief default implementation for nextBabies
 ////////////////////////////////////////////////////////////////////////////////
 
-void IndexIterator::nextBabies(std::vector<TRI_doc_mptr_t*>& result, size_t batchSize) {
+void IndexIterator::nextBabies(std::vector<IndexElement*>& result, size_t batchSize) {
   result.clear();
 
   while (true) {
-    TRI_doc_mptr_t* mptr = next();
+    IndexElement* mptr = next();
     if (mptr == nullptr) {
       return;
     }
@@ -143,11 +143,11 @@ void IndexIterator::skip(uint64_t count, uint64_t& skipped) {
 ///        A nullptr indicates that all iterators are exhausted
 ////////////////////////////////////////////////////////////////////////////////
 
-TRI_doc_mptr_t* MultiIndexIterator::next() {
+IndexElement* MultiIndexIterator::next() {
   if (_current == nullptr) {
     return nullptr;
   }
-  TRI_doc_mptr_t* next = _current->next();
+  IndexElement* next = _current->next();
   while (next == nullptr) {
     _currentIdx++;
     if (_currentIdx >= _iterators.size()) {
@@ -166,7 +166,7 @@ TRI_doc_mptr_t* MultiIndexIterator::next() {
 ///        An empty result vector indicates that all iterators are exhausted
 ////////////////////////////////////////////////////////////////////////////////
 
-void MultiIndexIterator::nextBabies(std::vector<TRI_doc_mptr_t*>& result, size_t limit) {
+void MultiIndexIterator::nextBabies(std::vector<IndexElement*>& result, size_t limit) {
   if (_current == nullptr) {
     result.clear();
     return;

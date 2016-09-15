@@ -1071,8 +1071,8 @@ int InitialSyncer::handleSyncKeys(arangodb::LogicalCollection* col,
     markers.reserve(idx->size());
 
     uint64_t iterations = 0;
-    trx.invokeOnAllElements(trx.name(), [this, &markers, &iterations](TRI_doc_mptr_t const* mptr) {
-      markers.emplace_back(mptr->vpack());
+    trx.invokeOnAllElements(trx.name(), [this, &markers, &iterations](IndexElement const* element) {
+      markers.emplace_back(element->document()->vpack());
       
       if (++iterations % 10000 == 0) {
         if (checkAborted()) {

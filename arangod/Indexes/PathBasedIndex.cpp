@@ -127,12 +127,9 @@ PathBasedIndex::~PathBasedIndex() {}
 /// @brief helper function to insert a document into any index type
 ////////////////////////////////////////////////////////////////////////////////
 
-int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
-                                TRI_doc_mptr_t const* document) {
-  TRI_ASSERT(document != nullptr);
-  TRI_ASSERT(document->vpack() != nullptr);
-
-  VPackSlice const slice(document->vpack());
+int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
+                                DocumentWrapper const& document) {
+  VPackSlice const slice(document.slice());
 
   if (slice.isNone()) {
     LOG(WARN) << "encountered invalid marker with slice of type None";
@@ -151,7 +148,7 @@ int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
     if (slices.size() == n) {
       // if shapes.size() != n, then the value is not inserted into the index
       // because of index sparsity!
-      TRI_index_element_t* element = TRI_index_element_t::allocate(n);
+      IndexElement* element = IndexElement::allocate(n);
       if (element == nullptr) {
         return TRI_ERROR_OUT_OF_MEMORY;
       }
@@ -161,11 +158,10 @@ int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
         return TRI_ERROR_OUT_OF_MEMORY;
       }
 
-      element->document(const_cast<TRI_doc_mptr_t*>(document));
-      TRI_vpack_sub_t* subObjects = element->subObjects();
+      element->document(const_cast<TRI_doc_mptr_t*>(document.mptr()));
 
       for (size_t i = 0; i < n; ++i) {
-        subObjects[i].fill(slices[i]);
+        element->subObject(i)->fill(slices[i]);
       }
 
       try {
@@ -191,7 +187,7 @@ int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
 
       for (auto& info : toInsert) {
         TRI_ASSERT(info.size() == n);
-        TRI_index_element_t* element = TRI_index_element_t::allocate(n);
+        IndexElement* element = IndexElement::allocate(n);
 
         if (element == nullptr) {
           return TRI_ERROR_OUT_OF_MEMORY;
@@ -202,11 +198,10 @@ int PathBasedIndex::fillElement(std::vector<TRI_index_element_t*>& elements,
           return TRI_ERROR_OUT_OF_MEMORY;
         }
 
-        element->document(const_cast<TRI_doc_mptr_t*>(document));
-        TRI_vpack_sub_t* subObjects = element->subObjects();
+        element->document(const_cast<TRI_doc_mptr_t*>(document.mptr()));
 
         for (size_t j = 0; j < n; ++j) {
-          subObjects[j].fill(info[j]);
+          element->subObject(j)->fill(info[j]);
         }
 
         try {

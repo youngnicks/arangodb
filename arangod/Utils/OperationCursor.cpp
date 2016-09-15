@@ -76,15 +76,15 @@ void OperationCursor::getMore(std::shared_ptr<OperationResult>& opRes,
   builder.clear();
   try {
     VPackArrayBuilder guard(&builder);
-    TRI_doc_mptr_t* mptr = nullptr;
+    IndexElement* element = nullptr;
     // TODO: Improve this for baby awareness
-    while (batchSize > 0 && _limit > 0 && (mptr = _indexIterator->next()) != nullptr) {
+    while (batchSize > 0 && _limit > 0 && (element = _indexIterator->next()) != nullptr) {
       --batchSize;
       --_limit;
       if (useExternals) {
-        builder.addExternal(mptr->vpack());
+        builder.addExternal(element->document()->vpack());
       } else {
-        builder.add(VPackSlice(mptr->vpack()));
+        builder.add(VPackSlice(element->document()->vpack()));
       }
     }
     if (batchSize > 0 || _limit == 0) {
@@ -104,8 +104,8 @@ void OperationCursor::getMore(std::shared_ptr<OperationResult>& opRes,
 ///        NOTE: This will throw on OUT_OF_MEMORY
 //////////////////////////////////////////////////////////////////////////////
 
-std::vector<TRI_doc_mptr_t*> OperationCursor::getMoreMptr(uint64_t batchSize) {
-  std::vector<TRI_doc_mptr_t*> res;
+std::vector<IndexElement*> OperationCursor::getMoreMptr(uint64_t batchSize) {
+  std::vector<IndexElement*> res;
   getMoreMptr(res, batchSize);
   return res;
 }
@@ -119,7 +119,7 @@ std::vector<TRI_doc_mptr_t*> OperationCursor::getMoreMptr(uint64_t batchSize) {
 ///              The caller shall NOT modify it.
 //////////////////////////////////////////////////////////////////////////////
 
-void OperationCursor::getMoreMptr(std::vector<TRI_doc_mptr_t*>& result,
+void OperationCursor::getMoreMptr(std::vector<IndexElement*>& result,
                                   uint64_t batchSize) {
   if (!hasMore()) {
     TRI_ASSERT(false);

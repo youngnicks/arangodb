@@ -514,8 +514,7 @@ double Index::selectivityEstimate() const {
 }
 
 /// @brief default implementation for selectivityEstimate
-int Index::batchInsert(arangodb::Transaction*,
-                       std::vector<TRI_doc_mptr_t const*> const*, size_t) {
+int Index::batchInsert(arangodb::Transaction*, std::vector<DocumentWrapper> const&, size_t) {
   THROW_ARANGO_EXCEPTION(TRI_ERROR_NOT_IMPLEMENTED);
 }
 

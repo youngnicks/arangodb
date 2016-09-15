@@ -40,12 +40,9 @@
 
 using namespace arangodb;
    
-////////////////////////////////////////////////////////////////////////////////
 /// @brief hard-coded vector of the index attributes
 /// note that the attribute names must be hard-coded here to avoid an init-order
 /// fiasco with StaticStrings::FromString etc.
-////////////////////////////////////////////////////////////////////////////////
-
 static std::vector<std::vector<arangodb::basics::AttributeName>> const IndexAttributes
     {{arangodb::basics::AttributeName("_from", false)},
      {arangodb::basics::AttributeName("_to", false)}};
@@ -69,21 +66,20 @@ static uint64_t HashElementKey(void*, VPackSlice const* key) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief hashes an edge (_from case)
+/// @brief hashes an edge
 ////////////////////////////////////////////////////////////////////////////////
 
-static uint64_t HashElementEdgeFrom(void*, TRI_doc_mptr_t const* mptr,
-                                    bool byKey) {
-  TRI_ASSERT(mptr != nullptr);
+static uint64_t HashElementEdge(void*, IndexElement const* element, bool byKey) {
+  TRI_ASSERT(element != nullptr);
 
   uint64_t hash = 0x87654321;
 
   if (!byKey) {
-    hash = (uint64_t)mptr;
+    hash = (uint64_t) element;
     hash = fasthash64(&hash, sizeof(hash), 0x56781234);
   } else {
     // Is identical to HashElementKey
-    VPackSlice tmp = Transaction::extractFromFromDocument(VPackSlice(mptr->vpack()));
+    VPackSlice tmp = element->slice(0);
     TRI_ASSERT(tmp.isString());
     // we can get away with the fast hash function here, as edge
     // index values are restricted to strings
@@ -93,57 +89,16 @@ static uint64_t HashElementEdgeFrom(void*, TRI_doc_mptr_t const* mptr,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief hashes an edge (_to case)
+/// @brief checks if key and element match
 ////////////////////////////////////////////////////////////////////////////////
 
-static uint64_t HashElementEdgeTo(void*, TRI_doc_mptr_t const* mptr,
-                                  bool byKey) {
-  TRI_ASSERT(mptr != nullptr);
-
-  uint64_t hash = 0x87654321;
-
-  if (!byKey) {
-    hash = (uint64_t)mptr;
-    hash = fasthash64(&hash, sizeof(hash), 0x56781234);
-  } else {
-    // Is identical to HashElementKey
-    VPackSlice tmp = Transaction::extractToFromDocument(VPackSlice(mptr->vpack()));
-    TRI_ASSERT(tmp.isString());
-    // we can get away with the fast hash function here, as edge
-    // index values are restricted to strings
-    hash = tmp.hashString(hash);
-  }
-  return hash;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief checks if key and element match (_from case)
-////////////////////////////////////////////////////////////////////////////////
-
-static bool IsEqualKeyEdgeFrom(void*, VPackSlice const* left,
-                               TRI_doc_mptr_t const* right) {
+static bool IsEqualKeyEdge(void*, VPackSlice const* left, IndexElement const* right) {
   TRI_ASSERT(left != nullptr);
   TRI_ASSERT(right != nullptr);
 
   // left is a key
   // right is an element, that is a master pointer
-  VPackSlice tmp = Transaction::extractFromFromDocument(VPackSlice(right->vpack()));
-  TRI_ASSERT(tmp.isString());
-  return (*left).equals(tmp);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief checks if key and element match (_to case)
-////////////////////////////////////////////////////////////////////////////////
-
-static bool IsEqualKeyEdgeTo(void*, VPackSlice const* left,
-                             TRI_doc_mptr_t const* right) {
-  TRI_ASSERT(left != nullptr);
-  TRI_ASSERT(right != nullptr);
-
-  // left is a key
-  // right is an element, that is a master pointer
-  VPackSlice tmp = Transaction::extractToFromDocument(VPackSlice(right->vpack()));
+  VPackSlice tmp = right->slice(0);
   TRI_ASSERT(tmp.isString());
   return (*left).equals(tmp);
 }
@@ -152,49 +107,28 @@ static bool IsEqualKeyEdgeTo(void*, VPackSlice const* left,
 /// @brief checks for elements are equal (_from and _to case)
 ////////////////////////////////////////////////////////////////////////////////
 
-static bool IsEqualElementEdge(void*, TRI_doc_mptr_t const* left,
-                               TRI_doc_mptr_t const* right) {
+static bool IsEqualElementEdge(void*, IndexElement const* left,
+                               IndexElement const* right) {
   return left == right;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief checks for elements are equal (_from case)
+/// @brief checks for elements are equal
 ////////////////////////////////////////////////////////////////////////////////
 
-static bool IsEqualElementEdgeFromByKey(void*,
-                                        TRI_doc_mptr_t const* left,
-                                        TRI_doc_mptr_t const* right) {
+static bool IsEqualElementEdgeByKey(void*, IndexElement const* left, IndexElement const* right) {
   TRI_ASSERT(left != nullptr);
   TRI_ASSERT(right != nullptr);
 
-  VPackSlice lSlice = Transaction::extractFromFromDocument(VPackSlice(left->vpack()));
+  VPackSlice lSlice = left->slice(0);
   TRI_ASSERT(lSlice.isString());
 
-  VPackSlice rSlice = Transaction::extractFromFromDocument(VPackSlice(right->vpack()));
+  VPackSlice rSlice = right->slice(0);
   TRI_ASSERT(rSlice.isString());
 
   return lSlice.equals(rSlice);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief checks for elements are equal (_to case)
-////////////////////////////////////////////////////////////////////////////////
-
-static bool IsEqualElementEdgeToByKey(void*,
-                                      TRI_doc_mptr_t const* left,
-                                      TRI_doc_mptr_t const* right) {
-  TRI_ASSERT(left != nullptr);
-  TRI_ASSERT(right != nullptr);
-
-  VPackSlice lSlice = Transaction::extractToFromDocument(VPackSlice(left->vpack()));
-  TRI_ASSERT(lSlice.isString());
-  
-  VPackSlice rSlice = Transaction::extractToFromDocument(VPackSlice(right->vpack()));
-  TRI_ASSERT(rSlice.isString());
-
-  return lSlice.equals(rSlice);
-}
-    
 EdgeIndexIterator::~EdgeIndexIterator() {
   if (_keys != nullptr) {
     // return the VPackBuilder to the transaction context 
@@ -202,7 +136,7 @@ EdgeIndexIterator::~EdgeIndexIterator() {
   }
 }
 
-TRI_doc_mptr_t* EdgeIndexIterator::next() {
+IndexElement* EdgeIndexIterator::next() {
   while (_iterator.valid()) {
     if (_buffer.empty()) {
       // We start a new lookup
@@ -235,7 +169,7 @@ TRI_doc_mptr_t* EdgeIndexIterator::next() {
   return nullptr;
 }
 
-void EdgeIndexIterator::nextBabies(std::vector<TRI_doc_mptr_t*>& buffer, size_t limit) {
+void EdgeIndexIterator::nextBabies(std::vector<IndexElement*>& buffer, size_t limit) {
   size_t atMost = _batchSize > limit ? limit : _batchSize;
 
   while (_iterator.valid()) {
@@ -272,12 +206,12 @@ void EdgeIndexIterator::reset() {
   _iterator.reset();
 }
 
-TRI_doc_mptr_t* AnyDirectionEdgeIndexIterator::next() {
-  TRI_doc_mptr_t* res = nullptr;
+IndexElement* AnyDirectionEdgeIndexIterator::next() {
+  IndexElement* res = nullptr;
   if (_useInbound) {
     do {
       res = _inbound->next();
-    } while (res != nullptr && _seen.find(res) != _seen.end());
+    } while (res != nullptr && _seen.find(res->revisionId()) != _seen.end());
     return res;
   }
   res = _outbound->next();
@@ -285,14 +219,14 @@ TRI_doc_mptr_t* AnyDirectionEdgeIndexIterator::next() {
     _useInbound = true;
     return next();
   }
-  _seen.emplace(res);
+  _seen.emplace(res->revisionId());
   return res;
 }
 
-void AnyDirectionEdgeIndexIterator::nextBabies(std::vector<TRI_doc_mptr_t*>& result, size_t limit) {
+void AnyDirectionEdgeIndexIterator::nextBabies(std::vector<IndexElement*>& result, size_t limit) {
   result.clear();
   for (size_t i = 0; i < limit; ++i) {
-    TRI_doc_mptr_t* res = next();
+    IndexElement* res = next();
     if (res == nullptr) {
       return;
     }
@@ -326,14 +260,14 @@ EdgeIndex::EdgeIndex(TRI_idx_iid_t iid, arangodb::LogicalCollection* collection)
 
   auto context = [this]() -> std::string { return this->context(); };
 
-  _edgesFrom = new TRI_EdgeIndexHash_t(HashElementKey, HashElementEdgeFrom,
-                                       IsEqualKeyEdgeFrom, IsEqualElementEdge,
-                                       IsEqualElementEdgeFromByKey, _numBuckets,
+  _edgesFrom = new TRI_EdgeIndexHash_t(HashElementKey, HashElementEdge,
+                                       IsEqualKeyEdge, IsEqualElementEdge,
+                                       IsEqualElementEdgeByKey, _numBuckets,
                                        64, context);
 
   _edgesTo = new TRI_EdgeIndexHash_t(
-      HashElementKey, HashElementEdgeTo, IsEqualKeyEdgeTo, IsEqualElementEdge,
-      IsEqualElementEdgeToByKey, _numBuckets, 64, context);
+      HashElementKey, HashElementEdge, IsEqualKeyEdge, IsEqualElementEdge,
+      IsEqualElementEdgeByKey, _numBuckets, 64, context);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -523,48 +457,89 @@ void EdgeIndex::toVelocyPackFigures(VPackBuilder& builder) const {
   builder.add("buckets", VPackValue(_numBuckets));
 }
 
-int EdgeIndex::insert(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
+int EdgeIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
                       bool isRollback) {
-  auto element = const_cast<TRI_doc_mptr_t*>(doc);
-  _edgesFrom->insert(trx, element, true, isRollback);
+  // TODO: OOM!!!!
+  VPackSlice from = Transaction::extractFromFromDocument(doc.slice());
+  TRI_ASSERT(from.isString());
+  IndexElement* fromElement = IndexElement::allocate(1);
+  if (fromElement == nullptr) {
+    return TRI_ERROR_OUT_OF_MEMORY;
+  }
+  fromElement->document(doc.mptr());
+  fromElement->subObject(0)->fill(from);
+  
+  VPackSlice to = Transaction::extractToFromDocument(doc.slice());
+  TRI_ASSERT(to.isString());
+  IndexElement* toElement = IndexElement::allocate(1);
+  if (toElement == nullptr) {
+    return TRI_ERROR_OUT_OF_MEMORY;
+  }
+  toElement->document(doc.mptr());
+  toElement->subObject(0)->fill(to);
+
+  _edgesFrom->insert(trx, fromElement, true, isRollback);
 
   try {
-    _edgesTo->insert(trx, element, true, isRollback);
+    _edgesTo->insert(trx, toElement, true, isRollback);
   } catch (...) {
-    _edgesFrom->remove(trx, element);
+    _edgesFrom->remove(trx, fromElement);
+    // TODO: free
     throw;
   }
 
   return TRI_ERROR_NO_ERROR;
 }
 
-int EdgeIndex::remove(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
+int EdgeIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc,
                       bool) {
-  _edgesFrom->remove(trx, doc);
-  _edgesTo->remove(trx, doc);
+  // TODO: OOM!!
+  VPackSlice from = Transaction::extractFromFromDocument(doc.slice());
+  TRI_ASSERT(from.isString());
+  IndexElement* fromElement = IndexElement::allocate(1);
+  if (fromElement == nullptr) {
+    return TRI_ERROR_OUT_OF_MEMORY;
+  }
+  fromElement->document(doc.mptr());
+  fromElement->subObject(0)->fill(from);
+  _edgesFrom->remove(trx, fromElement);
+  fromElement->free(1);
+  
+  VPackSlice to = Transaction::extractToFromDocument(doc.slice());
+  TRI_ASSERT(to.isString());
+  IndexElement* toElement = IndexElement::allocate(1);
+  if (toElement == nullptr) {
+    return TRI_ERROR_OUT_OF_MEMORY;
+  }
+  toElement->document(doc.mptr());
+  toElement->subObject(0)->fill(to);
+
+  _edgesTo->remove(trx, toElement);
 
   return TRI_ERROR_NO_ERROR;
 }
 
 int EdgeIndex::batchInsert(arangodb::Transaction* trx,
-                           std::vector<TRI_doc_mptr_t const*> const* documents,
+                           std::vector<DocumentWrapper> const& documents,
                            size_t numThreads) {
-  if (!documents->empty()) {
-    _edgesFrom->batchInsert(
-        trx, reinterpret_cast<std::vector<TRI_doc_mptr_t*> const*>(documents),
-        numThreads);
-    _edgesTo->batchInsert(
-        trx, reinterpret_cast<std::vector<TRI_doc_mptr_t*> const*>(documents),
-        numThreads);
+  /* TODO
+  if (!documents.empty()) {
+    _edgesFrom->batchInsert(trx, &documents, numThreads);
+    _edgesTo->batchInsert(trx, &documents, numThreads);
   }
+  */
 
   return TRI_ERROR_NO_ERROR;
 }
 
 /// @brief unload the index data from memory
 int EdgeIndex::unload() {
-  _edgesFrom->truncate([](TRI_doc_mptr_t*) -> bool { return true; });
-  _edgesTo->truncate([](TRI_doc_mptr_t*) -> bool { return true; });
+  auto cb = [](IndexElement* element) -> bool {
+    element->free(1); 
+    return true;
+  };
+  _edgesFrom->truncate(cb);
+  _edgesTo->truncate(cb);
 
   return TRI_ERROR_NO_ERROR;
 }

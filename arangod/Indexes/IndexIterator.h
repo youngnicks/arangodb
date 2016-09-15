@@ -26,6 +26,7 @@
 
 #include "Basics/Common.h"
 #include "Cluster/ServerState.h"
+#include "Indexes/IndexElement.h"
 #include "VocBase/vocbase.h"
 
 namespace arangodb {
@@ -70,9 +71,9 @@ class IndexIterator {
   IndexIterator() {}
   virtual ~IndexIterator();
 
-  virtual TRI_doc_mptr_t* next();
+  virtual IndexElement* next();
 
-  virtual void nextBabies(std::vector<TRI_doc_mptr_t*>&, size_t);
+  virtual void nextBabies(std::vector<IndexElement*>&, size_t);
 
   virtual void reset();
 
@@ -83,16 +84,14 @@ class IndexIterator {
 /// @brief Special iterator if the condition cannot have any result
 ////////////////////////////////////////////////////////////////////////////////
 
-class EmptyIndexIterator : public IndexIterator {
+class EmptyIndexIterator final : public IndexIterator {
   public:
     EmptyIndexIterator() {}
     ~EmptyIndexIterator() {}
 
-    TRI_doc_mptr_t* next() override {
-      return nullptr;
-    }
+    IndexElement* next() override { return nullptr; }
 
-    void nextBabies(std::vector<TRI_doc_mptr_t*>&, size_t) override {}
+    void nextBabies(std::vector<IndexElement*>&, size_t) override {}
 
     void reset() override {}
 
@@ -109,7 +108,7 @@ class EmptyIndexIterator : public IndexIterator {
 ///        Outside if necessary.
 ////////////////////////////////////////////////////////////////////////////////
 
-class MultiIndexIterator : public IndexIterator {
+class MultiIndexIterator final : public IndexIterator {
 
   public:
    explicit MultiIndexIterator(std::vector<IndexIterator*> const& iterators)
@@ -117,14 +116,14 @@ class MultiIndexIterator : public IndexIterator {
        if (!_iterators.empty()) {
          _current = _iterators.at(0);
        }
-     };
+     }
 
     ~MultiIndexIterator () {
       // Free all iterators
       for (auto& it : _iterators) {
         delete it;
       }
-    };
+    }
 
     ////////////////////////////////////////////////////////////////////////////////
     /// @brief Get the next element
@@ -132,7 +131,7 @@ class MultiIndexIterator : public IndexIterator {
     ///        A nullptr indicates that all iterators are exhausted
     ////////////////////////////////////////////////////////////////////////////////
 
-    TRI_doc_mptr_t* next() override;
+    IndexElement* next() override;
 
     ////////////////////////////////////////////////////////////////////////////////
     /// @brief Get at most the next limit many elements
@@ -140,7 +139,7 @@ class MultiIndexIterator : public IndexIterator {
     ///        An empty result vector indicates that all iterators are exhausted
     ////////////////////////////////////////////////////////////////////////////////
     
-    void nextBabies(std::vector<TRI_doc_mptr_t*>&, size_t) override;
+    void nextBabies(std::vector<IndexElement*>&, size_t) override;
 
     ////////////////////////////////////////////////////////////////////////////////
     /// @brief Reset the cursor

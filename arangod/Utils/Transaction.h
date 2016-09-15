@@ -28,6 +28,7 @@
 #include "Basics/Exceptions.h"
 #include "Basics/StringRef.h"
 #include "Cluster/ServerState.h"
+#include "Indexes/IndexElement.h"
 #include "Utils/OperationOptions.h"
 #include "Utils/OperationResult.h"
 #include "VocBase/transaction.h"
@@ -443,7 +444,7 @@ class Transaction {
   //////////////////////////////////////////////////////////////////////////////
 
   void invokeOnAllElements(std::string const& collectionName,
-                           std::function<bool(TRI_doc_mptr_t const*)>);
+                           std::function<bool(IndexElement const*)>);
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief return one  document from a collection, fast path

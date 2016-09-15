@@ -87,7 +87,7 @@ class RocksDBIterator final : public IndexIterator {
   /// @brief Get the next element in the index
   ////////////////////////////////////////////////////////////////////////////////
 
-  TRI_doc_mptr_t* next() override;
+  IndexElement* next() override;
 
   ////////////////////////////////////////////////////////////////////////////////
   /// @brief Reset the cursor
@@ -115,23 +115,23 @@ class RocksDBIndex final : public PathBasedIndex {
   ~RocksDBIndex();
 
  public:
-  IndexType type() const override final {
+  IndexType type() const override {
     return Index::TRI_IDX_TYPE_ROCKSDB_INDEX;
   }
   
-  bool allowExpansion() const override final { return true; }
+  bool allowExpansion() const override { return true; }
   
-  bool isPersistent() const override final { return true; }
-  bool canBeDropped() const override final { return true; }
+  bool isPersistent() const override { return true; }
+  bool canBeDropped() const override { return true; }
 
-  bool isSorted() const override final { return true; }
+  bool isSorted() const override { return true; }
 
-  bool hasSelectivityEstimate() const override final { return false; }
+  bool hasSelectivityEstimate() const override { return false; }
 
-  size_t memory() const override final;
+  size_t memory() const override;
 
-  void toVelocyPack(VPackBuilder&, bool) const override final;
-  void toVelocyPackFigures(VPackBuilder&) const override final;
+  void toVelocyPack(VPackBuilder&, bool) const override;
+  void toVelocyPackFigures(VPackBuilder&) const override;
   
   static constexpr size_t minimalPrefixSize() {
     return sizeof(TRI_voc_tick_t);
@@ -163,15 +163,13 @@ class RocksDBIndex final : public PathBasedIndex {
     return value;
   }
 
-  int insert(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
-             bool) override final;
+  int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
 
-  int remove(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
-             bool) override final;
+  int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
 
-  int unload() override final;
+  int unload() override;
 
-  int drop() override final;
+  int drop() override;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief attempts to locate an entry in the index

@@ -24,9 +24,10 @@
 #ifndef ARANGOD_SINGLE_SERVER_TRAVERSER_H
 #define ARANGOD_SINGLE_SERVER_TRAVERSER_H 1
 
-#include "VocBase/Traverser.h"
 #include "Aql/AqlValue.h"
+#include "Indexes/IndexElement.h"
 #include "Utils/OperationCursor.h"
+#include "VocBase/Traverser.h"
 #include "VocBase/TraverserOptions.h"
 #include "VocBase/voc-types.h"
 
@@ -44,7 +45,7 @@ class SingleServerEdgeCursor : public EdgeCursor {
   std::vector<std::vector<OperationCursor*>> _cursors;
   size_t _currentCursor;
   size_t _currentSubCursor;
-  std::vector<TRI_doc_mptr_t*> _cache;
+  std::vector<IndexElement*> _cache;
   size_t _cachePos;
 
  public:

@@ -70,8 +70,6 @@ namespace {
   }
 }
 
-struct TRI_doc_mptr_t;
-
 namespace arangodb {
 class Transaction;
 

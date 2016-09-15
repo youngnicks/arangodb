@@ -31,8 +31,6 @@
 #include <velocypack/Iterator.h>
 #include <velocypack/Slice.h>
 
-struct TRI_doc_mptr_t;
-
 namespace arangodb {
 namespace aql {
 class AqlItemBlock;

@@ -23,6 +23,7 @@
 
 #include "MasterPointers.h"
 #include "Logger/Logger.h"
+#include "Utils/Transaction.h"
 #include "VocBase/MasterPointer.h"
 
 using namespace arangodb;
@@ -163,5 +164,9 @@ void MasterPointers::release(TRI_doc_mptr_t* header) {
 
     _freelist = nullptr;
   }
+}
+  
+TRI_voc_rid_t TRI_doc_mptr_t::revisionId() const {
+  return arangodb::Transaction::extractRevFromDocument(VPackSlice(vpack()));
 }
 

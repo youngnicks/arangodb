@@ -220,13 +220,8 @@ bool GeoIndex::matchesDefinition(VPackSlice const& info) const {
   return true;
 }
 
-
-
-int GeoIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc, bool) {
-  TRI_ASSERT(doc != nullptr);
-  TRI_ASSERT(doc->vpack() != nullptr);
-
-  VPackSlice const slice(doc->vpack());
+int GeoIndex::insert(arangodb::Transaction*, DocumentWrapper const& doc, bool) {
+  VPackSlice const slice(doc.slice());
 
   double latitude;
   double longitude;
@@ -274,7 +269,7 @@ int GeoIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc, bool) {
   GeoCoordinate gc;
   gc.latitude = latitude;
   gc.longitude = longitude;
-  gc.data = const_cast<void*>(static_cast<void const*>(doc));
+  gc.data = const_cast<void*>(static_cast<void const*>(doc.mptr()));
 
   int res = GeoIndex_insert(_geoIndex, &gc);
 
@@ -293,11 +288,8 @@ int GeoIndex::insert(arangodb::Transaction*, TRI_doc_mptr_t const* doc, bool) {
   return TRI_ERROR_NO_ERROR;
 }
 
-int GeoIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc, bool) {
-  TRI_ASSERT(doc != nullptr);
-  TRI_ASSERT(doc->vpack() != nullptr);
-
-  VPackSlice const slice(doc->vpack());
+int GeoIndex::remove(arangodb::Transaction*, DocumentWrapper const& doc, bool) {
+  VPackSlice const slice(doc.slice());
 
   double latitude = 0.0;
   double longitude = 0.0;
@@ -348,7 +340,7 @@ int GeoIndex::remove(arangodb::Transaction*, TRI_doc_mptr_t const* doc, bool) {
   GeoCoordinate gc;
   gc.latitude = latitude;
   gc.longitude = longitude;
-  gc.data = const_cast<void*>(static_cast<void const*>(doc));
+  gc.data = const_cast<void*>(static_cast<void const*>(doc.mptr()));
 
   // ignore non-existing elements in geo-index
   GeoIndex_remove(_geoIndex, &gc);

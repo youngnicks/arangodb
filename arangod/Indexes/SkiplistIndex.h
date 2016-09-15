@@ -175,7 +175,7 @@ class SkiplistIterator final : public IndexIterator {
  private:
   // Shorthand for the skiplist node
   typedef arangodb::basics::SkipListNode<VPackSlice,
-                                         TRI_index_element_t> Node;
+                                         IndexElement> Node;
 
  private:
   bool _reverse;
@@ -204,7 +204,7 @@ class SkiplistIterator final : public IndexIterator {
   /// @brief Get the next element in the skiplist
   ////////////////////////////////////////////////////////////////////////////////
 
-  TRI_doc_mptr_t* next() override;
+  IndexElement* next() override;
 
   ////////////////////////////////////////////////////////////////////////////////
   /// @brief Reset the cursor
@@ -227,10 +227,10 @@ class SkiplistIterator2 final : public IndexIterator {
  private:
   // Shorthand for the skiplist node
   typedef arangodb::basics::SkipListNode<VPackSlice,
-                                         TRI_index_element_t> Node;
+                                         IndexElement> Node;
 
   typedef arangodb::basics::SkipList<VPackSlice,
-                                     TRI_index_element_t> TRI_Skiplist;
+                                     IndexElement> TRI_Skiplist;
 
  private:
 
@@ -246,13 +246,13 @@ class SkiplistIterator2 final : public IndexIterator {
 
   BaseSkiplistLookupBuilder* _builder;
 
-  std::function<int(TRI_index_element_t const*, TRI_index_element_t const*,
+  std::function<int(IndexElement const*, IndexElement const*,
                       arangodb::basics::SkipListCmpType)> _CmpElmElm;
 
  public:
   SkiplistIterator2(
       TRI_Skiplist const* skiplist,
-      std::function<int(TRI_index_element_t const*, TRI_index_element_t const*,
+      std::function<int(IndexElement const*, IndexElement const*,
                         arangodb::basics::SkipListCmpType)> const& CmpElmElm,
       bool reverse, BaseSkiplistLookupBuilder* builder)
       : _skiplistIndex(skiplist),
@@ -282,7 +282,7 @@ class SkiplistIterator2 final : public IndexIterator {
   /// @brief Get the next element in the skiplist
   ////////////////////////////////////////////////////////////////////////////////
 
-  TRI_doc_mptr_t* next() override;
+  IndexElement* next() override;
 
   ////////////////////////////////////////////////////////////////////////////////
   /// @brief Reset the cursor
@@ -318,7 +318,7 @@ class SkiplistIterator2 final : public IndexIterator {
 class SkiplistIndex final : public PathBasedIndex {
   struct KeyElementComparator {
     int operator()(VPackSlice const* leftKey,
-                   TRI_index_element_t const* rightElement) const;
+                   IndexElement const* rightElement) const;
 
     explicit KeyElementComparator(SkiplistIndex* idx) { _idx = idx; }
 
@@ -327,8 +327,8 @@ class SkiplistIndex final : public PathBasedIndex {
   };
 
   struct ElementElementComparator {
-    int operator()(TRI_index_element_t const* leftElement,
-                   TRI_index_element_t const* rightElement,
+    int operator()(IndexElement const* leftElement,
+                   IndexElement const* rightElement,
                    arangodb::basics::SkipListCmpType cmptype) const;
 
     explicit ElementElementComparator(SkiplistIndex* idx) { _idx = idx; }
@@ -342,7 +342,7 @@ class SkiplistIndex final : public PathBasedIndex {
   friend struct ElementElementComparator;
 
   typedef arangodb::basics::SkipList<VPackSlice,
-                                     TRI_index_element_t> TRI_Skiplist;
+                                     IndexElement> TRI_Skiplist;
 
  public:
   SkiplistIndex() = delete;
@@ -360,30 +360,28 @@ class SkiplistIndex final : public PathBasedIndex {
   ~SkiplistIndex();
 
  public:
-  IndexType type() const override final {
+  IndexType type() const override {
     return Index::TRI_IDX_TYPE_SKIPLIST_INDEX;
   }
   
-  bool allowExpansion() const override final { return true; }
+  bool allowExpansion() const override { return true; }
 
-  bool canBeDropped() const override final { return true; }
+  bool canBeDropped() const override { return true; }
 
-  bool isSorted() const override final { return true; }
+  bool isSorted() const override { return true; }
 
-  bool hasSelectivityEstimate() const override final { return false; }
+  bool hasSelectivityEstimate() const override { return false; }
 
-  size_t memory() const override final;
+  size_t memory() const override;
 
-  void toVelocyPack(VPackBuilder&, bool) const override final;
-  void toVelocyPackFigures(VPackBuilder&) const override final;
+  void toVelocyPack(VPackBuilder&, bool) const override;
+  void toVelocyPackFigures(VPackBuilder&) const override;
 
-  int insert(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
-             bool) override final;
+  int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
 
-  int remove(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
-             bool) override final;
+  int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
   
-  int unload() override final;
+  int unload() override;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief attempts to locate an entry in the skip list index
@@ -444,7 +442,7 @@ class SkiplistIndex final : public PathBasedIndex {
 
   // Shorthand for the skiplist node
   typedef arangodb::basics::SkipListNode<VPackSlice,
-                                         TRI_index_element_t> Node;
+                                         IndexElement> Node;
 
   bool intervalValid(Node* left, Node* right) const;
 

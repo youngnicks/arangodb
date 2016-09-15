@@ -65,7 +65,7 @@ class GeoIndex final : public Index {
   };
 
  public:
-  IndexType type() const override final {
+  IndexType type() const override {
     if (_variant == INDEX_GEO_COMBINED_LAT_LON ||
         _variant == INDEX_GEO_COMBINED_LON_LAT) {
       return TRI_IDX_TYPE_GEO1_INDEX;
@@ -74,28 +74,26 @@ class GeoIndex final : public Index {
     return TRI_IDX_TYPE_GEO2_INDEX;
   }
   
-  bool allowExpansion() const override final { return false; }
+  bool allowExpansion() const override { return false; }
   
-  bool canBeDropped() const override final { return true; }
+  bool canBeDropped() const override { return true; }
 
-  bool isSorted() const override final { return false; }
+  bool isSorted() const override { return false; }
 
-  bool hasSelectivityEstimate() const override final { return false; }
+  bool hasSelectivityEstimate() const override { return false; }
 
-  size_t memory() const override final;
+  size_t memory() const override;
 
-  void toVelocyPack(VPackBuilder&, bool) const override final;
+  void toVelocyPack(VPackBuilder&, bool) const override;
   // Uses default toVelocyPackFigures
 
-  bool matchesDefinition(VPackSlice const& info) const override final;
+  bool matchesDefinition(VPackSlice const& info) const override;
 
-  int insert(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
-             bool) override final;
+  int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
 
-  int remove(arangodb::Transaction*, struct TRI_doc_mptr_t const*,
-             bool) override final;
+  int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
 
-  int unload() override final;
+  int unload() override;
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief looks up all points within a given radius

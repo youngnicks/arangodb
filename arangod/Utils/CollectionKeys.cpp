@@ -120,13 +120,13 @@ void CollectionKeys::create(TRI_voc_tick_t maxTick) {
     }
 
     trx.invokeOnAllElements(
-        _collection->name(), [this, &maxTick](TRI_doc_mptr_t const* mptr) {
+        _collection->name(), [this, &maxTick](IndexElement const* element) {
           // only use those markers that point into datafiles
-          if (!mptr->pointsToWal()) {
-            TRI_df_marker_t const* marker = mptr->getMarkerPtr();
+          if (!element->document()->pointsToWal()) {
+            TRI_df_marker_t const* marker = element->document()->getMarkerPtr();
 
             if (marker->getTick() <= maxTick) {
-              _markers->emplace_back(mptr->vpack());
+              _markers->emplace_back(element->document()->vpack());
             }
           }
 

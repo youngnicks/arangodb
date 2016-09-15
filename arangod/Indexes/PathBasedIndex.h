@@ -94,7 +94,7 @@ class PathBasedIndex : public Index {
   //////////////////////////////////////////////////////////////////////////////
 
   inline size_t elementSize() const {
-    return TRI_index_element_t::memoryUsage(_paths.size());
+    return IndexElement::memoryUsage(_paths.size());
   }
 
  protected:
@@ -102,8 +102,7 @@ class PathBasedIndex : public Index {
   /// @brief helper function to insert a document into any index type
   //////////////////////////////////////////////////////////////////////////////
 
-  int fillElement(std::vector<TRI_index_element_t*>& elements,
-                  TRI_doc_mptr_t const* document);
+  int fillElement(std::vector<IndexElement*>& elements, DocumentWrapper const&);
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief return the number of paths

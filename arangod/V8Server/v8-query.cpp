@@ -379,8 +379,8 @@ static void JS_ChecksumCollection(
   std::string const revisionId = std::to_string(physical->revision());
   uint64_t hash = 0;
         
-  trx.invokeOnAllElements(col->name(), [&hash, &withData, &withRevisions](TRI_doc_mptr_t const* mptr) {
-    VPackSlice const slice(mptr->vpack());
+  trx.invokeOnAllElements(col->name(), [&hash, &withData, &withRevisions](IndexElement const* element) {
+    VPackSlice const slice(element->document()->vpack());
 
     uint64_t localHash = slice.get(StaticStrings::KeyString).hash();
 

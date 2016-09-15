@@ -22,9 +22,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "ShortestPathBlock.h"
-
 #include "Aql/ExecutionEngine.h"
 #include "Aql/ExecutionPlan.h"
+#include "Indexes/IndexElement.h"
 #include "Utils/AqlTransaction.h"
 #include "Utils/OperationCursor.h"
 #include "Utils/Transaction.h"
@@ -69,7 +69,7 @@ struct ConstDistanceExpanderLocal {
   bool _isReverse;
 
   /// @brief Local cursor vector
-  std::vector<TRI_doc_mptr_t*> _cursor;
+  std::vector<IndexElement*> _cursor;
 
  public:
   ConstDistanceExpanderLocal(ShortestPathBlock const* block,
@@ -94,7 +94,7 @@ struct ConstDistanceExpanderLocal {
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(_cursor, UINT64_MAX);
         for (auto const& mptr : _cursor) {
-          VPackSlice edge(mptr->vpack());
+          VPackSlice edge(mptr->document()->vpack());
           VPackSlice from =
               arangodb::Transaction::extractFromFromDocument(edge);
           if (from == v) {
@@ -212,7 +212,7 @@ struct EdgeWeightExpanderLocal {
 
   void operator()(VPackSlice const& source,
                   std::vector<ArangoDBPathFinder::Step*>& result) {
-    std::vector<TRI_doc_mptr_t*> cursor;
+    std::vector<IndexElement*> cursor;
     std::unique_ptr<arangodb::OperationCursor> edgeCursor;
     std::unordered_map<VPackSlice, size_t> candidates;
     for (auto const& edgeCollection : _block->_collectionInfos) {
@@ -233,7 +233,7 @@ struct EdgeWeightExpanderLocal {
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(cursor, UINT64_MAX);
         for (auto const& mptr : cursor) {
-          VPackSlice edge(mptr->vpack());
+          VPackSlice edge(mptr->document()->vpack());
           VPackSlice from =
               arangodb::Transaction::extractFromFromDocument(edge);
           VPackSlice to = arangodb::Transaction::extractToFromDocument(edge);

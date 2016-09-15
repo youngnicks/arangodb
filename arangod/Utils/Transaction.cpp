@@ -1236,12 +1236,12 @@ OperationResult Transaction::anyLocal(std::string const& collectionName,
       indexScan(collectionName, Transaction::CursorType::ANY, IndexHandle(), 
                 {}, skip, limit, 1000, false);
 
-  std::vector<TRI_doc_mptr_t*> result;
+  std::vector<IndexElement*> result;
   while (cursor->hasMore()) {
     result.clear();
     cursor->getMoreMptr(result);
     for (auto const& mptr : result) {
-      resultBuilder.add(VPackSlice(mptr->vpack()));
+      resultBuilder.add(VPackSlice(mptr->document()->vpack()));
     }
   }
 
@@ -1344,7 +1344,7 @@ Transaction::IndexHandle Transaction::edgeIndexHandle(std::string const& collect
 //////////////////////////////////////////////////////////////////////////////
 
 void Transaction::invokeOnAllElements(std::string const& collectionName,
-                                      std::function<bool(TRI_doc_mptr_t const*)> callback) {
+                                      std::function<bool(IndexElement const*)> callback) {
   TRI_ASSERT(getStatus() == TRI_TRANSACTION_RUNNING);
   if (ServerState::isCoordinator(_serverRole)) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_NOT_IMPLEMENTED);
@@ -2543,12 +2543,12 @@ OperationResult Transaction::allLocal(std::string const& collectionName,
     return OperationResult(cursor->code);
   }
 
-  std::vector<TRI_doc_mptr_t*> result;
+  std::vector<IndexElement*> result;
   result.reserve(1000);
   while (cursor->hasMore()) {
     cursor->getMoreMptr(result, 1000);
     for (auto const& mptr : result) {
-      resultBuilder.addExternal(mptr->vpack());
+      resultBuilder.addExternal(mptr->document()->vpack());
     }
   }
 
@@ -2618,11 +2618,11 @@ OperationResult Transaction::truncateLocal(std::string const& collectionName,
 
   TRI_voc_tick_t resultMarkerTick = 0;
 
-  auto callback = [&](TRI_doc_mptr_t const* mptr) {
+  auto callback = [&](IndexElement const* element) {
     VPackSlice actualRevision;
     TRI_doc_mptr_t previous;
     int res =
-        collection->remove(this, VPackSlice(mptr->vpack()), options,
+        collection->remove(this, VPackSlice(element->document()->vpack()), options,
                            resultMarkerTick, false, actualRevision, previous);
 
     if (res != TRI_ERROR_NO_ERROR) {

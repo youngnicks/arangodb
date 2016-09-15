@@ -139,7 +139,7 @@ void RocksDBIterator::reset() {
 /// @brief Get the next element in the index
 ////////////////////////////////////////////////////////////////////////////////
 
-TRI_doc_mptr_t* RocksDBIterator::next() {
+IndexElement* RocksDBIterator::next() {
   auto comparator = RocksDBFeature::instance()->comparator();
     
   while (true) {
@@ -166,7 +166,7 @@ TRI_doc_mptr_t* RocksDBIterator::next() {
     res = comparator->Compare(key, rocksdb::Slice(_rightEndpoint->data(), _rightEndpoint->size()));
     // LOG(TRACE) << "comparing: " << VPackSlice(key.data() + RocksDBIndex::keyPrefixSize()).toJson() << " with " << VPackSlice((char const*) _rightEndpoint->data() + RocksDBIndex::keyPrefixSize()).toJson() << " - res: " << res;
    
-    TRI_doc_mptr_t* doc = nullptr;
+    IndexElement* doc = nullptr;
      
     if (res <= 0) {
       // get the value for _key, which is the last entry in the key array
@@ -267,10 +267,9 @@ void RocksDBIndex::toVelocyPackFigures(VPackBuilder& builder) const {
 /// @brief inserts a document into the index
 ////////////////////////////////////////////////////////////////////////////////
 
-int RocksDBIndex::insert(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
-                         bool) {
+int RocksDBIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc, bool) {
   auto comparator = RocksDBFeature::instance()->comparator();
-  std::vector<TRI_index_element_t*> elements;
+  std::vector<IndexElement*> elements;
 
   int res;
   try {
@@ -292,7 +291,7 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
     return res;
   }
   
-  VPackSlice const key = Transaction::extractKeyFromDocument(VPackSlice(doc->vpack()));
+  VPackSlice const key = Transaction::extractKeyFromDocument(VPackSlice(doc.slice()));
   std::string const prefix =
       buildPrefix(trx->vocbase()->id(), _collection->cid(), _iid);
 
@@ -310,7 +309,7 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
     builder.clear();
     builder.openArray();
     for (size_t i = 0; i < _fields.size(); ++i) {
-      builder.add(it->subObjects()[i].slice(doc));
+      builder.add(it->subObject(i)->slice());
     }
     builder.add(key); // always append _key value to the end of the array
     builder.close();
@@ -326,7 +325,7 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
       builder.clear();
       builder.openArray();
       for (size_t i = 0; i < _fields.size(); ++i) {
-        builder.add(it->subObjects()[i].slice(doc));
+        builder.add(it->subObject(i)->slice());
       }
       builder.add(VPackSlice::minKeySlice());
       builder.close();
@@ -343,7 +342,7 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
       builder.clear();
       builder.openArray();
       for (size_t i = 0; i < _fields.size(); ++i) {
-        builder.add(it->subObjects()[i].slice(doc));
+        builder.add(it->subObject(i)->slice());
       }
       builder.add(VPackSlice::maxKeySlice());
       builder.close();
@@ -425,9 +424,8 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
 /// @brief removes a document from the index
 ////////////////////////////////////////////////////////////////////////////////
 
-int RocksDBIndex::remove(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
-                         bool) {
-  std::vector<TRI_index_element_t*> elements;
+int RocksDBIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc, bool) {
+  std::vector<IndexElement*> elements;
 
   int res;
   try {
@@ -449,7 +447,7 @@ int RocksDBIndex::remove(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
     return res;
   }
   
-  VPackSlice const key = Transaction::extractKeyFromDocument(VPackSlice(doc->vpack()));
+  VPackSlice const key = Transaction::extractKeyFromDocument(doc.slice());
   
   VPackBuilder builder;
   std::vector<std::string> values;
@@ -457,7 +455,7 @@ int RocksDBIndex::remove(arangodb::Transaction* trx, TRI_doc_mptr_t const* doc,
     builder.clear();
     builder.openArray();
     for (size_t i = 0; i < _fields.size(); ++i) {
-      builder.add(it->subObjects()[i].slice(doc));
+      builder.add(it->subObject(i)->slice());
     }
     builder.add(key); // always append _key value to the end of the array
     builder.close();

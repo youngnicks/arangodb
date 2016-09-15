@@ -121,7 +121,11 @@ static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
 
   // no primary index lock required here because we are the only ones reading
   // from the index ATM
-  auto found = primaryIndex->lookupKey(trx, keySlice);
+  TRI_doc_mptr_t* found = nullptr;
+  IndexElement* f = primaryIndex->lookupKey(trx, keySlice);
+  if (f != nullptr) {
+    found = f->document();
+  }
 
   // it is a new entry
   if (found == nullptr) {
@@ -136,8 +140,8 @@ static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
     header->setVPackFromMarker(marker);  
 
     // insert into primary index
-    void const* result = nullptr;
-    int res = primaryIndex->insertKey(trx, header, &result);
+    TRI_doc_mptr_t* result = nullptr;
+    int res = primaryIndex->insertKey(trx, header, result);
 
     if (res != TRI_ERROR_NO_ERROR) {
       collection->releaseMasterpointer(header);
@@ -216,7 +220,11 @@ static int OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* marker,
   // no primary index lock required here because we are the only ones reading
   // from the index ATM
   auto primaryIndex = collection->primaryIndex();
-  TRI_doc_mptr_t* found = primaryIndex->lookupKey(trx, keySlice);
+  IndexElement* f = primaryIndex->lookupKey(trx, keySlice);
+  TRI_doc_mptr_t* found = nullptr;
+  if (f != nullptr) {
+    found = f->document();
+  }
 
   // it is a new entry, so we missed the create
   if (found == nullptr) {
