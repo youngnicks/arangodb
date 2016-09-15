@@ -278,7 +278,7 @@ IndexElement* PrimaryIndex::lookupSequential(
 
 IndexIterator* PrimaryIndex::allIterator(arangodb::Transaction* trx,
                                          bool reverse) const {
-  return new AllIndexIterator(trx, _primaryIndex, reverse);
+  return new AllIndexIterator(_collection, trx, _primaryIndex, reverse);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -288,7 +288,7 @@ IndexIterator* PrimaryIndex::allIterator(arangodb::Transaction* trx,
 //////////////////////////////////////////////////////////////////////////////
 
 IndexIterator* PrimaryIndex::anyIterator(arangodb::Transaction* trx) const {
-  return new AnyIndexIterator(trx, _primaryIndex);
+  return new AnyIndexIterator(_collection, trx, _primaryIndex);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -446,7 +446,7 @@ IndexIterator* PrimaryIndex::iteratorForSlice(
   TransactionBuilderLeaser builder(trx);
   std::unique_ptr<VPackBuilder> keys(builder.steal());
   builder->add(searchValues);
-  return new PrimaryIndexIterator(trx, this, keys);
+  return new PrimaryIndexIterator(_collection, trx, this, keys);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -493,7 +493,7 @@ IndexIterator* PrimaryIndex::createInIterator(
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
   keys->close();
-  return new PrimaryIndexIterator(trx, this, keys);
+  return new PrimaryIndexIterator(_collection, trx, this, keys);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -519,7 +519,7 @@ IndexIterator* PrimaryIndex::createEqIterator(
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
   keys->close();
-  return new PrimaryIndexIterator(trx, this, keys);
+  return new PrimaryIndexIterator(_collection, trx, this, keys);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -262,11 +262,12 @@ static bool IsEqualKeyElementHash(
   return IsEqualKeyElement(userData, left, right);
 }
 
-HashIndexIterator::HashIndexIterator(arangodb::Transaction* trx,
+HashIndexIterator::HashIndexIterator(LogicalCollection* collection,
+                                     arangodb::Transaction* trx,
                                      HashIndex const* index,
                                      arangodb::aql::AstNode const* node,
                                      arangodb::aql::Variable const* reference)
-    : _trx(trx),
+    : IndexIterator(collection, trx),
       _index(index),
       _lookups(trx, node, reference, index->fields()),
       _buffer(),
@@ -1051,7 +1052,7 @@ IndexIterator* HashIndex::iteratorForCondition(
   TRI_IF_FAILURE("HashIndex::noIterator")  {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
-  return new HashIndexIterator(trx, this, node, reference);
+  return new HashIndexIterator(_collection, trx, this, node, reference);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1070,7 +1071,7 @@ IndexIterator* HashIndex::iteratorForSlice(arangodb::Transaction* trx,
   TransactionBuilderLeaser builder(trx);
   std::unique_ptr<VPackBuilder> keys(builder.steal());
   keys->add(searchValues);
-  return new HashIndexIteratorVPack(trx, this, keys);
+  return new HashIndexIteratorVPack(_collection, trx, this, keys);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

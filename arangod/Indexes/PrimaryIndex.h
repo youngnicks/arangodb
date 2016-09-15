@@ -44,9 +44,11 @@ typedef arangodb::basics::AssocUnique<uint8_t, IndexElement> PrimaryIndexImpl;
 
 class PrimaryIndexIterator final : public IndexIterator {
  public:
-  PrimaryIndexIterator(arangodb::Transaction* trx, PrimaryIndex const* index,
+  PrimaryIndexIterator(LogicalCollection* collection,
+                       arangodb::Transaction* trx, 
+                       PrimaryIndex const* index,
                        std::unique_ptr<VPackBuilder>& keys)
-      : _trx(trx), 
+      : IndexIterator(collection, trx),
         _index(index), 
         _keys(keys.get()), 
         _iterator(_keys->slice()) {
@@ -56,13 +58,14 @@ class PrimaryIndexIterator final : public IndexIterator {
       }
 
   ~PrimaryIndexIterator();
+    
+  char const* typeName() const override { return "primary-index-iterator"; }
 
   IndexElement* next() override;
 
   void reset() override;
 
  private:
-  arangodb::Transaction* _trx;
   PrimaryIndex const* _index;
   std::unique_ptr<VPackBuilder> _keys;
   arangodb::velocypack::ArrayIterator _iterator;
@@ -70,11 +73,14 @@ class PrimaryIndexIterator final : public IndexIterator {
 
 class AllIndexIterator final : public IndexIterator {
  public:
-  AllIndexIterator(arangodb::Transaction* trx, PrimaryIndexImpl const* index,
+  AllIndexIterator(LogicalCollection* collection,
+                   arangodb::Transaction* trx, PrimaryIndexImpl const* index,
                    bool reverse)
-      : _trx(trx), _index(index), _reverse(reverse), _total(0) {}
+      : IndexIterator(collection, trx), _index(index), _reverse(reverse), _total(0) {}
 
   ~AllIndexIterator() {}
+    
+  char const* typeName() const override { return "all-index-iterator"; }
 
   IndexElement* next() override;
   
@@ -83,7 +89,6 @@ class AllIndexIterator final : public IndexIterator {
   void reset() override;
 
  private:
-  arangodb::Transaction* _trx;
   PrimaryIndexImpl const* _index;
   arangodb::basics::BucketPosition _position;
   bool const _reverse;
@@ -92,17 +97,19 @@ class AllIndexIterator final : public IndexIterator {
 
 class AnyIndexIterator final : public IndexIterator {
  public:
-  AnyIndexIterator(arangodb::Transaction* trx, PrimaryIndexImpl const* index)
-      : _trx(trx), _index(index), _step(0), _total(0) {}
+  AnyIndexIterator(LogicalCollection* collection, arangodb::Transaction* trx, 
+                   PrimaryIndexImpl const* index)
+      : IndexIterator(collection, trx), _index(index), _step(0), _total(0) {}
 
   ~AnyIndexIterator() {}
+  
+  char const* typeName() const override { return "any-index-iterator"; }
 
   IndexElement* next() override;
 
   void reset() override;
 
  private:
-  arangodb::Transaction* _trx;
   PrimaryIndexImpl const* _index;
   arangodb::basics::BucketPosition _initial;
   arangodb::basics::BucketPosition _position;

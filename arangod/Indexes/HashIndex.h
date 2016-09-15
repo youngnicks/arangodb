@@ -89,11 +89,14 @@ class HashIndexIterator final : public IndexIterator {
 /// @brief Construct an HashIndexIterator based on Ast Conditions
 ////////////////////////////////////////////////////////////////////////////////
 
-  HashIndexIterator(arangodb::Transaction* trx, HashIndex const* index,
+  HashIndexIterator(LogicalCollection* collection, arangodb::Transaction* trx, 
+                    HashIndex const* index,
                     arangodb::aql::AstNode const*,
                     arangodb::aql::Variable const*);
 
   ~HashIndexIterator() = default;
+  
+  char const* typeName() const override { return "hash-index-iterator"; }
 
   IndexElement* next() override;
 
@@ -102,7 +105,6 @@ class HashIndexIterator final : public IndexIterator {
   void reset() override;
 
  private:
-  arangodb::Transaction* _trx;
   HashIndex const* _index;
   LookupBuilder _lookups;
   std::vector<IndexElement*> _buffer;
@@ -118,10 +120,10 @@ class HashIndexIteratorVPack final : public IndexIterator {
 /// @brief Construct an HashIndexIterator based on VelocyPack
 ////////////////////////////////////////////////////////////////////////////////
 
-  HashIndexIteratorVPack(
+  HashIndexIteratorVPack(LogicalCollection* collection,
       arangodb::Transaction* trx, HashIndex const* index,
       std::unique_ptr<arangodb::velocypack::Builder>& searchValues)
-      : _trx(trx),
+      : IndexIterator(collection, trx),
         _index(index),
         _searchValues(searchValues.get()),
         _iterator(_searchValues->slice()),
@@ -131,13 +133,14 @@ class HashIndexIteratorVPack final : public IndexIterator {
   }
 
   ~HashIndexIteratorVPack();
+  
+  char const* typeName() const override { return "hash-index-iterator-vpack"; }
 
   IndexElement* next() override;
 
   void reset() override;
 
  private:
-  arangodb::Transaction* _trx;
   HashIndex const* _index;
   std::unique_ptr<arangodb::velocypack::Builder> _searchValues;
   arangodb::velocypack::ArrayIterator _iterator;

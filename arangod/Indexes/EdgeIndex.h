@@ -42,16 +42,10 @@ typedef arangodb::basics::AssocMulti<arangodb::velocypack::Slice, IndexElement,
 
 class EdgeIndexIterator final : public IndexIterator {
  public:
-  IndexElement* next() override;
-
-  void nextBabies(std::vector<IndexElement*>&, size_t) override;
-
-  void reset() override;
-
-  EdgeIndexIterator(arangodb::Transaction* trx,
+  EdgeIndexIterator(LogicalCollection* collection, arangodb::Transaction* trx,
                     TRI_EdgeIndexHash_t const* index,
                     std::unique_ptr<VPackBuilder>& keys)
-      : _trx(trx),
+      : IndexIterator(collection, trx),
         _index(index),
         _keys(keys.get()),
         _iterator(_keys->slice()),
@@ -62,9 +56,16 @@ class EdgeIndexIterator final : public IndexIterator {
   }
 
   ~EdgeIndexIterator();
+  
+  char const* typeName() const override { return "edge-index-iterator"; }
+
+  IndexElement* next() override;
+
+  void nextBabies(std::vector<IndexElement*>&, size_t) override;
+
+  void reset() override;
 
  private:
-  arangodb::Transaction* _trx;
   TRI_EdgeIndexHash_t const* _index;
   std::unique_ptr<arangodb::velocypack::Builder> _keys;
   arangodb::velocypack::ArrayIterator _iterator;
@@ -75,15 +76,12 @@ class EdgeIndexIterator final : public IndexIterator {
 
 class AnyDirectionEdgeIndexIterator final : public IndexIterator {
  public:
-  IndexElement* next() override;
-
-  void nextBabies(std::vector<IndexElement*>&, size_t) override;
-
-  void reset() override;
-
-  AnyDirectionEdgeIndexIterator(EdgeIndexIterator* outboundIterator,
+  AnyDirectionEdgeIndexIterator(LogicalCollection* collection,
+                                arangodb::Transaction* trx,
+                                EdgeIndexIterator* outboundIterator,
                                 EdgeIndexIterator* inboundIterator)
-      : _outbound(outboundIterator),
+      : IndexIterator(collection, trx),
+        _outbound(outboundIterator),
         _inbound(inboundIterator),
         _useInbound(false) {}
 
@@ -91,6 +89,14 @@ class AnyDirectionEdgeIndexIterator final : public IndexIterator {
     delete _outbound;
     delete _inbound;
   }
+  
+  char const* typeName() const override { return "any-edge-index-iterator"; }
+
+  IndexElement* next() override;
+
+  void nextBabies(std::vector<IndexElement*>&, size_t) override;
+
+  void reset() override;
 
  private:
   EdgeIndexIterator* _outbound;

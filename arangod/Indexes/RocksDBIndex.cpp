@@ -79,14 +79,15 @@ static size_t sortWeight(arangodb::aql::AstNode const* node) {
 // lists: lexicographically and within each slot according to these rules.
 // ...........................................................................
   
-RocksDBIterator::RocksDBIterator(arangodb::Transaction* trx, 
+RocksDBIterator::RocksDBIterator(LogicalCollection* collection,
+                                 arangodb::Transaction* trx, 
                                  arangodb::RocksDBIndex const* index,
                                  arangodb::PrimaryIndex* primaryIndex,
                                  rocksdb::OptimisticTransactionDB* db,
                                  bool reverse, 
                                  VPackSlice const& left,
                                  VPackSlice const& right)
-    : _trx(trx),
+    : IndexIterator(collection, trx),
       _primaryIndex(primaryIndex),
       _db(db),
       _reverse(reverse),
@@ -598,7 +599,7 @@ RocksDBIterator* RocksDBIndex::lookup(arangodb::Transaction* trx,
   // _collection at least as long as trx is running.
   // Same for the iterator
   auto idx = _collection->primaryIndex();
-  return new RocksDBIterator(trx, this, idx, _db, reverse, leftBorder, rightBorder);
+  return new RocksDBIterator(_collection, trx, this, idx, _db, reverse, leftBorder, rightBorder);
 }
 
 bool RocksDBIndex::accessFitsIndex(
@@ -1063,7 +1064,7 @@ IndexIterator* RocksDBIndex::iteratorForCondition(
       }
       throw; 
     }
-    return new MultiIndexIterator(iterators);
+    return new MultiIndexIterator(_collection, trx, iterators);
   }
 
   VPackSlice searchSlice = searchValues.slice();

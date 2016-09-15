@@ -31,6 +31,8 @@
 
 namespace arangodb {
 class CollectionNameResolver;
+class LogicalCollection;
+class Transaction;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief context for an index iterator
@@ -42,7 +44,6 @@ struct IndexIteratorContext {
   
   IndexIteratorContext() = delete;
   IndexIteratorContext(TRI_vocbase_t*, CollectionNameResolver const*, ServerState::RoleEnum);
-  //explicit IndexIteratorContext(TRI_vocbase_t*);
 
   ~IndexIteratorContext();
 
@@ -67,9 +68,16 @@ class IndexIterator {
  public:
   IndexIterator(IndexIterator const&) = delete;
   IndexIterator& operator=(IndexIterator const&) = delete;
+  IndexIterator() = delete;
 
-  IndexIterator() {}
+  IndexIterator(LogicalCollection* collection, arangodb::Transaction* trx)
+      : _collection(collection), _trx(trx) {}
+
   virtual ~IndexIterator();
+
+  virtual char const* typeName() const = 0;
+
+  LogicalCollection* collection() const { return _collection; }
 
   virtual IndexElement* next();
 
@@ -78,6 +86,10 @@ class IndexIterator {
   virtual void reset();
 
   virtual void skip(uint64_t count, uint64_t& skipped);
+
+ protected:
+  LogicalCollection* _collection;
+  arangodb::Transaction* _trx;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -86,8 +98,12 @@ class IndexIterator {
 
 class EmptyIndexIterator final : public IndexIterator {
   public:
-    EmptyIndexIterator() {}
+    EmptyIndexIterator(LogicalCollection* collection, arangodb::Transaction* trx) 
+        : IndexIterator(collection, trx) {}
+
     ~EmptyIndexIterator() {}
+
+    char const* typeName() const override { return "empty-index-iterator"; }
 
     IndexElement* next() override { return nullptr; }
 
@@ -111,8 +127,9 @@ class EmptyIndexIterator final : public IndexIterator {
 class MultiIndexIterator final : public IndexIterator {
 
   public:
-   explicit MultiIndexIterator(std::vector<IndexIterator*> const& iterators)
-     : _iterators(iterators), _currentIdx(0), _current(nullptr) {
+   MultiIndexIterator(LogicalCollection* collection, arangodb::Transaction* trx,
+                      std::vector<IndexIterator*> const& iterators)
+     : IndexIterator(collection, trx), _iterators(iterators), _currentIdx(0), _current(nullptr) {
        if (!_iterators.empty()) {
          _current = _iterators.at(0);
        }
@@ -124,6 +141,8 @@ class MultiIndexIterator final : public IndexIterator {
         delete it;
       }
     }
+    
+    char const* typeName() const override { return "multi-index-iterator"; }
 
     ////////////////////////////////////////////////////////////////////////////////
     /// @brief Get the next element

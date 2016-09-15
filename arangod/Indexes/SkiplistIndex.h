@@ -185,9 +185,10 @@ class SkiplistIterator final : public IndexIterator {
   Node* _rightEndPoint;  // Interval right border, first excluded element
 
  public:
-  SkiplistIterator(bool reverse, Node* left,
-                   Node* right)
-      : _reverse(reverse),
+  SkiplistIterator(LogicalCollection* collection, arangodb::Transaction* trx,
+                   bool reverse, Node* left, Node* right)
+      : IndexIterator(collection, trx),
+        _reverse(reverse),
         _leftEndPoint(left),
         _rightEndPoint(right) {
     reset(); // Initializes the cursor
@@ -199,6 +200,7 @@ class SkiplistIterator final : public IndexIterator {
   // can be nullptr if the iterator is exhausted.
 
  public:
+  char const* typeName() const override { return "skiplist-index-iterator"; }
 
   ////////////////////////////////////////////////////////////////////////////////
   /// @brief Get the next element in the skiplist
@@ -250,12 +252,13 @@ class SkiplistIterator2 final : public IndexIterator {
                       arangodb::basics::SkipListCmpType)> _CmpElmElm;
 
  public:
-  SkiplistIterator2(
+  SkiplistIterator2(LogicalCollection* collection, arangodb::Transaction* trx,
       TRI_Skiplist const* skiplist,
       std::function<int(IndexElement const*, IndexElement const*,
                         arangodb::basics::SkipListCmpType)> const& CmpElmElm,
       bool reverse, BaseSkiplistLookupBuilder* builder)
-      : _skiplistIndex(skiplist),
+      : IndexIterator(collection, trx),
+        _skiplistIndex(skiplist),
         _reverse(reverse),
         _cursor(nullptr),
         _currentInterval(0),
@@ -277,6 +280,8 @@ class SkiplistIterator2 final : public IndexIterator {
   // can be nullptr if the iterator is exhausted.
 
  public:
+  
+  char const* typeName() const override { return "skiplist-index-iterator2"; }
 
   ////////////////////////////////////////////////////////////////////////////////
   /// @brief Get the next element in the skiplist
@@ -349,13 +354,6 @@ class SkiplistIndex final : public PathBasedIndex {
 
   SkiplistIndex(TRI_idx_iid_t, LogicalCollection*,
                 arangodb::velocypack::Slice const&);
-
-  SkiplistIndex(
-      TRI_idx_iid_t, arangodb::LogicalCollection*,
-      std::vector<std::vector<arangodb::basics::AttributeName>> const&, bool,
-      bool);
-
-  explicit SkiplistIndex(VPackSlice const&);
 
   ~SkiplistIndex();
 

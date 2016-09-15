@@ -159,9 +159,7 @@ struct IndexElement {
 
   /// @brief allocate a new index element
   static IndexElement* allocate(size_t numSubs) {
-    void* space = TRI_Allocate(
-        TRI_UNKNOWN_MEM_ZONE,
-        sizeof(TRI_doc_mptr_t*) + (sizeof(TRI_vpack_sub_t) * numSubs), false);
+    void* space = TRI_Allocate(TRI_UNKNOWN_MEM_ZONE, memoryUsage(numSubs), false);
     if (space == nullptr) {
       return nullptr;
     }

@@ -48,6 +48,7 @@ class SortCondition;
 struct Variable;
 }
 
+class LogicalCollection;
 class PrimaryIndex;
 class RocksDBIndex;
 class Transaction;
@@ -60,18 +61,8 @@ class RocksDBIterator final : public IndexIterator {
  private:
   friend class RocksDBIndex;
 
- private:
-  arangodb::Transaction* _trx;
-  arangodb::PrimaryIndex* _primaryIndex;
-  rocksdb::OptimisticTransactionDB* _db;
-  std::unique_ptr<rocksdb::Iterator> _cursor;
-  std::unique_ptr<arangodb::velocypack::Buffer<char>> _leftEndpoint;   // Interval left border
-  std::unique_ptr<arangodb::velocypack::Buffer<char>> _rightEndpoint;  // Interval right border
-  bool const _reverse;
-  bool _probe;
-
  public:
-  RocksDBIterator(arangodb::Transaction* trx, 
+  RocksDBIterator(LogicalCollection* collection, Transaction* trx, 
                   arangodb::RocksDBIndex const* index,
                   arangodb::PrimaryIndex* primaryIndex,
                   rocksdb::OptimisticTransactionDB* db,
@@ -82,6 +73,8 @@ class RocksDBIterator final : public IndexIterator {
   ~RocksDBIterator() = default;
 
  public:
+  
+  char const* typeName() const override { return "rocksdb-index-iterator"; }
 
   ////////////////////////////////////////////////////////////////////////////////
   /// @brief Get the next element in the index
@@ -94,6 +87,15 @@ class RocksDBIterator final : public IndexIterator {
   ////////////////////////////////////////////////////////////////////////////////
 
   void reset() override;
+ 
+ private:
+  arangodb::PrimaryIndex* _primaryIndex;
+  rocksdb::OptimisticTransactionDB* _db;
+  std::unique_ptr<rocksdb::Iterator> _cursor;
+  std::unique_ptr<arangodb::velocypack::Buffer<char>> _leftEndpoint;   // Interval left border
+  std::unique_ptr<arangodb::velocypack::Buffer<char>> _rightEndpoint;  // Interval right border
+  bool const _reverse;
+  bool _probe;
 };
 
 class RocksDBIndex final : public PathBasedIndex {

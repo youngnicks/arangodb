@@ -694,22 +694,6 @@ void SkiplistIterator2::initNextInterval() {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create the skiplist index
-////////////////////////////////////////////////////////////////////////////////
-
-SkiplistIndex::SkiplistIndex(
-    TRI_idx_iid_t iid, arangodb::LogicalCollection* collection,
-    std::vector<std::vector<arangodb::basics::AttributeName>> const& fields,
-    bool unique, bool sparse)
-    : PathBasedIndex(iid, collection, fields, unique, sparse, true),
-      CmpElmElm(this),
-      CmpKeyElm(this),
-      _skiplistIndex(nullptr) {
-  _skiplistIndex =
-      new TRI_Skiplist(CmpElmElm, CmpKeyElm, [this](IndexElement* element) { element->free(numPaths()); }, unique, _useExpansion);
-}
-
 /// @brief create the skiplist index
 SkiplistIndex::SkiplistIndex(TRI_idx_iid_t iid,
                              arangodb::LogicalCollection* collection,
@@ -721,17 +705,6 @@ SkiplistIndex::SkiplistIndex(TRI_idx_iid_t iid,
   _skiplistIndex =
       new TRI_Skiplist(CmpElmElm, CmpKeyElm, [this](IndexElement* element) { element->free(numPaths()); }, _unique, _useExpansion);
 }
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create an index stub with a hard-coded selectivity estimate
-/// this is used in the cluster coordinator case
-////////////////////////////////////////////////////////////////////////////////
-
-SkiplistIndex::SkiplistIndex(VPackSlice const& slice)
-    : PathBasedIndex(slice, true),
-      CmpElmElm(this),
-      CmpKeyElm(this),
-      _skiplistIndex(nullptr) {}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief destroy the skiplist index
@@ -1017,11 +990,11 @@ IndexIterator* SkiplistIndex::lookup(arangodb::Transaction* trx,
 
   // Check if the interval is valid and not empty
   if (intervalValid(leftBorder, rightBorder)) {
-    return new SkiplistIterator(reverse, leftBorder, rightBorder);
+    return new SkiplistIterator(_collection, trx, reverse, leftBorder, rightBorder);
   }
 
   // Creates an empty iterator
-  return new EmptyIndexIterator();
+  return new EmptyIndexIterator(_collection, trx);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1426,7 +1399,7 @@ IndexIterator* SkiplistIndex::iteratorForCondition(
                                      // will have _fields many entries.
     TRI_ASSERT(mapping.size() == _fields.size());
     if (!findMatchingConditions(node, reference, mapping, usesIn)) {
-      return new EmptyIndexIterator();
+      return new EmptyIndexIterator(_collection, trx);
     }
   } else {
     TRI_IF_FAILURE("SkiplistIndex::noSortIterator") {
@@ -1441,12 +1414,12 @@ IndexIterator* SkiplistIndex::iteratorForCondition(
   if (usesIn) {
     auto builder = std::make_unique<SkiplistInLookupBuilder>(
         trx, mapping, reference, reverse);
-    return new SkiplistIterator2(_skiplistIndex, CmpElmElm, reverse,
+    return new SkiplistIterator2(_collection, trx, _skiplistIndex, CmpElmElm, reverse,
                                  builder.release());
   }
   auto builder =
       std::make_unique<SkiplistLookupBuilder>(trx, mapping, reference, reverse);
-  return new SkiplistIterator2(_skiplistIndex, CmpElmElm, reverse,
+  return new SkiplistIterator2(_collection, trx, _skiplistIndex, CmpElmElm, reverse,
                                builder.release());
 }
 

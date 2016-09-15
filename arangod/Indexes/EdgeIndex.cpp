@@ -739,27 +739,27 @@ IndexIterator* EdgeIndex::iteratorForSlice(
       TransactionBuilderLeaser fromBuilder(trx);
       std::unique_ptr<VPackBuilder> fromKeys(fromBuilder.steal());
       fromKeys->add(from);
-      auto left = std::make_unique<EdgeIndexIterator>(trx, _edgesFrom, fromKeys);
+      auto left = std::make_unique<EdgeIndexIterator>(_collection, trx, _edgesFrom, fromKeys);
 
       TransactionBuilderLeaser toBuilder(trx);
       std::unique_ptr<VPackBuilder> toKeys(toBuilder.steal());
       toKeys->add(to);
-      auto right = std::make_unique<EdgeIndexIterator>(trx, _edgesTo, toKeys);
-      return new AnyDirectionEdgeIndexIterator(left.release(), right.release());
+      auto right = std::make_unique<EdgeIndexIterator>(_collection, trx, _edgesTo, toKeys);
+      return new AnyDirectionEdgeIndexIterator(_collection, trx, left.release(), right.release());
     }
     // OUTBOUND search
     TRI_ASSERT(to.isNull());
     TransactionBuilderLeaser builder(trx);
     std::unique_ptr<VPackBuilder> keys(builder.steal());
     keys->add(from);
-    return new EdgeIndexIterator(trx, _edgesFrom, keys);
+    return new EdgeIndexIterator(_collection, trx, _edgesFrom, keys);
   } else {
     // INBOUND search
     TRI_ASSERT(to.isArray());
     TransactionBuilderLeaser builder(trx);
     std::unique_ptr<VPackBuilder> keys(builder.steal());
     keys->add(to);
-    return new EdgeIndexIterator(trx, _edgesTo, keys);
+    return new EdgeIndexIterator(_collection, trx, _edgesTo, keys);
   }
 }
 
@@ -786,7 +786,7 @@ IndexIterator* EdgeIndex::createEqIterator(
   // _from or _to?
   bool const isFrom = (attrNode->stringEquals(StaticStrings::FromString));
 
-  return new EdgeIndexIterator(trx, isFrom ? _edgesFrom : _edgesTo, keys);
+  return new EdgeIndexIterator(_collection, trx, isFrom ? _edgesFrom : _edgesTo, keys);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -819,7 +819,7 @@ IndexIterator* EdgeIndex::createInIterator(
   // _from or _to?
   bool const isFrom = (attrNode->stringEquals(StaticStrings::FromString));
 
-  return new EdgeIndexIterator(trx, isFrom ? _edgesFrom : _edgesTo, keys);
+  return new EdgeIndexIterator(_collection, trx, isFrom ? _edgesFrom : _edgesTo, keys);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
