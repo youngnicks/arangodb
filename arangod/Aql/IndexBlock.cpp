@@ -391,19 +391,26 @@ bool IndexBlock::readIndex(size_t atMost) {
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
     }
     
-    for (auto const& mptr : _result) {
-      if (!hasMultipleIndexes) {
-        _documents.emplace_back(mptr->document()->vpack());
-      } else {
+    if (hasMultipleIndexes) {
+      for (auto const& mptr : _result) {
         VPackSlice doc(mptr->document()->vpack());
-        VPackSlice keySlice = Transaction::extractKeyFromDocument(doc);
-        std::string key = keySlice.copyString();
-        if (_alreadyReturned.find(key) == _alreadyReturned.end()) {
-          if (!isLastIndex) {
-            _alreadyReturned.emplace(std::move(key));
+        TRI_voc_rid_t revision = Transaction::extractRevFromDocument(doc);
+        // uniqueness checks
+        if (!isLastIndex) {
+          // insert & check for duplicates in one go
+          if (_alreadyReturned.emplace(revision).second) {
+            _documents.emplace_back(mptr->document()->vpack());
           }
-          _documents.emplace_back(mptr->document()->vpack());
+        } else {
+          // only check for duplicates
+          if (_alreadyReturned.find(revision) == _alreadyReturned.end()) {
+            _documents.emplace_back(mptr->document()->vpack());
+          }
         }
+      }
+    } else {
+      for (auto const& mptr : _result) {
+        _documents.emplace_back(mptr->document()->vpack());
       } 
     }
     // Leave the loop here, we can only exhaust one cursor at a time, otherwise slices are lost

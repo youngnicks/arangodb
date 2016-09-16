@@ -148,7 +148,7 @@ class IndexBlock : public ExecutionBlock {
   AstNode const* _condition;
 
   /// @brief set of already returned documents. Used to make the result distinct
-  std::unordered_set<std::string> _alreadyReturned;
+  std::unordered_set<TRI_voc_rid_t> _alreadyReturned;
 
   /// @brief whether or not at least one expression uses v8
   bool _hasV8Expression;

@@ -264,7 +264,7 @@ void PathBasedIndex::buildIndexValues(
       slice = arangodb::basics::VelocyPackHelper::NullValue();
     }
     sliceStack.push_back(slice);
-    buildIndexValues(document, level+1, toInsert, sliceStack);
+    buildIndexValues(document, level + 1, toInsert, sliceStack);
     sliceStack.pop_back();
     return;
   }
