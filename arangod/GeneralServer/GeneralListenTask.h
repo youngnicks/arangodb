@@ -42,11 +42,13 @@ class GeneralListenTask : public ListenTask {
   GeneralListenTask& operator=(GeneralListenTask const&) = delete;
 
  public:
-  GeneralListenTask(GeneralServer* server, Endpoint* endpoint,
+  GeneralListenTask(EventLoop2, GeneralServer*, Endpoint*,
                     ProtocolType connectionType);
 
  protected:
-  bool handleConnected(TRI_socket_t s, ConnectionInfo&& info) override;
+  void handleConnected(std::unique_ptr<Socket>,
+                       ConnectionInfo&&) override;
+  void signalTask(std::unique_ptr<TaskData>) override {}
 
  private:
   GeneralServer* _server;
@@ -54,8 +56,7 @@ class GeneralListenTask : public ListenTask {
   double _keepAliveTimeout = 300.0;
   SSL_CTX* _sslContext = nullptr;
   int _verificationMode = SSL_VERIFY_NONE;
-  int (*_verificationCallback)(int, X509_STORE_CTX*) = nullptr
-;
+  int (*_verificationCallback)(int, X509_STORE_CTX*) = nullptr;
 };
 }
 }

@@ -41,6 +41,7 @@
 #include "Scheduler/JobQueue.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
+#include "Scheduler/TaskData.h"
 
 using namespace arangodb;
 using namespace arangodb::basics;
@@ -51,10 +52,10 @@ using namespace arangodb::rest;
 // -----------------------------------------------------------------------------
 
 GeneralCommTask::GeneralCommTask(EventLoop2 loop, GeneralServer* server,
-                                 TRI_socket_t socket, ConnectionInfo&& info,
-                                 double keepAliveTimeout)
+                                 std::unique_ptr<Socket> socket,
+                                 ConnectionInfo&& info, double keepAliveTimeout)
     : Task2(loop, "GeneralCommTask"),
-      SocketTask2(loop, socket, std::move(info), keepAliveTimeout),
+      SocketTask2(loop, std::move(socket), std::move(info), keepAliveTimeout),
       _server(server) {}
 
 // -----------------------------------------------------------------------------
@@ -91,8 +92,7 @@ void GeneralCommTask::executeRequest(
     return;
   }
 
-  EventLoop loop{};
-  handler->setTaskId(_taskId, loop);
+  handler->setTaskId(_taskId);
 
   // asynchronous request
   bool ok = false;
@@ -226,19 +226,15 @@ void GeneralCommTask::handleRequestDirectly(WorkItem::uptr<RestHandler> h) {
   auto agent = getAgent(messageId);
 
   agent->transferTo(handler);
-  RestHandler::status result = handler->executeFull();
+  RestStatus result = handler->executeFull();
   handler->RequestStatisticsAgent::transferTo(agent);
 
-  switch (result) {
-    case RestHandler::status::FAILED:
-    case RestHandler::status::DONE: {
-      addResponse(handler->response());
-      break;
-    }
-
-    case RestHandler::status::ASYNC:
-      handler->release();
-      break;
+  if (result.failed() || result.done()) {
+    addResponse(handler->response());
+  } else if (result.abandoned()) {
+    handler->release();
+  } else {
+#warning TODO
   }
 }
 
@@ -256,7 +252,7 @@ bool GeneralCommTask::handleRequestAsync(WorkItem::uptr<RestHandler> handler,
   if (jobId != nullptr) {
     store = true;
     *jobId = handler->handlerId();
-    GeneralServerFeature::JOB_MANAGER->initAsyncJob(*jobId, hdr);
+    GeneralServerFeature::JOB_MANAGER->initAsyncJob(handler.get(), hdr);
   }
 
   // queue this job
@@ -269,22 +265,14 @@ bool GeneralCommTask::handleRequestAsync(WorkItem::uptr<RestHandler> handler,
 
         HandlerWorkStack work(std::move(h));
         auto handler = work.handler();
-        RestHandler::status result = handler->executeFull();
+        RestStatus result = handler->executeFull();
 
-        switch (result) {
-          case RestHandler::status::FAILED:
-          case RestHandler::status::DONE: {
-            if (store) {
-              GeneralServerFeature::JOB_MANAGER->finishAsyncJob(
-                  handler->handlerId(), handler->stealResponse());
-            }
-
-            break;
+        if (result.failed() || result.done()) {
+          if (store) {
+            GeneralServerFeature::JOB_MANAGER->finishAsyncJob(handler);
           }
-
-          case RestHandler::status::ASYNC:
-            handler->release();
-            break;
+        } else if (result.abandoned()) {
+          handler->release();
         }
       });
 

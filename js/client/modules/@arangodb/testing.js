@@ -59,7 +59,8 @@ const functionsDocumentation = {
   'single_server': 'run one test suite on the server; options required\n' +
     '            run without arguments to get more detail',
   'ssl_server': 'https server tests',
-  'upgrade': 'upgrade tests'
+  'upgrade': 'upgrade tests',
+  'fail': 'this job will always produce a failed result'
 };
 
 const optionsDocumentation = [
@@ -238,6 +239,7 @@ let JS_DIR;
 let LOGS_DIR;
 let PEM_FILE;
 let UNITTESTS_DIR;
+let GDB_OUTPUT;
 
 function makeResults (testname) {
   const startTime = time();
@@ -418,8 +420,9 @@ function readImportantLogLines (logPath) {
 // //////////////////////////////////////////////////////////////////////////////
 
 function analyzeCoreDump (instanceInfo, options, storeArangodPath, pid) {
-  let command;
+  let gdbOutputFile = fs.getTempFile();
 
+  let command;
   command = '(';
   command += "printf 'bt full\\n thread apply all bt\\n';";
   command += 'sleep 10;';
@@ -432,11 +435,14 @@ function analyzeCoreDump (instanceInfo, options, storeArangodPath, pid) {
   } else {
     command += options.coreDirectory + '/*core*' + pid + '*';
   }
-
+  command += " > " + gdbOutputFile + " 2>&1";
   const args = ['-c', command];
   print(JSON.stringify(args));
 
   executeExternalAndWait('/bin/bash', args);
+  GDB_OUTPUT = fs.read(gdbOutputFile);
+  print(GDB_OUTPUT);
+  
 }
 
 // //////////////////////////////////////////////////////////////////////////////
@@ -1303,7 +1309,7 @@ function startInstanceCluster (instanceInfo, protocol, options,
     return [subArgs, subDir];
   };
 
-  options.agencySize = 1;
+//  options.agencySize = 1;
   options.agencyWaitForSync = false;
   startInstanceAgency(instanceInfo, protocol, options, ...makeArgs('agency', {}));
 
@@ -1747,7 +1753,7 @@ function findTests () {
   function doOnePath(path) {
     var community = doOnePathInner(path);
     if (global.ARANGODB_CLIENT_VERSION(true)['enterprise-version']) {
-      return community.concat(doOnePathInner('enterprise/Enterprise/' + path));
+      return community.concat(doOnePathInner('enterprise/' + path));
     } else {
       return community;
     }
@@ -1958,6 +1964,42 @@ let testFuncs = {
   'all': function () {}
 };
 
+testFuncs.fail = function (options) {
+
+  return {
+    failSuite: {
+      status: false,
+      total: 1,
+      message: "this suite will always fail.",
+      duration: 2,
+      failed: 1,
+      failTest: {
+        status: false,
+        total: 1,
+        duration: 1,
+        message: "this testcase will always fail."
+      },
+      failSuccessTest: {
+        status: true,
+        duration: 1,
+        message: "this testcase will always succeed, though its in the fail testsuite."
+      }
+    },
+    successSuite: {
+      status: true,
+      total: 1,
+      message: "this suite will always be successfull",
+      duration: 1,
+      failed: 0,
+      success: {
+        status: true,
+        message: "this testcase will always be successfull",
+        duration: 1       
+      }
+    }
+  };
+};
+
 // //////////////////////////////////////////////////////////////////////////////
 // / @brief TEST: arangosh
 // //////////////////////////////////////////////////////////////////////////////
@@ -2073,7 +2115,6 @@ testFuncs.arangosh = function (options) {
   }
 
   print();
-
   return ret;
 };
 
@@ -3888,6 +3929,8 @@ function unitTestPrettyPrintResults (r) {
     }
     print(SuccessMessages);
     print(failedMessages);
+    fs.write("out/testfailures.txt", failedMessages);
+    fs.write("out/testfailures.txt", GDB_OUTPUT);
     /* jshint forin: true */
 
     let color = (!r.crashed && r.status === true) ? GREEN : RED;
@@ -4072,7 +4115,6 @@ function unitTest (cases, options) {
 
     let result = testFuncs[currentTest](options);
     results[currentTest] = result;
-
     let status = true;
 
     for (let i in result) {

@@ -29,6 +29,7 @@
 #include "Basics/StringBuffer.h"
 #include "Basics/StringUtils.h"
 #include "Basics/VelocyPackHelper.h"
+#include "Logger/Logger.h"
 #include "Cluster/ClusterComm.h"
 #include "Cluster/ClusterInfo.h"
 #include "Cluster/ClusterMethods.h"
@@ -49,7 +50,7 @@ bool RestQueryHandler::isDirect() const {
   return _request->requestType() != rest::RequestType::POST;
 }
 
-RestHandler::status RestQueryHandler::execute() {
+RestStatus RestQueryHandler::execute() {
   // extract the sub-request type
   auto const type = _request->requestType();
 
@@ -73,7 +74,7 @@ RestHandler::status RestQueryHandler::execute() {
   }
 
   // this handler is done
-  return status::DONE;
+  return RestStatus::DONE;
 }
 
 bool RestQueryHandler::readQueryProperties() {
@@ -105,7 +106,8 @@ bool RestQueryHandler::readQuery(bool slow) {
   result.add(VPackValue(VPackValueType::Array));
 
   for (auto const& q : queries) {
-    auto const& timeString = TRI_StringTimeStamp(q.started);
+    auto const& timeString = TRI_StringTimeStamp(q.started, Logger::getUseLocalTime());
+
     auto const& queryString = q.queryString;
     auto const& queryState = q.queryState.substr(8, q.queryState.size() - 9);
 

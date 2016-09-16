@@ -2,9 +2,13 @@
 #define ARANGOD_GENERAL_SERVER_HTTP_COMM_TASK_H 1
 
 #include "GeneralServer/GeneralCommTask.h"
-namespace arangodb {
-namespace rest {
 
+#include "Rest/HttpResponse.h"
+
+namespace arangodb {
+class HttpRequest;
+
+namespace rest {
 class HttpCommTask : public GeneralCommTask {
  public:
   static size_t const MaximalHeaderSize;
@@ -13,7 +17,8 @@ class HttpCommTask : public GeneralCommTask {
   static size_t const RunCompactEvery;
 
  public:
-  HttpCommTask(EventLoop2, GeneralServer*, TRI_socket_t, ConnectionInfo&&, double timeout);
+  HttpCommTask(EventLoop2, GeneralServer*, std::unique_ptr<Socket> socket,
+               ConnectionInfo&&, double timeout);
 
   // convert from GeneralResponse to httpResponse ad dispatch request to class
   // internal addResponse
@@ -67,11 +72,10 @@ class HttpCommTask : public GeneralCommTask {
   bool _allowMethodOverride;  // allow method override
   bool _denyCredentials;  // whether or not to allow credentialed requests (only
                           // CORS)
-  bool _acceptDeflate;    // whether the client accepts deflate algorithm
   bool _newRequest;       // new request started
   // TODO(fc) remove
   rest::RequestType _requestType;  // type of request (GET, POST, ...)
-  std::string _fullUrl;                      // value of requested URL
+  std::string _fullUrl;            // value of requested URL
   std::string _origin;  // value of the HTTP origin header the client sent (if
                         // any, CORS only)
   size_t

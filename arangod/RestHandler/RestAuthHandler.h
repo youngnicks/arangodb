@@ -30,11 +30,6 @@
 #include <chrono>
 
 namespace arangodb {
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief auth handler
-////////////////////////////////////////////////////////////////////////////////
-
 class RestAuthHandler : public RestVocbaseBaseHandler {
  public:
   RestAuthHandler(GeneralRequest*, GeneralResponse*,
@@ -44,12 +39,12 @@ class RestAuthHandler : public RestVocbaseBaseHandler {
 
  public:
   bool isDirect() const override;
-  status execute() override;
+  RestStatus execute() override;
 
  private:
   std::string _jwtSecret;
   std::chrono::seconds _validFor;
-  status badRequest();
+  RestStatus badRequest();
 };
 }
 

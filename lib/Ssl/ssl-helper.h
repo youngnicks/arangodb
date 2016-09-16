@@ -26,8 +26,8 @@
 
 #include "Basics/Common.h"
 
-#include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <boost/asio/ssl.hpp>
 #include <boost/optional.hpp>
 
@@ -62,7 +62,8 @@ enum protocol_e {
 /// @brief creates an SSL context
 ////////////////////////////////////////////////////////////////////////////////
 
-boost::optional<boost::asio::ssl::context> sslContext(protocol_e, std::string const& keyfile);
+boost::optional<boost::asio::ssl::context> sslContext(
+    protocol_e, std::string const& keyfile);
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief get the name of an SSL protocol version

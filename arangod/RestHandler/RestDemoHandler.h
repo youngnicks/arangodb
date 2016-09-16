@@ -1,8 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /// DISCLAIMER
 ///
-/// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
-/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
+/// Copyright 2016 ArangoDB GmbH, Cologne, Germany
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
 /// you may not use this file except in compliance with the License.
@@ -19,22 +18,26 @@
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
-/// @author Achim Brandt
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "Task2.h"
+#ifndef ARANGOD_REST_HANDLER_REST_DEMO_HANDLER_H
+#define ARANGOD_REST_HANDLER_REST_DEMO_HANDLER_H 1
 
-#include <velocypack/Builder.h>
-#include <velocypack/velocypack-aliases.h>
+#include "RestHandler/RestBaseHandler.h"
 
-using namespace arangodb::rest;
+namespace arangodb {
+class RestDemoHandler : public arangodb::RestBaseHandler {
+ public:
+  RestDemoHandler(GeneralRequest*, GeneralResponse*);
 
-namespace {
-std::atomic_uint_fast64_t NEXT_TASK_ID(static_cast<uint64_t>(TRI_microtime() *
-                                                             100000.0));
+ public:
+  bool isDirect() const override { return true; }
+  RestStatus execute() override;
+
+private:
+  void doSomeMoreWork();
+  RestStatus evenMoreWork();
+};
 }
 
-Task2::Task2(EventLoop2 loop, std::string const& name)
-    : _loop(loop),
-      _taskId(NEXT_TASK_ID.fetch_add(1, std::memory_order_seq_cst)),
-      _name(name) {}
+#endif

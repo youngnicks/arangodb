@@ -33,7 +33,6 @@
 #include "Cluster/RestAgencyCallbacksHandler.h"
 #include "Cluster/RestShardHandler.h"
 #include "Cluster/TraverserEngineRegistry.h"
-#include "Dispatcher/DispatcherFeature.h"
 #include "GeneralServer/GeneralServer.h"
 #include "GeneralServer/RestHandlerFactory.h"
 #include "InternalRestHandler/InternalRestTraverserHandler.h"
@@ -105,7 +104,6 @@ GeneralServerFeature::GeneralServerFeature(
   startsAfter("Agency");
   startsAfter("CheckVersion");
   startsAfter("Database");
-  startsAfter("Dispatcher");
   startsAfter("Endpoint");
   startsAfter("FoxxQueues");
   startsAfter("LogfileManager");

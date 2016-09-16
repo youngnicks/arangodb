@@ -63,7 +63,7 @@ class PathHandler : public RestHandler {
 
  public:
   bool isDirect() const override { return true; }
-  status execute() override;
+  RestStatus execute() override;
   void handleError(const basics::Exception&) override;
 
  private:

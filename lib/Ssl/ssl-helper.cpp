@@ -22,10 +22,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "ssl-helper.h"
-#include "Logger/Logger.h"
 
 #include <openssl/err.h>
 #include <boost/asio/ssl.hpp>
+
+#include "Logger/Logger.h"
 
 using namespace arangodb;
 
@@ -37,7 +38,8 @@ extern "C" const SSL_METHOD* SSLv3_method(void);
 /// @brief creates an SSL context
 ////////////////////////////////////////////////////////////////////////////////
 
-boost::optional<boost::asio::ssl::context> arangodb::sslContext(protocol_e protocol, std::string const& keyfile) {
+boost::optional<boost::asio::ssl::context> arangodb::sslContext(
+    protocol_e protocol, std::string const& keyfile) {
   // create our context
 
   using boost::asio::ssl::context;
@@ -81,15 +83,16 @@ boost::optional<boost::asio::ssl::context> arangodb::sslContext(protocol_e proto
   }
 
   // load our keys and certificates
-  if (!SSL_CTX_use_certificate_chain_file(sslctx.native_handle(), keyfile.c_str())) {
+  if (!SSL_CTX_use_certificate_chain_file(sslctx.native_handle(),
+                                          keyfile.c_str())) {
     LOG(ERR) << "cannot read certificate from '" << keyfile
              << "': " << lastSSLError();
     return boost::none;
   }
 
-  if (!SSL_CTX_use_PrivateKey_file(sslctx.native_handle(), keyfile.c_str(), SSL_FILETYPE_PEM)) {
-    LOG(ERR) << "cannot read key from '" << keyfile
-             << "': " << lastSSLError();
+  if (!SSL_CTX_use_PrivateKey_file(sslctx.native_handle(), keyfile.c_str(),
+                                   SSL_FILETYPE_PEM)) {
+    LOG(ERR) << "cannot read key from '" << keyfile << "': " << lastSSLError();
     return boost::none;
   }
 
@@ -97,7 +100,7 @@ boost::optional<boost::asio::ssl::context> arangodb::sslContext(protocol_e proto
   SSL_CTX_set_verify_depth(sslctx.native_handle(), 1);
 #endif
 
-  return sslctx;
+  return std::move(sslctx);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

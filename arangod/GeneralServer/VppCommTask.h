@@ -25,20 +25,21 @@
 #define ARANGOD_GENERAL_SERVER_VPP_COMM_TASK_H 1
 
 #include "GeneralServer/GeneralCommTask.h"
-#include "lib/Rest/VppMessage.h"
-#include "lib/Rest/VppRequest.h"
-#include "lib/Rest/VppResponse.h"
 
 #include <boost/optional.hpp>
 #include <stdexcept>
+
+#include "lib/Rest/VppMessage.h"
+#include "lib/Rest/VppRequest.h"
+#include "lib/Rest/VppResponse.h"
 
 namespace arangodb {
 namespace rest {
 
 class VppCommTask : public GeneralCommTask {
  public:
-  VppCommTask(EventLoop2, GeneralServer*, TRI_socket_t, ConnectionInfo&&,
-              double timeout);
+  VppCommTask(EventLoop2, GeneralServer*, std::unique_ptr<Socket> socket,
+              ConnectionInfo&&, double timeout);
 
   // convert from GeneralResponse to vppResponse ad dispatch request to class
   // internal addResponse

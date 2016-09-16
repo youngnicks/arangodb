@@ -32,6 +32,7 @@
 #include "Basics/Mutex.h"
 #include "Basics/StringBuffer.h"
 #include "Basics/WorkItem.h"
+#include "Scheduler/Socket.h"
 
 namespace arangodb {
 class GeneralRequest;
@@ -82,8 +83,8 @@ class GeneralCommTask : public SocketTask2 {
   GeneralCommTask const& operator=(GeneralCommTask const&) = delete;
 
  public:
-  GeneralCommTask(EventLoop2, GeneralServer*, TRI_socket_t, ConnectionInfo&&,
-                  double keepAliveTimeout);
+  GeneralCommTask(EventLoop2, GeneralServer*, std::unique_ptr<Socket>,
+                  ConnectionInfo&&, double keepAliveTimeout);
 
   virtual void addResponse(GeneralResponse*) = 0;
   virtual arangodb::Endpoint::TransportType transportType() = 0;
@@ -132,7 +133,8 @@ class GeneralCommTask : public SocketTask2 {
 
   bool handleRequest(WorkItem::uptr<RestHandler>);
   void handleRequestDirectly(WorkItem::uptr<RestHandler>);
-  bool handleRequestAsync(WorkItem::uptr<RestHandler>, uint64_t* jobId = nullptr);
+  bool handleRequestAsync(WorkItem::uptr<RestHandler>,
+                          uint64_t* jobId = nullptr);
 };
 }
 }

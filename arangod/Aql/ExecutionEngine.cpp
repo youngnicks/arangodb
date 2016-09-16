@@ -239,6 +239,7 @@ struct Instanciator final : public WalkerWorker<ExecutionNode> {
     for (auto const& it : en->getDependencies()) {
       auto it2 = cache.find(it);
       TRI_ASSERT(it2 != cache.end());
+      TRI_ASSERT(it2->second != nullptr);
       block->addDependency(it2->second);
     }
 
@@ -670,6 +671,7 @@ struct CoordinatorInstanciator : public WalkerWorker<ExecutionNode> {
 
           if (d != cache.end()) {
             // add regular dependencies
+            TRI_ASSERT((*d).second != nullptr);
             eb->addDependency((*d).second);
           }
         }
@@ -713,6 +715,7 @@ struct CoordinatorInstanciator : public WalkerWorker<ExecutionNode> {
               throw;
             }
 
+            TRI_ASSERT(r != nullptr);
             eb->addDependency(r);
           }
         }
@@ -910,6 +913,9 @@ struct CoordinatorInstanciator : public WalkerWorker<ExecutionNode> {
       engineInfo.close(); // edges
 
       engineInfo.close(); // shards
+
+      en->enhanceEngineInfo(engineInfo);
+
       engineInfo.close(); // base
 
       arangodb::CoordTransactionID coordTransactionID = TRI_NewTickServer();

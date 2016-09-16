@@ -18,36 +18,38 @@
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
-/// @author Copyright 2016, ArangoDB GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGODB_ENDPOINT_ENDPOINT_SRV_H
-#define ARANGODB_ENDPOINT_ENDPOINT_SRV_H 1
+#ifndef ARANGOD_HTTP_SERVER_REST_STATUS_H
+#define ARANGOD_HTTP_SERVER_REST_STATUS_H 1
 
-#include "Endpoint/Endpoint.h"
+#include "Basics/Common.h"
 
 namespace arangodb {
-class EndpointSrv final : public Endpoint {
+class RestStatus {
  public:
-  explicit EndpointSrv(std::string const&);
-
-  ~EndpointSrv();
+  static RestStatus const ABANDON;
+  static RestStatus const DONE;
+  static RestStatus const FAILED;
+  static RestStatus const QUEUE;
 
  public:
-  bool isConnected() const override;
-  TRI_socket_t connect(double, double) override;
-  void disconnect() override;
-  bool initIncoming(TRI_socket_t) override;
-  int domain() const override;
-  int port() const override;
-  std::string host() const override;
-  std::string hostAndPort() const override;
+  enum class Status { DONE, FAILED, ABANDONED, QUEUED };
 
-  void openAcceptor(boost::asio::io_service*,
-                    boost::asio::ip::tcp::acceptor*) override final;
+ public:
+  RestStatus(Status status) : _status(status) {}
+
+ public:
+  RestStatus then(std::function<void()>);
+  RestStatus then(std::function<RestStatus>);
+
+ public:
+  bool done() const { return _status == Status::DONE; }
+  bool failed() const { return _status == Status::FAILED; }
+  bool abandoned() const { return _status == Status::ABANDONED; }
 
  private:
-  std::unique_ptr<Endpoint> _endpoint;
+  Status _status = Status::DONE;
 };
 }
 

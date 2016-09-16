@@ -26,7 +26,6 @@
 #include "Basics/Common.h"
 
 #include "Basics/WorkItem.h"
-#include "GeneralServer/RestHandler.h"
 
 namespace arangodb {
 namespace rest {
@@ -36,12 +35,12 @@ class RestHandler;
 
 class Job {
  public:
-  Job(std::function<void(WorkItem::uptr<rest::RestHandler>)> callback)
-      : _server(nullptr), _handler(nullptr), _callback(callback) {}
+  Job(std::function<void(WorkItem::uptr<rest::RestHandler>)> callback);
 
   Job(rest::GeneralServer* server, WorkItem::uptr<rest::RestHandler> handler,
-      std::function<void(WorkItem::uptr<rest::RestHandler>)> callback)
-      : _server(server), _handler(std::move(handler)), _callback(callback) {}
+      std::function<void(WorkItem::uptr<rest::RestHandler>)> callback);
+
+  ~Job();
 
  public:
   rest::GeneralServer* _server;

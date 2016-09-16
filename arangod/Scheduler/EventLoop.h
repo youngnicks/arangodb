@@ -22,53 +22,22 @@
 /// @author Achim Brandt
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_SCHEDULER_TASK2_H
-#define ARANGOD_SCHEDULER_TASK2_H 1
+#ifndef ARANGOD_SCHEDULER_EVENTS_H
+#define ARANGOD_SCHEDULER_EVENTS_H 1
 
 #include "Basics/Common.h"
 
-#include "Scheduler/Task.h"
-#include "Scheduler/events.h"
+#include <boost/asio.hpp>
 
 namespace arangodb {
-namespace velocypack {
-class Builder;
-}
-
 namespace rest {
-class Task2 {
-  Task2(Task2 const&) = delete;
-  Task2& operator=(Task2 const&) = delete;
-
- public:
-  Task2(EventLoop2, std::string const& name);
-  virtual ~Task2() {}
-
- public:
-  // returns the internal task identifier
-  uint64_t taskId() const { return _taskId; }
-
-  // returns the task name for debugging
-  std::string const& name() const { return _name; }
-
-  // returns the internal event loop
-  EventLoop2 eventLoop() const { return _loop; }
-
-  // get a VelocyPack representation of the task for reporting
-  std::shared_ptr<arangodb::velocypack::Builder> toVelocyPack() const;
-  void toVelocyPack(arangodb::velocypack::Builder&) const;
-
- public:
-  virtual void signalTask(std::unique_ptr<TaskData>) = 0;
-
- protected:
-  EventLoop2 _loop;
-  uint64_t const _taskId;
-
- private:
-  std::string const _name;
-};
+class Scheduler;
 }
+
+struct EventLoop2 {
+  boost::asio::io_service& _ioService;
+  rest::Scheduler* _scheduler;
+};
 }
 
 #endif

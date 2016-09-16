@@ -1,6 +1,21 @@
 devel
 -----
 
+* rewrote scheduler and dispatcher based on boost::asio
+
+  parameter changed:
+    --scheduler.threads and --server.threads are now one: --server.threads
+
+    hidden --server.extra-threads has been removed
+
+    hidden --server.aql-threads has been removed
+
+    hidden --server.backend has been removed
+
+    hidden --server.show-backends has been removed
+
+    hidden --server.thread-affinity has been removed
+
 * added HTTP REST APIs for online loglevel adjustments:
 
   - GET `/_admin/log/level` returns the current loglevel settings
@@ -72,9 +87,12 @@ devel
 * bug in RAFT implementation of reads. dethroned leader still answered
   requests in isolation
 
+* all lambdas in ClusterInfo might have been left with dangling references.
 
 v3.0.8 (XXXX-XX-XX)
 -------------------
+
+* fixed issue #2052
 
 * fixed issue #2005
 

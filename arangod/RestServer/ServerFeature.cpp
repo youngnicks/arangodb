@@ -55,7 +55,6 @@ ServerFeature::ServerFeature(application_features::ApplicationServer* server,
   requiresElevatedPrivileges(false);
   startsAfter("Cluster");
   startsAfter("Database");
-  startsAfter("Dispatcher");
   startsAfter("Recovery");
   startsAfter("Scheduler");
   startsAfter("Statistics");
@@ -117,9 +116,9 @@ void ServerFeature::validateOptions(std::shared_ptr<ProgramOptions>) {
   }
 
   if (!_restServer) {
-    ApplicationServer::disableFeatures({"Daemon", "Dispatcher", "Endpoint",
-                                        "GeneralServer", "Scheduler",
-                                        "SslServer", "Supervisor"});
+    ApplicationServer::disableFeatures({"Daemon", "Endpoint", "GeneralServer",
+                                        "Scheduler", "SslServer",
+                                        "Supervisor"});
 
     DatabaseFeature* database =
         ApplicationServer::getFeature<DatabaseFeature>("Database");

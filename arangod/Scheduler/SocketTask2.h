@@ -27,29 +27,14 @@
 
 #include "Scheduler/Task2.h"
 
-#include "Basics/Thread.h"
-#include "Statistics/StatisticsAgent.h"
-
-#ifdef _WIN32
-#include "Basics/win-utils.h"
-#endif
-
-#include "Basics/socket-utils.h"
-
 #include <boost/asio/ssl.hpp>
 
+#include "Basics/StringBuffer.h"
+#include "Scheduler/Socket.h"
+#include "Statistics/StatisticsAgent.h"
 
 namespace arangodb {
-namespace basics {
-class StringBuffer;
-}
-
 namespace rest {
-namespace asio = ::boost::asio;
-using asioSocket = asio::ip::tcp::socket;
-using asioSslStream = asio::ssl::stream<asioSocket>;
-using asioSslContext = asio::ssl::context;
-
 class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
   explicit SocketTask2(SocketTask2 const&) = delete;
   SocketTask2& operator=(SocketTask2 const&) = delete;
@@ -58,8 +43,8 @@ class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
   static size_t const READ_BLOCK_SIZE = 10000;
 
  public:
-  SocketTask2(EventLoop2, TRI_socket_t, ConnectionInfo&&, double keepAliveTimeout);
-  ~SocketTask2() {}
+  SocketTask2(EventLoop2, std::unique_ptr<Socket>, ConnectionInfo&&,
+              double keepAliveTimeout);
 
  public:
   void start();
@@ -92,10 +77,7 @@ class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
   std::deque<basics::StringBuffer*> _writeBuffers;
   std::deque<TRI_request_statistics_t*> _writeBuffersStats;
 
-  bool _encrypted;
-  asioSslContext _context;
-  asioSslStream _sslSocket;
-  asioSocket&  _socket;
+  std::unique_ptr<Socket> _peer;
 
  protected:
   bool _closeRequested = false;
@@ -109,7 +91,6 @@ class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
  private:
   bool _closedSend = false;
   bool _closedReceive = false;
-
 };
 }
 }

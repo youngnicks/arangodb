@@ -18,36 +18,31 @@
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
-/// @author Copyright 2016, ArangoDB GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGODB_ENDPOINT_ENDPOINT_SRV_H
-#define ARANGODB_ENDPOINT_ENDPOINT_SRV_H 1
+#ifndef ARANGOD_SCHEDULER_TASK_DATA_H
+#define ARANGOD_SCHEDULER_TASK_DATA_H 1
 
-#include "Endpoint/Endpoint.h"
+#include "Statistics/StatisticsAgent.h"
 
 namespace arangodb {
-class EndpointSrv final : public Endpoint {
+class GeneralResponse;
+
+namespace rest {
+class Task2;
+}
+
+class TaskData : public rest::RequestStatisticsAgent {
  public:
-  explicit EndpointSrv(std::string const&);
-
-  ~EndpointSrv();
+  static uint64_t const TASK_DATA_RESPONSE = 1000;
+  static uint64_t const TASK_DATA_CHUNK = 1001;
 
  public:
-  bool isConnected() const override;
-  TRI_socket_t connect(double, double) override;
-  void disconnect() override;
-  bool initIncoming(TRI_socket_t) override;
-  int domain() const override;
-  int port() const override;
-  std::string host() const override;
-  std::string hostAndPort() const override;
-
-  void openAcceptor(boost::asio::io_service*,
-                    boost::asio::ip::tcp::acceptor*) override final;
-
- private:
-  std::unique_ptr<Endpoint> _endpoint;
+  uint64_t _taskId;
+  uint64_t _type;
+  std::string _data;
+  std::unique_ptr<GeneralResponse> _response;
+  rest::Task2* _task;
 };
 }
 

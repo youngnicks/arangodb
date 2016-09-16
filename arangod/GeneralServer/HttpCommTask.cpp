@@ -30,6 +30,7 @@
 #include "GeneralServer/RestHandler.h"
 #include "GeneralServer/RestHandlerFactory.h"
 #include "Meta/conversion.h"
+#include "Rest/HttpRequest.h"
 #include "VocBase/ticks.h"
 
 using namespace arangodb;
@@ -42,10 +43,11 @@ size_t const HttpCommTask::MaximalPipelineSize = 1024 * 1024 * 1024;  // 1024 MB
 size_t const HttpCommTask::RunCompactEvery = 500;
 
 HttpCommTask::HttpCommTask(EventLoop2 loop, GeneralServer* server,
-                           TRI_socket_t sock, ConnectionInfo&& info,
-                           double timeout)
+                           std::unique_ptr<Socket> socket,
+                           ConnectionInfo&& info, double timeout)
     : Task2(loop, "HttpCommTask"),
-      GeneralCommTask(loop, server, sock, std::move(info), timeout),
+      GeneralCommTask(loop, server, std::move(socket), std::move(info),
+                      timeout),
       _readPosition(0),
       _startPosition(0),
       _bodyPosition(0),
@@ -53,7 +55,6 @@ HttpCommTask::HttpCommTask(EventLoop2 loop, GeneralServer* server,
       _readRequestBody(false),
       _allowMethodOverride(GeneralServerFeature::allowMethodOverride()),
       _denyCredentials(true),
-      _acceptDeflate(false),
       _newRequest(true),
       _requestType(rest::RequestType::ILLEGAL),  // TODO(fc) remove
       _fullUrl(),                                // TODO(fc) remove
@@ -226,7 +227,6 @@ bool HttpCommTask::processRead() {
       _requestType = rest::RequestType::ILLEGAL;
       _fullUrl = "";
       _denyCredentials = true;
-      _acceptDeflate = false;
 
       _sinceCompactification++;
     }
@@ -445,8 +445,8 @@ bool HttpCommTask::processRead() {
     _incompleteRequest->setBody(_readBuffer.c_str() + _bodyPosition,
                                 _bodyLength);
 
-    LOG(TRACE) << "" << std::string(_readBuffer.c_str() + _bodyPosition,
-                                    _bodyLength);
+    LOG(TRACE) << ""
+               << std::string(_readBuffer.c_str() + _bodyPosition, _bodyLength);
 
     // remove body from read buffer and reset read position
     _readRequestBody = false;
@@ -543,18 +543,6 @@ bool HttpCommTask::processRead() {
 }
 
 void HttpCommTask::processRequest(std::unique_ptr<HttpRequest> request) {
-  // check for deflate
-  bool found;
-
-  std::string const& acceptEncoding =
-      request->header(StaticStrings::AcceptEncoding, found);
-
-  if (found) {
-    if (acceptEncoding.find("deflate") != std::string::npos) {
-      _acceptDeflate = true;
-    }
-  }
-
   {
     LOG_TOPIC(DEBUG, Logger::REQUESTS)
         << "\"http-request-begin\",\"" << (void*)this << "\",\""
@@ -573,6 +561,7 @@ void HttpCommTask::processRequest(std::unique_ptr<HttpRequest> request) {
   }
 
   // check for an HLC time stamp
+  bool found;
   std::string const& timeStamp =
       request->header(StaticStrings::HLCHeader, found);
 

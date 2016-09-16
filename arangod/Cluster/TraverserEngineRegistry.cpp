@@ -31,6 +31,7 @@
 
 using namespace arangodb::traverser;
 
+#ifndef USE_ENTERPRISE
 TraverserEngineRegistry::EngineInfo::EngineInfo(TRI_vocbase_t* vocbase,
                                                 VPackSlice info)
     : _isInUse(false),
@@ -40,6 +41,7 @@ TraverserEngineRegistry::EngineInfo::EngineInfo(TRI_vocbase_t* vocbase,
 
 TraverserEngineRegistry::EngineInfo::~EngineInfo() {
 }
+#endif
 
 TraverserEngineRegistry::~TraverserEngineRegistry() {
   WRITE_LOCKER(writeLocker, _lock);
@@ -68,7 +70,7 @@ void TraverserEngineRegistry::destroy(TraverserEngineID id) {
 }
 
 /// @brief Get the engine with the given id
-TraverserEngine* TraverserEngineRegistry::get(TraverserEngineID id) {
+BaseTraverserEngine* TraverserEngineRegistry::get(TraverserEngineID id) {
   WRITE_LOCKER(writeLocker, _lock);
   auto e = _engines.find(id);
   if (e == _engines.end()) {

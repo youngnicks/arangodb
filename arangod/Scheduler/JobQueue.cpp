@@ -23,6 +23,7 @@
 #include "JobQueue.h"
 
 #include "Basics/ConditionLocker.h"
+#include "GeneralServer/RestHandler.h"
 #include "Logger/Logger.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
@@ -56,7 +57,7 @@ class JobQueueThread : public Thread {
                                           << _jobQueue->queueSize(i);
 
         while (_jobQueue->tryActive()) {
-	  Job* job = nullptr;
+          Job* job = nullptr;
 
           if (!_jobQueue->pop(i, job)) {
             _jobQueue->releaseActive();

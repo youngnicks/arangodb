@@ -31,12 +31,13 @@
 #include "Cluster/ClusterInfo.h"
 #include "Cluster/HeartbeatThread.h"
 #include "Cluster/ServerState.h"
-#include "Dispatcher/DispatcherFeature.h"
 #include "Endpoint/Endpoint.h"
 #include "Logger/Logger.h"
 #include "ProgramOptions/ProgramOptions.h"
 #include "ProgramOptions/Section.h"
 #include "RestServer/DatabaseFeature.h"
+#include "Scheduler/Scheduler.h"
+#include "Scheduler/SchedulerFeature.h"
 #include "SimpleHttpClient/ConnectionManager.h"
 #include "V8Server/V8DealerFeature.h"
 
@@ -59,7 +60,6 @@ ClusterFeature::ClusterFeature(application_features::ApplicationServer* server)
   startsAfter("Logger");
   startsAfter("WorkMonitor");
   startsAfter("Database");
-  startsAfter("Dispatcher");
   startsAfter("Scheduler");
   startsAfter("V8Dealer");
   startsAfter("Database");
@@ -411,8 +411,9 @@ void ClusterFeature::start() {
     }
 
     // start heartbeat thread
-    _heartbeatThread = new HeartbeatThread(_agencyCallbackRegistry.get(),
-                                           _heartbeatInterval * 1000, 5);
+    _heartbeatThread = new HeartbeatThread(
+        _agencyCallbackRegistry.get(), _heartbeatInterval * 1000, 5,
+        SchedulerFeature::SCHEDULER->ioService());
 
     if (!_heartbeatThread->init() || !_heartbeatThread->start()) {
       LOG(FATAL) << "heartbeat could not connect to agency endpoints ("
@@ -459,11 +460,6 @@ void ClusterFeature::start() {
   } else if (role == ServerState::ROLE_SECONDARY) {
     ServerState::instance()->setState(ServerState::STATE_SYNCING);
   }
-
-  DispatcherFeature* dispatcher =
-      ApplicationServer::getFeature<DispatcherFeature>("Dispatcher");
-
-  dispatcher->buildAqlQueue();
 }
 
 void ClusterFeature::unprepare() {

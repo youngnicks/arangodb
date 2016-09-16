@@ -26,7 +26,7 @@
 #ifndef ARANGOD_HTTP_SERVER_HTTP_SERVER_H
 #define ARANGOD_HTTP_SERVER_HTTP_SERVER_H 1
 
-#include "Scheduler/TaskManager.h"
+#include "Basics/Common.h"
 
 #include <boost/lockfree/queue.hpp>
 
@@ -38,17 +38,10 @@
 
 namespace arangodb {
 class EndpointList;
+class ListenTask;
 
 namespace rest {
-class AsyncJobManager;
-class Dispatcher;
-class GeneralCommTask;
-class HttpServerJob;
-class Job;
-class ListenTask;
-class RestHandlerFactory;
-
-class GeneralServer : protected TaskManager {
+class GeneralServer {
   GeneralServer(GeneralServer const&) = delete;
   GeneralServer const& operator=(GeneralServer const&) = delete;
 

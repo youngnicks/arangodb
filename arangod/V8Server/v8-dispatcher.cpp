@@ -29,8 +29,6 @@
 
 #include "Basics/StringUtils.h"
 #include "Basics/tri-strings.h"
-#include "Dispatcher/Dispatcher.h"
-#include "Dispatcher/DispatcherFeature.h"
 #include "Logger/Logger.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
@@ -145,7 +143,7 @@ int V8Task::unregisterTask(std::string const& id, bool cancel) {
   }
 
   _tasks.erase(itr);
-  
+
   if (cancel) {
     itr->second->cancel();
   }
@@ -389,8 +387,7 @@ static void JS_RegisterTask(v8::FunctionCallbackInfo<v8::Value> const& args) {
   TRI_V8_TRY_CATCH_BEGIN(isolate);
   v8::HandleScope scope(isolate);
 
-  if (DispatcherFeature::DISPATCHER == nullptr ||
-      SchedulerFeature::SCHEDULER == nullptr) {
+  if (SchedulerFeature::SCHEDULER == nullptr) {
     TRI_V8_THROW_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "no scheduler found");
   }
 
