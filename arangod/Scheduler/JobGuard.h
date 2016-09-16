@@ -35,7 +35,7 @@ class Scheduler;
 
 class JobGuard {
  public:
-  explicit JobGuard(EventLoop2 const& loop) : _scheduler(loop._scheduler) {}
+  explicit JobGuard(EventLoop const& loop) : _scheduler(loop._scheduler) {}
   explicit JobGuard(rest::Scheduler* scheduler) : _scheduler(scheduler) {}
   ~JobGuard() { release(); }
 

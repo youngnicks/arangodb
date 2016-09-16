@@ -34,6 +34,7 @@
 #include "Basics/MutexLocker.h"
 #include "Basics/socket-utils.h"
 #include "Logger/Logger.h"
+#include "Scheduler/EventLoop.h"
 
 namespace arangodb {
 class JobQueue;
@@ -59,6 +60,10 @@ class Scheduler {
   boost::asio::io_service* ioService() const { return _ioService.get(); }
   boost::asio::io_service* managerService() const {
     return _managerService.get();
+  }
+
+  EventLoop eventLoop() {
+    return EventLoop{._ioService = *_ioService.get(), ._scheduler = this};
   }
 
   bool start(basics::ConditionVariable*);

@@ -29,7 +29,7 @@ namespace arangodb {
 class GeneralResponse;
 
 namespace rest {
-class Task2;
+class Task;
 }
 
 class TaskData : public rest::RequestStatisticsAgent {
@@ -42,7 +42,7 @@ class TaskData : public rest::RequestStatisticsAgent {
   uint64_t _type;
   std::string _data;
   std::unique_ptr<GeneralResponse> _response;
-  rest::Task2* _task;
+  rest::Task* _task;
 };
 }
 

@@ -38,7 +38,7 @@ namespace rest {
 
 class VppCommTask : public GeneralCommTask {
  public:
-  VppCommTask(EventLoop2, GeneralServer*, std::unique_ptr<Socket> socket,
+  VppCommTask(EventLoop, GeneralServer*, std::unique_ptr<Socket> socket,
               ConnectionInfo&&, double timeout);
 
   // convert from GeneralResponse to vppResponse ad dispatch request to class

@@ -37,7 +37,7 @@
 #include "Logger/Logger.h"
 #include "Rest/GeneralResponse.h"
 #include "Scheduler/JobQueue.h"
-#include "Scheduler/Task2.h"
+#include "Scheduler/Task.h"
 #include "Scheduler/TaskData.h"
 
 using namespace arangodb;
@@ -175,9 +175,6 @@ Scheduler::~Scheduler() { deleteOldThreads(); }
 /// @brief starts scheduler, keeps running
 ////////////////////////////////////////////////////////////////////////////////
 
-#warning TODO
-EventLoop2* EVENTLOOP2;
-
 bool Scheduler::start(ConditionVariable* cv) {
   // start the I/O
   startIoService();
@@ -205,8 +202,6 @@ bool Scheduler::start(ConditionVariable* cv) {
 void Scheduler::startIoService() {
   _ioService.reset(new boost::asio::io_service());
   _serviceGuard.reset(new boost::asio::io_service::work(*_ioService));
-
-  EVENTLOOP2 = new EventLoop2{._ioService = *_ioService, ._scheduler = this};
 
   _managerService.reset(new boost::asio::io_service());
   _managerGuard.reset(new boost::asio::io_service::work(*_managerService));

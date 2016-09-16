@@ -1,8 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /// DISCLAIMER
 ///
-/// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
-/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
+/// Copyright 2016 ArangoDB GmbH, Cologne, Germany
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
 /// you may not use this file except in compliance with the License.
@@ -19,24 +18,34 @@
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
-/// @author Achim Brandt
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_SCHEDULER_EVENTS_H
-#define ARANGOD_SCHEDULER_EVENTS_H 1
+#ifndef ARANGOD_SCHEDULER_SOCKET_H
+#define ARANGOD_SCHEDULER_SOCKET_H 1
 
 #include "Basics/Common.h"
 
-#include <boost/asio.hpp>
+#include <boost/asio/ssl.hpp>
 
 namespace arangodb {
-namespace rest {
-class Scheduler;
-}
+struct Socket {
+  Socket(boost::asio::io_service& ioService,
+         boost::asio::ssl::context&& context, bool encrypted)
+      : _context(std::move(context)),
+        _sslSocket(ioService, _context),
+        _socket(_sslSocket.next_layer()),
+        _peerEndpoint(),
+        _encrypted(encrypted) {}
 
-struct EventLoop {
-  boost::asio::io_service& _ioService;
-  rest::Scheduler* _scheduler;
+  Socket(Socket&& that) = default;
+
+  boost::asio::ssl::context _context;
+  boost::asio::ssl::stream<boost::asio::ip::tcp::socket> _sslSocket;
+  boost::asio::ip::tcp::socket& _socket;
+
+  boost::asio::ip::tcp::acceptor::endpoint_type _peerEndpoint;
+
+  bool _encrypted;
 };
 }
 

@@ -42,7 +42,7 @@ class GeneralListenTask : public ListenTask {
   GeneralListenTask& operator=(GeneralListenTask const&) = delete;
 
  public:
-  GeneralListenTask(EventLoop2, GeneralServer*, Endpoint*,
+  GeneralListenTask(EventLoop, GeneralServer*, Endpoint*,
                     ProtocolType connectionType);
 
  protected:

@@ -25,7 +25,7 @@
 #ifndef ARANGOD_SCHEDULER_SOCKET_TASK2_H
 #define ARANGOD_SCHEDULER_SOCKET_TASK2_H 1
 
-#include "Scheduler/Task2.h"
+#include "Scheduler/Task.h"
 
 #include <boost/asio/ssl.hpp>
 
@@ -35,16 +35,16 @@
 
 namespace arangodb {
 namespace rest {
-class SocketTask2 : virtual public Task2, public ConnectionStatisticsAgent {
-  explicit SocketTask2(SocketTask2 const&) = delete;
-  SocketTask2& operator=(SocketTask2 const&) = delete;
+class SocketTask : virtual public Task, public ConnectionStatisticsAgent {
+  explicit SocketTask(SocketTask const&) = delete;
+  SocketTask& operator=(SocketTask const&) = delete;
 
  private:
   static size_t const READ_BLOCK_SIZE = 10000;
 
  public:
-  SocketTask2(EventLoop2, std::unique_ptr<Socket>, ConnectionInfo&&,
-              double keepAliveTimeout);
+  SocketTask(EventLoop, std::unique_ptr<Socket>, ConnectionInfo&&,
+             double keepAliveTimeout);
 
  public:
   void start();

@@ -38,10 +38,10 @@ using namespace arangodb::rest;
 /// @brief listen to given port
 ////////////////////////////////////////////////////////////////////////////////
 
-GeneralListenTask::GeneralListenTask(EventLoop2 loop, GeneralServer* server,
+GeneralListenTask::GeneralListenTask(EventLoop loop, GeneralServer* server,
                                      Endpoint* endpoint,
                                      ProtocolType connectionType)
-    : Task2(loop, "GeneralListenTask"),
+    : Task(loop, "GeneralListenTask"),
       ListenTask(loop, endpoint),
       _server(server),
       _connectionType(connectionType) {

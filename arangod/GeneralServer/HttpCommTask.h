@@ -17,7 +17,7 @@ class HttpCommTask : public GeneralCommTask {
   static size_t const RunCompactEvery;
 
  public:
-  HttpCommTask(EventLoop2, GeneralServer*, std::unique_ptr<Socket> socket,
+  HttpCommTask(EventLoop, GeneralServer*, std::unique_ptr<Socket> socket,
                ConnectionInfo&&, double timeout);
 
   // convert from GeneralResponse to httpResponse ad dispatch request to class

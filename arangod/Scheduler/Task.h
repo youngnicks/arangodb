@@ -22,8 +22,8 @@
 /// @author Achim Brandt
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_SCHEDULER_TASK2_H
-#define ARANGOD_SCHEDULER_TASK2_H 1
+#ifndef ARANGOD_SCHEDULER_TASK_H
+#define ARANGOD_SCHEDULER_TASK_H 1
 
 #include "Basics/Common.h"
 
@@ -37,17 +37,17 @@ class Builder;
 }
 
 namespace rest {
-class Task2 {
-  Task2(Task2 const&) = delete;
-  Task2& operator=(Task2 const&) = delete;
+class Task {
+  Task(Task const&) = delete;
+  Task& operator=(Task const&) = delete;
 
  public:
-  Task2(EventLoop2, std::string const& name);
-  virtual ~Task2() {}
+  Task(EventLoop, std::string const& name);
+  virtual ~Task() {}
 
  public:
   uint64_t taskId() const { return _taskId; }
-  EventLoop2 eventLoop() const { return _loop; }
+  EventLoop eventLoop() const { return _loop; }
   std::string const& name() const { return _name; }
 
   // get a VelocyPack representation of the task for reporting
@@ -58,7 +58,7 @@ class Task2 {
   virtual void signalTask(std::unique_ptr<TaskData>) = 0;
 
  protected:
-  EventLoop2 _loop;
+  EventLoop _loop;
   uint64_t const _taskId;
 
  private:

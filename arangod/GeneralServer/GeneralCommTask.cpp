@@ -51,11 +51,11 @@ using namespace arangodb::rest;
 // --SECTION--                                      constructors and destructors
 // -----------------------------------------------------------------------------
 
-GeneralCommTask::GeneralCommTask(EventLoop2 loop, GeneralServer* server,
+GeneralCommTask::GeneralCommTask(EventLoop loop, GeneralServer* server,
                                  std::unique_ptr<Socket> socket,
                                  ConnectionInfo&& info, double keepAliveTimeout)
-    : Task2(loop, "GeneralCommTask"),
-      SocketTask2(loop, std::move(socket), std::move(info), keepAliveTimeout),
+    : Task(loop, "GeneralCommTask"),
+      SocketTask(loop, std::move(socket), std::move(info), keepAliveTimeout),
       _server(server) {}
 
 // -----------------------------------------------------------------------------

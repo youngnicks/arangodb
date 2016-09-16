@@ -42,10 +42,10 @@ size_t const HttpCommTask::MaximalBodySize = 1024 * 1024 * 1024;      // 1024 MB
 size_t const HttpCommTask::MaximalPipelineSize = 1024 * 1024 * 1024;  // 1024 MB
 size_t const HttpCommTask::RunCompactEvery = 500;
 
-HttpCommTask::HttpCommTask(EventLoop2 loop, GeneralServer* server,
+HttpCommTask::HttpCommTask(EventLoop loop, GeneralServer* server,
                            std::unique_ptr<Socket> socket,
                            ConnectionInfo&& info, double timeout)
-    : Task2(loop, "HttpCommTask"),
+    : Task(loop, "HttpCommTask"),
       GeneralCommTask(loop, server, std::move(socket), std::move(info),
                       timeout),
       _readPosition(0),

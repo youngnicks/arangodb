@@ -54,8 +54,8 @@ boost::asio::ssl::context createSslContextFreestanding() {
 // --SECTION--                                      constructors and destructors
 // -----------------------------------------------------------------------------
 
-ListenTask::ListenTask(EventLoop2 loop, Endpoint* endpoint)
-    : Task2(loop, "ListenTask"),
+ListenTask::ListenTask(EventLoop loop, Endpoint* endpoint)
+    : Task(loop, "ListenTask"),
       _endpoint(endpoint),
       _bound(false),
       _ioService(&loop._ioService),

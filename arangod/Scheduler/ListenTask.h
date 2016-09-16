@@ -25,19 +25,19 @@
 #ifndef ARANGOD_SCHEDULER_LISTEN_TASK_H
 #define ARANGOD_SCHEDULER_LISTEN_TASK_H 1
 
-#include "Scheduler/Task2.h"
+#include "Scheduler/Task.h"
 
 #include "Endpoint/ConnectionInfo.h"
 #include "Endpoint/Endpoint.h"
 #include "Scheduler/Socket.h"
 
 namespace arangodb {
-class ListenTask : virtual public rest::Task2 {
+class ListenTask : virtual public rest::Task {
  public:
   static size_t const MAX_ACCEPT_ERRORS = 128;
 
  public:
-  ListenTask(EventLoop2, Endpoint*);
+  ListenTask(EventLoop, Endpoint*);
 
  public:
   virtual void handleConnected(std::unique_ptr<Socket>, ConnectionInfo&&) = 0;

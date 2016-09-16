@@ -99,8 +99,6 @@ void GeneralServer::stopListening() {
 // --SECTION--                                                 protected methods
 // -----------------------------------------------------------------------------
 
-extern EventLoop2* EVENTLOOP2;
-
 bool GeneralServer::openEndpoint(Endpoint* endpoint) {
   ProtocolType protocolType;
 
@@ -118,8 +116,8 @@ bool GeneralServer::openEndpoint(Endpoint* endpoint) {
     }
   }
 
-  std::unique_ptr<ListenTask> task(
-      new GeneralListenTask(*EVENTLOOP2, this, endpoint, protocolType));
+  std::unique_ptr<ListenTask> task(new GeneralListenTask(
+      SchedulerFeature::SCHEDULER->eventLoop(), this, endpoint, protocolType));
   task->start();
 
   if (!task->isBound()) {

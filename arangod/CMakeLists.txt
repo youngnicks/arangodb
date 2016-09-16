@@ -274,8 +274,8 @@ add_executable(${BIN_ARANGOD}
   Scheduler/ListenTask.cpp
   Scheduler/Scheduler.cpp
   Scheduler/SchedulerFeature.cpp
-  Scheduler/SocketTask2.cpp
-  Scheduler/Task2.cpp
+  Scheduler/SocketTask.cpp
+  Scheduler/Task.cpp
   Statistics/StatisticsFeature.cpp
   Statistics/statistics.cpp
   StorageEngine/EngineSelectorFeature.cpp

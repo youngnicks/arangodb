@@ -21,7 +21,7 @@
 /// @author Dr. Frank Celler
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "SocketTask2.h"
+#include "SocketTask.h"
 
 #include "Basics/StringBuffer.h"
 #include "Basics/socket-utils.h"
@@ -36,10 +36,9 @@ using namespace arangodb::rest;
 // --SECTION--                                      constructors and destructors
 // -----------------------------------------------------------------------------
 
-SocketTask2::SocketTask2(EventLoop2 loop, std::unique_ptr<Socket> socket,
-                         ConnectionInfo&& connectionInfo,
-                         double keepAliveTimeout)
-    : Task2(loop, "SocketTask2"),
+SocketTask::SocketTask(EventLoop loop, std::unique_ptr<Socket> socket,
+                       ConnectionInfo&& connectionInfo, double keepAliveTimeout)
+    : Task(loop, "SocketTask"),
       _connectionInfo(connectionInfo),
       _readBuffer(TRI_UNKNOWN_MEM_ZONE, READ_BLOCK_SIZE + 1, false),
       _peer(std::move(socket)) {
@@ -79,7 +78,7 @@ SocketTask2::SocketTask2(EventLoop2 loop, std::unique_ptr<Socket> socket,
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
 
-void SocketTask2::start() {
+void SocketTask::start() {
   if (_closedSend || _closedReceive) {
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "cannot start, channel closed";
     return;
@@ -101,16 +100,16 @@ void SocketTask2::start() {
 // --SECTION--                                                 protected methods
 // -----------------------------------------------------------------------------
 
-void SocketTask2::addWriteBuffer(std::unique_ptr<basics::StringBuffer> buffer,
-                                 RequestStatisticsAgent* statistics) {
+void SocketTask::addWriteBuffer(std::unique_ptr<basics::StringBuffer> buffer,
+                                RequestStatisticsAgent* statistics) {
   TRI_request_statistics_t* stat =
       statistics == nullptr ? nullptr : statistics->steal();
 
   addWriteBuffer(buffer.release(), stat);
 }
 
-void SocketTask2::addWriteBuffer(basics::StringBuffer* buffer,
-                                 TRI_request_statistics_t* stat) {
+void SocketTask::addWriteBuffer(basics::StringBuffer* buffer,
+                                TRI_request_statistics_t* stat) {
   if (_closedSend) {
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
         << "dropping output, send stream already closed";
@@ -192,7 +191,7 @@ void SocketTask2::addWriteBuffer(basics::StringBuffer* buffer,
   }
 }
 
-void SocketTask2::completedWriteBuffer() {
+void SocketTask::completedWriteBuffer() {
   delete _writeBuffer;
   _writeBuffer = nullptr;
 
@@ -222,7 +221,7 @@ void SocketTask2::completedWriteBuffer() {
   addWriteBuffer(buffer, statistics);
 }
 
-void SocketTask2::closeStream() {
+void SocketTask::closeStream() {
   if (!_closedSend) {
     try {
       _peer->_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_send);
@@ -262,7 +261,7 @@ void SocketTask2::closeStream() {
 // --SECTION--                                                   private methods
 // -----------------------------------------------------------------------------
 
-bool SocketTask2::reserveMemory() {
+bool SocketTask::reserveMemory() {
   if (_readBuffer.reserve(READ_BLOCK_SIZE + 1) == TRI_ERROR_OUT_OF_MEMORY) {
     LOG(WARN) << "out of memory while reading from client";
     closeStream();
@@ -272,7 +271,7 @@ bool SocketTask2::reserveMemory() {
   return true;
 }
 
-bool SocketTask2::trySyncRead() {
+bool SocketTask::trySyncRead() {
   try {
     if (0 == _peer->_socket.available()) {
       return false;
@@ -302,7 +301,7 @@ bool SocketTask2::trySyncRead() {
   }
 }
 
-void SocketTask2::asyncReadSome() {
+void SocketTask::asyncReadSome() {
   auto info = _peer->_socket.native_handle();
 
   try {
@@ -427,7 +426,7 @@ void SocketTask2::asyncReadSome() {
   }
 }
 
-void SocketTask2::closeReceiveStream() {
+void SocketTask::closeReceiveStream() {
   auto info = _peer->_socket.native_handle();
 
   if (!_closedReceive) {
