@@ -306,11 +306,11 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
     bounds.reserve(elements.size());
   }
 
-  for (auto& it : elements) {
+  for (auto const& it : elements) {
     builder.clear();
     builder.openArray();
     for (size_t i = 0; i < _fields.size(); ++i) {
-      builder.add(it->subObject(i)->slice());
+      builder.add(it->slice(i));
     }
     builder.add(key); // always append _key value to the end of the array
     builder.close();
@@ -326,7 +326,7 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
       builder.clear();
       builder.openArray();
       for (size_t i = 0; i < _fields.size(); ++i) {
-        builder.add(it->subObject(i)->slice());
+        builder.add(it->slice(i));
       }
       builder.add(VPackSlice::minKeySlice());
       builder.close();
@@ -343,7 +343,7 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
       builder.clear();
       builder.openArray();
       for (size_t i = 0; i < _fields.size(); ++i) {
-        builder.add(it->subObject(i)->slice());
+        builder.add(it->slice(i));
       }
       builder.add(VPackSlice::maxKeySlice());
       builder.close();
@@ -452,11 +452,11 @@ int RocksDBIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc,
   
   VPackBuilder builder;
   std::vector<std::string> values;
-  for (auto& it : elements) {
+  for (auto const& it : elements) {
     builder.clear();
     builder.openArray();
     for (size_t i = 0; i < _fields.size(); ++i) {
-      builder.add(it->subObject(i)->slice());
+      builder.add(it->slice(i));
     }
     builder.add(key); // always append _key value to the end of the array
     builder.close();

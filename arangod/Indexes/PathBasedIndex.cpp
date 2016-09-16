@@ -147,7 +147,8 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
     if (slices.size() == n) {
       // if shapes.size() != n, then the value is not inserted into the index
       // because of index sparsity!
-      IndexElement* element = IndexElement::allocate(n);
+      IndexElement* element = IndexElement::allocate(document.mptr(), slices);
+
       if (element == nullptr) {
         return TRI_ERROR_OUT_OF_MEMORY;
       }
@@ -155,17 +156,6 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
         // clean up manually
         element->free(n);
         return TRI_ERROR_OUT_OF_MEMORY;
-      }
-
-      element->document(const_cast<TRI_doc_mptr_t*>(document.mptr()));
-
-      for (size_t i = 0; i < n; ++i) {
-        try { 
-          element->subObject(i)->fill(slices[i]);
-        } catch (...) {
-          element->free(n);
-          throw;
-        }
       }
 
       try {
@@ -191,7 +181,7 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
 
       for (auto& info : toInsert) {
         TRI_ASSERT(info.size() == n);
-        IndexElement* element = IndexElement::allocate(n);
+        IndexElement* element = IndexElement::allocate(document.mptr(), info);
 
         if (element == nullptr) {
           return TRI_ERROR_OUT_OF_MEMORY;
@@ -200,17 +190,6 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
           // clean up manually
           element->free(n);
           return TRI_ERROR_OUT_OF_MEMORY;
-        }
-
-        element->document(const_cast<TRI_doc_mptr_t*>(document.mptr()));
-
-        for (size_t j = 0; j < n; ++j) {
-          try {
-            element->subObject(j)->fill(info[j]);
-          } catch (...) {
-            element->free(n);
-            throw;
-          }
         }
 
         try {

@@ -49,7 +49,7 @@ struct TRI_vpack_sub_t {
   } value;
   
   /// @brief fill a TRI_vpack_sub_t structure with a subvalue
-  void fill(VPackSlice const value) noexcept {
+  void fill(VPackSlice const value) {
     VPackValueLength len = value.byteSize();
     if (len <= maxValueLength()) {
       setValue(value.start(), static_cast<size_t>(len));
@@ -116,32 +116,15 @@ struct IndexElement {
   ~IndexElement() = delete;
 
  public:
-  void init(size_t numSubs) {
-    for (size_t i = 0; i < numSubs; ++i) {
-      subObject(i)->fill(arangodb::velocypack::Slice::noneSlice());
-    }
-  }
-
   /// @brief get a pointer to the document's masterpointer
   TRI_doc_mptr_t* document() const { return _document; }
 
-  /// @brief set the pointer to the document's masterpointer
-  void document(TRI_doc_mptr_t* doc) noexcept { _document = doc; }
-  
-  /// @brief set the pointer to the document's masterpointer
-  void document(TRI_doc_mptr_t const* doc) noexcept { _document = const_cast<TRI_doc_mptr_t*>(doc); }
-  
   /// @brief get the revision id of the document
   TRI_voc_rid_t revisionId() const { return _document->revisionId(); }
   
   inline TRI_vpack_sub_t const* subObject(size_t position) const {
     char const* p = reinterpret_cast<char const*>(this) + sizeof(TRI_doc_mptr_t*) + position * sizeof(TRI_vpack_sub_t);
     return reinterpret_cast<TRI_vpack_sub_t const*>(p);
-  }
-  
-  inline TRI_vpack_sub_t* subObject(size_t position) {
-    char* p = reinterpret_cast<char*>(this) + sizeof(TRI_doc_mptr_t*) + position * sizeof(TRI_vpack_sub_t);
-    return reinterpret_cast<TRI_vpack_sub_t*>(p);
   }
   
   inline arangodb::velocypack::Slice slice(size_t position) const {
@@ -156,30 +139,34 @@ struct IndexElement {
     return slice(0).hashString(seed);
   }
 
-
   /// @brief allocate a new index element
-  static IndexElement* allocate(size_t numSubs) {
-    void* space = TRI_Allocate(TRI_UNKNOWN_MEM_ZONE, memoryUsage(numSubs), false);
-    if (space == nullptr) {
-      return nullptr;
-    }
+  static IndexElement* allocate(TRI_doc_mptr_t const* mptr, std::vector<arangodb::velocypack::Slice> const& values) {
+    TRI_ASSERT(!values.empty());
 
-    // will not fail
-    IndexElement* element = new (space) IndexElement();
+    IndexElement* element = allocate(mptr, values.size());
 
-    element->init(numSubs);
-    return element;
-  }
-
-  /// @brief allocate a new index element from a slice
-  static IndexElement* allocate(TRI_doc_mptr_t const* mptr, arangodb::velocypack::Slice const& value) {
-    IndexElement* element = allocate(1);
-    
     if (element == nullptr) {
       return nullptr;
     }
 
-    element->document(mptr);
+    try {
+      for (size_t i = 0; i < values.size(); ++i) {
+        element->subObject(i)->fill(values[i]);
+      }
+      return element;
+    } catch (...) {
+      element->free(values.size());
+      return nullptr;
+    }
+  }
+
+  /// @brief allocate a new index element from a slice
+  static IndexElement* allocate(TRI_doc_mptr_t const* mptr, arangodb::velocypack::Slice const& value) {
+    IndexElement* element = allocate(mptr, 1);
+    
+    if (element == nullptr) {
+      return nullptr;
+    }
 
     try {
       element->subObject(0)->fill(value);
@@ -200,6 +187,40 @@ struct IndexElement {
   /// @brief memory usage of an index element
   static constexpr size_t memoryUsage(size_t numSubs) {
     return sizeof(TRI_doc_mptr_t*) + (sizeof(TRI_vpack_sub_t) * numSubs);
+  }
+
+ private:
+  static IndexElement* allocate(TRI_doc_mptr_t const* mptr, size_t numSubs) {
+    void* space = TRI_Allocate(TRI_UNKNOWN_MEM_ZONE, memoryUsage(numSubs), false);
+
+    if (space == nullptr) {
+      return nullptr;
+    }
+
+    // will not fail
+    IndexElement* element = new (space) IndexElement();
+
+    element->init(numSubs);
+    element->document(mptr);
+
+    return element;
+  }
+
+  /// @brief set the pointer to the document's masterpointer
+  void document(TRI_doc_mptr_t const* doc) noexcept { _document = const_cast<TRI_doc_mptr_t*>(doc); }
+
+  /// @brief set the pointer to the document's masterpointer
+  void document(TRI_doc_mptr_t* doc) noexcept { _document = doc; }
+  
+  void init(size_t numSubs) {
+    for (size_t i = 0; i < numSubs; ++i) {
+      subObject(i)->fill(arangodb::velocypack::Slice::noneSlice());
+    }
+  }
+
+  inline TRI_vpack_sub_t* subObject(size_t position) {
+    char* p = reinterpret_cast<char*>(this) + sizeof(TRI_doc_mptr_t*) + position * sizeof(TRI_vpack_sub_t);
+    return reinterpret_cast<TRI_vpack_sub_t*>(p);
   }
 };
 
