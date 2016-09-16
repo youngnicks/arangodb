@@ -35,7 +35,7 @@ class RestExportHandler : public RestVocbaseBaseHandler {
   explicit RestExportHandler(GeneralRequest*, GeneralResponse*);
 
  public:
-  status execute() override;
+  RestStatus execute() override;
 
  private:
   //////////////////////////////////////////////////////////////////////////////

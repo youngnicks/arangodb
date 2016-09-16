@@ -559,7 +559,7 @@ void RestAqlHandler::getInfoQuery(std::string const& operation,
 }
 
 // executes the handler
-RestHandler::status RestAqlHandler::execute() {
+RestStatus RestAqlHandler::execute() {
   // std::cout << "GOT INCOMING REQUEST: " <<
   // GeneralRequest::translateMethod(_request->requestType()) << ",
   // " << arangodb::ServerState::instance()->getId() << ": " <<
@@ -630,7 +630,7 @@ RestHandler::status RestAqlHandler::execute() {
   // _request->fullUrl() << ": " << _response->responseCode() << ",
   // CONTENT-LENGTH: " << _response->contentLength() << "\n";
 
-  return status::DONE;
+  return RestStatus::DONE;
 }
 
 // dig out the query from ID, handle errors

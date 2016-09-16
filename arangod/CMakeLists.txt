@@ -197,10 +197,10 @@ add_executable(${BIN_ARANGOD}
   GeneralServer/GeneralServer.cpp
   GeneralServer/GeneralServerFeature.cpp
   GeneralServer/HttpCommTask.cpp
-  # GeneralServer/HttpsCommTask.cpp
   GeneralServer/PathHandler.cpp
   GeneralServer/RestHandler.cpp
   GeneralServer/RestHandlerFactory.cpp
+  GeneralServer/RestStatus.cpp
   GeneralServer/VppCommTask.cpp
   GeoIndex/GeoIndex.cpp
   Indexes/EdgeIndex.cpp
@@ -228,6 +228,7 @@ add_executable(${BIN_ARANGOD}
   RestHandler/RestBatchHandler.cpp
   RestHandler/RestCursorHandler.cpp
   RestHandler/RestDebugHandler.cpp
+  # RestHandler/RestDemoHandler.cpp
   RestHandler/RestDocumentHandler.cpp
   RestHandler/RestEchoHandler.cpp
   RestHandler/RestEdgesHandler.cpp
@@ -367,9 +368,9 @@ install(
 install_config(arangod)
 
 if (NOT USE_PRECOMPILED_V8)
-  add_dependencies(arangod ev zlibstatic v8_build)
+  add_dependencies(arangod zlibstatic v8_build)
 else ()
-  add_dependencies(arangod ev zlibstatic)
+  add_dependencies(arangod zlibstatic)
 endif ()
 
 ################################################################################

@@ -44,7 +44,7 @@ RestActionHandler::RestActionHandler(GeneralRequest* request,
 
 bool RestActionHandler::isDirect() const { return _action == nullptr; }
 
-RestHandler::status RestActionHandler::execute() {
+RestStatus RestActionHandler::execute() {
   TRI_action_result_t result;
 
   // check the request path
@@ -85,7 +85,7 @@ RestHandler::status RestActionHandler::execute() {
   }
 
   // handler has finished, generate result
-  return result.isValid ? status::DONE : status::FAILED;
+  return result.isValid ? RestStatus::DONE : RestStatus::FAILED;
 }
 
 bool RestActionHandler::cancel() {

@@ -40,7 +40,7 @@ class RestAgencyPrivHandler : public arangodb::RestBaseHandler {
 
  public:
   bool isDirect() const override;
-  status execute() override;
+  RestStatus execute() override;
 
  private:
   template <class T>
@@ -65,11 +65,11 @@ class RestAgencyPrivHandler : public arangodb::RestBaseHandler {
     return true;
   }
 
-  status reportErrorEmptyRequest();
-  status reportTooManySuffices();
-  status reportBadQuery(std::string const& message = "bad parameter");
-  status reportMethodNotAllowed();
-  status reportGone();
+  RestStatus reportErrorEmptyRequest();
+  RestStatus reportTooManySuffices();
+  RestStatus reportBadQuery(std::string const& message = "bad parameter");
+  RestStatus reportMethodNotAllowed();
+  RestStatus reportGone();
 
   consensus::Agent* _agent;
 };

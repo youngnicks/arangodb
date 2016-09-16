@@ -22,13 +22,11 @@
 
 #include "RestDemoHandler.h"
 
-#include "ApplicationFeatures/ApplicationServer.h"
-#include "Rest/Demo.h"
-#include "Rest/HttpRequest.h"
-#include "RestServer/ServerFeature.h"
-
 #include <velocypack/Builder.h>
 #include <velocypack/velocypack-aliases.h>
+
+#include "Rest/HttpRequest.h"
+#include "Rest/Version.h"
 
 using namespace arangodb;
 using namespace arangodb::basics;
@@ -38,15 +36,13 @@ RestDemoHandler::RestDemoHandler(GeneralRequest* request,
                                  GeneralResponse* response)
     : RestBaseHandler(request, response) {}
 
-bool RestDemoHandler::isDirect() const { return true; }
-
 RestStatus RestDemoHandler::execute() {
   return RestStatus::QUEUE
-    .then([]() { LOG(INFO) << "demo handler going to sleep"; })
-    .then([]() { TRI_sleep(5); })
-    .then([]() { LOG(INFO) << "demo handler done sleeping"; })
-    .then([]() { doSomeMoreWork(); })
-    .then([this]() { return evenMoreWork(); });
+      .then([]() { LOG(INFO) << "demo handler going to sleep"; })
+      .then([]() { sleep(5); })
+      .then([]() { LOG(INFO) << "demo handler done sleeping"; })
+      .then([this]() { doSomeMoreWork(); })
+      .then([this]() { return evenMoreWork(); });
 }
 
 void RestDemoHandler::doSomeMoreWork() {
@@ -65,43 +61,9 @@ RestStatus RestDemoHandler::evenMoreWork() {
   generateResult(rest::ResponseCode::OK, result.slice());
 
   return RestStatus::DONE
-    .then([]() { LOG(INFO) << "demo handler keeps working"; });
-    .then([]() { TRI_sleep(5); })
-    .then([]() { LOG(INFO) << "even if the result has already been returned"; });
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  bool found;
-  std::string const& detailsStr = _request->value("details", found);
-
-  if (found && StringUtils::boolean(detailsStr)) {
-    result.add("details", VPackValue(VPackValueType::Object));
-
-    Demo::getVPack(result);
-
-    if (application_features::ApplicationServer::server != nullptr) {
-      auto server = application_features::ApplicationServer::server
-                        ->getFeature<ServerFeature>("Server");
-      result.add("mode", VPackValue(server->operationModeString()));
-    }
-
-    result.close();
-  }
-  result.close();
-  generateResult(rest::ResponseCode::OK, result.slice());
-  return status::DONE;
+      .then([]() { LOG(INFO) << "demo handler keeps working"; })
+      .then([]() { sleep(5); })
+      .then(
+          []() { LOG(INFO) << "even if the result has already been returned"; })
+      .then([]() { LOG(INFO) << "finally done"; });
 }

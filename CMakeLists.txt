@@ -871,7 +871,7 @@ endif()
 add_subdirectory(Documentation)
 
 add_dependencies(arangobench   zlibstatic)
-add_dependencies(arangod       ev zlibstatic)
+add_dependencies(arangod       zlibstatic)
 add_dependencies(arangodump    zlibstatic)
 add_dependencies(arangoimp     zlibstatic)
 add_dependencies(arangorestore zlibstatic)

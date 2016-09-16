@@ -1,8 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /// DISCLAIMER
 ///
-/// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
-/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
+/// Copyright 2016 ArangoDB GmbH, Cologne, Germany
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
 /// you may not use this file except in compliance with the License.
@@ -18,29 +17,17 @@
 ///
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
-/// @author Jan Steemann
+/// @author Dr. Frank Celler
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_REST_HANDLER_REST_WAL_HANDLER_H
-#define ARANGOD_REST_HANDLER_REST_WAL_HANDLER_H 1
+#include "RestStatus.h"
 
-#include "Basics/Common.h"
-#include "RestHandler/RestVocbaseBaseHandler.h"
+using namespace arangodb;
 
-namespace arangodb {
+RestStatus const RestStatus::ABANDON(Status::ABANDONED);
+RestStatus const RestStatus::DONE(Status::DONE);
+RestStatus const RestStatus::FAILED(Status::FAILED);
+RestStatus const RestStatus::QUEUE(Status::QUEUED);
 
-class RestWalHandler : public RestVocbaseBaseHandler {
- public:
-  RestWalHandler(GeneralRequest*, GeneralResponse*);
 
- public:
-  RestStatus execute() override final;
 
- private:
-  void flush();
-  void transactions();
-  void properties();
-};
-}
-
-#endif

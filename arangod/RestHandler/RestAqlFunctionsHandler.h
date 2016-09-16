@@ -38,7 +38,7 @@ class RestAqlFunctionsHandler : public RestVocbaseBaseHandler {
   explicit RestAqlFunctionsHandler(GeneralRequest*, GeneralResponse*);
 
  public:
-  status execute() override;
+  RestStatus execute() override;
 
 };
 }

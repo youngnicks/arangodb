@@ -60,12 +60,10 @@ RestHandler::RestHandler(GeneralRequest* request, GeneralResponse* response)
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
 
-void RestHandler::setTaskId(uint64_t id) {
-  _taskId = id;
-}
+void RestHandler::setTaskId(uint64_t id) { _taskId = id; }
 
-RestHandler::status RestHandler::executeFull() {
-  RestHandler::status result = status::FAILED;
+RestStatus RestHandler::executeFull() {
+  RestStatus result = RestStatus::FAILED;
 
   requestStatisticsAgentSetRequestStart();
 
@@ -111,22 +109,22 @@ RestHandler::status RestHandler::executeFull() {
 
     finalizeExecute();
 
-    if (result != status::ASYNC && _response == nullptr) {
+    if (!result.abandoned() && _response == nullptr) {
       Exception err(TRI_ERROR_INTERNAL, "no response received from handler",
                     __FILE__, __LINE__);
 
       handleError(err);
     }
   } catch (Exception const& ex) {
-    result = status::FAILED;
+    result = RestStatus::FAILED;
     requestStatisticsAgentSetExecuteError();
     LOG(ERR) << "caught exception: " << DIAGNOSTIC_INFORMATION(ex);
   } catch (std::exception const& ex) {
-    result = status::FAILED;
+    result = RestStatus::FAILED;
     requestStatisticsAgentSetExecuteError();
     LOG(ERR) << "caught exception: " << ex.what();
   } catch (...) {
-    result = status::FAILED;
+    result = RestStatus::FAILED;
     requestStatisticsAgentSetExecuteError();
     LOG(ERR) << "caught exception";
   }

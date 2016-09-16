@@ -226,19 +226,15 @@ void GeneralCommTask::handleRequestDirectly(WorkItem::uptr<RestHandler> h) {
   auto agent = getAgent(messageId);
 
   agent->transferTo(handler);
-  RestHandler::status result = handler->executeFull();
+  RestStatus result = handler->executeFull();
   handler->RequestStatisticsAgent::transferTo(agent);
 
-  switch (result) {
-    case RestHandler::status::FAILED:
-    case RestHandler::status::DONE: {
-      addResponse(handler->response());
-      break;
-    }
-
-    case RestHandler::status::ASYNC:
-      handler->release();
-      break;
+  if (result.failed() || result.done()) {
+    addResponse(handler->response());
+  } else if (result.abandoned()) {
+    handler->release();
+  } else {
+#warning TODO
   }
 }
 
@@ -269,21 +265,14 @@ bool GeneralCommTask::handleRequestAsync(WorkItem::uptr<RestHandler> handler,
 
         HandlerWorkStack work(std::move(h));
         auto handler = work.handler();
-        RestHandler::status result = handler->executeFull();
+        RestStatus result = handler->executeFull();
 
-        switch (result) {
-          case RestHandler::status::FAILED:
-          case RestHandler::status::DONE: {
-            if (store) {
-              GeneralServerFeature::JOB_MANAGER->finishAsyncJob(handler);
-            }
-
-            break;
+        if (result.failed() || result.done()) {
+          if (store) {
+            GeneralServerFeature::JOB_MANAGER->finishAsyncJob(handler);
           }
-
-          case RestHandler::status::ASYNC:
-            handler->release();
-            break;
+        } else if (result.abandoned()) {
+          handler->release();
         }
       });
 

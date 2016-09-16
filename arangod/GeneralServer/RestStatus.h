@@ -1,8 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /// DISCLAIMER
 ///
-/// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
-/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
+/// Copyright 2016 ArangoDB GmbH, Cologne, Germany
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
 /// you may not use this file except in compliance with the License.
@@ -18,33 +17,39 @@
 ///
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
-/// @author Jan Steemann
+/// @author Dr. Frank Celler
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_REST_HANDLER_REST_UPLOAD_HANDLER_H
-#define ARANGOD_REST_HANDLER_REST_UPLOAD_HANDLER_H 1
+#ifndef ARANGOD_HTTP_SERVER_REST_STATUS_H
+#define ARANGOD_HTTP_SERVER_REST_STATUS_H 1
 
 #include "Basics/Common.h"
-#include "GeneralServer/GeneralServer.h"
-#include "RestHandler/RestVocbaseBaseHandler.h"
 
 namespace arangodb {
-
-class RestUploadHandler : public RestVocbaseBaseHandler {
+class RestStatus {
  public:
-  RestUploadHandler(GeneralRequest*, GeneralResponse*);
-
-  ~RestUploadHandler();
+  static RestStatus const ABANDON;
+  static RestStatus const DONE;
+  static RestStatus const FAILED;
+  static RestStatus const QUEUE;
 
  public:
-  RestStatus execute();
+  enum class Status { DONE, FAILED, ABANDONED, QUEUED };
 
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief parses a multi-part request body and determines the boundaries of
-  /// its first element
-  //////////////////////////////////////////////////////////////////////////////
+ public:
+  RestStatus(Status status) : _status(status) {}
 
-  bool parseMultiPart(char const*&, size_t&);
+ public:
+  RestStatus then(std::function<void()>);
+  RestStatus then(std::function<RestStatus>);
+
+ public:
+  bool done() const { return _status == Status::DONE; }
+  bool failed() const { return _status == Status::FAILED; }
+  bool abandoned() const { return _status == Status::ABANDONED; }
+
+ private:
+  Status _status = Status::DONE;
 };
 }
 

@@ -28,9 +28,10 @@
 
 #include "Basics/Exceptions.h"
 #include "Basics/WorkMonitor.h"
+#include "GeneralServer/RestStatus.h"
 #include "Rest/GeneralResponse.h"
-#include "Scheduler/JobQueue.h"
 #include "Scheduler/EventLoop.h"
+#include "Scheduler/JobQueue.h"
 #include "Statistics/StatisticsAgent.h"
 
 namespace arangodb {
@@ -51,9 +52,6 @@ class RestHandler : public RequestStatisticsAgent, public arangodb::WorkItem {
   ~RestHandler() = default;
 
  public:
-  enum class status { DONE, FAILED, ASYNC };
-
- public:
   virtual bool isDirect() const = 0;
 
   virtual bool needsOwnThread() const { return _needsOwnThread; }
@@ -62,7 +60,7 @@ class RestHandler : public RequestStatisticsAgent, public arangodb::WorkItem {
 
   virtual void prepareExecute() {}
 
-  virtual status execute() = 0;
+  virtual RestStatus execute() = 0;
 
   virtual void finalizeExecute() {}
 
@@ -80,7 +78,7 @@ class RestHandler : public RequestStatisticsAgent, public arangodb::WorkItem {
   uint64_t taskId() const { return _taskId; }
   void setTaskId(uint64_t taskId);
 
-  status executeFull();
+  RestStatus executeFull();
 
   GeneralRequest const* request() const { return _request.get(); }
   std::unique_ptr<GeneralRequest> stealRequest() { return std::move(_request); }

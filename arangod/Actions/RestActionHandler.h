@@ -37,7 +37,7 @@ class RestActionHandler : public RestVocbaseBaseHandler {
 
  public:
   bool isDirect() const override;
-  status execute() override;
+  RestStatus execute() override;
   bool cancel() override;
 
  private:

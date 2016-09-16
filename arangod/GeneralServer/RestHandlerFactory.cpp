@@ -48,10 +48,10 @@ class MaintenanceHandler : public RestHandler {
 
   bool isDirect() const override { return true; };
 
-  status execute() override {
+  RestStatus execute() override {
     resetResponse(rest::ResponseCode::SERVICE_UNAVAILABLE);
 
-    return status::DONE;
+    return RestStatus::DONE;
   };
 
   void handleError(const Exception& error) override {
@@ -126,10 +126,10 @@ RestHandler* RestHandlerFactory::createHandler(
 
 #if 1
       return new RestDocumentHandler(request.release(),
-				     response.release());
+                                     response.release());
 #else
       return new RestVersionHandler(request.release(),
-				    response.release());
+                                    response.release());
 #endif
   }
 
