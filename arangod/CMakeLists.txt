@@ -198,6 +198,7 @@ add_executable(${BIN_ARANGOD}
   GeneralServer/GeneralServerFeature.cpp
   GeneralServer/HttpCommTask.cpp
   GeneralServer/PathHandler.cpp
+  GeneralServer/RestEngine.cpp
   GeneralServer/RestHandler.cpp
   GeneralServer/RestHandlerFactory.cpp
   GeneralServer/RestStatus.cpp
@@ -228,7 +229,7 @@ add_executable(${BIN_ARANGOD}
   RestHandler/RestBatchHandler.cpp
   RestHandler/RestCursorHandler.cpp
   RestHandler/RestDebugHandler.cpp
-  # RestHandler/RestDemoHandler.cpp
+  RestHandler/RestDemoHandler.cpp
   RestHandler/RestDocumentHandler.cpp
   RestHandler/RestEchoHandler.cpp
   RestHandler/RestEdgesHandler.cpp

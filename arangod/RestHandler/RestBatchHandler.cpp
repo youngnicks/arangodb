@@ -212,11 +212,10 @@ RestStatus RestBatchHandler::executeHttp() {
 
     // start to work for this handler
     {
-      HandlerWorkStack work(handler);
-      RestStatus result = work.handler()->executeFull();
+      handler->initEngine();
+      RestStatus result = handler->syncRunEngine();
 
-#warning TODO
-      if (result.failed()) {
+      if (result.isFailed()) {
         generateError(rest::ResponseCode::BAD, TRI_ERROR_INTERNAL,
                       "executing a handler for batch part failed");
 

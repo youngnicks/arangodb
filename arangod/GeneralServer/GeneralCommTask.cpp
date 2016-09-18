@@ -216,26 +216,14 @@ bool GeneralCommTask::handleRequest(WorkItem::uptr<RestHandler> handler) {
   return ok;
 }
 
-void GeneralCommTask::handleRequestDirectly(WorkItem::uptr<RestHandler> h) {
-  JobGuard guard(_loop);
-  guard.work();
+void GeneralCommTask::handleRequestDirectly(
+    WorkItem::uptr<RestHandler> handler) {
+  RequestStatisticsAgent* agent = getAgent(handler->messageId());
 
-  HandlerWorkStack work(std::move(h));
-  auto handler = work.handler();
-  uint64_t messageId = handler->messageId();
-  auto agent = getAgent(messageId);
-
-  agent->transferTo(handler);
-  RestStatus result = handler->executeFull();
-  handler->RequestStatisticsAgent::transferTo(agent);
-
-  if (result.failed() || result.done()) {
+  handler->initEngine(_loop, agent, [this](RestHandler* handler) {
     addResponse(handler->response());
-  } else if (result.abandoned()) {
-    handler->release();
-  } else {
-#warning TODO
-  }
+  });
+  handler->runEngine(std::move(handler));
 }
 
 bool GeneralCommTask::handleRequestAsync(WorkItem::uptr<RestHandler> handler,
@@ -255,26 +243,20 @@ bool GeneralCommTask::handleRequestAsync(WorkItem::uptr<RestHandler> handler,
     GeneralServerFeature::JOB_MANAGER->initAsyncJob(handler.get(), hdr);
   }
 
+  if (store) {
+    handler->initEngine(_loop, nullptr, [this](RestHandler* handler) {
+      GeneralServerFeature::JOB_MANAGER->finishAsyncJob(handler);
+    });
+  } else {
+    handler->initEngine(_loop, nullptr, [this](RestHandler* handler) {});
+  }
+
   // queue this job
   size_t queue = handler->queue();
-  auto job = new arangodb::Job(
-      _server, std::move(handler),
-      [this, store](WorkItem::uptr<RestHandler> h) {
-        JobGuard guard(_loop);
-        guard.work();
+  std::unique_ptr<Job> job(new Job(_server, std::move(handler),
+                                   [](WorkItem::uptr<RestHandler> handler) {
+                                     handler->runEngine(std::move(handler));
+                                   }));
 
-        HandlerWorkStack work(std::move(h));
-        auto handler = work.handler();
-        RestStatus result = handler->executeFull();
-
-        if (result.failed() || result.done()) {
-          if (store) {
-            GeneralServerFeature::JOB_MANAGER->finishAsyncJob(handler);
-          }
-        } else if (result.abandoned()) {
-          handler->release();
-        }
-      });
-
-  return SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, job);
+  return SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, job.release());
 }

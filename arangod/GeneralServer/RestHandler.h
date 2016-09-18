@@ -28,7 +28,7 @@
 
 #include "Basics/Exceptions.h"
 #include "Basics/WorkMonitor.h"
-#include "GeneralServer/RestStatus.h"
+#include "GeneralServer/RestEngine.h"
 #include "Rest/GeneralResponse.h"
 #include "Scheduler/EventLoop.h"
 #include "Scheduler/JobQueue.h"
@@ -74,11 +74,31 @@ class RestHandler : public RequestStatisticsAgent, public arangodb::WorkItem {
   virtual void addResponse(RestHandler*) {}
 
  public:
+  void initEngine() {}
+
+  void initEngine(EventLoop loop, RequestStatisticsAgent* agent,
+                  std::function<void(RestHandler*)> storeResult) {
+    _engine.init(loop, agent, storeResult);
+  }
+
+  void runEngine(WorkItem::uptr<RestHandler> handler) {
+    _engine.run(std::move(handler));
+  }
+
+  RestStatus syncRunEngine() { return _engine.syncRun(); }
+
+  int prepareEngine(RestEngine*);
+
+  int executeEngine(RestEngine*);
+
+  int runEngine(RestEngine*);
+
+  int finalizeEngine(RestEngine*);
+
+ public:
   uint64_t handlerId() const { return _handlerId; }
   uint64_t taskId() const { return _taskId; }
   void setTaskId(uint64_t taskId);
-
-  RestStatus executeFull();
 
   GeneralRequest const* request() const { return _request.get(); }
   std::unique_ptr<GeneralRequest> stealRequest() { return std::move(_request); }
@@ -118,6 +138,7 @@ class RestHandler : public RequestStatisticsAgent, public arangodb::WorkItem {
 
  private:
   bool _needsOwnThread = false;
+  RestEngine _engine;
 };
 }
 }

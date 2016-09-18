@@ -47,6 +47,7 @@
 #include "RestHandler/RestBatchHandler.h"
 #include "RestHandler/RestCursorHandler.h"
 #include "RestHandler/RestDebugHandler.h"
+#include "RestHandler/RestDemoHandler.h"
 #include "RestHandler/RestDocumentHandler.h"
 #include "RestHandler/RestEchoHandler.h"
 #include "RestHandler/RestEdgesHandler.h"
@@ -355,14 +356,12 @@ void GeneralServerFeature::buildServers() {
 
     try {
       ssl->sslContext();
-    }
-    catch (std::exception& e) {
+    } catch (std::exception& e) {
       LOG(ERR) << e.what();
       LOG(FATAL) << "no ssl context is known, cannot create https server, "
                     "please use the '--ssl.keyfile' option";
       FATAL_ERROR_EXIT();
-    }
-    catch (...) {
+    } catch (...) {
       LOG(FATAL) << "no ssl context is known, cannot create https server, "
                     "please use the '--ssl.keyfile' option";
       FATAL_ERROR_EXIT();
@@ -502,13 +501,12 @@ void GeneralServerFeature::defineHandlers() {
         RestHandlerCreator<RestAgencyCallbacksHandler>::createData<
             AgencyCallbackRegistry*>,
         cluster->agencyCallbackRegistry());
-
   }
-    _handlerFactory->addPrefixHandler(
-        RestVocbaseBaseHandler::INTERNAL_TRAVERSER_PATH,
-        RestHandlerCreator<InternalRestTraverserHandler>::createData<
-            traverser::TraverserEngineRegistry*>,
-        traverserEngineRegistry);
+  _handlerFactory->addPrefixHandler(
+      RestVocbaseBaseHandler::INTERNAL_TRAVERSER_PATH,
+      RestHandlerCreator<InternalRestTraverserHandler>::createData<
+          traverser::TraverserEngineRegistry*>,
+      traverserEngineRegistry);
 
   // And now some handlers which are registered in both /_api and /_admin
   _handlerFactory->addPrefixHandler(
@@ -518,6 +516,12 @@ void GeneralServerFeature::defineHandlers() {
 
   _handlerFactory->addHandler(
       "/_api/version", RestHandlerCreator<RestVersionHandler>::createNoData);
+
+#ifdef ARANGODB_ENABLE_MAINTAINER_MODE
+#warning TODO
+  _handlerFactory->addHandler(
+      "/_admin/demo-engine", RestHandlerCreator<RestDemoHandler>::createNoData);
+#endif
 
   // ...........................................................................
   // /_admin

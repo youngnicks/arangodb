@@ -22,12 +22,107 @@
 
 #include "RestStatus.h"
 
+#include "Logger/Logger.h"
+
 using namespace arangodb;
 
-RestStatus const RestStatus::ABANDON(Status::ABANDONED);
-RestStatus const RestStatus::DONE(Status::DONE);
-RestStatus const RestStatus::FAILED(Status::FAILED);
-RestStatus const RestStatus::QUEUE(Status::QUEUED);
+// -----------------------------------------------------------------------------
+// --SECTION--                                                    static members
+// -----------------------------------------------------------------------------
 
+RestStatus const RestStatus::ABANDON(
+    new RestStatusElement(RestStatusElement::State::ABANDONED));
 
+RestStatus const RestStatus::DONE(
+    new RestStatusElement(RestStatusElement::State::DONE));
 
+RestStatus const RestStatus::FAILED(
+    new RestStatusElement(RestStatusElement::State::FAILED));
+
+RestStatus const RestStatus::QUEUE(
+    new RestStatusElement(RestStatusElement::State::QUEUED));
+
+// -----------------------------------------------------------------------------
+// --SECTION--                                                    public methods
+// -----------------------------------------------------------------------------
+
+void RestStatusElement::printTree() const {
+  std::string s = "TREE: ";
+  std::string sep = "";
+  RestStatusElement const* element = this;
+
+  while (element != nullptr) {
+    s += sep;
+
+    switch (element->_state) {
+      case State::DONE:
+        s += "DONE";
+        break;
+
+      case State::FAILED:
+        s += "FAILED";
+        break;
+
+      case State::ABANDONED:
+        s += "ABANDONED";
+        break;
+
+      case State::QUEUED:
+        s += "QUEUED";
+        break;
+
+      case State::THEN:
+        s += "THEN";
+        break;
+    }
+
+    sep = " -> ";
+
+    element = element->_previous;
+  }
+
+  LOG(INFO) << s;
+}
+
+// -----------------------------------------------------------------------------
+// --SECTION--                                                   private methods
+// -----------------------------------------------------------------------------
+
+RestStatusElement* RestStatusElement::then1(
+    std::function<void()> callback) const {
+  LOG(ERR) << "STATUS then1.a";
+  printTree();
+
+  return new RestStatusElement(State::THEN, this, [callback]() {
+    callback();
+    return nullptr;
+  });
+}
+
+RestStatusElement* RestStatusElement::then1(std::function<void()> callback) {
+  LOG(ERR) << "STATUS then1.b";
+  printTree();
+
+  return new RestStatusElement(State::THEN, this, [callback]() {
+    callback();
+    return nullptr;
+  });
+}
+
+RestStatusElement* RestStatusElement::then2(
+    std::function<RestStatus()> callback) const {
+  LOG(ERR) << "STATUS then2.a";
+  printTree();
+
+  return new RestStatusElement(
+      State::THEN, this, [callback]() { return new RestStatus(callback()); });
+}
+
+RestStatusElement* RestStatusElement::then2(
+    std::function<RestStatus()> callback) {
+  LOG(ERR) << "STATUS then2.b";
+  printTree();
+
+  return new RestStatusElement(
+      State::THEN, this, [callback]() { return new RestStatus(callback()); });
+}
