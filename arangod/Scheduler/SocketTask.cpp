@@ -104,7 +104,7 @@ void SocketTask::start() {
 // --SECTION--                                                 protected methods
 // -----------------------------------------------------------------------------
 
-void SocketTask::addWriteBuffer(std::unique_ptr<basics::StringBuffer> buffer,
+void SocketTask::addWriteBuffer(std::unique_ptr<StringBuffer> buffer,
                                 RequestStatisticsAgent* statistics) {
   TRI_request_statistics_t* stat =
       statistics == nullptr ? nullptr : statistics->steal();
@@ -112,7 +112,7 @@ void SocketTask::addWriteBuffer(std::unique_ptr<basics::StringBuffer> buffer,
   addWriteBuffer(buffer.release(), stat);
 }
 
-void SocketTask::addWriteBuffer(basics::StringBuffer* buffer,
+void SocketTask::addWriteBuffer(StringBuffer* buffer,
                                 TRI_request_statistics_t* stat) {
   if (_closedSend) {
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
@@ -324,7 +324,10 @@ void SocketTask::asyncReadSome() {
 
       if (!trySyncRead()) {
         if (n < MAX_DIRECT_TRIES) {
+#pragma message("review fc")
+#ifdef TRI_HAVE_SCHED_H
           sched_yield();
+#endif
         }
 
         continue;
