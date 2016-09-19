@@ -437,8 +437,7 @@ void RestReplicationHandler::handleCommandLoggerState() {
   // "server" part
   builder.add("server", VPackValue(VPackValueType::Object));
   builder.add("version", VPackValue(ARANGODB_VERSION));
-  builder.add("serverId",
-              VPackValue(std::to_string(ServerIdFeature::getId())));
+  builder.add("serverId", VPackValue(std::to_string(ServerIdFeature::getId())));
   builder.close();
 
   // "clients" part
@@ -453,8 +452,7 @@ void RestReplicationHandler::handleCommandLoggerState() {
     TRI_GetTimeStampReplication(std::get<1>(it), &buffer[0], sizeof(buffer));
     builder.add("time", VPackValue(buffer));
 
-    builder.add("lastServedTick",
-                VPackValue(std::to_string(std::get<2>(it))));
+    builder.add("lastServedTick", VPackValue(std::to_string(std::get<2>(it))));
 
     builder.close();
   }
@@ -971,7 +969,7 @@ void RestReplicationHandler::handleCommandLoggerFollow() {
 
   // and dump
   int res = TRI_DumpLogReplication(&dump, transactionIds, firstRegularTick,
-                                tickStart, tickEnd, false);
+                                   tickStart, tickEnd, false);
 
   if (res == TRI_ERROR_NO_ERROR) {
     bool const checkMore = (dump._lastFoundTick > 0 &&
@@ -991,44 +989,37 @@ void RestReplicationHandler::handleCommandLoggerFollow() {
       resetResponse(rest::ResponseCode::OK);
     }
 
-    if (length > 0) {
-      // transfer ownership of the buffer contents
-      _response->setContentType(rest::ContentType::DUMP);
+    // transfer ownership of the buffer contents
+    _response->setContentType(rest::ContentType::DUMP);
 
-      // set headers
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_CHECKMORE,
-                             checkMore ? "true" : "false");
+    // set headers
+    _response->setHeaderNC(TRI_REPLICATION_HEADER_CHECKMORE,
+                           checkMore ? "true" : "false");
+    _response->setHeaderNC(TRI_REPLICATION_HEADER_LASTINCLUDED,
+                           StringUtils::itoa(dump._lastFoundTick));
+    _response->setHeaderNC(TRI_REPLICATION_HEADER_LASTTICK,
+                           StringUtils::itoa(state.lastCommittedTick));
+    _response->setHeaderNC(TRI_REPLICATION_HEADER_ACTIVE, "true");
+    _response->setHeaderNC(TRI_REPLICATION_HEADER_FROMPRESENT,
+                           dump._fromTickIncluded ? "true" : "false");
 
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_LASTINCLUDED,
-                             StringUtils::itoa(dump._lastFoundTick));
+    if (useVpp) {
+      for (auto message : dump._slices) {
+        _response->addPayload(std::move(message), &dump._vpackOptions, true);
+      }
+    } else {
+      HttpResponse* httpResponse = dynamic_cast<HttpResponse*>(_response.get());
 
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_LASTTICK,
-                             StringUtils::itoa(state.lastCommittedTick));
+      if (httpResponse == nullptr) {
+        THROW_ARANGO_EXCEPTION(TRI_ERROR_INTERNAL);
+      }
 
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_ACTIVE, "true");
+      if (length > 0) {
+        // transfer ownership of the buffer contents
+        httpResponse->body().set(dump._buffer);
 
-      _response->setHeaderNC(TRI_REPLICATION_HEADER_FROMPRESENT,
-                             dump._fromTickIncluded ? "true" : "false");
-
-      if (useVpp) {
-        for (auto message : dump._slices) {
-          _response->addPayload(std::move(message), &dump._vpackOptions, true);
-        }
-      } else {
-        HttpResponse* httpResponse =
-            dynamic_cast<HttpResponse*>(_response.get());
-
-        if (httpResponse == nullptr) {
-          THROW_ARANGO_EXCEPTION(TRI_ERROR_INTERNAL);
-        }
-
-        if (length > 0) {
-          // transfer ownership of the buffer contents
-          httpResponse->body().set(dump._buffer);
-
-          // to avoid double freeing
-          TRI_StealStringBuffer(dump._buffer);
-        }
+        // to avoid double freeing
+        TRI_StealStringBuffer(dump._buffer);
       }
     }
 
@@ -1074,9 +1065,8 @@ void RestReplicationHandler::handleCommandDetermineOpenTransactions() {
       std::make_shared<StandaloneTransactionContext>(_vocbase);
 
   // initialize the dump container
-  TRI_replication_dump_t dump(transactionContext,
-                              static_cast<size_t>(determineChunkSize()),
-                              false, 0);
+  TRI_replication_dump_t dump(
+      transactionContext, static_cast<size_t>(determineChunkSize()), false, 0);
 
   // and dump
   int res = TRI_DetermineOpenTransactionsReplication(&dump, tickStart, tickEnd);
@@ -1099,10 +1089,10 @@ void RestReplicationHandler::handleCommandDetermineOpenTransactions() {
     _response->setContentType(rest::ContentType::DUMP);
 
     _response->setHeaderNC(TRI_REPLICATION_HEADER_FROMPRESENT,
-                            dump._fromTickIncluded ? "true" : "false");
+                           dump._fromTickIncluded ? "true" : "false");
 
     _response->setHeaderNC(TRI_REPLICATION_HEADER_LASTTICK,
-                            StringUtils::itoa(dump._lastFoundTick));
+                           StringUtils::itoa(dump._lastFoundTick));
 
     if (length > 0) {
       // transfer ownership of the buffer contents
@@ -1133,8 +1123,8 @@ void RestReplicationHandler::handleCommandInventory() {
   // collections and indexes
   std::shared_ptr<VPackBuilder> collectionsBuilder;
   collectionsBuilder =
-      _vocbase->inventory(tick, &filterCollection, (void*)&includeSystem,
-                          true, RestReplicationHandler::sortCollections);
+      _vocbase->inventory(tick, &filterCollection, (void*)&includeSystem, true,
+                          RestReplicationHandler::sortCollections);
   VPackSlice const collections = collectionsBuilder->slice();
 
   TRI_ASSERT(collections.isArray());
@@ -1403,8 +1393,8 @@ void RestReplicationHandler::handleCommandRestoreCollection() {
 
   if (res != TRI_ERROR_NO_ERROR) {
     THROW_ARANGO_EXCEPTION(res);
-  } 
-  
+  }
+
   VPackBuilder result;
   result.add(VPackValue(VPackValueType::Object));
   result.add("result", VPackValue(true));
@@ -1451,7 +1441,7 @@ void RestReplicationHandler::handleCommandRestoreIndexes() {
   if (res != TRI_ERROR_NO_ERROR) {
     THROW_ARANGO_EXCEPTION(res);
   }
-    
+
   VPackBuilder result;
   result.openObject();
   result.add("result", VPackValue(true));
@@ -1705,8 +1695,7 @@ int RestReplicationHandler::processRestoreCollectionCoordinator(
   // shards
   std::vector<std::string> dbServers;  // will be filled
   std::map<std::string, std::vector<std::string>> shardDistribution =
-      arangodb::distributeShards(numberOfShards, replicationFactor,
-                                  dbServers);
+      arangodb::distributeShards(numberOfShards, replicationFactor, dbServers);
   if (shardDistribution.empty()) {
     errorMsg = "no database servers found in cluster";
     return TRI_ERROR_INTERNAL;
@@ -1772,7 +1761,7 @@ int RestReplicationHandler::processRestoreCollectionCoordinator(
     errorMsg =
         "unable to create collection: " + std::string(TRI_errno_string(res));
   }
-    
+
   return res;
 }
 
@@ -2907,7 +2896,7 @@ void RestReplicationHandler::handleCommandFetchKeys() {
 
     if (keys) {
       collectionKeys->dumpKeys(resultBuilder, chunk,
-                                static_cast<size_t>(chunkSize));
+                               static_cast<size_t>(chunkSize));
     } else {
       bool success;
       std::shared_ptr<VPackBuilder> parsedIds =
@@ -2918,8 +2907,8 @@ void RestReplicationHandler::handleCommandFetchKeys() {
         return;
       }
       collectionKeys->dumpDocs(resultBuilder, chunk,
-                                static_cast<size_t>(chunkSize),
-                                parsedIds->slice());
+                               static_cast<size_t>(chunkSize),
+                               parsedIds->slice());
     }
 
     resultBuilder.close();
@@ -2927,7 +2916,7 @@ void RestReplicationHandler::handleCommandFetchKeys() {
     collectionKeys->release();
 
     generateResult(rest::ResponseCode::OK, resultBuilder.slice(),
-                    transactionContext);
+                   transactionContext);
     return;
   } catch (...) {
     collectionKeys->release();
@@ -3086,8 +3075,8 @@ void RestReplicationHandler::handleCommandDump() {
     dump._compat28 = true;
   }
 
-  int res = TRI_DumpCollectionReplication(&dump, col, tickStart, tickEnd,
-                                      withTicks);
+  int res =
+      TRI_DumpCollectionReplication(&dump, col, tickStart, tickEnd, withTicks);
 
   if (res != TRI_ERROR_NO_ERROR) {
     THROW_ARANGO_EXCEPTION(res);
@@ -3113,10 +3102,10 @@ void RestReplicationHandler::handleCommandDump() {
 
   // set headers
   _response->setHeaderNC(TRI_REPLICATION_HEADER_CHECKMORE,
-                          (dump._hasMore ? "true" : "false"));
+                         (dump._hasMore ? "true" : "false"));
 
   _response->setHeaderNC(TRI_REPLICATION_HEADER_LASTINCLUDED,
-                          StringUtils::itoa(dump._lastFoundTick));
+                         StringUtils::itoa(dump._lastFoundTick));
 
   // transfer ownership of the buffer contents
   response->body().set(dump._buffer);
@@ -3382,7 +3371,7 @@ void RestReplicationHandler::handleCommandSync() {
 
   std::string errorMsg = "";
 
-  /*int res = */syncer.run(errorMsg, incremental);
+  /*int res = */ syncer.run(errorMsg, incremental);
 
   VPackBuilder result;
   result.add(VPackValue(VPackValueType::Object));
