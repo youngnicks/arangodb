@@ -16,6 +16,10 @@ devel
 
     hidden --server.thread-affinity has been removed
 
+* added experimental AQL functions `JSON_STRINGIFY` and `JSON_PARSE`
+
+* added experimental support for incoming gzip-compressed requests
+
 * added HTTP REST APIs for online loglevel adjustments:
 
   - GET `/_admin/log/level` returns the current loglevel settings

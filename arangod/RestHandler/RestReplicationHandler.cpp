@@ -978,9 +978,9 @@ void RestReplicationHandler::handleCommandLoggerFollow() {
     // generate the result
     size_t length = 0;
     if (useVpp) {
-      length = TRI_LengthStringBuffer(dump._buffer);
-    } else {
       length = dump._slices.size();
+    } else {
+      length = TRI_LengthStringBuffer(dump._buffer);
     }
 
     if (length == 0) {
@@ -1003,30 +1003,32 @@ void RestReplicationHandler::handleCommandLoggerFollow() {
     _response->setHeaderNC(TRI_REPLICATION_HEADER_FROMPRESENT,
                            dump._fromTickIncluded ? "true" : "false");
 
-    if (useVpp) {
-      for (auto message : dump._slices) {
-        _response->addPayload(std::move(message), &dump._vpackOptions, true);
-      }
-    } else {
-      HttpResponse* httpResponse = dynamic_cast<HttpResponse*>(_response.get());
+    if (length > 0) {
+      if (useVpp) {
+        for (auto message : dump._slices) {
+          _response->addPayload(std::move(message), &dump._vpackOptions, true);
+        }
+      } else {
+        HttpResponse* httpResponse =
+            dynamic_cast<HttpResponse*>(_response.get());
 
-      if (httpResponse == nullptr) {
-        THROW_ARANGO_EXCEPTION(TRI_ERROR_INTERNAL);
+        if (httpResponse == nullptr) {
+          THROW_ARANGO_EXCEPTION(TRI_ERROR_INTERNAL);
+        }
+
+        if (length > 0) {
+          // transfer ownership of the buffer contents
+          httpResponse->body().set(dump._buffer);
+
+          // to avoid double freeing
+          TRI_StealStringBuffer(dump._buffer);
+        }
       }
 
-      if (length > 0) {
-        // transfer ownership of the buffer contents
-        httpResponse->body().set(dump._buffer);
-
-        // to avoid double freeing
-        TRI_StealStringBuffer(dump._buffer);
-      }
+      insertClient(dump._lastFoundTick);
     }
-
-    insertClient(dump._lastFoundTick);
   }
 }
-
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief run the command that determines which transactions were open at
 /// a given tick value
@@ -3644,9 +3646,9 @@ void RestReplicationHandler::handleCommandAddFollower() {
   }
   VPackSlice const body = parsedBody->slice();
   if (!body.isObject()) {
-    generateError(
-        rest::ResponseCode::BAD, TRI_ERROR_HTTP_BAD_PARAMETER,
-        "body needs to be an object with attributes 'followerId' and 'shard'");
+    generateError(rest::ResponseCode::BAD, TRI_ERROR_HTTP_BAD_PARAMETER,
+                  "body needs to be an object with attributes 'followerId' "
+                  "and 'shard'");
     return;
   }
   VPackSlice const followerId = body.get("followerId");
@@ -3691,9 +3693,9 @@ void RestReplicationHandler::handleCommandRemoveFollower() {
   }
   VPackSlice const body = parsedBody->slice();
   if (!body.isObject()) {
-    generateError(
-        rest::ResponseCode::BAD, TRI_ERROR_HTTP_BAD_PARAMETER,
-        "body needs to be an object with attributes 'followerId' and 'shard'");
+    generateError(rest::ResponseCode::BAD, TRI_ERROR_HTTP_BAD_PARAMETER,
+                  "body needs to be an object with attributes 'followerId' "
+                  "and 'shard'");
     return;
   }
   VPackSlice const followerId = body.get("followerId");

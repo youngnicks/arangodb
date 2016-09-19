@@ -75,7 +75,7 @@ void HttpCommTask::handleSimpleError(rest::ResponseCode code,
 
 void HttpCommTask::handleSimpleError(rest::ResponseCode code, int errorNum,
                                      std::string const& errorMessage,
-                                     uint64_t messageId) {
+                                     uint64_t /* messageId */) {
   std::unique_ptr<GeneralResponse> response(new HttpResponse(code));
 
   VPackBuilder builder;
@@ -233,7 +233,7 @@ bool HttpCommTask::processRead() {
 
     char const* end = etr - 3;
 
-    // read buffer contents are way to small. we can exit here directly
+    // read buffer contents are way too small. we can exit here directly
     if (ptr >= end) {
       return false;
     }
@@ -441,12 +441,35 @@ bool HttpCommTask::processRead() {
       return false;
     }
 
-    // read "bodyLength" from read buffer and add this body to "httpRequest"
-    _incompleteRequest->setBody(_readBuffer.c_str() + _bodyPosition,
-                                _bodyLength);
+    bool handled = false;
+    std::string const& encoding = _incompleteRequest->header(StaticStrings::ContentEncoding);
+    if (!encoding.empty()) {
+      if (encoding == "gzip") {
+        std::string uncompressed;
+        if (!StringUtils::gzipUncompress(_readBuffer.c_str() + _bodyPosition, _bodyLength, uncompressed)) {
+          handleSimpleError(rest::ResponseCode::BAD, TRI_ERROR_BAD_PARAMETER, "gzip decoding error", 1);
+          return false;
+        }
+        _incompleteRequest->setBody(uncompressed.c_str(), uncompressed.size());
+        handled = true;
+      } else if (encoding == "deflate") {
+        std::string uncompressed;
+        if (!StringUtils::gzipDeflate(_readBuffer.c_str() + _bodyPosition, _bodyLength, uncompressed)) {
+          handleSimpleError(rest::ResponseCode::BAD, TRI_ERROR_BAD_PARAMETER, "gzip deflate error", 1);
+          return false;
+        }
+        _incompleteRequest->setBody(uncompressed.c_str(), uncompressed.size());
+        handled = true;
+      }
+    }
 
-    LOG(TRACE) << ""
-               << std::string(_readBuffer.c_str() + _bodyPosition, _bodyLength);
+    if (!handled) {
+      // read "bodyLength" from read buffer and add this body to "httpRequest"
+      _incompleteRequest->setBody(_readBuffer.c_str() + _bodyPosition,
+                                  _bodyLength);
+    }
+
+    LOG(TRACE) << std::string(_readBuffer.c_str() + _bodyPosition, _bodyLength);
 
     // remove body from read buffer and reset read position
     _readRequestBody = false;
