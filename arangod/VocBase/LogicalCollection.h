@@ -266,16 +266,6 @@ class LogicalCollection {
     return getPhysical()->applyForTickRange(dataMin, dataMax, callback);
   }
   
-  /// @brief order a new master pointer
-  TRI_doc_mptr_t* requestMasterpointer() {
-    return getPhysical()->requestMasterpointer();
-  } 
-  
-  /// @brief release an existing master pointer
-  void releaseMasterpointer(TRI_doc_mptr_t* mptr) {
-    getPhysical()->releaseMasterpointer(mptr);
-  }
-  
   /// @brief disallow starting the compaction of the collection
   void preventCompaction() { getPhysical()->preventCompaction(); }
   bool tryPreventCompaction() { return getPhysical()->tryPreventCompaction(); }
@@ -416,7 +406,6 @@ class LogicalCollection {
       arangodb::velocypack::Slice const& fromSlice,
       arangodb::velocypack::Slice const& toSlice,
       bool isEdgeCollection,
-      uint64_t& hash,
       arangodb::velocypack::Builder& builder,
       bool isRestore);
 

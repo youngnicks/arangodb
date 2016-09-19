@@ -25,6 +25,7 @@
 #include "Basics/FileUtils.h"
 #include "Basics/ReadLocker.h"
 #include "Basics/StaticStrings.h"
+#include "Basics/VelocyPackHelper.h"
 #include "Basics/WriteLocker.h"
 #include "Indexes/PrimaryIndex.h"
 #include "Logger/Logger.h"
@@ -127,23 +128,20 @@ static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
     found = f->document();
   }
 
+  MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
+
   // it is a new entry
   if (found == nullptr) {
-    TRI_doc_mptr_t* header = collection->requestMasterpointer();
-
-    if (header == nullptr) {
-      return TRI_ERROR_OUT_OF_MEMORY;
-    }
-
+    TRI_doc_mptr_t* header = c->insertRevision(revisionId, VPackSlice(basics::VelocyPackHelper::EmptyObjectValue())); // TODO
+    TRI_ASSERT(header != nullptr);
     header->setFid(fid, false);
-    header->setHash(primaryIndex->calculateHash(trx, keySlice));
     header->setVPackFromMarker(marker);  
 
     // insert into primary index
     int res = primaryIndex->insertKey(trx, header);
 
     if (res != TRI_ERROR_NO_ERROR) {
-      collection->releaseMasterpointer(header);
+      c->removeRevision(revisionId);
       LOG(ERR) << "inserting document into primary index failed with error: " << TRI_errno_string(res);
 
       return res;
@@ -256,7 +254,8 @@ static int OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* marker,
     collection->decNumberDocuments();
 
     // free the header
-    collection->releaseMasterpointer(found);
+    MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
+    c->removeRevision(found->revisionId());
   }
 
   return TRI_ERROR_NO_ERROR;
@@ -316,7 +315,7 @@ static bool OpenIterator(TRI_df_marker_t const* marker, OpenIteratorState* data,
 } // namespace
 
 MMFilesCollection::MMFilesCollection(LogicalCollection* collection)
-    : PhysicalCollection(collection), _ditches(collection), _initialCount(0), _revision(0) {}
+    : PhysicalCollection(collection), _ditches(collection), _initialCount(0), _lastRevision(0) {}
 
 MMFilesCollection::~MMFilesCollection() { 
   try {
@@ -327,12 +326,12 @@ MMFilesCollection::~MMFilesCollection() {
 }
 
 TRI_voc_rid_t MMFilesCollection::revision() const { 
-  return _revision; 
+  return _lastRevision; 
 }
 
 void MMFilesCollection::setRevision(TRI_voc_rid_t revision, bool force) {
-  if (force || revision > _revision) {
-    _revision = revision;
+  if (force || revision > _lastRevision) {
+    _lastRevision = revision;
   }
 }
 
@@ -369,7 +368,7 @@ int MMFilesCollection::close() {
   }
   _datafiles.clear();
 
-  _revision = 0;
+  _lastRevision = 0;
 
   return TRI_ERROR_NO_ERROR;
 }
@@ -1056,17 +1055,6 @@ int MMFilesCollection::applyForTickRange(TRI_voc_tick_t dataMin, TRI_voc_tick_t 
   return false; // hasMore = false
 }
   
-/// @brief order a new master pointer
-TRI_doc_mptr_t* MMFilesCollection::requestMasterpointer() {
-  return _masterPointers.request();
-}
-        
-/// @brief release an existing master pointer
-void MMFilesCollection::releaseMasterpointer(TRI_doc_mptr_t* mptr) {
-  TRI_ASSERT(mptr != nullptr);
-  _masterPointers.release(mptr);
-}
- 
 /// @brief report extra memory used by indexes etc.
 size_t MMFilesCollection::memory() const {
   return _masterPointers.memory();
@@ -1142,4 +1130,36 @@ int MMFilesCollection::iterateMarkersOnLoad(arangodb::Transaction* trx) {
   }
 
   return TRI_ERROR_NO_ERROR;
+}
+  
+TRI_doc_mptr_t* MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& doc) {
+  TRI_doc_mptr_t* header = _masterPointers.request();
+  if (header == nullptr) {
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+  }
+
+  header->setVPack(doc.begin());
+  try {
+    _revisionCache.emplace(revisionId, header);
+    return header;
+  } catch (...) {
+    _masterPointers.release(header);
+    throw;
+  }
+}
+
+void MMFilesCollection::updateRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& doc) {
+  auto it = _revisionCache.find(revisionId);
+  if (it == _revisionCache.end()) {
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected revision not found");
+  }
+  (*it).second->setVPack(doc.begin());
+}
+
+void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId) {
+  auto it = _revisionCache.find(revisionId);
+  if (it != _revisionCache.end()) {
+    _masterPointers.release((*it).second);
+    _revisionCache.erase(revisionId);
+  }
 }

@@ -105,12 +105,6 @@ class MMFilesCollection final : public PhysicalCollection {
     _datafileStatistics.update(fid, values);
   }
 
-  /// @brief order a new master pointer
-  TRI_doc_mptr_t* requestMasterpointer() override;
-
-  /// @brief release an existing master pointer
-  void releaseMasterpointer(TRI_doc_mptr_t* mptr) override;
-  
   /// @brief report extra memory used by indexes etc.
   size_t memory() const override;
 
@@ -125,6 +119,10 @@ class MMFilesCollection final : public PhysicalCollection {
   
   /// @brief iterate all markers of a collection on load
   int iterateMarkersOnLoad(arangodb::Transaction* trx) override;
+
+  TRI_doc_mptr_t* insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) override;
+  void updateRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) override;
+  void removeRevision(TRI_voc_rid_t revisionId) override;
 
  private:
   /// @brief create statistics for a datafile, using the stats provided
@@ -150,9 +148,10 @@ class MMFilesCollection final : public PhysicalCollection {
   bool iterateDatafilesVector(std::vector<TRI_datafile_t*> const& files,
                               std::function<bool(TRI_df_marker_t const*, TRI_datafile_t*)> const& cb);
 
- private:
+ public: // TODO
   arangodb::MasterPointers _masterPointers;
 
+ private:
   mutable arangodb::Ditches _ditches;
 
   arangodb::basics::ReadWriteLock _filesLock;
@@ -166,7 +165,9 @@ class MMFilesCollection final : public PhysicalCollection {
   
   MMFilesDatafileStatistics _datafileStatistics;
 
-  TRI_voc_rid_t _revision;
+  TRI_voc_rid_t _lastRevision;
+
+  std::unordered_map<TRI_voc_rid_t, TRI_doc_mptr_t*> _revisionCache;
 };
 
 }

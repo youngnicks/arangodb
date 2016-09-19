@@ -204,9 +204,6 @@ class PrimaryIndex final : public Index {
 
   int resize(arangodb::Transaction*, size_t);
 
-  static uint64_t calculateHash(arangodb::Transaction*, VPackSlice const&);
-  static uint64_t calculateHash(arangodb::Transaction*, uint8_t const*);
-
   void invokeOnAllElements(std::function<bool(IndexElement*)>);
   void invokeOnAllElementsForRemoval(std::function<bool(IndexElement*)>);
 

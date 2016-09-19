@@ -36,7 +36,7 @@ struct DocumentOperation {
   ~DocumentOperation() {
     if (status == StatusType::HANDLED) {
       if (type == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
-        collection->releaseMasterpointer(header);
+        collection->getPhysical()->removeRevision(header->revisionId());
       }
     } else if (status != StatusType::REVERTED) {
       revert();
@@ -91,7 +91,7 @@ struct DocumentOperation {
     }
 
     if (type == TRI_VOC_DOCUMENT_OPERATION_INSERT) {
-      collection->releaseMasterpointer(header);
+      collection->getPhysical()->removeRevision(header->revisionId());
     } else if (type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
                type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
       header->copy(oldHeader);

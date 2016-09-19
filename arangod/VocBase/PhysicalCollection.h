@@ -76,12 +76,6 @@ class PhysicalCollection {
   /// @brief report extra memory used by indexes etc.
   virtual size_t memory() const = 0;
     
-  /// @brief order a new master pointer
-  virtual TRI_doc_mptr_t* requestMasterpointer() = 0; 
-  
-  /// @brief release an existing master pointer
-  virtual void releaseMasterpointer(TRI_doc_mptr_t* mptr) = 0;
-
   /// @brief disallow compaction of the collection 
   /// after this call it is guaranteed that no compaction will be started until allowCompaction() is called
   virtual void preventCompaction() = 0;
@@ -105,6 +99,10 @@ class PhysicalCollection {
 
   /// @brief iterate all markers of a collection on load
   virtual int iterateMarkersOnLoad(arangodb::Transaction* trx) = 0;
+  
+  virtual TRI_doc_mptr_t* insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) = 0;
+  virtual void updateRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) = 0;
+  virtual void removeRevision(TRI_voc_rid_t revisionId) = 0;
 
  protected:
   LogicalCollection* _logicalCollection;

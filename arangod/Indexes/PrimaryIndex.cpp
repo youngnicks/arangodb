@@ -355,17 +355,6 @@ int PrimaryIndex::resize(arangodb::Transaction* trx, size_t targetSize) {
   return _primaryIndex->resize(trx, targetSize);
 }
 
-uint64_t PrimaryIndex::calculateHash(arangodb::Transaction* trx,
-                                     VPackSlice const& slice) {
-  // can use fast hash-function here, as index values are restricted to strings
-  return slice.hashString();
-}
-
-uint64_t PrimaryIndex::calculateHash(arangodb::Transaction* trx,
-                                     uint8_t const* key) {
-  return HashKey(trx, key);
-}
-
 void PrimaryIndex::invokeOnAllElements(
     std::function<bool(IndexElement*)> work) {
   _primaryIndex->invokeOnAllElements(work);

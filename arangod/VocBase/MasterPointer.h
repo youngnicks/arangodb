@@ -40,8 +40,6 @@ struct TRI_doc_mptr_t {
  private:
   // this is the datafile identifier
   TRI_voc_fid_t _fid;   
-  // the pre-calculated hash value of the key
-  uint64_t _hash;       
   // this is the pointer to the beginning of the raw marker
   void const* _dataptr; 
     
@@ -50,7 +48,6 @@ struct TRI_doc_mptr_t {
  public:
   TRI_doc_mptr_t()
       : _fid(0),
-        _hash(0),
         _dataptr(nullptr) {}
 
   // do NOT add virtual methods
@@ -58,7 +55,6 @@ struct TRI_doc_mptr_t {
 
   void clear() {
     _fid = 0;
-    _hash = 0;
     setVPack(nullptr);
   }
 
@@ -66,17 +62,8 @@ struct TRI_doc_mptr_t {
   void copy(TRI_doc_mptr_t const& that) {
     _fid = that._fid;
     _dataptr = that._dataptr;
-    _hash = that._hash;
   }
   
-  // return the hash value for the primary key encapsulated by this
-  // master pointer
-  inline uint64_t getHash() const { return _hash; }
-  
-  // sets the hash value for the primary key encapsulated by this
-  // master pointer
-  inline void setHash(uint64_t hash) { _hash = hash; }
-
   // return the datafile id.
   inline TRI_voc_fid_t getFid() const { 
     // unmask the WAL bit

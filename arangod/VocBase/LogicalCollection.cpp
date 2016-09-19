@@ -1794,14 +1794,12 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
     }
   }
 
-  uint64_t hash = 0;
-  
   TransactionBuilderLeaser builder(trx);
   VPackSlice newSlice;
   int res = TRI_ERROR_NO_ERROR;
   if (options.recoveryMarker == nullptr) {
     TIMER_START(TRANSACTION_NEW_OBJECT_FOR_INSERT);
-    res = newObjectForInsert(trx, slice, fromSlice, toSlice, isEdgeCollection, hash, *builder.get(), options.isRestore);
+    res = newObjectForInsert(trx, slice, fromSlice, toSlice, isEdgeCollection, *builder.get(), options.isRestore);
     TIMER_STOP(TRANSACTION_NEW_OBJECT_FOR_INSERT);
     if (res != TRI_ERROR_NO_ERROR) {
       return res;
@@ -1811,7 +1809,6 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
     TRI_ASSERT(slice.isObject());
     // we can get away with the fast hash function here, as key values are 
     // restricted to strings
-    hash = Transaction::extractKeyFromDocument(slice).hashString();
     newSlice = slice;
   }
     
@@ -1852,20 +1849,9 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
     arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
 
     // create a new header
-    TRI_doc_mptr_t* header = operation.header = getPhysical()->requestMasterpointer(); 
-
-    if (header == nullptr) {
-      // out of memory. no harm done here. just return the error
-      return TRI_ERROR_OUT_OF_MEMORY;
-    }
-
-    // update the header we got
-    void* mem = marker->vpack();
-    TRI_ASSERT(mem != nullptr);
-    header->setHash(hash);
-    header->setVPack(mem);  // PROTECTED by trx in trxCollection
-
-    TRI_ASSERT(VPackSlice(header->vpack()).isObject());
+    TRI_voc_rid_t revisionId = Transaction::extractRevFromDocument(newSlice); // TODO TODO TODO
+    TRI_doc_mptr_t* header = operation.header = getPhysical()->insertRevision(revisionId, VPackSlice(reinterpret_cast<uint8_t const*>(marker->vpack())));
+    TRI_ASSERT(header != nullptr);
 
     // insert into indexes
     res = insertDocument(trx, header, operation, marker, mptr, options.waitForSync);
@@ -3013,7 +2999,6 @@ int LogicalCollection::newObjectForInsert(
     VPackSlice const& fromSlice,
     VPackSlice const& toSlice,
     bool isEdgeCollection,
-    uint64_t& hash,
     VPackBuilder& builder,
     bool isRestore) {
 
@@ -3059,9 +3044,6 @@ int LogicalCollection::newObjectForInsert(
     // local server
     DatafileHelper::StoreNumber<uint64_t>(p, _cid, sizeof(uint64_t));
   }
-  // we can get away with the fast hash function here, as key values are 
-  // restricted to strings
-  hash = s.hashString();
 
   // _from and _to
   if (isEdgeCollection) {
