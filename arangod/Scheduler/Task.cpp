@@ -26,6 +26,7 @@
 
 #include <velocypack/Builder.h>
 #include <velocypack/velocypack-aliases.h>
+#include "Scheduler/EventLoop.h"
 
 using namespace arangodb::rest;
 
@@ -34,7 +35,7 @@ std::atomic_uint_fast64_t NEXT_TASK_ID(static_cast<uint64_t>(TRI_microtime() *
                                                              100000.0));
 }
 
-Task::Task(EventLoop loop, std::string const& name)
+Task::Task(arangodb::EventLoop loop, std::string const& name)
     : _loop(loop),
       _taskId(NEXT_TASK_ID.fetch_add(1, std::memory_order_seq_cst)),
       _name(name) {}

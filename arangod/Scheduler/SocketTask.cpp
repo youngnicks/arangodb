@@ -26,6 +26,7 @@
 #include "Basics/StringBuffer.h"
 #include "Basics/socket-utils.h"
 #include "Logger/Logger.h"
+#include "Scheduler/EventLoop.h"
 #include "Scheduler/JobGuard.h"
 #include "Scheduler/Scheduler.h"
 
@@ -36,7 +37,7 @@ using namespace arangodb::rest;
 // --SECTION--                                      constructors and destructors
 // -----------------------------------------------------------------------------
 
-SocketTask::SocketTask(EventLoop loop, std::unique_ptr<Socket> socket,
+SocketTask::SocketTask(arangodb::EventLoop loop, std::unique_ptr<Socket> socket,
                        ConnectionInfo&& connectionInfo, double keepAliveTimeout)
     : Task(loop, "SocketTask"),
       _connectionInfo(connectionInfo),
