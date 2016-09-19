@@ -39,18 +39,18 @@ class RestAgencyHandler : public RestBaseHandler {
 
  public:
   bool isDirect() const override;
-  status execute() override;
+  RestStatus execute() override;
 
  private:
-  status reportErrorEmptyRequest();
-  status reportTooManySuffices();
-  status reportUnknownMethod();
-  status handleStores();
-  status handleRead();
-  status handleWrite();
-  status handleConfig();
-  status reportMethodNotAllowed();
-  status handleState();
+  RestStatus reportErrorEmptyRequest();
+  RestStatus reportTooManySuffices();
+  RestStatus reportUnknownMethod();
+  RestStatus handleStores();
+  RestStatus handleRead();
+  RestStatus handleWrite();
+  RestStatus handleConfig();
+  RestStatus reportMethodNotAllowed();
+  RestStatus handleState();
 
   void redirectRequest(std::string const& leaderId);
   consensus::Agent* _agent;

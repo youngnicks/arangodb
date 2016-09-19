@@ -20,31 +20,14 @@
 /// @author Dr. Frank Celler
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef APPLICATION_FEATURES_AFFINITY_FEATURE_H
-#define APPLICATION_FEATURES_AFFINITY_FEATURE_H 1
+#include "RestStatus.h"
 
-#include "ApplicationFeatures/ApplicationFeature.h"
+using namespace arangodb;
 
-namespace arangodb {
-class AffinityFeature final : public application_features::ApplicationFeature {
- public:
-  explicit AffinityFeature(application_features::ApplicationServer* server);
+RestStatus const RestStatus::ABANDON(Status::ABANDONED);
+RestStatus const RestStatus::DONE(Status::DONE);
+RestStatus const RestStatus::FAILED(Status::FAILED);
+RestStatus const RestStatus::QUEUE(Status::QUEUED);
 
- public:
-  void collectOptions(std::shared_ptr<options::ProgramOptions>) override final;
-  void prepare() override final;
-  void start() override final;
 
- private:
-  uint32_t _threadAffinity;
 
- private:
-  size_t _n;
-  size_t _nd;
-  size_t _ns;
-  std::vector<size_t> _ps;
-  std::vector<size_t> _pd;
-};
-}
-
-#endif

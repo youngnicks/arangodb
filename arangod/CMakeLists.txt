@@ -186,11 +186,6 @@ add_executable(${BIN_ARANGOD}
   Cluster/TraverserEngineRegistry.cpp
   Cluster/ServerState.cpp
   Cluster/v8-cluster.cpp
-  Dispatcher/Dispatcher.cpp
-  Dispatcher/DispatcherFeature.cpp
-  Dispatcher/DispatcherQueue.cpp
-  Dispatcher/DispatcherThread.cpp
-  Dispatcher/Job.cpp
   FulltextIndex/fulltext-handles.cpp
   FulltextIndex/fulltext-index.cpp
   FulltextIndex/fulltext-list.cpp
@@ -202,11 +197,10 @@ add_executable(${BIN_ARANGOD}
   GeneralServer/GeneralServer.cpp
   GeneralServer/GeneralServerFeature.cpp
   GeneralServer/HttpCommTask.cpp
-  GeneralServer/GeneralServerJob.cpp
-  # GeneralServer/HttpsCommTask.cpp
   GeneralServer/PathHandler.cpp
   GeneralServer/RestHandler.cpp
   GeneralServer/RestHandlerFactory.cpp
+  GeneralServer/RestStatus.cpp
   GeneralServer/VppCommTask.cpp
   GeoIndex/GeoIndex.cpp
   Indexes/EdgeIndex.cpp
@@ -234,6 +228,7 @@ add_executable(${BIN_ARANGOD}
   RestHandler/RestBatchHandler.cpp
   RestHandler/RestCursorHandler.cpp
   RestHandler/RestDebugHandler.cpp
+  # RestHandler/RestDemoHandler.cpp
   RestHandler/RestDocumentHandler.cpp
   RestHandler/RestEchoHandler.cpp
   RestHandler/RestEdgesHandler.cpp
@@ -252,7 +247,6 @@ add_executable(${BIN_ARANGOD}
   RestHandler/RestVocbaseBaseHandler.cpp
   RestHandler/RestWalHandler.cpp
   RestHandler/WorkMonitorHandler.cpp
-  RestServer/AffinityFeature.cpp
   RestServer/BootstrapFeature.cpp
   RestServer/CheckVersionFeature.cpp
   RestServer/ConsoleFeature.cpp
@@ -274,17 +268,14 @@ add_executable(${BIN_ARANGOD}
   RestServer/VocbaseContext.cpp
   RestServer/WorkMonitorFeature.cpp
   RestServer/arangod.cpp
+  Scheduler/Job.cpp
   Scheduler/JobGuard.cpp
   Scheduler/JobQueue.cpp
   Scheduler/ListenTask.cpp
   Scheduler/Scheduler.cpp
   Scheduler/SchedulerFeature.cpp
-  Scheduler/SchedulerLibev.cpp
-  Scheduler/SchedulerThread.cpp
-  Scheduler/SocketTask2.cpp
+  Scheduler/SocketTask.cpp
   Scheduler/Task.cpp
-  Scheduler/Task2.cpp
-  Scheduler/TaskManager.cpp
   Statistics/StatisticsFeature.cpp
   Statistics/statistics.cpp
   StorageEngine/EngineSelectorFeature.cpp
@@ -366,7 +357,7 @@ target_link_libraries(${BIN_ARANGOD}
   ${LIB_ARANGO_FE}
   ${LIB_ARANGO_V8}
   ${LIB_ARANGO}
-  ${LIBEV_LIBS}
+  ${BOOST_LIBS}
   ${LINENOISE_LIBS}
   ${MSVC_LIBS}
   ${V8_LIBS}
@@ -383,9 +374,9 @@ install(
 install_config(arangod)
 
 if (NOT USE_PRECOMPILED_V8)
-  add_dependencies(arangod ev zlibstatic v8_build)
+  add_dependencies(arangod zlibstatic v8_build)
 else ()
-  add_dependencies(arangod ev zlibstatic)
+  add_dependencies(arangod zlibstatic)
 endif ()
 
 ################################################################################

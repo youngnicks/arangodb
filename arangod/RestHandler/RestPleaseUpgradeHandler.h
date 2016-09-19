@@ -33,7 +33,7 @@ class RestPleaseUpgradeHandler : public rest::RestHandler {
 
  public:
   bool isDirect() const override;
-  status execute() override;
+  RestStatus execute() override;
   void handleError(const basics::Exception&) override;
 };
 }

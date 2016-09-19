@@ -682,10 +682,6 @@ endif ()
 # ICU_LIBS
 # ICU_INCLUDE_DIR
 #
-# LIBEV_VERSION
-# LIBEV_LIBS
-# LIBEV_INCLUDE_DIR
-#
 # ZLIB_VERSION
 # ZLIB_LIBS
 # ZLIB_INCLUDE_DIR
@@ -730,13 +726,6 @@ add_definitions(-DARANGODB_BOOST_VERSION=\"${Boost_VERSION}\")
 ################################################################################
 
 include_directories(${ICU_INCLUDE_DIR})
-
-################################################################################
-## LIBEV
-################################################################################
-
-include_directories(${LIBEV_INCLUDE_DIR})
-add_definitions("-DARANGODB_LIBEV_VERSION=\"${LIBEV_VERSION}\"")
 
 ################################################################################
 ## OPENSSL
@@ -882,7 +871,7 @@ endif()
 add_subdirectory(Documentation)
 
 add_dependencies(arangobench   zlibstatic)
-add_dependencies(arangod       ev zlibstatic)
+add_dependencies(arangod       zlibstatic)
 add_dependencies(arangodump    zlibstatic)
 add_dependencies(arangoimp     zlibstatic)
 add_dependencies(arangorestore zlibstatic)

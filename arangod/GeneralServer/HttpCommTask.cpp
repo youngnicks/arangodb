@@ -30,6 +30,7 @@
 #include "GeneralServer/RestHandler.h"
 #include "GeneralServer/RestHandlerFactory.h"
 #include "Meta/conversion.h"
+#include "Rest/HttpRequest.h"
 #include "VocBase/ticks.h"
 
 using namespace arangodb;
@@ -41,11 +42,12 @@ size_t const HttpCommTask::MaximalBodySize = 1024 * 1024 * 1024;      // 1024 MB
 size_t const HttpCommTask::MaximalPipelineSize = 1024 * 1024 * 1024;  // 1024 MB
 size_t const HttpCommTask::RunCompactEvery = 500;
 
-HttpCommTask::HttpCommTask(EventLoop2 loop, GeneralServer* server,
-                           TRI_socket_t sock, ConnectionInfo&& info,
-                           double timeout)
-    : Task2(loop, "HttpCommTask"),
-      GeneralCommTask(loop, server, sock, std::move(info), timeout),
+HttpCommTask::HttpCommTask(EventLoop loop, GeneralServer* server,
+                           std::unique_ptr<Socket> socket,
+                           ConnectionInfo&& info, double timeout)
+    : Task(loop, "HttpCommTask"),
+      GeneralCommTask(loop, server, std::move(socket), std::move(info),
+                      timeout),
       _readPosition(0),
       _startPosition(0),
       _bodyPosition(0),
@@ -443,8 +445,8 @@ bool HttpCommTask::processRead() {
     _incompleteRequest->setBody(_readBuffer.c_str() + _bodyPosition,
                                 _bodyLength);
 
-    LOG(TRACE) << "" << std::string(_readBuffer.c_str() + _bodyPosition,
-                                    _bodyLength);
+    LOG(TRACE) << ""
+               << std::string(_readBuffer.c_str() + _bodyPosition, _bodyLength);
 
     // remove body from read buffer and reset read position
     _readRequestBody = false;

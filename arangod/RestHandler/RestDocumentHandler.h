@@ -33,7 +33,7 @@ class RestDocumentHandler : public RestVocbaseBaseHandler {
   RestDocumentHandler(GeneralRequest*, GeneralResponse*);
 
  public:
-  status execute() override final;
+  RestStatus execute() override final;
 
  protected:
   virtual TRI_col_type_e getCollectionType() const {

@@ -41,7 +41,7 @@ class RestEdgesHandler : public RestVocbaseBaseHandler {
   explicit RestEdgesHandler(GeneralRequest*, GeneralResponse*);
 
  public:
-  status execute() override final;
+  RestStatus execute() override final;
 
  protected:
   //////////////////////////////////////////////////////////////////////////////

@@ -18,36 +18,25 @@
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
-/// @author Copyright 2016, ArangoDB GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGODB_ENDPOINT_ENDPOINT_SRV_H
-#define ARANGODB_ENDPOINT_ENDPOINT_SRV_H 1
+#ifndef ARANGOD_REST_HANDLER_REST_DEMO_HANDLER_H
+#define ARANGOD_REST_HANDLER_REST_DEMO_HANDLER_H 1
 
-#include "Endpoint/Endpoint.h"
+#include "RestHandler/RestBaseHandler.h"
 
 namespace arangodb {
-class EndpointSrv final : public Endpoint {
+class RestDemoHandler : public arangodb::RestBaseHandler {
  public:
-  explicit EndpointSrv(std::string const&);
-
-  ~EndpointSrv();
+  RestDemoHandler(GeneralRequest*, GeneralResponse*);
 
  public:
-  bool isConnected() const override;
-  TRI_socket_t connect(double, double) override;
-  void disconnect() override;
-  bool initIncoming(TRI_socket_t) override;
-  int domain() const override;
-  int port() const override;
-  std::string host() const override;
-  std::string hostAndPort() const override;
+  bool isDirect() const override { return true; }
+  RestStatus execute() override;
 
-  void openAcceptor(boost::asio::io_service*,
-                    boost::asio::ip::tcp::acceptor*) override final;
-
- private:
-  std::unique_ptr<Endpoint> _endpoint;
+private:
+  void doSomeMoreWork();
+  RestStatus evenMoreWork();
 };
 }
 

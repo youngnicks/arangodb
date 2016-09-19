@@ -30,14 +30,16 @@
 
 #include "ApplicationFeatures/ApplicationServer.h"
 #include "Basics/ArangoGlobalContext.h"
-#include "Dispatcher/DispatcherFeature.h"
 #include "Logger/LogAppender.h"
 #include "ProgramOptions/ProgramOptions.h"
 #include "ProgramOptions/Section.h"
 #include "RestServer/ServerFeature.h"
-#include "Scheduler/SchedulerLibev.h"
+#include "Scheduler/Scheduler.h"
+#include "V8Server/V8DealerFeature.h"
+#include "V8Server/v8-dispatcher.h"
 
 using namespace arangodb;
+using namespace arangodb::application_features;
 using namespace arangodb::basics;
 using namespace arangodb::options;
 using namespace arangodb::rest;
@@ -46,11 +48,7 @@ Scheduler* SchedulerFeature::SCHEDULER = nullptr;
 
 SchedulerFeature::SchedulerFeature(
     application_features::ApplicationServer* server)
-    : ApplicationFeature(server, "Scheduler"),
-      _nrSchedulerThreads(0),
-      _backend(0),
-      _showBackends(false),
-      _scheduler(nullptr) {
+    : ApplicationFeature(server, "Scheduler"), _scheduler(nullptr) {
   setOptional(true);
   requiresElevatedPrivileges(false);
   startsAfter("Database");
@@ -69,38 +67,26 @@ void SchedulerFeature::collectOptions(
     std::shared_ptr<options::ProgramOptions> options) {
   options->addSection("scheduler", "Configure the I/O scheduler");
 
-  options->addOption("--scheduler.threads",
-                     "number of threads for I/O scheduler",
+  options->addOption("--server.threads", "number of threads scheduling",
                      new UInt64Parameter(&_nrSchedulerThreads));
 
-#ifndef _WIN32
-  std::unordered_set<uint64_t> backends = {0, 1, 2, 3, 4};
-  options->addHiddenOption(
-      "--scheduler.backend", "1: select, 2: poll, 4: epoll",
-      new DiscreteValuesParameter<UInt64Parameter>(&_backend, backends));
-#endif
+  options->addHiddenOption("--server.maximal-queue-size",
+                           "maximum queue length for asynchronous operations",
+                           new UInt64Parameter(&_queueSize));
 
-  options->addHiddenOption("--scheduler.show-backends",
-                           "show available backends",
-                           new BooleanParameter(&_showBackends));
+  options->addOldOption("scheduler.threads", "server.threads");
 }
 
 void SchedulerFeature::validateOptions(
     std::shared_ptr<options::ProgramOptions>) {
-  if (_showBackends) {
-    std::cout << "available io backends are: "
-              << SchedulerLibev::availableBackends() << std::endl;
-    exit(EXIT_SUCCESS);
+  if (_nrSchedulerThreads == 0) {
+    _nrSchedulerThreads = TRI_numberProcessors();
   }
 
-  if (_nrSchedulerThreads == 0) {
-    size_t n = TRI_numberProcessors();
-
-    if (n <= 4) {
-      _nrSchedulerThreads = 1;
-    } else {
-      _nrSchedulerThreads = 2;
-    }
+  if (_queueSize < 128) {
+    LOG(FATAL)
+        << "invalid value for `--server.maximal-queue-size', need at least 128";
+    FATAL_ERROR_EXIT();
   }
 }
 
@@ -117,29 +103,22 @@ void SchedulerFeature::start() {
 
   buildHangupHandler();
 
-  while (!_scheduler->isStarted()) {
-    LOG_TOPIC(DEBUG, Logger::STARTUP) << "waiting for scheduler to start";
-    usleep(500 * 1000);
-  }
-
   LOG_TOPIC(DEBUG, Logger::STARTUP) << "scheduler has started";
+
+  V8DealerFeature* dealer =
+      ApplicationServer::getFeature<V8DealerFeature>("V8Dealer");
+
+  dealer->defineContextUpdate(
+      [](v8::Isolate* isolate, v8::Handle<v8::Context> context, size_t) {
+        TRI_InitV8Dispatcher(isolate, context);
+      },
+      nullptr);
 }
 
 void SchedulerFeature::stop() {
   static size_t const MAX_TRIES = 10;
 
   if (_scheduler != nullptr) {
-    // unregister all tasks
-    _scheduler->unregisterUserTasks();
-
-    // remove all helper tasks
-    for (auto& task : _tasks) {
-      _scheduler->destroyTask(task);
-    }
-
-    _tasks.clear();
-
-    // shutdown the scheduler
     _scheduler->beginShutdown();
 
     for (size_t count = 0; count < MAX_TRIES && _scheduler->isRunning();
@@ -226,15 +205,8 @@ bool CtrlHandler(DWORD eventType) {
 #endif
 
 void SchedulerFeature::buildScheduler() {
-  DispatcherFeature* dispatcher =
-      application_features::ApplicationServer::getFeature<DispatcherFeature>(
-          "Dispatcher");
-
-  _scheduler = new SchedulerLibev(static_cast<size_t>(_nrSchedulerThreads),
-                                  static_cast<size_t>(dispatcher->queueSize()),
-                                  static_cast<int>(_backend));
-  _scheduler->setProcessorAffinity(_affinityCores);
-
+  _scheduler = new Scheduler(static_cast<size_t>(_nrSchedulerThreads),
+                             static_cast<size_t>(_queueSize));
   SCHEDULER = _scheduler;
 }
 
@@ -299,8 +271,4 @@ void SchedulerFeature::buildHangupHandler() {
 
   _hangupSignals->async_wait(_hangupHandler);
 #endif
-}
-
-void SchedulerFeature::setProcessorAffinity(std::vector<size_t> const& cores) {
-  _affinityCores = cores;
 }

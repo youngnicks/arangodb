@@ -25,13 +25,14 @@
 #ifndef ARANGOD_GENERAL_SERVER_GENERAL_COMM_TASK_H
 #define ARANGOD_GENERAL_SERVER_GENERAL_COMM_TASK_H 1
 
-#include "Scheduler/SocketTask2.h"
+#include "Scheduler/SocketTask.h"
 
 #include <openssl/ssl.h>
 
 #include "Basics/Mutex.h"
 #include "Basics/StringBuffer.h"
 #include "Basics/WorkItem.h"
+#include "Scheduler/Socket.h"
 
 namespace arangodb {
 class GeneralRequest;
@@ -77,13 +78,13 @@ class GeneralServer;
 //     turn will end the responding request.
 //
 
-class GeneralCommTask : public SocketTask2 {
+class GeneralCommTask : public SocketTask {
   GeneralCommTask(GeneralCommTask const&) = delete;
   GeneralCommTask const& operator=(GeneralCommTask const&) = delete;
 
  public:
-  GeneralCommTask(EventLoop2, GeneralServer*, TRI_socket_t, ConnectionInfo&&,
-                  double keepAliveTimeout);
+  GeneralCommTask(EventLoop, GeneralServer*, std::unique_ptr<Socket>,
+                  ConnectionInfo&&, double keepAliveTimeout);
 
   virtual void addResponse(GeneralResponse*) = 0;
   virtual arangodb::Endpoint::TransportType transportType() = 0;
@@ -132,7 +133,8 @@ class GeneralCommTask : public SocketTask2 {
 
   bool handleRequest(WorkItem::uptr<RestHandler>);
   void handleRequestDirectly(WorkItem::uptr<RestHandler>);
-  bool handleRequestAsync(WorkItem::uptr<RestHandler>, uint64_t* jobId = nullptr);
+  bool handleRequestAsync(WorkItem::uptr<RestHandler>,
+                          uint64_t* jobId = nullptr);
 };
 }
 }

@@ -32,7 +32,7 @@ class WorkMonitorHandler : public arangodb::RestBaseHandler {
 
  public:
   bool isDirect() const override;
-  status execute() override;
+  RestStatus execute() override;
 };
 }
 

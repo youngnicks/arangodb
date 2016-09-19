@@ -53,11 +53,12 @@ using namespace arangodb;
 using namespace arangodb::basics;
 using namespace arangodb::rest;
 
-VppCommTask::VppCommTask(EventLoop2 loop, GeneralServer* server,
-                         TRI_socket_t sock, ConnectionInfo&& info,
+VppCommTask::VppCommTask(EventLoop loop, GeneralServer* server,
+                         std::unique_ptr<Socket> socket, ConnectionInfo&& info,
                          double timeout)
-    : Task2(loop, "VppCommTask"),
-      GeneralCommTask(loop, server, sock, std::move(info), timeout),
+    : Task(loop, "VppCommTask"),
+      GeneralCommTask(loop, server, std::move(socket), std::move(info),
+                      timeout),
       _authenticatedUser(),
       _authenticationEnabled(
           application_features::ApplicationServer::getFeature<

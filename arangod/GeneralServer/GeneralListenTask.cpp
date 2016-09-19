@@ -38,48 +38,37 @@ using namespace arangodb::rest;
 /// @brief listen to given port
 ////////////////////////////////////////////////////////////////////////////////
 
-GeneralListenTask::GeneralListenTask(GeneralServer* server, Endpoint* endpoint,
+GeneralListenTask::GeneralListenTask(EventLoop loop, GeneralServer* server,
+                                     Endpoint* endpoint,
                                      ProtocolType connectionType)
-    : Task("GeneralListenTask"),
-      ListenTask(endpoint),
+    : Task(loop, "GeneralListenTask"),
+      ListenTask(loop, endpoint),
       _server(server),
       _connectionType(connectionType) {
   _keepAliveTimeout = GeneralServerFeature::keepAliveTimeout();
-
-  //SslServerFeature* ssl =
-  //    application_features::ApplicationServer::getFeature<SslServerFeature>(
-  //        "SslServer");
-
-  //if (ssl != nullptr) {
-  //  _sslContext = ssl->sslContext();
-  //}
-
-  //_verificationMode = GeneralServerFeature::verificationMode();
-  //_verificationCallback = GeneralServerFeature::verificationCallback();
 }
 
-extern EventLoop2* EVENTLOOP2;
-
-bool GeneralListenTask::handleConnected(TRI_socket_t socket,
+void GeneralListenTask::handleConnected(std::unique_ptr<Socket> socket,
                                         ConnectionInfo&& info) {
   GeneralCommTask* commTask = nullptr;
 
   switch (_connectionType) {
     case ProtocolType::VPPS:
     case ProtocolType::VPP:
-      commTask = new VppCommTask(*EVENTLOOP2, _server, socket, std::move(info),
-                                 _keepAliveTimeout);
+      commTask = new VppCommTask(_loop, _server, std::move(socket),
+                                 std::move(info), _keepAliveTimeout);
       break;
+
     case ProtocolType::HTTPS:
     case ProtocolType::HTTP:
-      commTask = new HttpCommTask(*EVENTLOOP2, _server, socket, std::move(info),
-                                  _keepAliveTimeout);
+      commTask = new HttpCommTask(_loop, _server, std::move(socket),
+                                  std::move(info), _keepAliveTimeout);
       break;
+
     default:
-      return false;
+      socket->_socket.close();
+      return;
   }
 
   commTask->start();
-
-  return true;
 }

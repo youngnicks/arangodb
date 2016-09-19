@@ -28,10 +28,10 @@
 
 #include "Basics/Exceptions.h"
 #include "Basics/WorkMonitor.h"
-#include "Dispatcher/Dispatcher.h"
-#include "Dispatcher/Job.h"
+#include "GeneralServer/RestStatus.h"
 #include "Rest/GeneralResponse.h"
-#include "Scheduler/events.h"
+#include "Scheduler/EventLoop.h"
+#include "Scheduler/JobQueue.h"
 #include "Statistics/StatisticsAgent.h"
 
 namespace arangodb {
@@ -52,67 +52,42 @@ class RestHandler : public RequestStatisticsAgent, public arangodb::WorkItem {
   ~RestHandler() = default;
 
  public:
-  enum class status { DONE, FAILED, ASYNC };
-
- public:
-  // returns true if a handler is executed directly
   virtual bool isDirect() const = 0;
 
-  // returns true if a handler desires to start a new dispatcher thread
   virtual bool needsOwnThread() const { return _needsOwnThread; }
 
-  // returns the queue name
-  virtual size_t queue() const { return Dispatcher::STANDARD_QUEUE; }
+  virtual size_t queue() const { return JobQueue::STANDARD_QUEUE; }
 
-  // prepares execution of a handler, has to be called before execute
   virtual void prepareExecute() {}
 
-  // executes a handler
-  virtual status execute() = 0;
+  virtual RestStatus execute() = 0;
 
-  // finalizes execution of a handler, has to be called after execute
   virtual void finalizeExecute() {}
 
-  // tries to cancel an execution
-  virtual bool cancel() { return false; }
+  virtual bool cancel() {
+    _canceled.store(true);
+    return false;
+  }
 
-  // handles error
   virtual void handleError(basics::Exception const&) = 0;
 
-  // adds a response
   virtual void addResponse(RestHandler*) {}
 
  public:
-  // returns the handler id
   uint64_t handlerId() const { return _handlerId; }
-
-  // returns the id of the underlying task
   uint64_t taskId() const { return _taskId; }
+  void setTaskId(uint64_t taskId);
 
-  // returns the event loop of the underlying task
-  EventLoop eventLoop() const { return _loop; }
+  RestStatus executeFull();
 
-  // sets the id of the underlying task or 0 if dettach
-  void setTaskId(uint64_t id, EventLoop);
-
-  // execution cycle including error handling and prepare
-  status executeFull();
-
-  // return a pointer to the request
   GeneralRequest const* request() const { return _request.get(); }
-
-  // steal the pointer to the request
   std::unique_ptr<GeneralRequest> stealRequest() { return std::move(_request); }
 
-  // returns the response
   GeneralResponse* response() const { return _response.get(); }
-
-  // steal the response
   std::unique_ptr<GeneralResponse> stealResponse() {
     return std::move(_response);
   }
 
-  // find a suitable message id
   uint64_t messageId() {
     uint64_t messageId = 0UL;
     auto req = _request.get();
@@ -130,18 +105,13 @@ class RestHandler : public RequestStatisticsAgent, public arangodb::WorkItem {
   }
 
  protected:
-  // resets the request
   void resetResponse(rest::ResponseCode);
 
  protected:
-  // handler id
   uint64_t const _handlerId;
-
-  // task id or (initially) 0
   uint64_t _taskId = 0;
 
-  // event loop
-  EventLoop _loop;
+  std::atomic<bool> _canceled;
 
   std::unique_ptr<GeneralRequest> _request;
   std::unique_ptr<GeneralResponse> _response;

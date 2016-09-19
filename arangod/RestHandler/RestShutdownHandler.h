@@ -36,7 +36,7 @@ class RestShutdownHandler : public RestBaseHandler {
 
  public:
   bool isDirect() const override;
-  status execute() override;
+  RestStatus execute() override;
 };
 }
 

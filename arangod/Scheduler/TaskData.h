@@ -1,8 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /// DISCLAIMER
 ///
-/// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
-/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
+/// Copyright 2016 ArangoDB GmbH, Cologne, Germany
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
 /// you may not use this file except in compliance with the License.
@@ -19,22 +18,32 @@
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
-/// @author Achim Brandt
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "Task2.h"
+#ifndef ARANGOD_SCHEDULER_TASK_DATA_H
+#define ARANGOD_SCHEDULER_TASK_DATA_H 1
 
-#include <velocypack/Builder.h>
-#include <velocypack/velocypack-aliases.h>
+#include "Statistics/StatisticsAgent.h"
 
-using namespace arangodb::rest;
+namespace arangodb {
+class GeneralResponse;
 
-namespace {
-std::atomic_uint_fast64_t NEXT_TASK_ID(static_cast<uint64_t>(TRI_microtime() *
-                                                             100000.0));
+namespace rest {
+class Task;
 }
 
-Task2::Task2(EventLoop2 loop, std::string const& name)
-    : _loop(loop),
-      _taskId(NEXT_TASK_ID.fetch_add(1, std::memory_order_seq_cst)),
-      _name(name) {}
+class TaskData : public rest::RequestStatisticsAgent {
+ public:
+  static uint64_t const TASK_DATA_RESPONSE = 1000;
+  static uint64_t const TASK_DATA_CHUNK = 1001;
+
+ public:
+  uint64_t _taskId;
+  uint64_t _type;
+  std::string _data;
+  std::unique_ptr<GeneralResponse> _response;
+  rest::Task* _task;
+};
+}
+
+#endif

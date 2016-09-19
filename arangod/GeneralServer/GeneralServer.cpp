@@ -45,6 +45,8 @@ using namespace arangodb::rest;
 // -----------------------------------------------------------------------------
 
 int GeneralServer::sendChunk(uint64_t taskId, std::string const& data) {
+#warning TODO
+#if 0
   auto taskData = std::make_unique<TaskData>();
 
   taskData->_taskId = taskId;
@@ -53,6 +55,7 @@ int GeneralServer::sendChunk(uint64_t taskId, std::string const& data) {
   taskData->_data = data;
 
   SchedulerFeature::SCHEDULER->signalTask(taskData);
+#endif
 
   return TRI_ERROR_NO_ERROR;
 }
@@ -86,7 +89,7 @@ void GeneralServer::startListening() {
 
 void GeneralServer::stopListening() {
   for (auto& task : _listenTasks) {
-    SchedulerFeature::SCHEDULER->destroyTask(task);
+    task->stop();
   }
 
   _listenTasks.clear();
@@ -113,25 +116,14 @@ bool GeneralServer::openEndpoint(Endpoint* endpoint) {
     }
   }
 
-  ListenTask* task = new GeneralListenTask(this, endpoint, protocolType);
-
-  // ...................................................................
-  // For some reason we have failed in our endeavor to bind to the socket
-  // -
-  // this effectively terminates the server
-  // ...................................................................
+  std::unique_ptr<ListenTask> task(new GeneralListenTask(
+      SchedulerFeature::SCHEDULER->eventLoop(), this, endpoint, protocolType));
+  task->start();
 
   if (!task->isBound()) {
-    deleteTask(task);
     return false;
   }
 
-  int res = SchedulerFeature::SCHEDULER->registerTask(task);
-
-  if (res == TRI_ERROR_NO_ERROR) {
-    _listenTasks.emplace_back(task);
-    return true;
-  }
-
-  return false;
+  _listenTasks.emplace_back(task.release());
+  return true;
 }

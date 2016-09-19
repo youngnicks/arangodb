@@ -39,12 +39,7 @@ class RestAdminLogHandler : public RestBaseHandler {
 
  public:
   bool isDirect() const override;
-
-  //////////////////////////////////////////////////////////////////////////////
-  /// @brief returns the log files (inheritDoc)
-  //////////////////////////////////////////////////////////////////////////////
-
-  status execute() override;
+  RestStatus execute() override;
 
  private:
   void reportLogs();

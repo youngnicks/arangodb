@@ -18,37 +18,20 @@
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
 /// @author Dr. Frank Celler
-/// @author Copyright 2016, ArangoDB GmbH, Cologne, Germany
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGODB_ENDPOINT_ENDPOINT_SRV_H
-#define ARANGODB_ENDPOINT_ENDPOINT_SRV_H 1
+#include "Job.h"
 
-#include "Endpoint/Endpoint.h"
+#include "GeneralServer/RestHandler.h"
 
-namespace arangodb {
-class EndpointSrv final : public Endpoint {
- public:
-  explicit EndpointSrv(std::string const&);
+using namespace arangodb;
 
-  ~EndpointSrv();
+Job::Job(std::function<void(WorkItem::uptr<rest::RestHandler>)> callback)
+    : _server(nullptr), _handler(nullptr), _callback(callback) {}
 
- public:
-  bool isConnected() const override;
-  TRI_socket_t connect(double, double) override;
-  void disconnect() override;
-  bool initIncoming(TRI_socket_t) override;
-  int domain() const override;
-  int port() const override;
-  std::string host() const override;
-  std::string hostAndPort() const override;
+Job::Job(rest::GeneralServer* server, WorkItem::uptr<rest::RestHandler> handler,
+         std::function<void(WorkItem::uptr<rest::RestHandler>)> callback)
+    : _server(server), _handler(std::move(handler)), _callback(callback) {}
 
-  void openAcceptor(boost::asio::io_service*,
-                    boost::asio::ip::tcp::acceptor*) override final;
-
- private:
-  std::unique_ptr<Endpoint> _endpoint;
-};
-}
-
-#endif
+// trival, but needs definition of RestHandler
+Job::~Job() {}
