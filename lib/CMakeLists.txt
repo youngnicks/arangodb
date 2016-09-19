@@ -236,3 +236,7 @@ add_library(${LIB_ARANGO_V8} STATIC
   V8/v8-vpack.cpp
   V8/v8-environment.cpp
 )
+
+target_link_libraries(${LIB_ARANGO_V8}
+    boost_boost
+)
