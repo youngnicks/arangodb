@@ -41,6 +41,10 @@ RestEngine::RestEngine() {}
 void RestEngine::init() {}
 
 void RestEngine::run(WorkItem::uptr<rest::RestHandler> handler) {
+  return run(handler.release());
+}
+
+void RestEngine::run(rest::RestHandler* handler) {
   while (true) {
     LOG(ERR) << "HALLO";
 
@@ -94,12 +98,9 @@ void RestEngine::run(WorkItem::uptr<rest::RestHandler> handler) {
 
 RestStatus RestEngine::syncRun() {}
 
-void RestEngine::appendRestStatus(std::unique_ptr<RestStatus> status) {
-  RestStatusElement* element = status->element();
-  _statusEntries.push_back(status.release());
-
-  while (element != nullptr) {
-    _elements.push_back(element);
+void RestEngine::appendRestStatus(std::shared_ptr<RestStatusElement> element) {
+  while (element.get() != nullptr) {
+    _elements.emplace_back(element);
     element = element->previous();
   }
 }

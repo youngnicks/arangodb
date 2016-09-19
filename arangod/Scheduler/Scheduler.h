@@ -63,7 +63,7 @@ class Scheduler {
   }
 
   EventLoop eventLoop() {
-    return EventLoop{._ioService = *_ioService.get(), ._scheduler = this};
+    return EventLoop{._ioService = _ioService.get(), ._scheduler = this};
   }
 
   bool start(basics::ConditionVariable*);

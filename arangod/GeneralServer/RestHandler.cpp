@@ -158,14 +158,8 @@ int RestHandler::executeEngine(RestEngine* engine) {
       return TRI_ERROR_NO_ERROR;
     }
 
-    std::unique_ptr<RestStatus> status(new RestStatus(std::move(result)));
-
-    LOG(ERR) << "BBBBBBBBBBBBBBBBBBBBBBBBB";
-    status->printTree();
-    LOG(ERR) << "BBBBBBBBBBBBBBBBBBBBBBBBB";
-
     engine->setState(RestEngine::State::RUN);
-    engine->appendRestStatus(std::move(status));
+    engine->appendRestStatus(result.element());
 
     return TRI_ERROR_NO_ERROR;
   } catch (Exception const& ex) {
@@ -198,7 +192,7 @@ int RestHandler::executeEngine(RestEngine* engine) {
 int RestHandler::runEngine(RestEngine* engine) {
   try {
     while (engine->hasSteps()) {
-      RestStatusElement* result = engine->popStep();
+      std::shared_ptr<RestStatusElement> result = engine->popStep();
 
       switch (result->state()) {
         case RestStatusElement::State::DONE:
@@ -215,12 +209,19 @@ int RestHandler::runEngine(RestEngine* engine) {
           break;
 
         case RestStatusElement::State::QUEUED:
-          LOG(ERR) << "MISSING";
-          break;
+          engine->queue([this, engine]() {
+            engine->run(this);
+          });
+
+          return TRI_ERROR_NO_ERROR;
 
         case RestStatusElement::State::THEN: {
-          std::unique_ptr<RestStatus> status(result->callThen());
-          engine->appendRestStatus(std::move(status));
+          auto status = result->callThen();
+
+          if (status != nullptr) {
+            engine->appendRestStatus(status->element());
+          }
+
           break;
         }
       }

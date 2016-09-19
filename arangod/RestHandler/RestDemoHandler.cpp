@@ -39,12 +39,10 @@ RestDemoHandler::RestDemoHandler(GeneralRequest* request,
 RestStatus RestDemoHandler::execute() {
   return RestStatus::QUEUE
       .then([]() { LOG(INFO) << "demo handler going to sleep"; })
-      .then([]() { sleep(5); });
-#if 0
+      .then([]() { sleep(5); })
       .then([]() { LOG(INFO) << "demo handler done sleeping"; })
       .then([this]() { doSomeMoreWork(); })
       .then([this]() { return evenMoreWork(); });
-#endif
 }
 
 void RestDemoHandler::doSomeMoreWork() {

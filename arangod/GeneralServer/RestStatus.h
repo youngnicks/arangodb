@@ -25,8 +25,6 @@
 
 #include "Basics/Common.h"
 
-#include "Logger/Logger.h"
-
 // -----------------------------------------------------------------------------
 // --SECTION--                                                 RestStatusElement
 // -----------------------------------------------------------------------------
@@ -43,51 +41,25 @@ class RestStatusElement {
  public:
   RestStatusElement(State status) : _state(status), _previous(nullptr) {
     TRI_ASSERT(_state != State::THEN);
-    LOG(ERR) << "RSE CONST1 (status only)";
   }
 
-  RestStatusElement(State status, RestStatusElement const* previous,
-                    std::function<RestStatus*()> callback)
-      : _state(status),
-        _previous(previous == nullptr ? nullptr
-                                      : new RestStatusElement(*previous)),
-        _callback(callback) {
-    LOG(ERR) << "RSE CONST2 (const previous)";
-  }
-
-  RestStatusElement(State status, RestStatusElement* previous,
-                    std::function<RestStatus*()> callback)
-      : _state(status), _previous(previous), _callback(callback) {
-    LOG(ERR) << "RSE CONST3 (previous)";
-    printTree();
-  }
-
-  RestStatusElement(RestStatusElement const& that)
-      : _state(that._state),
-        _previous(that._previous == nullptr ? nullptr : new RestStatusElement(
-                                                            *that._previous)),
-        _callback(that._callback) {
-    LOG(ERR) << "RSE CONST4 (copy)";
-  }
+  RestStatusElement(State status, std::shared_ptr<RestStatusElement> previous,
+                    std::function<std::shared_ptr<RestStatus>()> callback)
+      : _state(status), _previous(previous), _callback(callback) {}
 
  public:
-  RestStatus* callThen() { return _callback(); }
+  std::shared_ptr<RestStatusElement> previous() const { return _previous; }
   bool isLeaf() const { return _previous == nullptr; }
   State state() const { return _state; }
-  RestStatusElement* previous() const { return _previous; }
+
+ public:
+  std::shared_ptr<RestStatus> callThen() { return _callback(); }
   void printTree() const;
 
  private:
-  RestStatusElement* then1(std::function<void()>) const;
-  RestStatusElement* then1(std::function<void()>);
-
-  RestStatusElement* then2(std::function<RestStatus()>) const;
-  RestStatusElement* then2(std::function<RestStatus()>);
-
- private:
   State _state;
-  RestStatusElement* _previous;
-  std::function<RestStatus*()> _callback;
+  std::shared_ptr<RestStatusElement> _previous;
+  std::function<std::shared_ptr<RestStatus>()> _callback;
 };
 
 // -----------------------------------------------------------------------------
@@ -102,29 +74,37 @@ class RestStatus {
   static RestStatus const QUEUE;
 
  public:
-  explicit RestStatus(RestStatusElement* element) : _element(element) {
-    LOG(ERR) << "RS CONST1";
+  explicit RestStatus(RestStatusElement* element) : _element(element) {}
+
+  RestStatus(RestStatus const& that) = default;
+  RestStatus(RestStatus&& that) = default;
+
+  ~RestStatus() = default;
+
+ public:
+  template <typename FUNC>
+  auto then(FUNC callback) const ->
+      typename std::enable_if<std::is_void<decltype(callback())>::value,
+                              RestStatus>::type {
+    return RestStatus(new RestStatusElement(
+        RestStatusElement::State::THEN, _element, [callback]() {
+          callback();
+          return std::shared_ptr<RestStatus>(nullptr);
+        }));
   }
 
-  RestStatus(RestStatus const& that) : _element(that._element), _free(false) {
-    LOG(ERR) << "RS CONST2 (copy)";
-    printTree();
-  }
-
-  RestStatus(RestStatus&& that) : _element(that._element), _free(that._free) {
-    LOG(ERR) << "RS CONST3 (move)";
-    that._element = nullptr;
-    that._free = false;
-  }
-
-  ~RestStatus() {
-    if (_free && _element != nullptr) {
-      delete _element;
-    }
+  template <typename FUNC>
+  auto then(FUNC callback) const ->
+      typename std::enable_if<std::is_class<decltype(callback())>::value,
+                              RestStatus>::type {
+    return RestStatus(new RestStatusElement(
+        RestStatusElement::State::THEN, _element, [callback]() {
+          return std::shared_ptr<RestStatus>(new RestStatus(callback()));
+        }));
   }
 
  public:
-  RestStatusElement* element() const { return _element; }
+  std::shared_ptr<RestStatusElement> element() { return _element; }
 
   bool isLeaf() const { return _element->isLeaf(); }
 
@@ -136,52 +116,11 @@ class RestStatus {
     return _element->_state == RestStatusElement::State::ABANDONED;
   }
 
-  void printTree() const {
-    if (_element != nullptr) {
-      _element->printTree();
-    } else {
-      LOG(INFO) << "TREE: EMPTY";
-    }
-  }
-
  public:
-  template <typename FUNC>
-  auto then(FUNC func) const ->
-      typename std::enable_if<std::is_void<decltype(func())>::value,
-                              RestStatus>::type {
-    return RestStatus(_element->then1(func));
-  }
-
-  template <typename FUNC>
-  auto then(FUNC func) ->
-      typename std::enable_if<std::is_void<decltype(func())>::value,
-                              RestStatus&>::type {
-    _element = _element->then1(func);
-    _free = true;
-
-    return *this;
-  }
-
-  template <typename FUNC>
-  auto then(FUNC func) const ->
-      typename std::enable_if<std::is_class<decltype(func())>::value,
-                              RestStatus>::type {
-    return RestStatus(_element->then2(func));
-  }
-
-  template <typename FUNC>
-  auto then(FUNC func) ->
-      typename std::enable_if<std::is_class<decltype(func())>::value,
-                              RestStatus&>::type {
-    _element = _element->then2(func);
-    _free = true;
-
-    return *this;
-  }
+  void printTree() const;
 
  private:
-  RestStatusElement* _element;
-  bool _free = true;
+  std::shared_ptr<RestStatusElement> _element;
 };
 }
 

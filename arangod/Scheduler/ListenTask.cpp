@@ -58,8 +58,8 @@ ListenTask::ListenTask(EventLoop loop, Endpoint* endpoint)
     : Task(loop, "ListenTask"),
       _endpoint(endpoint),
       _bound(false),
-      _ioService(&loop._ioService),
-      _acceptor(loop._ioService),
+      _ioService(loop._ioService),
+      _acceptor(*loop._ioService),
       _peer(nullptr) {}
 
 // -----------------------------------------------------------------------------

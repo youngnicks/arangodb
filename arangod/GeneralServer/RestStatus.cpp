@@ -78,51 +78,16 @@ void RestStatusElement::printTree() const {
 
     sep = " -> ";
 
-    element = element->_previous;
+    element = element->_previous.get();
   }
 
   LOG(INFO) << s;
 }
 
-// -----------------------------------------------------------------------------
-// --SECTION--                                                   private methods
-// -----------------------------------------------------------------------------
-
-RestStatusElement* RestStatusElement::then1(
-    std::function<void()> callback) const {
-  LOG(ERR) << "STATUS then1.a";
-  printTree();
-
-  return new RestStatusElement(State::THEN, this, [callback]() {
-    callback();
-    return nullptr;
-  });
-}
-
-RestStatusElement* RestStatusElement::then1(std::function<void()> callback) {
-  LOG(ERR) << "STATUS then1.b";
-  printTree();
-
-  return new RestStatusElement(State::THEN, this, [callback]() {
-    callback();
-    return nullptr;
-  });
-}
-
-RestStatusElement* RestStatusElement::then2(
-    std::function<RestStatus()> callback) const {
-  LOG(ERR) << "STATUS then2.a";
-  printTree();
-
-  return new RestStatusElement(
-      State::THEN, this, [callback]() { return new RestStatus(callback()); });
-}
-
-RestStatusElement* RestStatusElement::then2(
-    std::function<RestStatus()> callback) {
-  LOG(ERR) << "STATUS then2.b";
-  printTree();
-
-  return new RestStatusElement(
-      State::THEN, this, [callback]() { return new RestStatus(callback()); });
+void RestStatus::printTree() const {
+  if (_element != nullptr) {
+    _element->printTree();
+  } else {
+    LOG(INFO) << "TREE: EMPTY";
+  }
 }

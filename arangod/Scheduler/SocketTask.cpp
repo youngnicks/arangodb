@@ -93,7 +93,7 @@ void SocketTask::start() {
   LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "starting communication on "
                                           << _peer->_socket.native_handle();
 
-  _loop._ioService.post([this]() { asyncReadSome(); });
+  _loop._ioService->post([this]() { asyncReadSome(); });
 }
 
 // -----------------------------------------------------------------------------

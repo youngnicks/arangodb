@@ -47,12 +47,15 @@ class RestEngine {
  public:
   void init();
 
-  void init(EventLoop, rest::RequestStatisticsAgent*,
+  void init(EventLoop loop, rest::RequestStatisticsAgent*,
             std::function<void(rest::RestHandler*)> processResult) {
+    _loop = loop;
     _processResult = processResult;
   }
 
   void run(WorkItem::uptr<rest::RestHandler>);
+
+  void run(rest::RestHandler*);
 
   RestStatus syncRun();
 
@@ -60,24 +63,27 @@ class RestEngine {
 
   void processResult(rest::RestHandler* handler) { _processResult(handler); }
 
-  void appendRestStatus(std::unique_ptr<RestStatus>);
+  void appendRestStatus(std::shared_ptr<RestStatusElement>);
+
+  void queue(std::function<void()> callback) {
+    _loop._ioService->post(callback);
+  }
 
   bool hasSteps() {
     return !_elements.empty();
   }
 
-  RestStatusElement* popStep() {
-    RestStatusElement* element = *_elements.rbegin();
+  std::shared_ptr<RestStatusElement> popStep() {
+    auto element = *_elements.rbegin();
     _elements.pop_back();
     return element;
   }
 
  private:
+  EventLoop _loop;
   State _state = State::PREPARE;
   std::function<void(rest::RestHandler*)> _processResult;
-#warning CLEAR VECTOR
-  std::vector<RestStatusElement*> _elements;
-  std::vector<RestStatus*> _statusEntries;
+  std::vector<std::shared_ptr<RestStatusElement>> _elements;
 };
 }
 

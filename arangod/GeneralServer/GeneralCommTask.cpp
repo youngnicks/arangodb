@@ -223,6 +223,7 @@ void GeneralCommTask::handleRequestDirectly(
   handler->initEngine(_loop, agent, [this](RestHandler* handler) {
     addResponse(handler->response());
   });
+
   handler->runEngine(std::move(handler));
 }
 
