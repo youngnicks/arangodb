@@ -45,8 +45,6 @@ WindowsLibraries/
 core
 TAGS
 
-CMakeCache.txt
-CMakeFiles/
 CPackConfig.cmake
 CPackSourceConfig.cmake
 CTestTestfile.cmake
