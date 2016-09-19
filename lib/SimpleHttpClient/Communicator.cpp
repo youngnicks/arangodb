@@ -52,7 +52,7 @@ Communicator::Communicator()
 #endif
 
   _wakeup.fd = _fds[0];
-  _wakeup.events = CURL_WAIT_POLLIN;
+  _wakeup.events = CURL_WAIT_POLLIN | CURL_WAIT_POLLPRI;
 }
 
 Ticket Communicator::addRequest(Destination destination,
@@ -65,8 +65,8 @@ Ticket Communicator::addRequest(Destination destination,
     _newRequests.emplace_back(
         NewRequest{destination, std::move(request), callbacks, options, id});
   }
-
-  write(_fds[1], "", 0);
+  // mop: just send \0 terminated empty string to wake up worker thread
+  write(_fds[1], "", 1);
 
   return Ticket{id};
 }
@@ -105,7 +105,7 @@ int Communicator::work_once() {
 
 void Communicator::wait() {
   static int const MAX_WAIT_MSECS = 1000;  // wait max. 1 seconds
-
+  
   int res = curl_multi_wait(_curl, &_wakeup, 1, MAX_WAIT_MSECS, &_numFds);
   if (res != CURLM_OK) {
     throw std::runtime_error("Invalid curl multi result while waiting! Result was " + std::to_string(res));

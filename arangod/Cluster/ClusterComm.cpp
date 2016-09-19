@@ -1179,6 +1179,7 @@ size_t ClusterComm::performRequests(std::vector<ClusterCommRequest>& requests,
               requests[i].requestType, requests[i].path, requests[i].body,
               requests[i].headerFields, nullptr, localTimeout, false,
               localInitTimeout);
+
           opIDtoIndex.insert(std::make_pair(opId, i));
           // It is possible that an error occurs right away, we will notice
           // below after wait(), though, and retry in due course.
@@ -1367,7 +1368,6 @@ communicator::Destination ClusterComm::createCommunicatorDestination(std::string
     httpEndpoint = "https://" + endpoint.substr(6);
   }
   httpEndpoint += path;
-  LOG(ERR) << "URL " << endpoint << " => " << httpEndpoint;
   return communicator::Destination{httpEndpoint};
 }
 
