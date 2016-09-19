@@ -30,7 +30,7 @@
 #include "Basics/StringBuffer.h"
 #include "Basics/StringUtils.h"
 #include "GeneralRequest.h"
-#include "lib/Endpoint/Endpoint.h"
+#include "Endpoint/Endpoint.h"
 #include "Rest/CommonDefines.h"
 
 namespace arangodb {
