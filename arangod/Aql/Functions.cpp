@@ -546,7 +546,7 @@ static void UnsetOrKeep(arangodb::Transaction* trx,
   for (auto const& entry : VPackObjectIterator(value, false)) {
     TRI_ASSERT(entry.key.isString());
     std::string key = entry.key.copyString();
-    if (!((names.find(key) == names.end()) ^ unset)) {
+    if ((names.find(key) == names.end()) == unset) {
       // not found and unset or found and keep 
       if (recursive && entry.value.isObject()) {
         result.add(entry.key); // Add the key
@@ -2372,6 +2372,54 @@ AqlValue Functions::Zip(arangodb::aql::Query* query,
     return AqlValue(builder.get());
   } catch (...) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+  }
+}
+
+/// @brief function JSON_STRINGIFY
+AqlValue Functions::JsonStringify(arangodb::aql::Query* query,
+                                  arangodb::Transaction* trx,
+                                  VPackFunctionParameters const& parameters) {
+  ValidateParameters(parameters, "JSON_STRINGIFY", 1, 1);
+
+  AqlValue value = ExtractFunctionParameterValue(trx, parameters, 0);
+  AqlValueMaterializer materializer(trx);
+  VPackSlice slice = materializer.slice(value, false);
+    
+  StringBufferLeaser buffer(trx);
+  arangodb::basics::VPackStringBufferAdapter adapter(buffer->stringBuffer());
+
+  VPackDumper dumper(&adapter, trx->transactionContextPtr()->getVPackOptions());
+  dumper.dump(slice);
+    
+  return AqlValue(buffer->begin(), buffer->length());
+}
+
+/// @brief function JSON_PARSE
+AqlValue Functions::JsonParse(arangodb::aql::Query* query,
+                              arangodb::Transaction* trx,
+                              VPackFunctionParameters const& parameters) {
+  ValidateParameters(parameters, "JSON_PARSE", 1, 1);
+
+  AqlValue value = ExtractFunctionParameterValue(trx, parameters, 0);
+  AqlValueMaterializer materializer(trx);
+  VPackSlice slice = materializer.slice(value, false);
+   
+  if (!slice.isString()) { 
+    RegisterWarning(query, "JSON_PARSE",
+                    TRI_ERROR_QUERY_FUNCTION_ARGUMENT_TYPE_MISMATCH);
+    return AqlValue(arangodb::basics::VelocyPackHelper::NullValue());
+  }
+
+  VPackValueLength l;
+  char const* p = slice.getString(l);
+
+  try {
+    std::shared_ptr<VPackBuilder> builder = VPackParser::fromJson(p, l);
+    return AqlValue(*builder);
+  } catch (...) {
+    RegisterWarning(query, "JSON_PARSE",
+                    TRI_ERROR_QUERY_FUNCTION_ARGUMENT_TYPE_MISMATCH);
+    return AqlValue(arangodb::basics::VelocyPackHelper::NullValue());
   }
 }
 

@@ -124,12 +124,23 @@ static std::unique_ptr<traverser::TraverserOptions> CreateTraversalOptions(
             options->uniqueEdges =
                 arangodb::traverser::TraverserOptions::UniquenessLevel::NONE;
           } else if (value->stringEquals("global", true)) {
-            options->uniqueEdges =
-                arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL;
+            THROW_ARANGO_EXCEPTION_MESSAGE(
+                TRI_ERROR_BAD_PARAMETER,
+                "uniqueEdges: 'global' is not supported, "
+                "due to unpredictable results. Use 'path' "
+                "or 'none' instead");
           }
         }
       }
     }
+  }
+  if (options->uniqueVertices ==
+          arangodb::traverser::TraverserOptions::UniquenessLevel::GLOBAL &&
+      !options->useBreadthFirst) {
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_BAD_PARAMETER,
+                                   "uniqueVertices: 'global' is only "
+                                   "supported, with bfs: true due to "
+                                   "unpredictable results.");
   }
   return options;
 }
@@ -403,6 +414,7 @@ ExecutionNode* ExecutionPlan::createCalculation(
   // DISTINCT expression is implemented by creating an anonymous COLLECT node
   auto collectNode = createAnonymousCollect(en);
 
+  TRI_ASSERT(en != nullptr);
   collectNode->addDependency(en);
 
   return collectNode;
@@ -974,6 +986,7 @@ ExecutionNode* ExecutionPlan::fromNodeSort(ExecutionNode* previous,
 
   // properly link the temporary calculations in the plan
   for (auto it = temp.begin(); it != temp.end(); ++it) {
+    TRI_ASSERT(previous != nullptr);
     (*it)->addDependency(previous);
     previous = (*it);
   }
@@ -1804,6 +1817,7 @@ void ExecutionPlan::unlinkNode(ExecutionNode* node, bool allowUnlinkingRoot) {
     p->removeDependency(node);
 
     for (auto* x : dep) {
+      TRI_ASSERT(x != nullptr);
       p->addDependency(x);
     }
   }
@@ -1828,6 +1842,7 @@ void ExecutionPlan::replaceNode(ExecutionNode* oldNode,
   std::vector<ExecutionNode*> deps = oldNode->getDependencies();
 
   for (auto* x : deps) {
+    TRI_ASSERT(x != nullptr);
     newNode->addDependency(x);
     oldNode->removeDependency(x);
   }
@@ -1856,6 +1871,7 @@ void ExecutionPlan::insertDependency(ExecutionNode* oldNode,
   TRI_ASSERT(oldNode->getDependencies().size() == 1);
 
   auto oldDeps = oldNode->getDependencies();  // Intentional copy
+  TRI_ASSERT(!oldDeps.empty());
 
   if (!oldNode->replaceDependency(oldDeps[0], newNode)) {
     THROW_ARANGO_EXCEPTION_MESSAGE(
@@ -1863,6 +1879,7 @@ void ExecutionPlan::insertDependency(ExecutionNode* oldNode,
   }
 
   newNode->removeDependencies();
+  TRI_ASSERT(oldDeps[0] != nullptr);
   newNode->addDependency(oldDeps[0]);
   _varUsageComputed = false;
 }

@@ -52,7 +52,6 @@ HttpCommTask::HttpCommTask(GeneralServer* server, TRI_socket_t sock,
       _readRequestBody(false),
       _allowMethodOverride(GeneralServerFeature::allowMethodOverride()),
       _denyCredentials(true),
-      _acceptDeflate(false),
       _newRequest(true),
       _requestType(rest::RequestType::ILLEGAL),  // TODO(fc) remove
       _fullUrl(),                                // TODO(fc) remove
@@ -73,7 +72,7 @@ void HttpCommTask::handleSimpleError(rest::ResponseCode code,
 
 void HttpCommTask::handleSimpleError(rest::ResponseCode code, int errorNum,
                                      std::string const& errorMessage,
-                                     uint64_t messageId) {
+                                     uint64_t /* messageId */) {
   std::unique_ptr<GeneralResponse> response(new HttpResponse(code));
 
   VPackBuilder builder;
@@ -169,7 +168,7 @@ void HttpCommTask::addResponse(HttpResponse* response) {
 
   auto agent = getAgent(1);
   double const totalTime = agent->elapsedSinceReadStart();
-
+               
   // append write buffer and statistics
   addWriteBuffer(std::move(buffer), agent);
 
@@ -225,14 +224,13 @@ bool HttpCommTask::processRead() {
       _requestType = rest::RequestType::ILLEGAL;
       _fullUrl = "";
       _denyCredentials = true;
-      _acceptDeflate = false;
 
       _sinceCompactification++;
     }
 
     char const* end = etr - 3;
 
-    // read buffer contents are way to small. we can exit here directly
+    // read buffer contents are way too small. we can exit here directly
     if (ptr >= end) {
       return false;
     }
@@ -385,20 +383,6 @@ bool HttpCommTask::processRead() {
         }
 
         default: {
-          size_t l = _readPosition - _startPosition;
-
-          if (6 < l) {
-            l = 6;
-          }
-
-          LOG(WARN) << "got corrupted HTTP request '"
-                    << std::string(_readBuffer.c_str() + _startPosition, l)
-                    << "'";
-
-          // force a socket close, response will be ignored!
-          TRI_CLOSE_SOCKET(_commSocket);
-          TRI_invalidatesocket(&_commSocket);
-
           // bad request, method not allowed
           handleSimpleError(rest::ResponseCode::METHOD_NOT_ALLOWED, 1);
           return false;
@@ -439,13 +423,36 @@ bool HttpCommTask::processRead() {
       // let client send more
       return false;
     }
+      
+    bool handled = false; 
+    std::string const& encoding = _incompleteRequest->header(StaticStrings::ContentEncoding);
+    if (!encoding.empty()) {
+      if (encoding == "gzip") {
+        std::string uncompressed;
+        if (!StringUtils::gzipUncompress(_readBuffer.c_str() + _bodyPosition, _bodyLength, uncompressed)) {
+          handleSimpleError(rest::ResponseCode::BAD, TRI_ERROR_BAD_PARAMETER, "gzip decoding error", 1);
+          return false;
+        }
+        _incompleteRequest->setBody(uncompressed.c_str(), uncompressed.size());
+        handled = true;
+      } else if (encoding == "deflate") {
+        std::string uncompressed;
+        if (!StringUtils::gzipDeflate(_readBuffer.c_str() + _bodyPosition, _bodyLength, uncompressed)) {
+          handleSimpleError(rest::ResponseCode::BAD, TRI_ERROR_BAD_PARAMETER, "gzip deflate error", 1);
+          return false;
+        }
+        _incompleteRequest->setBody(uncompressed.c_str(), uncompressed.size());
+        handled = true;
+      }
+    }
 
-    // read "bodyLength" from read buffer and add this body to "httpRequest"
-    _incompleteRequest->setBody(_readBuffer.c_str() + _bodyPosition,
-                                _bodyLength);
+    if (!handled) {
+      // read "bodyLength" from read buffer and add this body to "httpRequest"
+      _incompleteRequest->setBody(_readBuffer.c_str() + _bodyPosition,
+                                  _bodyLength);
+    }
 
-    LOG(TRACE) << "" << std::string(_readBuffer.c_str() + _bodyPosition,
-                                    _bodyLength);
+    LOG(TRACE) << std::string(_readBuffer.c_str() + _bodyPosition, _bodyLength);
 
     // remove body from read buffer and reset read position
     _readRequestBody = false;
@@ -540,18 +547,6 @@ bool HttpCommTask::processRead() {
 }
 
 void HttpCommTask::processRequest(std::unique_ptr<HttpRequest> request) {
-  // check for deflate
-  bool found;
-
-  std::string const& acceptEncoding =
-      request->header(StaticStrings::AcceptEncoding, found);
-
-  if (found) {
-    if (acceptEncoding.find("deflate") != std::string::npos) {
-      _acceptDeflate = true;
-    }
-  }
-
   {
     LOG_TOPIC(DEBUG, Logger::REQUESTS)
         << "\"http-request-begin\",\"" << (void*)this << "\",\""
@@ -570,6 +565,7 @@ void HttpCommTask::processRequest(std::unique_ptr<HttpRequest> request) {
   }
 
   // check for an HLC time stamp
+  bool found;
   std::string const& timeStamp =
       request->header(StaticStrings::HLCHeader, found);
 
