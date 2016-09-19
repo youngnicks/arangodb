@@ -35,6 +35,7 @@
 #include "Scheduler/ListenTask.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
+#include "Scheduler/TaskData.h"
 
 using namespace arangodb;
 using namespace arangodb::basics;
