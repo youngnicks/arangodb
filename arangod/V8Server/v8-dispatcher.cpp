@@ -50,11 +50,13 @@ using namespace arangodb::rest;
 // -----------------------------------------------------------------------------
 
 namespace {
-class V8Task {
+class V8Task : public std::enable_shared_from_this<V8Task> {
  public:
-  static V8Task* createTask(std::string const& id, std::string const& name,
-                            TRI_vocbase_t*, std::string const& command,
-                            bool allowUseDatabase, int& ec);
+  static std::shared_ptr<V8Task> createTask(std::string const& id,
+                                            std::string const& name,
+                                            TRI_vocbase_t*,
+                                            std::string const& command,
+                                            bool allowUseDatabase, int& ec);
 
   static int unregisterTask(std::string const& id, bool cancel);
 
@@ -63,7 +65,7 @@ class V8Task {
 
  private:
   static Mutex _tasksLock;
-  static std::unordered_map<std::string, V8Task*> _tasks;
+  static std::unordered_map<std::string, std::shared_ptr<V8Task>> _tasks;
 
  public:
   V8Task(std::string const& id, std::string const& name, TRI_vocbase_t*,
@@ -105,11 +107,13 @@ class V8Task {
 };
 
 Mutex V8Task::_tasksLock;
-std::unordered_map<std::string, V8Task*> V8Task::_tasks;
+std::unordered_map<std::string, std::shared_ptr<V8Task>> V8Task::_tasks;
 
-V8Task* V8Task::createTask(std::string const& id, std::string const& name,
-                           TRI_vocbase_t* vocbase, std::string const& command,
-                           bool allowUseDatabase, int& ec) {
+std::shared_ptr<V8Task> V8Task::createTask(std::string const& id,
+                                           std::string const& name,
+                                           TRI_vocbase_t* vocbase,
+                                           std::string const& command,
+                                           bool allowUseDatabase, int& ec) {
   if (id.empty()) {
     ec = TRI_ERROR_TASK_INVALID_ID;
     return nullptr;
@@ -119,14 +123,15 @@ V8Task* V8Task::createTask(std::string const& id, std::string const& name,
 
   if (_tasks.find(id) != _tasks.end()) {
     ec = TRI_ERROR_TASK_DUPLICATE_ID;
-    return nullptr;
+    return {nullptr};
   }
 
-  auto task = new V8Task(id, name, vocbase, command, allowUseDatabase);
-  _tasks.emplace(id, task);
-  ec = TRI_ERROR_NO_ERROR;
+  auto itr = _tasks.emplace(
+      id,
+      std::make_shared<V8Task>(id, name, vocbase, command, allowUseDatabase));
 
-  return task;
+  ec = TRI_ERROR_NO_ERROR;
+  return itr.first->second;
 }
 
 int V8Task::unregisterTask(std::string const& id, bool cancel) {
@@ -190,25 +195,7 @@ V8Task::V8Task(std::string const& id, std::string const& name,
       _created(TRI_microtime()),
       _vocbaseGuard(vocbase),
       _command(command),
-      _allowUseDatabase(allowUseDatabase) {
-  _handler = [this](const boost::system::error_code& error) {
-    if (error) {
-      unregisterTask(_id, false);
-      delete this;
-      return;
-    }
-
-    work();
-
-    if (_periodic) {
-      _timer->expires_from_now(_interval);
-      _timer->async_wait(_handler);
-    } else {
-      unregisterTask(_id, false);
-      delete this;
-    }
-  };
-}
+      _allowUseDatabase(allowUseDatabase) {}
 
 void V8Task::setOffset(double offset) {
   _offset = std::chrono::microseconds(static_cast<long long>(offset * 1000000));
@@ -234,8 +221,26 @@ void V8Task::start(boost::asio::io_service* ioService) {
     _offset = std::chrono::microseconds(1);
   }
 
+  auto self = shared_from_this();
+  std::function<void(const boost::system::error_code&)> handler =
+      [self, this, &handler](const boost::system::error_code& error) {
+        if (error) {
+          V8Task::unregisterTask(_id, false);
+          return;
+        }
+
+        work();
+
+        if (_periodic) {
+          _timer->expires_from_now(_interval);
+          _timer->async_wait(handler);
+        } else {
+          V8Task::unregisterTask(_id, false);
+        }
+      };
+
   _timer->expires_from_now(_offset);
-  _timer->async_wait(_handler);
+  _timer->async_wait(handler);
 }
 
 void V8Task::cancel() {
@@ -477,9 +482,9 @@ static void JS_RegisterTask(v8::FunctionCallbackInfo<v8::Value> const& args) {
   command = "(function (params) { " + command + " } )(params);";
 
   int res;
-  std::unique_ptr<V8Task> task(
+  std::shared_ptr<V8Task> task =
       V8Task::createTask(id, name, static_cast<TRI_vocbase_t*>(v8g->_vocbase),
-                         command, isSystem, res));
+                         command, isSystem, res);
 
   if (res != TRI_ERROR_NO_ERROR) {
     TRI_V8_THROW_EXCEPTION(res);
@@ -505,7 +510,7 @@ static void JS_RegisterTask(v8::FunctionCallbackInfo<v8::Value> const& args) {
 
   // and start
   auto ioService = SchedulerFeature::SCHEDULER->ioService();
-  task.release()->start(ioService);
+  task->start(ioService);
 
   v8::Handle<v8::Value> result = TRI_VPackToV8(isolate, builder->slice());
 
