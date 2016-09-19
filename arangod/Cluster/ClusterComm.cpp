@@ -356,9 +356,11 @@ OperationID ClusterComm::asyncRequest(
       bool ret = ((*callback.get())(result.get()));
       TRI_ASSERT(ret == true);
     };
-    callbacks._onSuccess = [result](std::unique_ptr<GeneralResponse> response) {
+    callbacks._onSuccess = [callback, result](std::unique_ptr<GeneralResponse> response) {
       TRI_ASSERT(response.get() != nullptr);
       result->fromResponse(std::move(response));
+      bool ret = ((*callback.get())(result.get()));
+      TRI_ASSERT(ret == true);
     };
   } else {
     callbacks._onError = [callback, result, doLogConnectionErrors, this](int errorCode, std::unique_ptr<GeneralResponse> response) {
@@ -389,9 +391,7 @@ OperationID ClusterComm::asyncRequest(
   auto ticketId = _communicator->addRequest(createCommunicatorDestination(result->endpoint, path),
                std::move(request), callbacks, opt);
   
-  // mop: this is used to distinguish a syncRequest from an asyncRequest while processing
-  // the answer...
-  result->single = false;
+  result->single = singleRequest;
   result->status = CL_COMM_SUBMITTED;
   result->operationID = ticketId;
   CONDITION_LOCKER(locker, somethingReceived);
@@ -622,40 +622,22 @@ bool ClusterComm::match(ClientTransactionID const& clientTransactionID,
 /// from deleting `result` and `answer`.
 ////////////////////////////////////////////////////////////////////////////////
 
-ClusterCommResult const ClusterComm::enquire(OperationID const operationID) {
-  IndexIterator i;
-  ClusterCommOperation* op = nullptr;
+ClusterCommResult const ClusterComm::enquire(Ticket const ticketId) {
+  ResponseIterator i;
+  AsyncResponse response;
 
-  // First look into the send queue:
-  {
-    CONDITION_LOCKER(locker, somethingToSend);
-
-    i = toSendByOpID.find(operationID);
-    if (i != toSendByOpID.end()) {
-      op = *(i->second);
-      return op->result;
-    }
-  }
-
-  // Note that operations only ever move from the send queue to the
-  // receive queue and never in the other direction. Therefore it is
-  // OK to use two different locks here, since we look first in the
-  // send queue and then in the receive queue; we can never miss
-  // an operation that is actually there.
-
-  // If the above did not give anything, look into the receive queue:
   {
     CONDITION_LOCKER(locker, somethingReceived);
 
-    i = receivedByOpID.find(operationID);
-    if (i != receivedByOpID.end()) {
-      op = *(i->second);
-      return op->result;
+    i = responses.find(ticketId);
+    if (i != responses.end()) {
+      response = i->second;
+      return *response.result.get();
     }
   }
 
   ClusterCommResult res;
-  res.operationID = operationID;
+  res.operationID = ticketId;
   res.status = CL_COMM_DROPPED;
   return res;
 }
