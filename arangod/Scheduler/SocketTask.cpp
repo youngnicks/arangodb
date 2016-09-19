@@ -37,7 +37,7 @@ using namespace arangodb::rest;
 // --SECTION--                                      constructors and destructors
 // -----------------------------------------------------------------------------
 
-SocketTask::SocketTask(arangodb::EventLoop loop, std::unique_ptr<Socket> socket,
+SocketTask::SocketTask(arangodb::EventLoop loop, std::unique_ptr<arangodb::Socket> socket,
                        ConnectionInfo&& connectionInfo, double keepAliveTimeout)
     : Task(loop, "SocketTask"),
       _connectionInfo(connectionInfo),
