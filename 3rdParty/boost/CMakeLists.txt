@@ -19,7 +19,7 @@ else()
     target_include_directories(boost_boost INTERFACE "${boost_src}")
 
     #build boost_system - there seems to be just one cpp file:)
-    add_library(boost_system
+    add_library(boost_system STATIC
         ${boost_src}/libs/system/src/error_code.cpp
     )
     target_link_libraries(boost_system PUBLIC boost_boost) #this will add required includes
