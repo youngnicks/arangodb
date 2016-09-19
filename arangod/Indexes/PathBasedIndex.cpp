@@ -147,7 +147,7 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
     if (slices.size() == n) {
       // if shapes.size() != n, then the value is not inserted into the index
       // because of index sparsity!
-      IndexElement* element = IndexElement::allocate(document.mptr(), slices);
+      IndexElement* element = IndexElement::create(document.mptr(), slices);
 
       if (element == nullptr) {
         return TRI_ERROR_OUT_OF_MEMORY;
@@ -181,7 +181,7 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
 
       for (auto& info : toInsert) {
         TRI_ASSERT(info.size() == n);
-        IndexElement* element = IndexElement::allocate(document.mptr(), info);
+        IndexElement* element = IndexElement::create(document.mptr(), info);
 
         if (element == nullptr) {
           return TRI_ERROR_OUT_OF_MEMORY;

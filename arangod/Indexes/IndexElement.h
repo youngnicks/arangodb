@@ -106,21 +106,21 @@ static_assert(sizeof(TRI_vpack_sub_t) == 16, "invalid size of TRI_vpack_sub_t");
 
 /// @brief Unified index element. Do not directly construct it.
 struct IndexElement {
+  // Do not use new for this struct, use create()!
  private:
-  TRI_doc_mptr_t* _document;
+  IndexElement(TRI_doc_mptr_t const* mptr, size_t numSubs); 
 
-  // Do not use new for this struct, use allocate!
-  IndexElement() {}
+  IndexElement() = delete;
   IndexElement(IndexElement const&) = delete;
   IndexElement& operator=(IndexElement const&) = delete;
   ~IndexElement() = delete;
 
  public:
-  /// @brief get a pointer to the document's masterpointer
-  TRI_doc_mptr_t* document() const { return _document; }
-
   /// @brief get the revision id of the document
   TRI_voc_rid_t revisionId() const { return _document->revisionId(); }
+  
+  TRI_doc_mptr_t const* document() const { return _document; }
+  TRI_doc_mptr_t* document() { return const_cast<TRI_doc_mptr_t*>(_document); }
   
   inline TRI_vpack_sub_t const* subObject(size_t position) const {
     char const* p = reinterpret_cast<char const*>(this) + sizeof(TRI_doc_mptr_t*) + position * sizeof(TRI_vpack_sub_t);
@@ -139,50 +139,13 @@ struct IndexElement {
     return slice(0).hashString(seed);
   }
 
-  /// @brief allocate a new index element
-  static IndexElement* allocate(TRI_doc_mptr_t const* mptr, std::vector<arangodb::velocypack::Slice> const& values) {
-    TRI_ASSERT(!values.empty());
-
-    IndexElement* element = allocate(mptr, values.size());
-
-    if (element == nullptr) {
-      return nullptr;
-    }
-
-    try {
-      for (size_t i = 0; i < values.size(); ++i) {
-        element->subObject(i)->fill(values[i]);
-      }
-      return element;
-    } catch (...) {
-      element->free(values.size());
-      return nullptr;
-    }
-  }
-
+  /// @brief allocate a new index element from a vector of slices
+  static IndexElement* create(TRI_doc_mptr_t const* mptr, std::vector<arangodb::velocypack::Slice> const& values);
+  
   /// @brief allocate a new index element from a slice
-  static IndexElement* allocate(TRI_doc_mptr_t const* mptr, arangodb::velocypack::Slice const& value) {
-    IndexElement* element = allocate(mptr, 1);
-    
-    if (element == nullptr) {
-      return nullptr;
-    }
+  static IndexElement* create(TRI_doc_mptr_t const* mptr, arangodb::velocypack::Slice const& value);
 
-    try {
-      element->subObject(0)->fill(value);
-      return element;
-    } catch (...) {
-      element->free(1);
-      return nullptr;
-    }
-  }
-
-  void free(size_t numSubs) {
-    for (size_t i = 0; i < numSubs; ++i) {
-      subObject(i)->free();
-    }
-    TRI_Free(TRI_UNKNOWN_MEM_ZONE, this);
-  }
+  void free(size_t numSubs);
 
   /// @brief memory usage of an index element
   static constexpr size_t memoryUsage(size_t numSubs) {
@@ -190,38 +153,15 @@ struct IndexElement {
   }
 
  private:
-  static IndexElement* allocate(TRI_doc_mptr_t const* mptr, size_t numSubs) {
-    void* space = TRI_Allocate(TRI_UNKNOWN_MEM_ZONE, memoryUsage(numSubs), false);
-
-    if (space == nullptr) {
-      return nullptr;
-    }
-
-    // will not fail
-    IndexElement* element = new (space) IndexElement();
-
-    element->init(numSubs);
-    element->document(mptr);
-
-    return element;
-  }
-
-  /// @brief set the pointer to the document's masterpointer
-  void document(TRI_doc_mptr_t const* doc) noexcept { _document = const_cast<TRI_doc_mptr_t*>(doc); }
-
-  /// @brief set the pointer to the document's masterpointer
-  void document(TRI_doc_mptr_t* doc) noexcept { _document = doc; }
-  
-  void init(size_t numSubs) {
-    for (size_t i = 0; i < numSubs; ++i) {
-      subObject(i)->fill(arangodb::velocypack::Slice::noneSlice());
-    }
-  }
+  static IndexElement* create(TRI_doc_mptr_t const* mptr, size_t numSubs);
 
   inline TRI_vpack_sub_t* subObject(size_t position) {
-    char* p = reinterpret_cast<char*>(this) + sizeof(TRI_doc_mptr_t*) + position * sizeof(TRI_vpack_sub_t);
+    char* p = reinterpret_cast<char*>(this) + memoryUsage(position);
     return reinterpret_cast<TRI_vpack_sub_t*>(p);
   }
+ 
+ private:
+  TRI_doc_mptr_t const* _document;
 };
 
 class IndexElementGuard {

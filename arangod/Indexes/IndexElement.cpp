@@ -1,0 +1,90 @@
+////////////////////////////////////////////////////////////////////////////////
+/// DISCLAIMER
+///
+/// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
+/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
+///
+/// Licensed under the Apache License, Version 2.0 (the "License");
+/// you may not use this file except in compliance with the License.
+/// You may obtain a copy of the License at
+///
+///     http://www.apache.org/licenses/LICENSE-2.0
+///
+/// Unless required by applicable law or agreed to in writing, software
+/// distributed under the License is distributed on an "AS IS" BASIS,
+/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+/// See the License for the specific language governing permissions and
+/// limitations under the License.
+///
+/// Copyright holder is ArangoDB GmbH, Cologne, Germany
+///
+/// @author Jan Steemann
+////////////////////////////////////////////////////////////////////////////////
+
+#include "IndexElement.h"
+
+using namespace arangodb;
+
+IndexElement::IndexElement(TRI_doc_mptr_t const* mptr, size_t numSubs) 
+    : _document(mptr) {
+    
+  for (size_t i = 0; i < numSubs; ++i) {
+    subObject(i)->fill(arangodb::velocypack::Slice::noneSlice());
+  }
+}
+
+/// @brief allocate a new index element
+IndexElement* IndexElement::create(TRI_doc_mptr_t const* mptr, std::vector<arangodb::velocypack::Slice> const& values) {
+  TRI_ASSERT(!values.empty());
+
+  IndexElement* element = create(mptr, values.size());
+
+  if (element == nullptr) {
+    return nullptr;
+  }
+
+  try {
+    for (size_t i = 0; i < values.size(); ++i) {
+      element->subObject(i)->fill(values[i]);
+    }
+    return element;
+  } catch (...) {
+    element->free(values.size());
+    return nullptr;
+  }
+}
+
+/// @brief allocate a new index element from a slice
+IndexElement* IndexElement::create(TRI_doc_mptr_t const* mptr, arangodb::velocypack::Slice const& value) {
+  IndexElement* element = create(mptr, 1);
+  
+  if (element == nullptr) {
+    return nullptr;
+  }
+
+  try {
+    element->subObject(0)->fill(value);
+    return element;
+  } catch (...) {
+    element->free(1);
+    return nullptr;
+  }
+}
+
+IndexElement* IndexElement::create(TRI_doc_mptr_t const* mptr, size_t numSubs) {
+  void* space = TRI_Allocate(TRI_UNKNOWN_MEM_ZONE, memoryUsage(numSubs), false);
+
+  if (space == nullptr) {
+    return nullptr;
+  }
+
+  // will not fail
+  return new (space) IndexElement(mptr, numSubs);
+}
+
+void IndexElement::free(size_t numSubs) {
+  for (size_t i = 0; i < numSubs; ++i) {
+    subObject(i)->free();
+  }
+  TRI_Free(TRI_UNKNOWN_MEM_ZONE, this);
+}

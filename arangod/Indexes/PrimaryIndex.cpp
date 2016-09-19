@@ -558,5 +558,5 @@ void PrimaryIndex::handleValNode(IndexIteratorContext* context,
 }
 
 IndexElement* PrimaryIndex::buildKeyElement(TRI_doc_mptr_t const* mptr) const {
-  return IndexElement::allocate(mptr, Transaction::extractKeyFromDocument(VPackSlice(mptr->vpack())));
+  return IndexElement::create(mptr, Transaction::extractKeyFromDocument(VPackSlice(mptr->vpack())));
 }

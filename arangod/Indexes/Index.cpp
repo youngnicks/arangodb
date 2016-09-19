@@ -792,7 +792,7 @@ void Index::expandInSearchValues(VPackSlice const base,
 IndexElement* Index::buildStringElement(DocumentWrapper const& doc, VPackSlice const& value) const {
   TRI_ASSERT(value.isString());
   
-  return IndexElement::allocate(doc.mptr(), value);
+  return IndexElement::create(doc.mptr(), value);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

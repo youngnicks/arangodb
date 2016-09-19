@@ -214,6 +214,7 @@ add_executable(${BIN_ARANGOD}
   Indexes/GeoIndex.cpp
   Indexes/HashIndex.cpp
   Indexes/Index.cpp
+  Indexes/IndexElement.cpp
   Indexes/IndexIterator.cpp
   Indexes/PathBasedIndex.cpp
   Indexes/PrimaryIndex.cpp
