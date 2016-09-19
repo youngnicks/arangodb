@@ -699,29 +699,6 @@ foreach (LINK_DIR ${LINK_DIRECTORIES})
 endforeach()
 
 ################################################################################
-## BOOST
-################################################################################
-
-message(STATUS "using 3rdParty BOOST")
-option(USE_BOOST_UNITTESTS "use boost unit-tests" ON)
-
-set(Boost_VERSION "1.61.0")
-set(Boost_INCLUDE_DIR
-  "${PROJECT_SOURCE_DIR}/3rdParty/boost/${Boost_VERSION}"
-)
-
-if (NOT USE_BOOST_UNITTESTS)
-  message(STATUS "BOOST unit-tests are disabled")
-endif ()
-
-include_directories(SYSTEM ${Boost_INCLUDE_DIR})
-add_definitions(-DARANGODB_BOOST_VERSION=\"${Boost_VERSION}\")
-
-#set(BOOST_LIBS
-#  "${PROJECT_SOURCE_DIR}/3rdParty/boost/${Boost_VERSION}/stage/lib/libboost_system.a"
-#)
-
-################################################################################
 ## ICU
 ################################################################################
 
