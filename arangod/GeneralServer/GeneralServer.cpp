@@ -32,9 +32,11 @@
 #include "GeneralServer/RestHandler.h"
 #include "Logger/Logger.h"
 #include "Rest/CommonDefines.h"
+#include "Rest/GeneralResponse.h"
 #include "Scheduler/ListenTask.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
+#include "Scheduler/Task.h"
 #include "Scheduler/TaskData.h"
 
 using namespace arangodb;

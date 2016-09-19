@@ -29,6 +29,7 @@
 #include "GeneralServer/VppCommTask.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
+#include "Scheduler/TaskData.h"
 #include "Ssl/SslServerFeature.h"
 
 using namespace arangodb;
