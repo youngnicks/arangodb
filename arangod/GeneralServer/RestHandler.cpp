@@ -63,7 +63,7 @@ RestHandler::RestHandler(GeneralRequest* request, GeneralResponse* response)
 void RestHandler::setTaskId(uint64_t id) { _taskId = id; }
 
 RestStatus RestHandler::executeFull() {
-  RestStatus result = RestStatus::FAILED;
+  RestStatus result = RestStatus::FAIL;
 
   requestStatisticsAgentSetRequestStart();
 
@@ -116,15 +116,15 @@ RestStatus RestHandler::executeFull() {
       handleError(err);
     }
   } catch (Exception const& ex) {
-    result = RestStatus::FAILED;
+    result = RestStatus::FAIL;
     requestStatisticsAgentSetExecuteError();
     LOG(ERR) << "caught exception: " << DIAGNOSTIC_INFORMATION(ex);
   } catch (std::exception const& ex) {
-    result = RestStatus::FAILED;
+    result = RestStatus::FAIL;
     requestStatisticsAgentSetExecuteError();
     LOG(ERR) << "caught exception: " << ex.what();
   } catch (...) {
-    result = RestStatus::FAILED;
+    result = RestStatus::FAIL;
     requestStatisticsAgentSetExecuteError();
     LOG(ERR) << "caught exception";
   }

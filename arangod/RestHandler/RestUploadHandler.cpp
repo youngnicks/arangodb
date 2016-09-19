@@ -68,7 +68,7 @@ RestStatus RestUploadHandler::execute() {
     errorMessage = "could not generate temp file: " + errorMessage;
     generateError(rest::ResponseCode::SERVER_ERROR,
                   TRI_ERROR_INTERNAL, errorMessage);
-    return RestStatus::FAILED;
+    return RestStatus::FAIL;
   }
 
   char* relative = TRI_GetFilename(filename);
@@ -92,7 +92,7 @@ RestStatus RestUploadHandler::execute() {
         TRI_Free(TRI_CORE_MEM_ZONE, filename);
         generateError(rest::ResponseCode::SERVER_ERROR,
                       TRI_ERROR_INTERNAL, "invalid multipart request");
-        return RestStatus::FAILED;
+        return RestStatus::FAIL;
       }
     }
   }
@@ -105,7 +105,7 @@ RestStatus RestUploadHandler::execute() {
     TRI_Free(TRI_CORE_MEM_ZONE, filename);
     generateError(rest::ResponseCode::SERVER_ERROR,
                   TRI_ERROR_INTERNAL, "could not save file");
-    return RestStatus::FAILED;
+    return RestStatus::FAIL;
   }
 
   char* fullName = TRI_Concatenate2File("uploads", relative);

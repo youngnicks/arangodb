@@ -58,7 +58,7 @@ RestStatus RestBatchHandler::execute() {
   }
   // should never get here
   TRI_ASSERT(false);
-  return RestStatus::FAILED;
+  return RestStatus::FAIL;
 }
 
 RestStatus RestBatchHandler::executeVpp() {
@@ -98,7 +98,7 @@ RestStatus RestBatchHandler::executeHttp() {
   if (!getBoundary(&boundary)) {
     generateError(rest::ResponseCode::BAD, TRI_ERROR_HTTP_BAD_PARAMETER,
                   "invalid content-type or boundary received");
-    return RestStatus::FAILED;
+    return RestStatus::FAIL;
   }
 
   LOG(TRACE) << "boundary of multipart-message is '" << boundary << "'";
@@ -132,7 +132,7 @@ RestStatus RestBatchHandler::executeHttp() {
                     "invalid multipart message received");
       LOG(WARN) << "received a corrupted multipart message";
 
-      return RestStatus::FAILED;
+      return RestStatus::FAIL;
     }
 
     // split part into header & body
@@ -206,7 +206,7 @@ RestStatus RestBatchHandler::executeHttp() {
         generateError(rest::ResponseCode::BAD, TRI_ERROR_INTERNAL,
                       "could not create handler for batch part processing");
 
-        return RestStatus::FAILED;
+        return RestStatus::FAIL;
       }
     }
 
@@ -220,7 +220,7 @@ RestStatus RestBatchHandler::executeHttp() {
         generateError(rest::ResponseCode::BAD, TRI_ERROR_INTERNAL,
                       "executing a handler for batch part failed");
 
-        return RestStatus::FAILED;
+        return RestStatus::FAIL;
       }
 
       HttpResponse* partResponse =
@@ -230,7 +230,7 @@ RestStatus RestBatchHandler::executeHttp() {
         generateError(rest::ResponseCode::BAD, TRI_ERROR_INTERNAL,
                       "could not create a response for batch part request");
 
-        return RestStatus::FAILED;
+        return RestStatus::FAIL;
       }
 
       rest::ResponseCode const code = partResponse->responseCode();

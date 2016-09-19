@@ -30,11 +30,11 @@ class RestStatus {
  public:
   static RestStatus const ABANDON;
   static RestStatus const DONE;
-  static RestStatus const FAILED;
+  static RestStatus const FAIL;
   static RestStatus const QUEUE;
 
  public:
-  enum class Status { DONE, FAILED, ABANDONED, QUEUED };
+  enum class Status { DONE, FAIL, ABANDONED, QUEUED };
 
  public:
   RestStatus(Status status) : _status(status) {}
@@ -45,7 +45,7 @@ class RestStatus {
 
  public:
   bool done() const { return _status == Status::DONE; }
-  bool failed() const { return _status == Status::FAILED; }
+  bool failed() const { return _status == Status::FAIL; }
   bool abandoned() const { return _status == Status::ABANDONED; }
 
  private:

@@ -26,8 +26,5 @@ using namespace arangodb;
 
 RestStatus const RestStatus::ABANDON(Status::ABANDONED);
 RestStatus const RestStatus::DONE(Status::DONE);
-RestStatus const RestStatus::FAILED(Status::FAILED);
+RestStatus const RestStatus::FAIL(Status::FAIL);
 RestStatus const RestStatus::QUEUE(Status::QUEUED);
-
-
-
