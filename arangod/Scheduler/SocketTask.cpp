@@ -25,6 +25,7 @@
 
 #include "Basics/StringBuffer.h"
 #include "Basics/socket-utils.h"
+#include "Endpoint/ConnectionInfo.h"
 #include "Logger/Logger.h"
 #include "Scheduler/EventLoop.h"
 #include "Scheduler/JobGuard.h"
@@ -37,8 +38,10 @@ using namespace arangodb::rest;
 // --SECTION--                                      constructors and destructors
 // -----------------------------------------------------------------------------
 
-SocketTask::SocketTask(arangodb::EventLoop loop, std::unique_ptr<arangodb::Socket> socket,
-                       ConnectionInfo&& connectionInfo, double keepAliveTimeout)
+SocketTask::SocketTask(arangodb::EventLoop loop,
+                       std::unique_ptr<arangodb::Socket> socket,
+                       arangodb::ConnectionInfo&& connectionInfo,
+                       double keepAliveTimeout)
     : Task(loop, "SocketTask"),
       _connectionInfo(connectionInfo),
       _readBuffer(TRI_UNKNOWN_MEM_ZONE, READ_BLOCK_SIZE + 1, false),
