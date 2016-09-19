@@ -217,6 +217,7 @@ add_library(${LIB_ARANGO} STATIC
 
 target_link_libraries(${LIB_ARANGO}
     boost_system
+    boost_boost
 )
 
 ################################################################################
