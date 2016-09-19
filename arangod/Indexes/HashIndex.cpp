@@ -299,6 +299,11 @@ IndexElement* HashIndexIterator::next() {
 
 void HashIndexIterator::nextBabies(std::vector<IndexElement*>& result, size_t atMost) {
   result.clear();
+  
+  if (atMost == 0) {
+    return;
+  }
+
   while (true) {
     if (_posInBuffer >= _buffer.size()) {
       if (!_lookups.hasAndGetNext()) {

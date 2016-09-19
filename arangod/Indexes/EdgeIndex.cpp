@@ -166,6 +166,12 @@ IndexElement* EdgeIndexIterator::next() {
 void EdgeIndexIterator::nextBabies(std::vector<IndexElement*>& buffer, size_t limit) {
   size_t atMost = _batchSize > limit ? limit : _batchSize;
 
+  if (atMost == 0) {
+    // nothing to do
+    _buffer.clear();
+    return;
+  }
+
   while (_iterator.valid()) {
     if (buffer.empty()) {
       VPackSlice tmp = _iterator.value();

@@ -105,15 +105,17 @@ IndexElement* IndexIterator::next() { return nullptr; }
 void IndexIterator::nextBabies(std::vector<IndexElement*>& result, size_t batchSize) {
   result.clear();
 
-  while (true) {
-    IndexElement* mptr = next();
-    if (mptr == nullptr) {
-      return;
-    }
-    result.emplace_back(mptr);
-    batchSize--;
-    if (batchSize == 0) {
-      return;
+  if (batchSize > 0) {
+    while (true) {
+      IndexElement* mptr = next();
+      if (mptr == nullptr) {
+        return;
+      }
+      result.emplace_back(mptr);
+      batchSize--;
+      if (batchSize == 0) {
+        return;
+      }
     }
   }
 }
