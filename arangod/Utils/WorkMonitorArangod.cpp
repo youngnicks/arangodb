@@ -247,7 +247,7 @@ void WorkMonitor::sendWorkOverview(
   data->_type = TaskData::TASK_DATA_RESPONSE;
   data->_response = handler->stealResponse();
 
-#warning TODO
+#pragma message("TODO")
   // SchedulerFeature::SCHEDULER->signalTask(data);
 
   delete static_cast<WorkItem*>(handler);

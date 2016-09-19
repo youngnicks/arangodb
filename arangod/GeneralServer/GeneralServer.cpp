@@ -45,7 +45,7 @@ using namespace arangodb::rest;
 // -----------------------------------------------------------------------------
 
 int GeneralServer::sendChunk(uint64_t taskId, std::string const& data) {
-#warning TODO
+#pragma message("TODO")
 #if 0
   auto taskData = std::make_unique<TaskData>();
 

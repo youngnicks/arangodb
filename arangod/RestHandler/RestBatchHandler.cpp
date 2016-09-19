@@ -215,7 +215,7 @@ RestStatus RestBatchHandler::executeHttp() {
       HandlerWorkStack work(handler);
       RestStatus result = work.handler()->executeFull();
 
-#warning TODO
+#pragma message("TODO")
       if (result.failed()) {
         generateError(rest::ResponseCode::BAD, TRI_ERROR_INTERNAL,
                       "executing a handler for batch part failed");

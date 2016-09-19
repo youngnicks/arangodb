@@ -234,7 +234,7 @@ void GeneralCommTask::handleRequestDirectly(WorkItem::uptr<RestHandler> h) {
   } else if (result.abandoned()) {
     handler->release();
   } else {
-#warning TODO
+#pragma message("TODO")
   }
 }
 
