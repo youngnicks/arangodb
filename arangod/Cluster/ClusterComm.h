@@ -227,20 +227,21 @@ struct ClusterCommResult {
   static char const* stringifyStatus(ClusterCommOpStatus status);
   
   void fromError(int errorCode, std::unique_ptr<GeneralResponse> response) {
-    try {
-      switch(errorCode) {
-        case TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT:
-          status = CL_COMM_BACKEND_UNAVAILABLE;
-          break;
-        default:
+    errorMessage = TRI_errno_string(errorCode);
+    switch(errorCode) {
+      case TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT:
+        status = CL_COMM_BACKEND_UNAVAILABLE;
+        break;
+      case TRI_ERROR_CLUSTER_TIMEOUT:
+        status = CL_COMM_TIMEOUT;
+        break;
+      default:
+        if (response == nullptr) {
           status = CL_COMM_ERROR;
-      }
-      if (response != nullptr) {
-        result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.release()));
-      }
-      errorMessage = TRI_errno_string(errorCode);
-    } catch (...) {
-      status = CL_COMM_DROPPED;
+        } else {
+          // mop: wow..this is actually the old behaviour :S
+          fromResponse(std::move(response));
+        }
     }
   }
 
@@ -253,9 +254,10 @@ struct ClusterCommResult {
     // request => response we simulate the old behaviour now and fake a request
     // containing the body of our response
     // :snake: OPST_CIRCUS
-    HttpRequest* request = HttpRequest::createHttpRequest(ContentType::JSON, dynamic_cast<HttpResponse*>(response.get())->body().c_str(), dynamic_cast<HttpResponse*>(response.get())->body().length(), {});
-    answer.reset(request);
     answer_code = dynamic_cast<HttpResponse*>(response.get())->responseCode();
+    HttpRequest* request = HttpRequest::createHttpRequest(ContentType::JSON, dynamic_cast<HttpResponse*>(response.get())->body().c_str(), dynamic_cast<HttpResponse*>(response.get())->body().length(), {});
+    request->setHeader("x-arango-response-code", static_cast<int>(answer_code));
+    answer.reset(request);
     TRI_ASSERT(response != nullptr);
     result = std::make_shared<httpclient::SimpleHttpCommunicatorResult>(dynamic_cast<HttpResponse*>(response.release()));
     // mop: well single requests were processed differently formerly and got
@@ -263,7 +265,9 @@ struct ClusterCommResult {
     if (single) {
       status = result->wasHttpError() ? CL_COMM_ERROR: CL_COMM_SENT;
     } else {
-      status = result->wasHttpError() ? CL_COMM_ERROR: CL_COMM_RECEIVED;
+      // mop: actually it will never be an ERROR here...this is and was a dirty hack :S
+      status = CL_COMM_RECEIVED;
+
     }
   }
 };
