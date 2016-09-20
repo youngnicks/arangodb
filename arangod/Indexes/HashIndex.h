@@ -280,8 +280,8 @@ class HashIndex final : public PathBasedIndex {
         return hash;
       }
 
-      TRI_doc_mptr_t const* ptr = element->document();
-      return fasthash64(&ptr, sizeof(ptr), hash);
+      TRI_voc_rid_t revisionId = element->revisionId();
+      return fasthash64(&revisionId, sizeof(revisionId), hash);
     }
   };
 
@@ -297,10 +297,10 @@ class HashIndex final : public PathBasedIndex {
 
     bool operator()(void*, IndexElement const* left,
                     IndexElement const* right) {
-      TRI_ASSERT(left->document() != nullptr);
-      TRI_ASSERT(right->document() != nullptr);
+      TRI_ASSERT(left->revisionId() != 0);
+      TRI_ASSERT(right->revisionId() != 0);
 
-      if (left->document() == right->document()) {
+      if (left->revisionId() == right->revisionId()) {
         return true;
       }
 

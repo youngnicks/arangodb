@@ -120,8 +120,9 @@ void CollectionExport::run(uint64_t maxWaitTime, size_t limit) {
       if (limit == 0) {
         return false;
       }
-      if (!element->document()->pointsToWal()) {
-        _documents->emplace_back(element->document()->vpack());
+      TRI_doc_mptr_t* mptr = _collection->getPhysical()->lookupRevisionMptr(element->revisionId());
+      if (!mptr->pointsToWal()) {
+        _documents->emplace_back(mptr->vpack());
         --limit;
       }
       return true;

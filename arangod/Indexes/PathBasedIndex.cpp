@@ -138,6 +138,8 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
 
   TRI_IF_FAILURE("FillElementIllegalSlice") { return TRI_ERROR_INTERNAL; }
 
+  TRI_voc_rid_t const revisionId = document.revisionId();
+
   size_t const n = _paths.size();
 
   if (!_useExpansion) {
@@ -147,7 +149,7 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
     if (slices.size() == n) {
       // if shapes.size() != n, then the value is not inserted into the index
       // because of index sparsity!
-      IndexElement* element = IndexElement::create(document.mptr(), slices);
+      IndexElement* element = IndexElement::create(revisionId, slices);
 
       if (element == nullptr) {
         return TRI_ERROR_OUT_OF_MEMORY;
@@ -181,7 +183,7 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
 
       for (auto& info : toInsert) {
         TRI_ASSERT(info.size() == n);
-        IndexElement* element = IndexElement::create(document.mptr(), info);
+        IndexElement* element = IndexElement::create(revisionId, info);
 
         if (element == nullptr) {
           return TRI_ERROR_OUT_OF_MEMORY;

@@ -25,8 +25,8 @@
 
 using namespace arangodb;
 
-IndexElement::IndexElement(TRI_doc_mptr_t const* mptr, size_t numSubs) 
-    : _document(mptr) {
+IndexElement::IndexElement(TRI_voc_rid_t revisionId, size_t numSubs) 
+    : _revisionId(revisionId) {
     
   for (size_t i = 0; i < numSubs; ++i) {
     subObject(i)->fill(arangodb::velocypack::Slice::noneSlice());
@@ -34,10 +34,10 @@ IndexElement::IndexElement(TRI_doc_mptr_t const* mptr, size_t numSubs)
 }
 
 /// @brief allocate a new index element
-IndexElement* IndexElement::create(TRI_doc_mptr_t const* mptr, std::vector<arangodb::velocypack::Slice> const& values) {
+IndexElement* IndexElement::create(TRI_voc_rid_t revisionId, std::vector<arangodb::velocypack::Slice> const& values) {
   TRI_ASSERT(!values.empty());
 
-  IndexElement* element = create(mptr, values.size());
+  IndexElement* element = create(revisionId, values.size());
 
   if (element == nullptr) {
     return nullptr;
@@ -55,8 +55,8 @@ IndexElement* IndexElement::create(TRI_doc_mptr_t const* mptr, std::vector<arang
 }
 
 /// @brief allocate a new index element from a slice
-IndexElement* IndexElement::create(TRI_doc_mptr_t const* mptr, arangodb::velocypack::Slice const& value) {
-  IndexElement* element = create(mptr, 1);
+IndexElement* IndexElement::create(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& value) {
+  IndexElement* element = create(revisionId, 1);
   
   if (element == nullptr) {
     return nullptr;
@@ -71,7 +71,8 @@ IndexElement* IndexElement::create(TRI_doc_mptr_t const* mptr, arangodb::velocyp
   }
 }
 
-IndexElement* IndexElement::create(TRI_doc_mptr_t const* mptr, size_t numSubs) {
+IndexElement* IndexElement::create(TRI_voc_rid_t revisionId, size_t numSubs) {
+  //LOG(ERR) << "CREATING INDEX ELEMENT WITH REVISION " << revisionId;
   void* space = TRI_Allocate(TRI_UNKNOWN_MEM_ZONE, memoryUsage(numSubs), false);
 
   if (space == nullptr) {
@@ -79,12 +80,18 @@ IndexElement* IndexElement::create(TRI_doc_mptr_t const* mptr, size_t numSubs) {
   }
 
   // will not fail
-  return new (space) IndexElement(mptr, numSubs);
+  return new (space) IndexElement(revisionId, numSubs);
 }
 
 void IndexElement::free(size_t numSubs) {
+  //LOG(ERR) << "FREEING INDEX ELEMENT WITH REVISION " << _revisionId;
   for (size_t i = 0; i < numSubs; ++i) {
     subObject(i)->free();
   }
   TRI_Free(TRI_UNKNOWN_MEM_ZONE, this);
+}
+   
+void IndexElement::revisionId(TRI_voc_rid_t revisionId) { 
+  //LOG(ERR) << "PATCHING REVISION FROM " << _revisionId << " TO " << revisionId;
+  _revisionId = revisionId; 
 }

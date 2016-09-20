@@ -209,7 +209,7 @@ void LookupBuilder::buildNextSearchValue() {
 static bool IsEqualElementElement(void*,
                                   IndexElement const* left,
                                   IndexElement const* right) {
-  return left->document() == right->document();
+  return left->revisionId() == right->revisionId();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -238,7 +238,7 @@ static bool IsEqualKeyElement(void*,
                               VPackSlice const* left,
                               IndexElement const* right) {
   TRI_ASSERT(left->isArray());
-  TRI_ASSERT(right->document() != nullptr);
+  TRI_ASSERT(right->revisionId() != 0);
   
   size_t const n = left->length();
   

@@ -260,7 +260,7 @@ class PrimaryIndex final : public Index {
                      arangodb::aql::AstNode const* valNode,
                      bool isId) const; 
 
-  IndexElement* buildKeyElement(TRI_doc_mptr_t const* mptr) const;
+  IndexElement* buildKeyElement(TRI_voc_rid_t revisionId, uint8_t const*) const;
 
  private:
   /// @brief the actual index

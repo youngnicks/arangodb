@@ -74,8 +74,8 @@ static uint64_t HashElementEdge(void* userData, IndexElement const* element, boo
   TRI_ASSERT(element != nullptr);
 
   if (!byKey) {
-    uint64_t hash = (uint64_t) element->document();
-    return fasthash64(&hash, sizeof(hash), 0x56781234);
+    TRI_voc_rid_t revisionId = element->revisionId();
+    return fasthash64(&revisionId, sizeof(revisionId), 0x56781234);
   }
 
   // Is identical to HashElementKey
@@ -103,7 +103,7 @@ static bool IsEqualKeyEdge(void*, VPackSlice const* left, IndexElement const* ri
 ////////////////////////////////////////////////////////////////////////////////
 
 static bool IsEqualElementEdge(void*, IndexElement const* left, IndexElement const* right) {
-  return left->document() == right->document();
+  return left->revisionId() == right->revisionId();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

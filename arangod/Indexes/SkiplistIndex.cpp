@@ -29,6 +29,7 @@
 #include "Basics/debugging.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Utils/Transaction.h"
+#include "VocBase/LogicalCollection.h"
 
 #include <velocypack/Iterator.h>
 #include <velocypack/velocypack-aliases.h>
@@ -753,11 +754,10 @@ int SkiplistIndex::insert(arangodb::Transaction*, DocumentWrapper const& doc, bo
   }
 
   if (res != TRI_ERROR_NO_ERROR) {
-    for (auto& it : elements) {
+    for (auto& element : elements) {
       // free all elements to prevent leak
-      it->free(numPaths());
+      element->free(numPaths());
     }
-
     return res;
   }
 
@@ -770,9 +770,8 @@ int SkiplistIndex::insert(arangodb::Transaction*, DocumentWrapper const& doc, bo
     res = _skiplistIndex->insert(elements[i]);
 
     if (res != TRI_ERROR_NO_ERROR) {
-      elements[i]->free(numPaths());
       // Note: this element is freed already
-      for (size_t j = i + 1; j < count; ++j) {
+      for (size_t j = i; j < count; ++j) {
         elements[j]->free(numPaths());
       }
       for (size_t j = 0; j < i; ++j) {
@@ -806,11 +805,10 @@ int SkiplistIndex::remove(arangodb::Transaction*, DocumentWrapper const& doc,
   }
 
   if (res != TRI_ERROR_NO_ERROR) {
-    for (auto& it : elements) {
+    for (auto& element : elements) {
       // free all elements to prevent leak
-      it->free(numPaths());
+      element->free(numPaths());
     }
-
     return res;
   }
 
@@ -1039,7 +1037,7 @@ int SkiplistIndex::ElementElementComparator::operator()(
 
   if (leftElement == rightElement ||
       (!_idx->_skiplistIndex->isArray() &&
-       leftElement->document() == rightElement->document())) {
+       leftElement->revisionId() == rightElement->revisionId())) {
     return 0;
   }
 
@@ -1062,18 +1060,12 @@ int SkiplistIndex::ElementElementComparator::operator()(
   if (arangodb::basics::SKIPLIST_CMP_PREORDER == cmptype) {
     return 0;
   }
-
+    
   // We break this tie in the key comparison by looking at the key:
-  VPackSlice leftKey = Transaction::extractKeyFromDocument(VPackSlice(leftElement->document()->vpack()));
-  VPackSlice rightKey = Transaction::extractKeyFromDocument(VPackSlice(rightElement->document()->vpack()));
-
-  VPackValueLength l;
-  char const* p = rightKey.getString(l);
-  int compareResult = leftKey.compareString(p, l);
-
-  if (compareResult < 0) {
+  if (leftElement->revisionId() < rightElement->revisionId()) {
     return -1;
-  } else if (compareResult > 0) {
+  }
+  if (leftElement->revisionId() > rightElement->revisionId()) {
     return 1;
   }
   return 0;

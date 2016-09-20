@@ -1071,8 +1071,9 @@ int InitialSyncer::handleSyncKeys(arangodb::LogicalCollection* col,
     markers.reserve(idx->size());
 
     uint64_t iterations = 0;
-    trx.invokeOnAllElements(trx.name(), [this, &markers, &iterations](IndexElement const* element) {
-      markers.emplace_back(element->document()->vpack());
+    trx.invokeOnAllElements(trx.name(), [this, &markers, &iterations, &idx](IndexElement const* element) {
+      uint8_t const* vpack = idx->collection()->getPhysical()->lookupRevision(element->revisionId());
+      markers.emplace_back(vpack);
       
       if (++iterations % 10000 == 0) {
         if (checkAborted()) {

@@ -275,8 +275,14 @@ MMFilesCompactorThread::CompactionInitialContext MMFilesCompactorThread::getComp
 
         // check if the document is still active
         auto primaryIndex = collection->primaryIndex();
-        auto found = primaryIndex->lookupKey(context._trx, keySlice);
-        bool deleted = (found == nullptr || marker != found->document()->getMarkerPtr());
+
+        IndexElement* element = primaryIndex->lookupKey(context._trx, keySlice);
+        TRI_doc_mptr_t* found = nullptr;
+        if (element != nullptr) {
+          found = collection->getPhysical()->lookupRevisionMptr(element->revisionId());
+        }
+
+        bool deleted = (found == nullptr || marker != found->getMarkerPtr());
 
         if (deleted) {
           return true;
@@ -361,7 +367,7 @@ void MMFilesCompactorThread::compactDatafiles(LogicalCollection* collection,
       IndexElement* element = primaryIndex->lookupKey(context->_trx, keySlice);
       TRI_doc_mptr_t* found = nullptr;
       if (element != nullptr) {
-        found = element->document();
+        found = collection->getPhysical()->lookupRevisionMptr(element->revisionId());
       }
       bool deleted = (found == nullptr || marker != found->getMarkerPtr());
 

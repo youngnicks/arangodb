@@ -1233,12 +1233,15 @@ OperationResult Transaction::anyLocal(std::string const& collectionName,
       indexScan(collectionName, Transaction::CursorType::ANY, IndexHandle(), 
                 {}, skip, limit, 1000, false);
 
+  LogicalCollection* collection = cursor->collection();
   std::vector<IndexElement*> result;
   while (cursor->hasMore()) {
     result.clear();
     cursor->getMoreMptr(result);
     for (auto const& mptr : result) {
-      resultBuilder.add(VPackSlice(mptr->document()->vpack()));
+      TRI_voc_rid_t revisionId = mptr->revisionId();
+      uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+      resultBuilder.add(VPackSlice(vpack));
     }
   }
 
@@ -2540,12 +2543,15 @@ OperationResult Transaction::allLocal(std::string const& collectionName,
     return OperationResult(cursor->code);
   }
 
+  LogicalCollection* collection = cursor->collection();
   std::vector<IndexElement*> result;
   result.reserve(1000);
   while (cursor->hasMore()) {
     cursor->getMoreMptr(result, 1000);
     for (auto const& mptr : result) {
-      resultBuilder.addExternal(mptr->document()->vpack());
+      TRI_voc_rid_t revisionId = mptr->revisionId();
+      uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+      resultBuilder.addExternal(vpack);
     }
   }
 
@@ -2618,8 +2624,10 @@ OperationResult Transaction::truncateLocal(std::string const& collectionName,
   auto callback = [&](IndexElement const* element) {
     VPackSlice actualRevision;
     TRI_doc_mptr_t previous;
+    TRI_voc_rid_t revisionId = element->revisionId();
+    uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
     int res =
-        collection->remove(this, VPackSlice(element->document()->vpack()), options,
+        collection->remove(this, VPackSlice(vpack), options,
                            resultMarkerTick, false, actualRevision, previous);
 
     if (res != TRI_ERROR_NO_ERROR) {

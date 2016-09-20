@@ -108,7 +108,7 @@ static_assert(sizeof(TRI_vpack_sub_t) == 16, "invalid size of TRI_vpack_sub_t");
 struct IndexElement {
   // Do not use new for this struct, use create()!
  private:
-  IndexElement(TRI_doc_mptr_t const* mptr, size_t numSubs); 
+  IndexElement(TRI_voc_rid_t revisionId, size_t numSubs); 
 
   IndexElement() = delete;
   IndexElement(IndexElement const&) = delete;
@@ -117,13 +117,12 @@ struct IndexElement {
 
  public:
   /// @brief get the revision id of the document
-  TRI_voc_rid_t revisionId() const { return _document->revisionId(); }
-  
-  TRI_doc_mptr_t const* document() const { return _document; }
-  TRI_doc_mptr_t* document() { return const_cast<TRI_doc_mptr_t*>(_document); }
+  TRI_voc_rid_t revisionId() const { return _revisionId; }
+  /// @brief set the revision id of the document
+  void revisionId(TRI_voc_rid_t revisionId);
   
   inline TRI_vpack_sub_t const* subObject(size_t position) const {
-    char const* p = reinterpret_cast<char const*>(this) + sizeof(TRI_doc_mptr_t*) + position * sizeof(TRI_vpack_sub_t);
+    char const* p = reinterpret_cast<char const*>(this) + sizeof(TRI_voc_rid_t) + position * sizeof(TRI_vpack_sub_t);
     return reinterpret_cast<TRI_vpack_sub_t const*>(p);
   }
   
@@ -140,20 +139,20 @@ struct IndexElement {
   }
 
   /// @brief allocate a new index element from a vector of slices
-  static IndexElement* create(TRI_doc_mptr_t const* mptr, std::vector<arangodb::velocypack::Slice> const& values);
+  static IndexElement* create(TRI_voc_rid_t revisionId, std::vector<arangodb::velocypack::Slice> const& values);
   
   /// @brief allocate a new index element from a slice
-  static IndexElement* create(TRI_doc_mptr_t const* mptr, arangodb::velocypack::Slice const& value);
+  static IndexElement* create(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& value);
 
   void free(size_t numSubs);
 
   /// @brief memory usage of an index element
   static constexpr size_t memoryUsage(size_t numSubs) {
-    return sizeof(TRI_doc_mptr_t*) + (sizeof(TRI_vpack_sub_t) * numSubs);
+    return sizeof(TRI_voc_rid_t) + (sizeof(TRI_vpack_sub_t) * numSubs);
   }
 
  private:
-  static IndexElement* create(TRI_doc_mptr_t const* mptr, size_t numSubs);
+  static IndexElement* create(TRI_voc_rid_t revisionId, size_t numSubs);
 
   inline TRI_vpack_sub_t* subObject(size_t position) {
     char* p = reinterpret_cast<char*>(this) + memoryUsage(position);
@@ -161,7 +160,7 @@ struct IndexElement {
   }
  
  private:
-  TRI_doc_mptr_t const* _document;
+  TRI_voc_rid_t _revisionId;
 };
 
 class IndexElementGuard {

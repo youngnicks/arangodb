@@ -25,6 +25,7 @@
 #include "OperationResult.h"
 #include "Basics/Exceptions.h"
 #include "Logger/Logger.h"
+#include "VocBase/LogicalCollection.h"
 #include "VocBase/MasterPointer.h"
 
 using namespace arangodb;
@@ -71,7 +72,8 @@ void OperationCursor::getMore(std::shared_ptr<OperationResult>& opRes,
   if (batchSize == UINT64_MAX) {
     batchSize = _batchSize;
   }
-  
+ 
+  LogicalCollection* collection = _indexIterator->collection(); 
   VPackBuilder builder(opRes->buffer);
   builder.clear();
   try {
@@ -81,10 +83,13 @@ void OperationCursor::getMore(std::shared_ptr<OperationResult>& opRes,
     while (batchSize > 0 && _limit > 0 && (element = _indexIterator->next()) != nullptr) {
       --batchSize;
       --_limit;
+      TRI_voc_rid_t revisionId = element->revisionId();
+      uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+      
       if (useExternals) {
-        builder.addExternal(element->document()->vpack());
+        builder.addExternal(vpack);
       } else {
-        builder.add(VPackSlice(element->document()->vpack()));
+        builder.add(VPackSlice(vpack));
       }
     }
     if (batchSize > 0 || _limit == 0) {

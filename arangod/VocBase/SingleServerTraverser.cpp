@@ -24,6 +24,7 @@
 #include "SingleServerTraverser.h"
 #include "Basics/StringRef.h"
 #include "Utils/Transaction.h"
+#include "VocBase/LogicalCollection.h"
 #include "VocBase/MasterPointer.h"
 
 using namespace arangodb;
@@ -67,7 +68,10 @@ bool SingleServerEdgeCursor::next(std::vector<VPackSlice>& result,
   }
   _cachePos++;
   if (_cachePos < _cache.size()) {
-    result.emplace_back(_cache[_cachePos]->document()->vpack());
+    LogicalCollection* collection = _cursors[_currentCursor][_currentSubCursor]->collection();
+    TRI_voc_rid_t revisionId = _cache[_cachePos]->revisionId();
+    uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+    result.emplace_back(vpack);
     cursorId = _currentCursor;
     return true;
   }
@@ -107,7 +111,10 @@ bool SingleServerEdgeCursor::next(std::vector<VPackSlice>& result,
     }
   } while (_cache.empty());
   TRI_ASSERT(_cachePos < _cache.size());
-  result.emplace_back(_cache[_cachePos]->document()->vpack());
+  LogicalCollection* collection = cursor->collection();
+  TRI_voc_rid_t revisionId = _cache[_cachePos]->revisionId();
+  uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+  result.emplace_back(vpack);
   cursorId = _currentCursor;
   return true;
 }
@@ -120,12 +127,15 @@ bool SingleServerEdgeCursor::readAll(std::unordered_set<VPackSlice>& result,
   cursorId = _currentCursor;
   auto& cursorSet = _cursors[_currentCursor];
   for (auto& cursor : cursorSet) {
+    LogicalCollection* collection = cursor->collection(); 
     while (cursor->hasMore()) {
       // NOTE: We cannot clear the cache,
       // because the cursor expect's it to be filled.
       cursor->getMoreMptr(_cache);
       for (auto const& mptr : _cache) {
-        result.emplace(mptr->document()->vpack());
+        TRI_voc_rid_t revisionId = mptr->revisionId();
+        uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+        result.emplace(vpack);
       }
     }
   }

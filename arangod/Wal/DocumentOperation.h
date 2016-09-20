@@ -3,6 +3,9 @@
 #define ARANGOD_WAL_DOCUMENT_OPERATION_H 1
 
 #include "Basics/Common.h"
+#include "Indexes/IndexElement.h"
+#include "Indexes/PrimaryIndex.h"
+#include "Utils/Transaction.h"
 #include "VocBase/LogicalCollection.h"
 #include "VocBase/MasterPointer.h"
 #include "VocBase/MasterPointers.h"
@@ -36,7 +39,7 @@ struct DocumentOperation {
   ~DocumentOperation() {
     if (status == StatusType::HANDLED) {
       if (type == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
-        collection->getPhysical()->removeRevision(header->revisionId());
+        collection->getPhysical()->removeRevision(header->revisionId(), true);
       }
     } else if (status != StatusType::REVERTED) {
       revert();
@@ -91,10 +94,17 @@ struct DocumentOperation {
     }
 
     if (type == TRI_VOC_DOCUMENT_OPERATION_INSERT) {
-      collection->getPhysical()->removeRevision(header->revisionId());
+      collection->getPhysical()->removeRevision(header->revisionId(), true);
     } else if (type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
                type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
+      collection->getPhysical()->removeRevision(header->revisionId(), false);
+  
+      IndexElement* element = collection->primaryIndex()->lookupKey(trx, Transaction::extractKeyFromDocument(VPackSlice(header->vpack())));
       header->copy(oldHeader);
+      if (element != nullptr) {
+        element->revisionId(header->revisionId());
+      }
+      collection->getPhysical()->insertRevision(header->revisionId(), header);
     }
 
     status = StatusType::REVERTED;

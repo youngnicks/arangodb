@@ -120,9 +120,13 @@ class MMFilesCollection final : public PhysicalCollection {
   /// @brief iterate all markers of a collection on load
   int iterateMarkersOnLoad(arangodb::Transaction* trx) override;
 
+  uint8_t const* lookupRevision(TRI_voc_rid_t revisionId) override;
   TRI_doc_mptr_t* insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) override;
+  void insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t*) override;
   void updateRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) override;
-  void removeRevision(TRI_voc_rid_t revisionId) override;
+  void removeRevision(TRI_voc_rid_t revisionId, bool free) override;
+  
+  TRI_doc_mptr_t* lookupRevisionMptr(TRI_voc_rid_t revisionId) override; // TODO: remove
 
  private:
   /// @brief create statistics for a datafile, using the stats provided

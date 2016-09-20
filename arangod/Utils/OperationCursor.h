@@ -38,6 +38,7 @@ namespace arangodb {
 
 // FORWARD declaration
 class IndexIterator;
+class LogicalCollection;
 struct OperationResult;
 
 struct OperationCursor {
@@ -77,6 +78,11 @@ struct OperationCursor {
   
   IndexIterator* indexIterator() const {
     return _indexIterator.get();
+  }
+  
+  LogicalCollection* collection() const {
+    TRI_ASSERT(_indexIterator != nullptr);
+    return _indexIterator->collection();
   }
 
   inline bool hasMore() const { return _hasMore; }

@@ -556,7 +556,7 @@ size_t CollectorThread::numQueuedOperations() {
 /// @brief process a single marker in collector step 2
 void CollectorThread::processCollectionMarker(
     arangodb::SingleCollectionTransaction& trx,
-    LogicalCollection* colection, CollectorCache* cache,
+    LogicalCollection* collection, CollectorCache* cache,
     CollectorOperation const& operation) {
   auto const* walMarker = reinterpret_cast<TRI_df_marker_t const*>(operation.walPosition);
   TRI_ASSERT(walMarker != nullptr);
@@ -578,10 +578,11 @@ void CollectorThread::processCollectionMarker(
     TRI_voc_rid_t revisionId = 0;
     Transaction::extractKeyAndRevFromDocument(slice, keySlice, revisionId);
   
-    IndexElement* f = colection->primaryIndex()->lookupKey(&trx, keySlice);
+    IndexElement* element = collection->primaryIndex()->lookupKey(&trx, keySlice);
     TRI_doc_mptr_t* found = nullptr;
-    if (f != nullptr) {
-      found = f->document();
+    if (element != nullptr) {
+      TRI_voc_rid_t revisionId = element->revisionId();
+      found = collection->getPhysical()->lookupRevisionMptr(revisionId);
     }
 
     if (found == nullptr || found->revisionId() != revisionId ||
@@ -610,7 +611,7 @@ void CollectorThread::processCollectionMarker(
     TRI_voc_rid_t revisionId = 0;
     Transaction::extractKeyAndRevFromDocument(slice, keySlice, revisionId);
 
-    auto found = colection->primaryIndex()->lookupKey(&trx, keySlice);
+    auto found = collection->primaryIndex()->lookupKey(&trx, keySlice);
 
     if (found != nullptr && found->revisionId() > revisionId) {
       // somebody re-created the document with a newer revision

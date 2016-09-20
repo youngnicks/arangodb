@@ -29,6 +29,7 @@
 #include "Utils/OperationCursor.h"
 #include "Utils/Transaction.h"
 #include "VocBase/EdgeCollectionInfo.h"
+#include "VocBase/LogicalCollection.h"
 #include "VocBase/MasterPointer.h"
 
 #include <velocypack/Iterator.h>
@@ -86,15 +87,19 @@ struct ConstDistanceExpanderLocal {
       } else {
         edgeCursor = edgeCollection->getEdges(v);
       }
+    
       // Clear the local cursor before using the
       // next edge cursor.
       // While iterating over the edge cursor, _cursor
       // has to stay intact.
       _cursor.clear();
+      LogicalCollection* collection = edgeCursor->collection();
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(_cursor, UINT64_MAX);
         for (auto const& mptr : _cursor) {
-          VPackSlice edge(mptr->document()->vpack());
+          TRI_voc_rid_t revisionId = mptr->revisionId();
+          uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+          VPackSlice edge(vpack);
           VPackSlice from =
               arangodb::Transaction::extractFromFromDocument(edge);
           if (from == v) {
@@ -230,10 +235,13 @@ struct EdgeWeightExpanderLocal {
       // While iterating over the edge cursor, _cursor
       // has to stay intact.
       cursor.clear();
+      LogicalCollection* collection = edgeCursor->collection();
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(cursor, UINT64_MAX);
         for (auto const& mptr : cursor) {
-          VPackSlice edge(mptr->document()->vpack());
+          TRI_voc_rid_t revisionId = mptr->revisionId();
+          uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+          VPackSlice edge(vpack);
           VPackSlice from =
               arangodb::Transaction::extractFromFromDocument(edge);
           VPackSlice to = arangodb::Transaction::extractToFromDocument(edge);

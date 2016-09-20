@@ -1002,7 +1002,7 @@ int LogicalCollection::update(VPackSlice const& slice, bool doSync) {
   // - _isSystem
   // - _isVolatile
   // ... probably a few others missing here ...
-
+    
   WRITE_LOCKER(writeLocker, _infoLock);
 
   // some basic validation...      
@@ -1377,11 +1377,11 @@ int LogicalCollection::saveIndex(arangodb::Index* idx, bool writeMarker) {
   try {
     builder = idx->toVelocyPack(false);
   } catch (...) {
-    LOG(ERR) << "cannot save index definition.";
+    LOG(ERR) << "cannot save index definition";
     return TRI_ERROR_INTERNAL;
   }
   if (builder == nullptr) {
-    LOG(ERR) << "cannot save index definition.";
+    LOG(ERR) << "cannot save index definition";
     return TRI_ERROR_OUT_OF_MEMORY;
   }
 
@@ -1748,6 +1748,8 @@ int LogicalCollection::read(Transaction* trx, StringRef const& key,
       return res;
     }
 
+    TRI_ASSERT(header != nullptr);
+
     // we found a document, now copy it over
     *mptr = *header;
   }
@@ -1923,6 +1925,8 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
     if (res != TRI_ERROR_NO_ERROR) {
       return res;
     }
+    
+    TRI_ASSERT(oldHeader != nullptr);
 
     TRI_IF_FAILURE("UpdateDocumentNoMarker") {
       // test what happens when no marker can be created
@@ -2073,6 +2077,8 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
     if (res != TRI_ERROR_NO_ERROR) {
       return res;
     }
+    
+    TRI_ASSERT(oldHeader != nullptr);
 
     TRI_IF_FAILURE("ReplaceDocumentNoMarker") {
       // test what happens when no marker can be created
@@ -2289,6 +2295,9 @@ int LogicalCollection::rollbackOperation(arangodb::Transaction* trx,
     // ignore any errors we're getting from this
     deletePrimaryIndex(trx, header);
     deleteSecondaryIndexes(trx, header, true);
+  
+    // remove new revision
+    getPhysical()->removeRevision(header->revisionId(), false);
 
     TRI_ASSERT(_numberDocuments > 0);
     _numberDocuments--;
@@ -2298,6 +2307,8 @@ int LogicalCollection::rollbackOperation(arangodb::Transaction* trx,
              type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
     // copy the existing header's state
     TRI_doc_mptr_t copy = *header;
+  
+    getPhysical()->removeRevision(header->revisionId(), false);
 
     // remove the current values from the indexes
     deleteSecondaryIndexes(trx, header, true);
@@ -2305,12 +2316,19 @@ int LogicalCollection::rollbackOperation(arangodb::Transaction* trx,
     header->copy(*oldData);
     // re-insert old state
     int res = insertSecondaryIndexes(trx, header, true);
+    
+    // re-insert old revision
+    getPhysical()->insertRevision(header->revisionId(), header);
+
     // revert again to the new state, because other parts of the new state
     // will be reverted at some other place
     header->copy(copy);
 
     return res;
   } else if (type == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
+    // re-insert old revision
+    getPhysical()->insertRevision(header->revisionId(), header);
+
     int res = insertPrimaryIndex(trx, header);
 
     if (res == TRI_ERROR_NO_ERROR) {
@@ -2416,7 +2434,8 @@ int LogicalCollection::fillIndexBatch(arangodb::Transaction* trx,
       TRI_doc_mptr_t const* mptr = nullptr;
       IndexElement* m = primaryIndex->lookupSequential(trx, position, total);
       if (m != nullptr) {
-        mptr = m->document();
+        TRI_voc_rid_t revisionId = m->revisionId();
+        mptr = getPhysical()->lookupRevisionMptr(revisionId);
       } 
 
       if (mptr == nullptr) {
@@ -2484,7 +2503,8 @@ int LogicalCollection::fillIndexSequential(arangodb::Transaction* trx,
       IndexElement* m = primaryIndex->lookupSequential(trx, position, total);
       TRI_doc_mptr_t const* mptr = nullptr;
       if (m != nullptr) {
-        mptr = m->document();
+        TRI_voc_rid_t revisionId = m->revisionId();
+        mptr = getPhysical()->lookupRevisionMptr(revisionId);
       }
 
       if (mptr == nullptr) {
@@ -2760,10 +2780,11 @@ int LogicalCollection::lookupDocument(
     return TRI_ERROR_ARANGO_DOCUMENT_KEY_BAD;
   }
 
-  IndexElement* h = primaryIndex()->lookupKey(trx, key);
+  IndexElement* element = primaryIndex()->lookupKey(trx, key);
   header = nullptr;
-  if (h != nullptr) {
-    header = h->document();
+  if (element != nullptr) {
+    TRI_voc_rid_t revisionId = element->revisionId();
+    header = getPhysical()->lookupRevisionMptr(revisionId);
   }
 
   if (header == nullptr) {
@@ -2803,6 +2824,8 @@ int LogicalCollection::updateDocument(
     return res;
   }
 
+  TRI_voc_rid_t const oldRevisionId = oldHeader->revisionId();
+
   // update header
   TRI_doc_mptr_t* newHeader = oldHeader;
 
@@ -2811,11 +2834,15 @@ int LogicalCollection::updateDocument(
   void* mem = marker->vpack(); 
   TRI_ASSERT(mem != nullptr);
   newHeader->setVPack(mem);
+  
+  TRI_voc_rid_t const newRevisionId = newHeader->revisionId();
 
   // insert new document into secondary indexes
   res = insertSecondaryIndexes(trx, newHeader, false);
 
   if (res != TRI_ERROR_NO_ERROR) {
+    getPhysical()->removeRevision(newRevisionId, false);
+
     // rollback
     deleteSecondaryIndexes(trx, newHeader, true);
 
@@ -2826,6 +2853,15 @@ int LogicalCollection::updateDocument(
 
     return res;
   }
+  
+  IndexElement* element = primaryIndex()->lookupKey(trx, Transaction::extractKeyFromDocument(VPackSlice(newHeader->vpack())));
+  if (element != nullptr) {
+    element->revisionId(newRevisionId);
+  }
+  
+  // store new revision
+  getPhysical()->insertRevision(newRevisionId, newHeader);
+  getPhysical()->removeRevision(oldRevisionId, false);
 
   operation.indexed();
 

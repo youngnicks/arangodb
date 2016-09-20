@@ -309,8 +309,8 @@ IndexElement* PrimaryIndex::lookupSequentialReverse(
 /// returns a status code, and *found will contain a found element (if any)
 ////////////////////////////////////////////////////////////////////////////////
 
-int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* header) {
-  IndexElementGuard element(buildKeyElement(header), 1);
+int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* mptr) {
+  IndexElementGuard element(buildKeyElement(mptr->revisionId(), mptr->vpack()), 1);
   if (!element) {
     return TRI_ERROR_OUT_OF_MEMORY;
   }
@@ -331,7 +331,7 @@ int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* header) 
 
 int PrimaryIndex::removeKey(arangodb::Transaction* trx,
                             TRI_doc_mptr_t const* mptr) {
-  IndexElementGuard element(buildKeyElement(mptr), 1);
+  IndexElementGuard element(buildKeyElement(mptr->revisionId(), mptr->vpack()), 1);
   if (!element) {
     return TRI_ERROR_OUT_OF_MEMORY;
   }
@@ -557,6 +557,6 @@ void PrimaryIndex::handleValNode(IndexIteratorContext* context,
   }
 }
 
-IndexElement* PrimaryIndex::buildKeyElement(TRI_doc_mptr_t const* mptr) const {
-  return IndexElement::create(mptr, Transaction::extractKeyFromDocument(VPackSlice(mptr->vpack())));
+IndexElement* PrimaryIndex::buildKeyElement(TRI_voc_rid_t revisionId, uint8_t const* vpack) const {
+  return IndexElement::create(revisionId, Transaction::extractKeyFromDocument(VPackSlice(vpack)));
 }

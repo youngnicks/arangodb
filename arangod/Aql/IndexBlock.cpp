@@ -32,6 +32,7 @@
 #include "Basics/StaticStrings.h"
 #include "Utils/OperationCursor.h"
 #include "V8/v8-globals.h"
+#include "VocBase/LogicalCollection.h"
 #include "VocBase/MasterPointer.h"
 #include "VocBase/vocbase.h"
 
@@ -376,6 +377,7 @@ bool IndexBlock::readIndex(size_t atMost) {
       continue;
     }
 
+    LogicalCollection* collection = _cursor->collection();
     _cursor->getMoreMptr(_result, atMost);
 
     size_t length = _result.size();
@@ -390,27 +392,29 @@ bool IndexBlock::readIndex(size_t atMost) {
     TRI_IF_FAILURE("IndexBlock::readIndex") {
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
     }
-    
+
     if (hasMultipleIndexes) {
       for (auto const& mptr : _result) {
-        VPackSlice doc(mptr->document()->vpack());
-        TRI_voc_rid_t revision = Transaction::extractRevFromDocument(doc);
+        TRI_voc_rid_t revisionId = mptr->revisionId();
+        uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
         // uniqueness checks
         if (!isLastIndex) {
           // insert & check for duplicates in one go
-          if (_alreadyReturned.emplace(revision).second) {
-            _documents.emplace_back(mptr->document()->vpack());
+          if (_alreadyReturned.emplace(revisionId).second) {
+            _documents.emplace_back(vpack);
           }
         } else {
           // only check for duplicates
-          if (_alreadyReturned.find(revision) == _alreadyReturned.end()) {
-            _documents.emplace_back(mptr->document()->vpack());
+          if (_alreadyReturned.find(revisionId) == _alreadyReturned.end()) {
+            _documents.emplace_back(vpack);
           }
         }
       }
     } else {
       for (auto const& mptr : _result) {
-        _documents.emplace_back(mptr->document()->vpack());
+        TRI_voc_rid_t revisionId = mptr->revisionId();
+        uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+        _documents.emplace_back(vpack);
       } 
     }
     // Leave the loop here, we can only exhaust one cursor at a time, otherwise slices are lost

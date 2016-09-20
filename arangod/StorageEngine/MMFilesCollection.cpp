@@ -122,18 +122,14 @@ static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
 
   // no primary index lock required here because we are the only ones reading
   // from the index ATM
-  TRI_doc_mptr_t* found = nullptr;
-  IndexElement* f = primaryIndex->lookupKey(trx, keySlice);
-  if (f != nullptr) {
-    found = f->document();
-  }
-
+  IndexElement* found = primaryIndex->lookupKey(trx, keySlice);
   MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
 
   // it is a new entry
   if (found == nullptr) {
     TRI_doc_mptr_t* header = c->insertRevision(revisionId, VPackSlice(basics::VelocyPackHelper::EmptyObjectValue())); // TODO
     TRI_ASSERT(header != nullptr);
+    // TODO: FIXME
     header->setFid(fid, false);
     header->setVPackFromMarker(marker);  
 
@@ -141,7 +137,7 @@ static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
     int res = primaryIndex->insertKey(trx, header);
 
     if (res != TRI_ERROR_NO_ERROR) {
-      c->removeRevision(revisionId);
+      c->removeRevision(revisionId, true);
       LOG(ERR) << "inserting document into primary index failed with error: " << TRI_errno_string(res);
 
       return res;
@@ -157,11 +153,18 @@ static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
   // it is an update, but only if found has a smaller revision identifier
   else {
     // save the old data
-    TRI_doc_mptr_t oldData = *found;
+    TRI_voc_rid_t const oldRevisionId = found->revisionId();
+    // TODO
+    TRI_doc_mptr_t* f = c->lookupRevisionMptr(oldRevisionId);
+    TRI_doc_mptr_t oldData = *f;
 
     // update the header info
-    found->setFid(fid, false); // when we're here, we're looking at a datafile
-    found->setVPackFromMarker(marker);
+    f->setFid(fid, false); // when we're here, we're looking at a datafile
+    f->setVPackFromMarker(marker);
+
+    found->revisionId(revisionId);
+    c->removeRevision(oldRevisionId, false);
+    c->insertRevision(revisionId, f);
 
     // update the datafile info
     DatafileStatisticsContainer* dfi;
@@ -217,10 +220,11 @@ static int OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* marker,
   // no primary index lock required here because we are the only ones reading
   // from the index ATM
   auto primaryIndex = collection->primaryIndex();
-  IndexElement* f = primaryIndex->lookupKey(trx, keySlice);
+  IndexElement* element = primaryIndex->lookupKey(trx, keySlice);
   TRI_doc_mptr_t* found = nullptr;
-  if (f != nullptr) {
-    found = f->document();
+  if (element != nullptr) {
+    MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
+    found = c->lookupRevisionMptr(element->revisionId());
   }
 
   // it is a new entry, so we missed the create
@@ -255,7 +259,7 @@ static int OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* marker,
 
     // free the header
     MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
-    c->removeRevision(found->revisionId());
+    c->removeRevision(found->revisionId(), true);
   }
 
   return TRI_ERROR_NO_ERROR;
@@ -1131,19 +1135,58 @@ int MMFilesCollection::iterateMarkersOnLoad(arangodb::Transaction* trx) {
 
   return TRI_ERROR_NO_ERROR;
 }
-  
+
+uint8_t const* MMFilesCollection::lookupRevision(TRI_voc_rid_t revisionId) {
+  LOG(TRACE) << "LOOKING UP REVISION: " << revisionId;
+  auto it = _revisionCache.find(revisionId);
+  if (it == _revisionCache.end()) {
+  LOG(TRACE) << "-------------> REVISION NOT FOUND";
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected revision not found");
+  }
+  return (*it).second->vpack();
+}
+
+TRI_doc_mptr_t* MMFilesCollection::lookupRevisionMptr(TRI_voc_rid_t revisionId) {
+  LOG(TRACE) << "LOOKING UP REVISION BY MPTR: " << revisionId;
+  auto it = _revisionCache.find(revisionId);
+  if (it == _revisionCache.end()) {
+  LOG(TRACE) << "-------------> REVISION NOT FOUND";
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected revision not found");
+  }
+  LOG(TRACE) << "FOUND REVISION: " << (*it).second;
+  return (*it).second;
+}
+ 
 TRI_doc_mptr_t* MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& doc) {
-  TRI_doc_mptr_t* header = _masterPointers.request();
-  if (header == nullptr) {
+  TRI_doc_mptr_t* mptr = _masterPointers.request();
+  if (mptr == nullptr) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
   }
 
-  header->setVPack(doc.begin());
+  LOG(TRACE) << "INSERT REVISION: " << revisionId << ", MPTR: " << mptr;
+  mptr->setVPack(doc.begin());
   try {
-    _revisionCache.emplace(revisionId, header);
-    return header;
+    if (!_revisionCache.emplace(revisionId, mptr).second) {
+  LOG(TRACE) << "----------------> REVISION ALREADY EXISTS";
+     _revisionCache[revisionId] = mptr;
+    }
+    return mptr;
   } catch (...) {
-    _masterPointers.release(header);
+    LOG(TRACE) << "OOPS; TRACEOR";
+    _masterPointers.release(mptr);
+    throw;
+  }
+}
+
+void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t* mptr) {
+  LOG(TRACE) << "INSERT REVISION: " << revisionId << ", MPTR: " << mptr;
+  try {
+    if (!_revisionCache.emplace(revisionId, mptr).second) {
+  LOG(TRACE) << "----------------> REVISION ALREADY EXISTS";
+     _revisionCache[revisionId] = mptr;
+    }
+  } catch (...) {
+    LOG(TRACE) << "OOPS; TRACEOR";
     throw;
   }
 }
@@ -1151,15 +1194,21 @@ TRI_doc_mptr_t* MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, aran
 void MMFilesCollection::updateRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& doc) {
   auto it = _revisionCache.find(revisionId);
   if (it == _revisionCache.end()) {
+  LOG(TRACE) << "EXPECTED REVISION NOT FOUND";
     THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected revision not found");
   }
   (*it).second->setVPack(doc.begin());
 }
 
-void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId) {
+void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId, bool free) {
+  LOG(TRACE) << "REMOVING REVISION: " << revisionId;
   auto it = _revisionCache.find(revisionId);
   if (it != _revisionCache.end()) {
-    _masterPointers.release((*it).second);
+  LOG(TRACE) << "FOUND REVISION: " << revisionId << " " << (*it).second;
+    if (free) {
+  LOG(TRACE) << "FREEING REVISION: " << revisionId << " " << (*it).second;
+      _masterPointers.release((*it).second);
+    }
     _revisionCache.erase(revisionId);
   }
 }
