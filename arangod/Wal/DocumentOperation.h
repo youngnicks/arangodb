@@ -97,14 +97,18 @@ struct DocumentOperation {
       collection->getPhysical()->removeRevision(header->revisionId(), true);
     } else if (type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
                type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
-      collection->getPhysical()->removeRevision(header->revisionId(), false);
+      TRI_voc_rid_t newRevisionId = header->revisionId();
+      VPackSlice newDoc = VPackSlice(header->vpack());
+      TRI_voc_rid_t oldRevisionId = oldHeader.revisionId();
+      
+      collection->getPhysical()->updateRevision(newRevisionId, oldRevisionId, header);
   
-      IndexElement* element = collection->primaryIndex()->lookupKey(trx, Transaction::extractKeyFromDocument(VPackSlice(header->vpack())));
-      header->copy(oldHeader);
+      IndexElement* element = collection->primaryIndex()->lookupKey(trx, Transaction::extractKeyFromDocument(newDoc));
       if (element != nullptr) {
-        element->revisionId(header->revisionId());
+        element->revisionId(oldRevisionId);
       }
-      collection->getPhysical()->insertRevision(header->revisionId(), header);
+      
+      header->copy(oldHeader);
     }
 
     status = StatusType::REVERTED;
