@@ -331,7 +331,8 @@ class LogicalCollection {
              VPackSlice&, TRI_doc_mptr_t&);
 
   int rollbackOperation(arangodb::Transaction*, TRI_voc_document_operation_e, 
-                        TRI_doc_mptr_t const* oldHeader, TRI_doc_mptr_t const* newHeader);
+                        TRI_voc_rid_t oldRevisionId, arangodb::velocypack::Slice const& oldDoc,
+                        TRI_voc_rid_t newRevisionId, arangodb::velocypack::Slice const& newDoc);
 
   // TODO Make Private and IndexFiller als friend
   /// @brief initializes an index with all existing documents

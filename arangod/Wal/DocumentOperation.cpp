@@ -135,26 +135,41 @@ void DocumentOperation::revert() {
     return;
   }
 
-  if (_status == StatusType::INDEXED || _status == StatusType::HANDLED) {
-    _collection->rollbackOperation(_trx, _type, _oldHeader, _newHeader);
+  TRI_ASSERT(_status == StatusType::INDEXED || _status == StatusType::HANDLED);
+   
+  TRI_voc_rid_t oldRevisionId = 0;
+  VPackSlice oldDoc;
+  if (_type != TRI_VOC_DOCUMENT_OPERATION_INSERT) {
+    TRI_ASSERT(_oldHeader != nullptr);
+    oldRevisionId = _oldHeader->revisionId();
+    oldDoc = VPackSlice(_oldHeader->vpack());
   }
+
+  TRI_voc_rid_t newRevisionId = 0;
+  VPackSlice newDoc;
+  if (_type != TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
+    TRI_ASSERT(_newHeader != nullptr);
+    newRevisionId = _newHeader->revisionId();
+    newDoc = VPackSlice(_newHeader->vpack());
+  }
+  _collection->rollbackOperation(_trx, _type, oldRevisionId, oldDoc, newRevisionId, newDoc);
 
   if (_type == TRI_VOC_DOCUMENT_OPERATION_INSERT) {
     TRI_ASSERT(_oldHeader == nullptr);
     TRI_ASSERT(_newHeader != nullptr);
     // remove now obsolete new revision
-    _collection->getPhysical()->removeRevision(_newHeader->revisionId(), true);
+    _collection->getPhysical()->removeRevision(newRevisionId, true);
   } else if (_type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
              _type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
     TRI_ASSERT(_oldHeader != nullptr);
     TRI_ASSERT(_newHeader != nullptr);
-    IndexElement* element = _collection->primaryIndex()->lookupKey(_trx, Transaction::extractKeyFromDocument(VPackSlice(_newHeader->vpack())));
+    IndexElement* element = _collection->primaryIndex()->lookupKey(_trx, Transaction::extractKeyFromDocument(newDoc));
     if (element != nullptr) {
-      element->revisionId(_oldHeader->revisionId());
+      element->revisionId(oldRevisionId);
     }
     
     // remove now obsolete new revision
-    _collection->getPhysical()->removeRevision(_newHeader->revisionId(), true);
+    _collection->getPhysical()->removeRevision(newRevisionId, true);
   }
 
   _status = StatusType::REVERTED;
