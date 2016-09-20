@@ -40,9 +40,7 @@ Communicator c;
 void connectionRefusedTest() {
   auto request = createRequest();
 
-  communicator::Callbacks callbacks{
-      ._onError = 
-          [](int errorCode, std::unique_ptr<GeneralResponse> response) {
+  communicator::Callbacks callbacks(createUnexpectedSuccess(__func__), [](int errorCode, std::unique_ptr<GeneralResponse> response) {
             if (errorCode != TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT) {
               throw std::runtime_error("Errorcode is supposed to be " + std::to_string(TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT) + ". But is " + std::to_string(errorCode));
             }
@@ -50,9 +48,7 @@ void connectionRefusedTest() {
             if (response.get() != nullptr) {
               throw std::runtime_error("Response is not null!");
             }
-          },
-      ._onSuccess = createUnexpectedSuccess(__func__)
-  };
+  });
 
   communicator::Options opt;
   c.addRequest(communicator::Destination{"http://localhost:12121/_api/version"},
@@ -62,9 +58,7 @@ void connectionRefusedTest() {
 void dnsFailureTest() {
   auto request = createRequest();
 
-  communicator::Callbacks callbacks{
-      ._onError = 
-          [](int errorCode, std::unique_ptr<GeneralResponse> response) {
+  communicator::Callbacks callbacks(createUnexpectedSuccess(__func__), [](int errorCode, std::unique_ptr<GeneralResponse> response) {
             if (errorCode != TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT) {
               throw std::runtime_error("Errorcode is supposed to be " + std::to_string(TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT) + ". But is " + std::to_string(errorCode));
             }
@@ -72,9 +66,7 @@ void dnsFailureTest() {
             if (response.get() != nullptr) {
               throw std::runtime_error("Response is not null!");
             }
-          },
-      ._onSuccess = createUnexpectedSuccess(__func__)
-  };
+  });
 
   communicator::Options opt;
   c.addRequest(communicator::Destination{"http://hans.peter.wurst.arangodb:8529/_api/version"},
@@ -84,9 +76,7 @@ void dnsFailureTest() {
 void protocolFailureTest() {
   auto request = createRequest();
 
-  communicator::Callbacks callbacks{
-      ._onError = 
-          [](int errorCode, std::unique_ptr<GeneralResponse> response) {
+  communicator::Callbacks callbacks(createUnexpectedSuccess(__func__), [](int errorCode, std::unique_ptr<GeneralResponse> response) {
             if (errorCode != TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT) {
               throw std::runtime_error("Errorcode is supposed to be " + std::to_string(TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT) + ". But is " + std::to_string(errorCode));
             }
@@ -94,9 +84,7 @@ void protocolFailureTest() {
             if (response.get() != nullptr) {
               throw std::runtime_error("Response is not null!");
             }
-          },
-      ._onSuccess = createUnexpectedSuccess(__func__)
-  };
+  });
 
   communicator::Options opt;
   c.addRequest(communicator::Destination{"http://hans.peter.wurst.arangodb:8529/_api/version"},
@@ -106,17 +94,13 @@ void protocolFailureTest() {
 void simpleGetTest() {
   auto request = createRequest();
 
-  communicator::Callbacks callbacks{
-      ._onError = createUnexpectedError(__func__),
-      ._onSuccess =
-          [](std::unique_ptr<GeneralResponse> response) {
-            std::string body(((HttpResponse*)response.get())->body().c_str(), ((HttpResponse*)response.get())->body().length());
-            std::string check = body.substr(0, 18);
-            if (check != "{\"server\":\"arango\"") {
-              throw std::runtime_error("Excpected arangodb server response. Got " + check);
-            }
-          }};
-
+  communicator::Callbacks callbacks([](std::unique_ptr<GeneralResponse> response) {
+	  std::string body(((HttpResponse*)response.get())->body().c_str(), ((HttpResponse*)response.get())->body().length());
+	  std::string check = body.substr(0, 18);
+	  if (check != "{\"server\":\"arango\"") {
+		  throw std::runtime_error("Excpected arangodb server response. Got " + check);
+	  }
+  }, createUnexpectedError(__func__));
   communicator::Options opt;
 
   c.addRequest(communicator::Destination{"http://localhost:8529/_api/version"},
@@ -131,14 +115,11 @@ void simplePostTest() {
   request->setBody(body.c_str(), body.length());
   
   std::string funcName(__func__);
-  communicator::Callbacks callbacks {
-      ._onError = [funcName](int errorCode, std::unique_ptr<GeneralResponse> response) {
+  communicator::Callbacks callbacks(createUnexpectedSuccess(__func__), [funcName](int errorCode, std::unique_ptr<GeneralResponse> response) {
         if (response != nullptr && response->responseCode() != ResponseCode::BAD) {
           throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
         }
-      },
-      ._onSuccess = createUnexpectedSuccess(__func__)
-  };
+  });
 
   communicator::Options opt;
 
@@ -154,19 +135,16 @@ void simplePostBodyTest() {
   request->setBody(body.c_str(), body.length());
 
   std::string funcName(__func__);
-  communicator::Callbacks callbacks {
-      ._onError = createUnexpectedError(__func__),
-      ._onSuccess = [funcName](std::unique_ptr<GeneralResponse> response) {
-        if (response->responseCode() != ResponseCode::OK) {
-          throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
-        }
-        
-        std::string body(((HttpResponse*)response.get())->body().c_str(), ((HttpResponse*)response.get())->body().length());
-        if (body != "{\"hase\":true,\"error\":false,\"code\":200}") {
-          throw std::runtime_error("Got invalid response in " + funcName + ": Expecting hase in body but body was " + body);
-        }
-      }
-  };
+  communicator::Callbacks callbacks([funcName](std::unique_ptr<GeneralResponse> response) {
+	  if (response->responseCode() != ResponseCode::OK) {
+		  throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
+	  }
+
+	  std::string body(((HttpResponse*)response.get())->body().c_str(), ((HttpResponse*)response.get())->body().length());
+	  if (body != "{\"hase\":true,\"error\":false,\"code\":200}") {
+		  throw std::runtime_error("Got invalid response in " + funcName + ": Expecting hase in body but body was " + body);
+	  }
+  }, createUnexpectedError(__func__));
 
   communicator::Options opt;
 
@@ -182,20 +160,17 @@ void simplePutBodyTest() {
   request->setBody(body.c_str(), body.length());
 
   std::string funcName(__func__);
-  communicator::Callbacks callbacks {
-      ._onError = createUnexpectedError(__func__),
-      ._onSuccess = [funcName](std::unique_ptr<GeneralResponse> response) {
-        if (response->responseCode() != ResponseCode::OK) {
-          throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
-        }
-        
-        std::string body(((HttpResponse*)response.get())->body().c_str(), ((HttpResponse*)response.get())->body().length());
-        // mop: as it is a PUT request the code is not actually carried out (strange but that's it :S)
-        if (body != "{\"error\":false,\"code\":200}") {
-          throw std::runtime_error("Got invalid response in " + funcName + ": " + body);
-        }
-      }
-  };
+  communicator::Callbacks callbacks([funcName](std::unique_ptr<GeneralResponse> response) {
+	  if (response->responseCode() != ResponseCode::OK) {
+		  throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
+	  }
+
+	  std::string body(((HttpResponse*)response.get())->body().c_str(), ((HttpResponse*)response.get())->body().length());
+	  // mop: as it is a PUT request the code is not actually carried out (strange but that's it :S)
+	  if (body != "{\"error\":false,\"code\":200}") {
+		  throw std::runtime_error("Got invalid response in " + funcName + ": " + body);
+	  }
+  }, createUnexpectedError(__func__));
 
   communicator::Options opt;
 
@@ -208,14 +183,11 @@ void sendHeadersTest() {
   request->setHeader("x-arango-async", 14, "true", 4);
 
   std::string funcName(__func__);
-  communicator::Callbacks callbacks {
-      ._onError = createUnexpectedError(__func__),
-      ._onSuccess = [funcName](std::unique_ptr<GeneralResponse> response) {
-        if (response->responseCode() != ResponseCode::ACCEPTED) {
-          throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
-        }
-      }
-  };
+  communicator::Callbacks callbacks([funcName](std::unique_ptr<GeneralResponse> response) {
+	  if (response->responseCode() != ResponseCode::ACCEPTED) {
+		  throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
+	  }
+  }, createUnexpectedError(__func__));
 
   communicator::Options opt;
 
@@ -229,20 +201,17 @@ void receiveHeadersTest() {
   request->setHeader("Origin", origin);
 
   std::string funcName(__func__);
-  communicator::Callbacks callbacks {
-      ._onError = createUnexpectedError(__func__),
-      ._onSuccess = [funcName, origin](std::unique_ptr<GeneralResponse> response) {
-        auto headers = response->headers();
-        auto it = headers.find("access-control-allow-origin");
-        if (it == headers.end()) {
-          throw std::runtime_error("Got invalid response in " + funcName + ": Origin header is not present. " + std::to_string(headers.size()));
-        }
-        
-        if (it->second != origin) {
-          throw std::runtime_error("Got invalid response in " + funcName + ": Origin header is " + it->second + " HUIU " + origin);
-        }
-      }
-  };
+  communicator::Callbacks callbacks([funcName, origin](std::unique_ptr<GeneralResponse> response) {
+	  auto headers = response->headers();
+	  auto it = headers.find("access-control-allow-origin");
+	  if (it == headers.end()) {
+		  throw std::runtime_error("Got invalid response in " + funcName + ": Origin header is not present. " + std::to_string(headers.size()));
+	  }
+
+	  if (it->second != origin) {
+		  throw std::runtime_error("Got invalid response in " + funcName + ": Origin header is " + it->second + " HUIU " + origin);
+	  }
+  }, createUnexpectedError(__func__));
 
   communicator::Options opt;
 
@@ -258,15 +227,12 @@ void failOnError() {
   request->setBody(body.c_str(), body.length());
   
   std::string funcName(__func__);
-  communicator::Callbacks callbacks {
-      ._onError = [funcName](int errorCode, std::unique_ptr<GeneralResponse> response) {
+  communicator::Callbacks callbacks(createUnexpectedSuccess(__func__), [funcName](int errorCode, std::unique_ptr<GeneralResponse> response) {
         LOG(ERR) << "ERRORCODE IS " << errorCode;
         if (response->responseCode() != ResponseCode::BAD) {
           throw std::runtime_error("Got invalid response in " + funcName + ": " + GeneralResponse::responseString(response->responseCode()));
         }
-      },
-      ._onSuccess = createUnexpectedSuccess(__func__)
-  };
+  });
 
   communicator::Options opt;
 

@@ -32,15 +32,21 @@ class GeneralResponse;
 namespace communicator {
 class Callbacks {
  public:
-  typedef std::function<void(int, std::unique_ptr<GeneralResponse>)>
-      OnErrorCallback;
+	typedef std::function<void(int, std::unique_ptr<GeneralResponse>)>
+		OnErrorCallback;
 
-  typedef std::function<void(std::unique_ptr<GeneralResponse>)>
-      OnSuccessCallback;
+	typedef std::function<void(std::unique_ptr<GeneralResponse>)>
+		OnSuccessCallback;
+
+	Callbacks() {}
+	Callbacks(OnSuccessCallback onSuccess, OnErrorCallback onError) :
+	_onSuccess(onSuccess), _onError(onError)  {
+	}
 
  public:
-  OnErrorCallback _onError;
-  OnSuccessCallback _onSuccess;
+	OnSuccessCallback _onSuccess;
+	OnErrorCallback _onError;
+
 };
 }
 }
