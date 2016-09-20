@@ -188,11 +188,11 @@ class HashIndex final : public PathBasedIndex {
 
   bool matchesDefinition(VPackSlice const& info) const override;
 
-  int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
+  int insert(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback) override;
 
-  int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
+  int remove(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback) override;
 
-  int batchInsert(arangodb::Transaction*, std::vector<DocumentWrapper> const&, size_t) override;
+  int batchInsert(arangodb::Transaction*, std::vector<std::pair<TRI_voc_rid_t, arangodb::velocypack::Slice>> const&, size_t) override;
   
   int unload() override;
 
@@ -231,23 +231,23 @@ class HashIndex final : public PathBasedIndex {
   int lookup(arangodb::Transaction*, arangodb::velocypack::Slice,
              std::vector<IndexElement*>&) const;
 
-  int insertUnique(arangodb::Transaction*, DocumentWrapper const&, bool isRollback);
+  int insertUnique(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback);
 
   int batchInsertUnique(arangodb::Transaction*,
-                        std::vector<DocumentWrapper> const&, size_t);
+                        std::vector<std::pair<TRI_voc_rid_t, arangodb::velocypack::Slice>> const&, size_t);
 
-  int insertMulti(arangodb::Transaction*, DocumentWrapper const&, bool isRollback);
+  int insertMulti(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback);
 
   int batchInsertMulti(arangodb::Transaction*,
-                       std::vector<DocumentWrapper> const&, size_t);
+                       std::vector<std::pair<TRI_voc_rid_t, arangodb::velocypack::Slice>> const&, size_t);
 
   int removeUniqueElement(arangodb::Transaction*, IndexElement*, bool);
 
-  int removeUnique(arangodb::Transaction*, DocumentWrapper const&, bool isRollback);
+  int removeUnique(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback);
 
   int removeMultiElement(arangodb::Transaction*, IndexElement*, bool);
 
-  int removeMulti(arangodb::Transaction*, DocumentWrapper const&, bool isRollback);
+  int removeMulti(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback);
 
   bool accessFitsIndex(arangodb::aql::AstNode const* access,
                        arangodb::aql::AstNode const* other,

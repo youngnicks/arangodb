@@ -2256,7 +2256,7 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
       return res;
     }
 
-    res = deletePrimaryIndex(trx, oldHeader);
+    res = deletePrimaryIndex(trx, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()));
 
     if (res != TRI_ERROR_NO_ERROR) {
       insertSecondaryIndexes(trx, oldHeader, true);
@@ -2293,7 +2293,7 @@ int LogicalCollection::rollbackOperation(arangodb::Transaction* trx,
                                          TRI_doc_mptr_t const* oldData) {
   if (type == TRI_VOC_DOCUMENT_OPERATION_INSERT) {
     // ignore any errors we're getting from this
-    deletePrimaryIndex(trx, header);
+    deletePrimaryIndex(trx, header->revisionId(), VPackSlice(header->vpack()));
     deleteSecondaryIndexes(trx, header, true);
   
     // remove new revision
@@ -2329,7 +2329,7 @@ int LogicalCollection::rollbackOperation(arangodb::Transaction* trx,
     // re-insert old revision
     getPhysical()->insertRevision(header->revisionId(), header);
 
-    int res = insertPrimaryIndex(trx, header);
+    int res = insertPrimaryIndex(trx, header->revisionId(), VPackSlice(header->vpack()));
 
     if (res == TRI_ERROR_NO_ERROR) {
       res = insertSecondaryIndexes(trx, header, true);
@@ -2424,25 +2424,23 @@ int LogicalCollection::fillIndexBatch(arangodb::Transaction* trx,
 
   int res = TRI_ERROR_NO_ERROR;
 
-  std::vector<DocumentWrapper> documents;
+  std::vector<std::pair<TRI_voc_rid_t, VPackSlice>> documents;
   documents.reserve(blockSize);
 
   if (nrUsed > 0) {
     arangodb::basics::BucketPosition position;
     uint64_t total = 0;
     while (true) {
-      TRI_doc_mptr_t const* mptr = nullptr;
-      IndexElement* m = primaryIndex->lookupSequential(trx, position, total);
-      if (m != nullptr) {
-        TRI_voc_rid_t revisionId = m->revisionId();
-        mptr = getPhysical()->lookupRevisionMptr(revisionId);
-      } 
+      IndexElement* element = primaryIndex->lookupSequential(trx, position, total);
 
-      if (mptr == nullptr) {
+      if (element == nullptr) {
         break;
       }
+      
+      TRI_voc_rid_t revisionId = element->revisionId();
+      TRI_doc_mptr_t* mptr = getPhysical()->lookupRevisionMptr(revisionId);
 
-      documents.emplace_back(DocumentWrapper(mptr));
+      documents.emplace_back(std::make_pair(revisionId, VPackSlice(mptr->vpack())));
 
       if (documents.size() == blockSize) {
         res = idx->batchInsert(trx, documents, indexPool->numThreads());
@@ -2500,18 +2498,16 @@ int LogicalCollection::fillIndexSequential(arangodb::Transaction* trx,
     uint64_t total = 0;
 
     while (true) {
-      IndexElement* m = primaryIndex->lookupSequential(trx, position, total);
-      TRI_doc_mptr_t const* mptr = nullptr;
-      if (m != nullptr) {
-        TRI_voc_rid_t revisionId = m->revisionId();
-        mptr = getPhysical()->lookupRevisionMptr(revisionId);
-      }
+      IndexElement* element = primaryIndex->lookupSequential(trx, position, total);
 
-      if (mptr == nullptr) {
+      if (element == nullptr) {
         break;
       }
 
-      int res = idx->insert(trx, DocumentWrapper(mptr), false);
+      TRI_voc_rid_t revisionId = element->revisionId();
+      TRI_doc_mptr_t* mptr = getPhysical()->lookupRevisionMptr(revisionId);
+
+      int res = idx->insert(trx, revisionId, VPackSlice(mptr->vpack()), false);
 
       if (res != TRI_ERROR_NO_ERROR) {
         return res;
@@ -2895,7 +2891,7 @@ int LogicalCollection::insertDocument(
   // .............................................................................
 
   // insert into primary index first
-  int res = insertPrimaryIndex(trx, header);
+  int res = insertPrimaryIndex(trx, header->revisionId(), VPackSlice(header->vpack()));
 
   if (res != TRI_ERROR_NO_ERROR) {
     // insert has failed
@@ -2907,7 +2903,7 @@ int LogicalCollection::insertDocument(
 
   if (res != TRI_ERROR_NO_ERROR) {
     deleteSecondaryIndexes(trx, header, true);
-    deletePrimaryIndex(trx, header);
+    deletePrimaryIndex(trx, header->revisionId(), VPackSlice(header->vpack()));
     return res;
   }
 
@@ -2932,22 +2928,20 @@ int LogicalCollection::insertDocument(
 
 /// @brief creates a new entry in the primary index
 int LogicalCollection::insertPrimaryIndex(arangodb::Transaction* trx,
-                                          TRI_doc_mptr_t* header) {
+                                          TRI_voc_rid_t revisionId,
+                                          VPackSlice const& doc) {
   TRI_IF_FAILURE("InsertPrimaryIndex") { return TRI_ERROR_DEBUG; }
 
-  TRI_ASSERT(header != nullptr);
-  TRI_ASSERT(header->vpack() != nullptr); 
-
   // insert into primary index
-  return primaryIndex()->insertKey(trx, header);
+  return primaryIndex()->insertKey(trx, revisionId, doc);
 }
 
 /// @brief deletes an entry from the primary index
 int LogicalCollection::deletePrimaryIndex(
-    arangodb::Transaction* trx, TRI_doc_mptr_t const* header) {
+    arangodb::Transaction* trx, TRI_voc_rid_t revisionId, VPackSlice const& doc) {
   TRI_IF_FAILURE("DeletePrimaryIndex") { return TRI_ERROR_DEBUG; }
 
-  return primaryIndex()->removeKey(trx, header);
+  return primaryIndex()->removeKey(trx, revisionId, doc);
 }
 
 /// @brief creates a new entry in the secondary indexes
@@ -2974,7 +2968,7 @@ int LogicalCollection::insertSecondaryIndexes(
       continue;
     }
 
-    int res = idx->insert(trx, DocumentWrapper(header), isRollback);
+    int res = idx->insert(trx, header->revisionId(), VPackSlice(header->vpack()), isRollback);
 
     // in case of no-memory, return immediately
     if (res == TRI_ERROR_OUT_OF_MEMORY) {
@@ -3017,7 +3011,7 @@ int LogicalCollection::deleteSecondaryIndexes(
       continue;
     }
 
-    int res = idx->remove(trx, DocumentWrapper(header), isRollback);
+    int res = idx->remove(trx, header->revisionId(), VPackSlice(header->vpack()), isRollback);
 
     if (res != TRI_ERROR_NO_ERROR) {
       // an error occurred

@@ -385,10 +385,10 @@ class LogicalCollection {
                      arangodb::wal::DocumentOperation&, arangodb::wal::Marker const*,
                      TRI_doc_mptr_t*, bool&);
 
-  int insertPrimaryIndex(arangodb::Transaction*, TRI_doc_mptr_t*);
+  int insertPrimaryIndex(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&);
  public:
   // FIXME needs to be private
-  int deletePrimaryIndex(arangodb::Transaction*, TRI_doc_mptr_t const*);
+  int deletePrimaryIndex(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&);
  private:
 
   int insertSecondaryIndexes(arangodb::Transaction*, TRI_doc_mptr_t const*,

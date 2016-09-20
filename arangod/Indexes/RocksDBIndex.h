@@ -165,9 +165,9 @@ class RocksDBIndex final : public PathBasedIndex {
     return value;
   }
 
-  int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
+  int insert(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback) override;
 
-  int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
+  int remove(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback) override;
 
   int unload() override;
 

@@ -67,9 +67,9 @@ class FulltextIndex final : public Index {
 
   bool matchesDefinition(VPackSlice const&) const override;
 
-  int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
+  int insert(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback) override;
 
-  int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
+  int remove(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback) override;
 
   int unload() override;
 
@@ -84,7 +84,7 @@ class FulltextIndex final : public Index {
   TRI_fts_index_t* internals() { return _fulltextIndex; }
 
  private:
-  std::vector<std::string> wordlist(DocumentWrapper const&);
+  std::vector<std::string> wordlist(arangodb::velocypack::Slice const&);
 
  private:
   //////////////////////////////////////////////////////////////////////////////

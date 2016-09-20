@@ -152,11 +152,11 @@ class EdgeIndex final : public Index {
 
   void toVelocyPackFigures(VPackBuilder&) const override;
 
-  int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
+  int insert(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback) override;
 
-  int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
+  int remove(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback) override;
 
-  int batchInsert(arangodb::Transaction*, std::vector<DocumentWrapper> const&, size_t) override;
+  int batchInsert(arangodb::Transaction*, std::vector<std::pair<TRI_voc_rid_t, VPackSlice>> const&, size_t) override;
   
   int unload() override;
 
@@ -231,8 +231,8 @@ class EdgeIndex final : public Index {
     
   void handleValNode(VPackBuilder* keys, arangodb::aql::AstNode const* valNode) const;
 
-  IndexElement* buildFromElement(DocumentWrapper const& doc) const;
-  IndexElement* buildToElement(DocumentWrapper const& doc) const;
+  IndexElement* buildFromElement(TRI_voc_rid_t, arangodb::velocypack::Slice const& doc) const;
+  IndexElement* buildToElement(TRI_voc_rid_t, arangodb::velocypack::Slice const& doc) const;
 
  private:
   //////////////////////////////////////////////////////////////////////////////

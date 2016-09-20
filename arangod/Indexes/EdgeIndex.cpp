@@ -466,10 +466,10 @@ void EdgeIndex::toVelocyPackFigures(VPackBuilder& builder) const {
   builder.add("buckets", VPackValue(_numBuckets));
 }
 
-int EdgeIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
-                      bool isRollback) {
-  IndexElementGuard fromElement(buildFromElement(doc), 1);
-  IndexElementGuard toElement(buildToElement(doc), 1);
+int EdgeIndex::insert(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
+                      VPackSlice const& doc, bool isRollback) {
+  IndexElementGuard fromElement(buildFromElement(revisionId, doc), 1);
+  IndexElementGuard toElement(buildToElement(revisionId, doc), 1);
 
   if (!fromElement || !toElement) {
     return TRI_ERROR_OUT_OF_MEMORY;
@@ -492,10 +492,10 @@ int EdgeIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
   return TRI_ERROR_NO_ERROR;
 }
 
-int EdgeIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc,
-                      bool) {
-  IndexElementGuard fromElement(buildFromElement(doc), 1);
-  IndexElementGuard toElement(buildToElement(doc), 1);
+int EdgeIndex::remove(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
+                      VPackSlice const& doc, bool isRollback) {
+  IndexElementGuard fromElement(buildFromElement(revisionId, doc), 1);
+  IndexElementGuard toElement(buildToElement(revisionId, doc), 1);
   
   if (!fromElement || !toElement) {
     return TRI_ERROR_OUT_OF_MEMORY;
@@ -509,7 +509,7 @@ int EdgeIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc,
 }
 
 int EdgeIndex::batchInsert(arangodb::Transaction* trx,
-                           std::vector<DocumentWrapper> const& documents,
+                           std::vector<std::pair<TRI_voc_rid_t, VPackSlice>> const& documents,
                            size_t numThreads) {
   if (documents.empty()) {
     return TRI_ERROR_NO_ERROR;
@@ -527,7 +527,7 @@ int EdgeIndex::batchInsert(arangodb::Transaction* trx,
   TRI_DEFER(cleanup());
   
   for (auto const& it : documents) {
-    IndexElementGuard fromElement(buildFromElement(it), 1);
+    IndexElementGuard fromElement(buildFromElement(it.first, it.second), 1);
     if (!fromElement) {
       return TRI_ERROR_OUT_OF_MEMORY;
     }
@@ -545,7 +545,7 @@ int EdgeIndex::batchInsert(arangodb::Transaction* trx,
   elements.clear();
   
   for (auto const& it : documents) {
-    IndexElementGuard toElement(buildToElement(it), 1);
+    IndexElementGuard toElement(buildToElement(it.first, it.second), 1);
     if (toElement == nullptr) {
       // TODO: remove the elements that were inserted into _edgesFrom!
       return TRI_ERROR_OUT_OF_MEMORY;
@@ -847,10 +847,10 @@ void EdgeIndex::handleValNode(VPackBuilder* keys,
   }
 }
 
-IndexElement* EdgeIndex::buildFromElement(DocumentWrapper const& doc) const {
-  return buildStringElement(doc, Transaction::extractFromFromDocument(doc.slice()));
+IndexElement* EdgeIndex::buildFromElement(TRI_voc_rid_t revisionId, VPackSlice const& doc) const {
+  return buildStringElement(revisionId, Transaction::extractFromFromDocument(doc));
 }
 
-IndexElement* EdgeIndex::buildToElement(DocumentWrapper const& doc) const {
-  return buildStringElement(doc, Transaction::extractToFromDocument(doc.slice()));
+IndexElement* EdgeIndex::buildToElement(TRI_voc_rid_t revisionId, VPackSlice const& doc) const {
+  return buildStringElement(revisionId, Transaction::extractToFromDocument(doc));
 }

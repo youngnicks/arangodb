@@ -684,30 +684,30 @@ bool HashIndex::matchesDefinition(VPackSlice const& info) const {
   return true;
 }
 
-int HashIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
-                      bool isRollback) {
+int HashIndex::insert(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
+                      VPackSlice const& doc, bool isRollback) {
   if (_unique) {
-    return insertUnique(trx, doc, isRollback);
+    return insertUnique(trx, revisionId, doc, isRollback);
   }
 
-  return insertMulti(trx, doc, isRollback);
+  return insertMulti(trx, revisionId, doc, isRollback);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief removes an entry from the hash array part of the hash index
 ////////////////////////////////////////////////////////////////////////////////
 
-int HashIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc,
-                      bool isRollback) {
+int HashIndex::remove(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
+                      VPackSlice const& doc, bool isRollback) {
   if (_unique) {
-    return removeUnique(trx, doc, isRollback);
+    return removeUnique(trx, revisionId, doc, isRollback);
   }
 
-  return removeMulti(trx, doc, isRollback);
+  return removeMulti(trx, revisionId, doc, isRollback);
 }
 
 int HashIndex::batchInsert(arangodb::Transaction* trx,
-                           std::vector<DocumentWrapper> const& documents,
+                           std::vector<std::pair<TRI_voc_rid_t, VPackSlice>> const& documents,
                            size_t numThreads) {
   if (_unique) {
     return batchInsertUnique(trx, documents, numThreads);
@@ -783,10 +783,10 @@ int HashIndex::lookup(arangodb::Transaction* trx,
   return TRI_ERROR_NO_ERROR;
 }
 
-int HashIndex::insertUnique(arangodb::Transaction* trx,
-                            DocumentWrapper const& doc, bool isRollback) {
+int HashIndex::insertUnique(arangodb::Transaction* trx, TRI_voc_rid_t revisionId, 
+                            VPackSlice const& doc, bool isRollback) {
   std::vector<IndexElement*> elements;
-  int res = fillElement(elements, doc);
+  int res = fillElement(elements, revisionId, doc);
 
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& it : elements) {
@@ -821,14 +821,13 @@ int HashIndex::insertUnique(arangodb::Transaction* trx,
   return res;
 }
 
-int HashIndex::batchInsertUnique(
-    arangodb::Transaction* trx,
-    std::vector<DocumentWrapper> const& documents, size_t numThreads) {
+int HashIndex::batchInsertUnique(arangodb::Transaction* trx, 
+     std::vector<std::pair<TRI_voc_rid_t, VPackSlice>> const& documents, size_t numThreads) {
   std::vector<IndexElement*> elements;
   elements.reserve(documents.size());
 
   for (auto& doc : documents) {
-    int res = fillElement(elements, doc);
+    int res = fillElement(elements, doc.first, doc.second);
 
     if (res != TRI_ERROR_NO_ERROR) {
       for (auto& it : elements) {
@@ -856,10 +855,10 @@ int HashIndex::batchInsertUnique(
   return res;
 }
 
-int HashIndex::insertMulti(arangodb::Transaction* trx,
-                           DocumentWrapper const& doc, bool isRollback) {
+int HashIndex::insertMulti(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
+                           VPackSlice const& doc, bool isRollback) {
   std::vector<IndexElement*> elements;
-  int res = fillElement(elements, doc);
+  int res = fillElement(elements, revisionId, doc);
 
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& hashElement : elements) {
@@ -916,14 +915,13 @@ int HashIndex::insertMulti(arangodb::Transaction* trx,
   return TRI_ERROR_NO_ERROR;
 }
 
-int HashIndex::batchInsertMulti(
-    arangodb::Transaction* trx,
-    std::vector<DocumentWrapper> const& documents, size_t numThreads) {
+int HashIndex::batchInsertMulti(arangodb::Transaction* trx, 
+        std::vector<std::pair<TRI_voc_rid_t, VPackSlice>> const& documents, size_t numThreads) {
   std::vector<IndexElement*> elements;
   elements.reserve(documents.size());
 
   for (auto& doc : documents) {
-    int res = fillElement(elements, doc);
+    int res = fillElement(elements, doc.first, doc.second);
 
     if (res != TRI_ERROR_NO_ERROR) {
       // Filling the elements failed for some reason. Assume loading as failed
@@ -962,9 +960,9 @@ int HashIndex::removeUniqueElement(arangodb::Transaction* trx,
 }
 
 int HashIndex::removeUnique(arangodb::Transaction* trx,
-                            DocumentWrapper const& doc, bool isRollback) {
+                            TRI_voc_rid_t revisionId, VPackSlice const& doc, bool isRollback) {
   std::vector<IndexElement*> elements;
-  int res = fillElement(elements, doc);
+  int res = fillElement(elements, revisionId, doc);
 
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& hashElement : elements) {
@@ -1006,9 +1004,9 @@ int HashIndex::removeMultiElement(arangodb::Transaction* trx,
 }
 
 int HashIndex::removeMulti(arangodb::Transaction* trx,
-                           DocumentWrapper const& doc, bool isRollback) {
+                           TRI_voc_rid_t revisionId, VPackSlice const& doc, bool isRollback) {
   std::vector<IndexElement*> elements;
-  int res = fillElement(elements, doc);
+  int res = fillElement(elements, revisionId, doc);
 
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& hashElement : elements) {

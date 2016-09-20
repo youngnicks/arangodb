@@ -56,20 +56,6 @@ struct Variable;
 class Transaction;
 }
 
-class DocumentWrapper {
- public:
-  explicit DocumentWrapper(TRI_doc_mptr_t const* mptr) 
-    : _mptr(mptr) {}
-
-  TRI_voc_rid_t revisionId() const { return _mptr->revisionId(); }
-  arangodb::velocypack::Slice slice() const { return arangodb::velocypack::Slice(_mptr->vpack()); }
-
-  TRI_doc_mptr_t const* mptr() const { return _mptr; }
-
- private:
-  TRI_doc_mptr_t const* _mptr;
-};
-
 namespace arangodb {
 class IndexIterator;
 struct IndexIteratorContext;
@@ -257,10 +243,10 @@ class Index {
   virtual void toVelocyPackFigures(arangodb::velocypack::Builder&) const;
   std::shared_ptr<arangodb::velocypack::Builder> toVelocyPackFigures() const;
 
-  virtual int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) = 0;
-  virtual int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) = 0;
+  virtual int insert(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&, bool isRollback) = 0;
+  virtual int remove(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&, bool isRollback) = 0;
   
-  virtual int batchInsert(arangodb::Transaction*, std::vector<DocumentWrapper> const&, size_t);
+  virtual int batchInsert(arangodb::Transaction*, std::vector<std::pair<TRI_voc_rid_t, arangodb::velocypack::Slice>> const&, size_t);
   
   virtual int unload() = 0;
 
@@ -314,8 +300,7 @@ class Index {
                                     arangodb::velocypack::Builder&) const;
 
  protected:
-  IndexElement* buildStringElement(DocumentWrapper const& doc, 
-                                   arangodb::velocypack::Slice const& value) const;
+  IndexElement* buildStringElement(TRI_voc_rid_t, arangodb::velocypack::Slice const& doc) const;
 
  private:
   /// @brief set fields from slice

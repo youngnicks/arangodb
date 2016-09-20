@@ -128,23 +128,20 @@ PathBasedIndex::~PathBasedIndex() {}
 ////////////////////////////////////////////////////////////////////////////////
 
 int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
-                                DocumentWrapper const& document) {
-  VPackSlice const slice(document.slice());
-
-  if (slice.isNone()) {
+                                TRI_voc_rid_t revisionId,
+                                VPackSlice const& doc) {
+  if (doc.isNone()) {
     LOG(ERR) << "encountered invalid marker with slice of type None";
     return TRI_ERROR_INTERNAL;
   }
 
   TRI_IF_FAILURE("FillElementIllegalSlice") { return TRI_ERROR_INTERNAL; }
 
-  TRI_voc_rid_t const revisionId = document.revisionId();
-
   size_t const n = _paths.size();
 
   if (!_useExpansion) {
     // fast path for inserts... no array elements used
-    auto slices = buildIndexValue(slice);
+    auto slices = buildIndexValue(doc);
 
     if (slices.size() == n) {
       // if shapes.size() != n, then the value is not inserted into the index
@@ -176,7 +173,7 @@ int PathBasedIndex::fillElement(std::vector<IndexElement*>& elements,
     std::vector<std::vector<VPackSlice>> toInsert;
     std::vector<VPackSlice> sliceStack;
 
-    buildIndexValues(slice, 0, toInsert, sliceStack);
+    buildIndexValues(doc, 0, toInsert, sliceStack);
 
     if (!toInsert.empty()) {
       elements.reserve(toInsert.size());

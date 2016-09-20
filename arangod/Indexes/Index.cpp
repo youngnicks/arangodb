@@ -514,7 +514,7 @@ double Index::selectivityEstimate() const {
 }
 
 /// @brief default implementation for selectivityEstimate
-int Index::batchInsert(arangodb::Transaction*, std::vector<DocumentWrapper> const&, size_t) {
+int Index::batchInsert(arangodb::Transaction*, std::vector<std::pair<TRI_voc_rid_t, VPackSlice>> const&, size_t) {
   THROW_ARANGO_EXCEPTION(TRI_ERROR_NOT_IMPLEMENTED);
 }
 
@@ -789,10 +789,10 @@ void Index::expandInSearchValues(VPackSlice const base,
   }
 }
 
-IndexElement* Index::buildStringElement(DocumentWrapper const& doc, VPackSlice const& value) const {
-  TRI_ASSERT(value.isString());
+IndexElement* Index::buildStringElement(TRI_voc_rid_t revisionId, VPackSlice const& doc) const {
+  TRI_ASSERT(doc.isString());
   
-  return IndexElement::create(doc.revisionId(), value);
+  return IndexElement::create(revisionId, doc);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

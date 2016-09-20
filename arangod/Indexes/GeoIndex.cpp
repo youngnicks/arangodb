@@ -220,20 +220,19 @@ bool GeoIndex::matchesDefinition(VPackSlice const& info) const {
   return true;
 }
 
-int GeoIndex::insert(arangodb::Transaction*, DocumentWrapper const& doc, bool) {
-  VPackSlice const slice(doc.slice());
-
+int GeoIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId,
+                     VPackSlice const& doc, bool isRollback) {
   double latitude;
   double longitude;
 
   if (_variant == INDEX_GEO_INDIVIDUAL_LAT_LON) {
-    VPackSlice lat = slice.get(_latitude);
+    VPackSlice lat = doc.get(_latitude);
     if (!lat.isNumber()) {
       // Invalid, no insert. Index is sparse
       return TRI_ERROR_NO_ERROR;
     }
 
-    VPackSlice lon = slice.get(_longitude);
+    VPackSlice lon = doc.get(_longitude);
     if (!lon.isNumber()) {
       // Invalid, no insert. Index is sparse
       return TRI_ERROR_NO_ERROR;
@@ -241,7 +240,7 @@ int GeoIndex::insert(arangodb::Transaction*, DocumentWrapper const& doc, bool) {
     latitude = lat.getNumericValue<double>();
     longitude = lon.getNumericValue<double>();
   } else {
-    VPackSlice loc = slice.get(_location);
+    VPackSlice loc = doc.get(_location);
     if (!loc.isArray() || loc.length() < 2) {
       // Invalid, no insert. Index is sparse
       return TRI_ERROR_NO_ERROR;
@@ -269,7 +268,7 @@ int GeoIndex::insert(arangodb::Transaction*, DocumentWrapper const& doc, bool) {
   GeoCoordinate gc;
   gc.latitude = latitude;
   gc.longitude = longitude;
-  gc.data = const_cast<void*>(static_cast<void const*>(doc.mptr()));
+  gc.data = reinterpret_cast<void*>(revisionId);
 
   int res = GeoIndex_insert(_geoIndex, &gc);
 
@@ -288,16 +287,15 @@ int GeoIndex::insert(arangodb::Transaction*, DocumentWrapper const& doc, bool) {
   return TRI_ERROR_NO_ERROR;
 }
 
-int GeoIndex::remove(arangodb::Transaction*, DocumentWrapper const& doc, bool) {
-  VPackSlice const slice(doc.slice());
-
+int GeoIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId, 
+                     VPackSlice const& doc, bool isRollback) {
   double latitude = 0.0;
   double longitude = 0.0;
   bool ok = true;
 
   if (_variant == INDEX_GEO_INDIVIDUAL_LAT_LON) {
-    VPackSlice lat = slice.get(_latitude);
-    VPackSlice lon = slice.get(_longitude);
+    VPackSlice lat = doc.get(_latitude);
+    VPackSlice lon = doc.get(_longitude);
     if (!lat.isNumber()) {
       ok = false;
     } else {
@@ -309,7 +307,7 @@ int GeoIndex::remove(arangodb::Transaction*, DocumentWrapper const& doc, bool) {
       longitude = lon.getNumericValue<double>();
     }
   } else {
-    VPackSlice loc = slice.get(_location);
+    VPackSlice loc = doc.get(_location);
     if (!loc.isArray() || loc.length() < 2) {
       ok = false;
     } else {
@@ -340,7 +338,7 @@ int GeoIndex::remove(arangodb::Transaction*, DocumentWrapper const& doc, bool) {
   GeoCoordinate gc;
   gc.latitude = latitude;
   gc.longitude = longitude;
-  gc.data = const_cast<void*>(static_cast<void const*>(doc.mptr()));
+  gc.data = reinterpret_cast<void*>(revisionId);
 
   // ignore non-existing elements in geo-index
   GeoIndex_remove(_geoIndex, &gc);

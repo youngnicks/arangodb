@@ -268,13 +268,14 @@ void RocksDBIndex::toVelocyPackFigures(VPackBuilder& builder) const {
 /// @brief inserts a document into the index
 ////////////////////////////////////////////////////////////////////////////////
 
-int RocksDBIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc, bool) {
+int RocksDBIndex::insert(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
+                         VPackSlice const& doc, bool isRollback) {
   auto comparator = RocksDBFeature::instance()->comparator();
   std::vector<IndexElement*> elements;
 
   int res;
   try {
-    res = fillElement(elements, doc);
+    res = fillElement(elements, revisionId, doc);
   } catch (...) {
     res = TRI_ERROR_OUT_OF_MEMORY;
   }
@@ -292,7 +293,7 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
     return res;
   }
   
-  VPackSlice const key = Transaction::extractKeyFromDocument(VPackSlice(doc.slice()));
+  VPackSlice const key = Transaction::extractKeyFromDocument(doc);
   std::string const prefix =
       buildPrefix(trx->vocbase()->id(), _collection->cid(), _iid);
 
@@ -425,12 +426,13 @@ int RocksDBIndex::insert(arangodb::Transaction* trx, DocumentWrapper const& doc,
 /// @brief removes a document from the index
 ////////////////////////////////////////////////////////////////////////////////
 
-int RocksDBIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc, bool) {
+int RocksDBIndex::remove(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
+                         VPackSlice const& doc, bool isRollback) {
   std::vector<IndexElement*> elements;
 
   int res;
   try {
-    res = fillElement(elements, doc);
+    res = fillElement(elements, revisionId, doc);
   } catch (...) {
     res = TRI_ERROR_OUT_OF_MEMORY;
   }
@@ -448,7 +450,7 @@ int RocksDBIndex::remove(arangodb::Transaction* trx, DocumentWrapper const& doc,
     return res;
   }
   
-  VPackSlice const key = Transaction::extractKeyFromDocument(doc.slice());
+  VPackSlice const key = Transaction::extractKeyFromDocument(doc);
   
   VPackBuilder builder;
   std::vector<std::string> values;

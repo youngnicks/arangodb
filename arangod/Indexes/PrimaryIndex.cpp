@@ -215,14 +215,14 @@ void PrimaryIndex::toVelocyPackFigures(VPackBuilder& builder) const {
   _primaryIndex->appendToVelocyPack(builder);
 }
 
-int PrimaryIndex::insert(arangodb::Transaction*, DocumentWrapper const&, bool) {
+int PrimaryIndex::insert(arangodb::Transaction*, TRI_voc_rid_t, VPackSlice const&, bool) {
 #ifdef ARANGODB_ENABLE_MAINTAINER_MODE
   LOG(WARN) << "insert() called for primary index";
 #endif
   THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "insert() called for primary index");
 }
 
-int PrimaryIndex::remove(arangodb::Transaction*, DocumentWrapper const&, bool) {
+int PrimaryIndex::remove(arangodb::Transaction*, TRI_voc_rid_t, VPackSlice const&, bool) {
 #ifdef ARANGODB_ENABLE_MAINTAINER_MODE
   LOG(WARN) << "remove() called for primary index";
 #endif
@@ -309,8 +309,8 @@ IndexElement* PrimaryIndex::lookupSequentialReverse(
 /// returns a status code, and *found will contain a found element (if any)
 ////////////////////////////////////////////////////////////////////////////////
 
-int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* mptr) {
-  IndexElementGuard element(buildKeyElement(mptr->revisionId(), mptr->vpack()), 1);
+int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_voc_rid_t revisionId, VPackSlice const& doc) {
+  IndexElementGuard element(buildKeyElement(revisionId, doc.begin()), 1);
   if (!element) {
     return TRI_ERROR_OUT_OF_MEMORY;
   }
@@ -330,8 +330,8 @@ int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_doc_mptr_t* mptr) {
 ////////////////////////////////////////////////////////////////////////////////
 
 int PrimaryIndex::removeKey(arangodb::Transaction* trx,
-                            TRI_doc_mptr_t const* mptr) {
-  IndexElementGuard element(buildKeyElement(mptr->revisionId(), mptr->vpack()), 1);
+                            TRI_voc_rid_t revisionId, VPackSlice const& doc) {
+  IndexElementGuard element(buildKeyElement(revisionId, doc.begin()), 1);
   if (!element) {
     return TRI_ERROR_OUT_OF_MEMORY;
   }

@@ -134,7 +134,7 @@ static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
     header->setVPackFromMarker(marker);  
 
     // insert into primary index
-    int res = primaryIndex->insertKey(trx, header);
+    int res = primaryIndex->insertKey(trx, revisionId, VPackSlice(header->vpack()));
 
     if (res != TRI_ERROR_NO_ERROR) {
       c->removeRevision(revisionId, true);
@@ -254,7 +254,7 @@ static int OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* marker,
     dfi->sizeDead += DatafileHelper::AlignedSize<int64_t>(size);
     state->_dfi->numberDeletions++;
 
-    collection->deletePrimaryIndex(trx, found);
+    collection->deletePrimaryIndex(trx, found->revisionId(), VPackSlice(found->vpack()));
     collection->decNumberDocuments();
 
     // free the header

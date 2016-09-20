@@ -743,12 +743,13 @@ void SkiplistIndex::toVelocyPackFigures(VPackBuilder& builder) const {
 /// @brief inserts a document into a skiplist index
 ////////////////////////////////////////////////////////////////////////////////
 
-int SkiplistIndex::insert(arangodb::Transaction*, DocumentWrapper const& doc, bool) {
+int SkiplistIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId, 
+                          VPackSlice const& doc, bool isRollback) {
   std::vector<IndexElement*> elements;
 
   int res;
   try {
-    res = fillElement(elements, doc);
+    res = fillElement(elements, revisionId, doc);
   } catch (...) {
     res = TRI_ERROR_OUT_OF_MEMORY;
   }
@@ -793,13 +794,13 @@ int SkiplistIndex::insert(arangodb::Transaction*, DocumentWrapper const& doc, bo
 /// @brief removes a document from a skiplist index
 ////////////////////////////////////////////////////////////////////////////////
 
-int SkiplistIndex::remove(arangodb::Transaction*, DocumentWrapper const& doc,
-                          bool) {
+int SkiplistIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId,
+                          VPackSlice const& doc, bool isRollback) {
   std::vector<IndexElement*> elements;
 
   int res;
   try {
-    res = fillElement(elements, doc);
+    res = fillElement(elements, revisionId, doc);
   } catch (...) {
     res = TRI_ERROR_OUT_OF_MEMORY;
   }

@@ -151,9 +151,9 @@ class PrimaryIndex final : public Index {
   void toVelocyPack(VPackBuilder&, bool) const override;
   void toVelocyPackFigures(VPackBuilder&) const override;
 
-  int insert(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
+  int insert(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback) override;
 
-  int remove(arangodb::Transaction*, DocumentWrapper const&, bool isRollback) override;
+  int remove(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback) override;
 
   int unload() override;
 
@@ -198,9 +198,9 @@ class PrimaryIndex final : public Index {
   IndexElement* lookupSequentialReverse(
       arangodb::Transaction*, arangodb::basics::BucketPosition& position);
 
-  int insertKey(arangodb::Transaction*, TRI_doc_mptr_t*);
+  int insertKey(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&);
 
-  int removeKey(arangodb::Transaction* trx, TRI_doc_mptr_t const*);
+  int removeKey(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&);
 
   int resize(arangodb::Transaction*, size_t);
 
