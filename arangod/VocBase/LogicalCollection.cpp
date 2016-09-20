@@ -1729,32 +1729,29 @@ int LogicalCollection::read(Transaction* trx, StringRef const& key,
   builder->add(VPackValuePair(key.data(), key.size(), VPackValueType::String));
   VPackSlice slice = builder->slice();
 
-  {
-    TRI_IF_FAILURE("ReadDocumentNoLock") {
-      // test what happens if no lock can be acquired
-      return TRI_ERROR_DEBUG;
-    }
-
-    TRI_IF_FAILURE("ReadDocumentNoLockExcept") {
-      THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
-    }
-
-    bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
-    CollectionReadLocker collectionLocker(this, useDeadlockDetector, lock);
-
-    TRI_doc_mptr_t const* header = nullptr;
-    int res = lookupDocument(trx, slice, header);
-
-    if (res != TRI_ERROR_NO_ERROR) {
-      return res;
-    }
-
-    TRI_ASSERT(header != nullptr);
-
-    // we found a document, now copy it over
-    *mptr = *header;
+  TRI_IF_FAILURE("ReadDocumentNoLock") {
+    // test what happens if no lock can be acquired
+    return TRI_ERROR_DEBUG;
   }
 
+  TRI_IF_FAILURE("ReadDocumentNoLockExcept") {
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
+  }
+
+  bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
+  CollectionReadLocker collectionLocker(this, useDeadlockDetector, lock);
+
+  TRI_doc_mptr_t const* header = nullptr;
+  int res = lookupDocument(trx, slice, header);
+
+  if (res != TRI_ERROR_NO_ERROR) {
+    return res;
+  }
+
+  TRI_ASSERT(header != nullptr);
+
+  // we found a document, now copy it over
+  *mptr = *header;
   TRI_ASSERT(mptr->vpack() != nullptr);
 
   return TRI_ERROR_NO_ERROR;
