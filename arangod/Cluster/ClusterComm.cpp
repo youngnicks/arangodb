@@ -917,6 +917,7 @@ void ClusterComm::asyncAnswer(std::string& coordinatorHeader,
 std::string ClusterComm::processAnswer(
     std::string const& coordinatorHeader,
     std::unique_ptr<GeneralRequest>&& answer) {
+  TRI_ASSERT(false);
   if (answer == nullptr) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_INTERNAL);
   }
@@ -926,9 +927,6 @@ std::string ClusterComm::processAnswer(
   OperationID operationID;
   size_t start = 0;
   size_t pos;
-
-  LOG_TOPIC(DEBUG, Logger::CLUSTER)
-    << "In processAnswer, seeing " << coordinatorHeader;
 
   pos = coordinatorHeader.find(":", start);
   if (pos == std::string::npos) {
@@ -1008,6 +1006,7 @@ std::string ClusterComm::processAnswer(
 ////////////////////////////////////////////////////////////////////////////////
 
 bool ClusterComm::moveFromSendToReceived(OperationID operationID) {
+  TRI_ASSERT(false);
   LOG_TOPIC(DEBUG, Logger::CLUSTER) << "In moveFromSendToReceived " << operationID;
 
   CONDITION_LOCKER(locker, somethingReceived);

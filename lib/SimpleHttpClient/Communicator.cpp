@@ -45,7 +45,10 @@ Communicator::Communicator()
 #if _WIN32
 #warning TODO
 #else
-  pipe(_fds);
+  int result = pipe(_fds);
+  if (result != 0) {
+    throw std::runtime_error("Couldn't setup pipe. Return code was: " + std::to_string(result));
+  }
 
   TRI_socket_t socket = {.fileDescriptor = _fds[0]};
   TRI_SetNonBlockingSocket(socket);
@@ -66,7 +69,10 @@ Ticket Communicator::addRequest(Destination destination,
         NewRequest{destination, std::move(request), callbacks, options, id});
   }
   // mop: just send \0 terminated empty string to wake up worker thread
-  write(_fds[1], "", 1);
+  ssize_t numBytes = write(_fds[1], "", 1);
+  if (numBytes != 1) {
+    LOG_TOPIC(WARN, Logger::REQUESTS) << "Couldn't wake up pipe. numBytes was " + std::to_string(numBytes);
+  }
 
   return Ticket{id};
 }
