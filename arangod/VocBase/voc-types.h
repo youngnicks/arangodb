@@ -119,6 +119,23 @@ struct hash<std::vector<VPackSlice>> {
 
 }
 
+struct DocumentDescriptor {
+  DocumentDescriptor() : _revisionId(0), _vpack(nullptr) {}
+
+  bool empty() const { return _vpack == nullptr; }
+  void reset(TRI_voc_rid_t revisionId, uint8_t const* vpack) {
+    _revisionId = revisionId;
+    _vpack = vpack;
+  }
+  void clear() {
+    _revisionId = 0;
+    _vpack = nullptr;
+  }
+
+  TRI_voc_rid_t _revisionId;
+  uint8_t const* _vpack;
+};
+
 /// @brief databases list structure
 struct TRI_vocbase_t;
 

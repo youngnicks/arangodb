@@ -72,6 +72,7 @@ using Helper = arangodb::basics::VelocyPackHelper;
 
 /// forward
 int TRI_AddOperationTransaction(TRI_transaction_t*,
+                                TRI_voc_rid_t,
                                 arangodb::wal::DocumentOperation&, 
                                 arangodb::wal::Marker const* marker,
                                 bool&);
@@ -2263,21 +2264,23 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
       }
     }
 
+    TRI_voc_rid_t oldRevisionId = oldHeader->revisionId();
+
     // we found a document to remove
     operation.setHeader(oldHeader, nullptr);
 
     // delete from indexes
-    res = deleteSecondaryIndexes(trx, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()), false);
+    res = deleteSecondaryIndexes(trx, oldRevisionId, VPackSlice(oldHeader->vpack()), false);
 
     if (res != TRI_ERROR_NO_ERROR) {
-      insertSecondaryIndexes(trx, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()), true);
+      insertSecondaryIndexes(trx, oldRevisionId, VPackSlice(oldHeader->vpack()), true);
       return res;
     }
 
-    res = deletePrimaryIndex(trx, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()));
+    res = deletePrimaryIndex(trx, oldRevisionId, VPackSlice(oldHeader->vpack()));
 
     if (res != TRI_ERROR_NO_ERROR) {
-      insertSecondaryIndexes(trx, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()), true);
+      insertSecondaryIndexes(trx, oldRevisionId, VPackSlice(oldHeader->vpack()), true);
       return res;
     }
 
@@ -2291,7 +2294,7 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
     }
   
-    res = TRI_AddOperationTransaction(trx->getInternals(), operation, marker, options.waitForSync);
+    res = TRI_AddOperationTransaction(trx->getInternals(), revisionId, operation, marker, options.waitForSync);
 
     if (res != TRI_ERROR_NO_ERROR) {
       operation.revert();
@@ -2862,7 +2865,7 @@ int LogicalCollection::updateDocument(
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
 
-  return TRI_AddOperationTransaction(trx->getInternals(), operation, marker, waitForSync);
+  return TRI_AddOperationTransaction(trx->getInternals(), newRevisionId, operation, marker, waitForSync);
 }
 
 /// @brief insert a document, low level worker
@@ -2899,7 +2902,7 @@ int LogicalCollection::insertDocument(
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
 
-  return TRI_AddOperationTransaction(trx->getInternals(), operation, marker, waitForSync);
+  return TRI_AddOperationTransaction(trx->getInternals(), revisionId, operation, marker, waitForSync);
 }
 
 /// @brief creates a new entry in the primary index

@@ -954,6 +954,7 @@ bool TRI_IsContainedCollectionTransaction(TRI_transaction_t* trx,
 ////////////////////////////////////////////////////////////////////////////////
 
 int TRI_AddOperationTransaction(TRI_transaction_t* trx,
+                                TRI_voc_rid_t revisionId,
                                 arangodb::wal::DocumentOperation& operation,
                                 arangodb::wal::Marker const* marker,
                                 bool& waitForSync) {
@@ -1042,10 +1043,10 @@ int TRI_AddOperationTransaction(TRI_transaction_t* trx,
       operation.type() == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
       operation.type() == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
     // adjust the data position in the header
-    operation.setVPack(reinterpret_cast<TRI_df_marker_t const*>(position)); 
-    // set header file id
+    uint8_t const* vpack = reinterpret_cast<uint8_t const*>(position) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT);
     TRI_ASSERT(fid > 0);
-    operation.setFid(fid);
+    operation.setVPack(vpack);
+    collection->getPhysical()->adjustStoragePosition(revisionId, vpack, fid, true); // always in WAL
   }
 
   TRI_IF_FAILURE("TransactionOperationAfterAdjust") { return TRI_ERROR_DEBUG; }

@@ -126,6 +126,7 @@ class MMFilesCollection final : public PhysicalCollection {
   void removeRevision(TRI_voc_rid_t revisionId, bool free) override;
   
   TRI_doc_mptr_t* lookupRevisionMptr(TRI_voc_rid_t revisionId) override; // TODO: remove
+  void adjustStoragePosition(TRI_voc_rid_t revisionId, uint8_t const* vpack, TRI_voc_fid_t, bool isInWal) override;
 
  private:
   /// @brief create statistics for a datafile, using the stats provided

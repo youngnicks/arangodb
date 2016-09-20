@@ -59,10 +59,8 @@ struct DocumentOperation {
 
   uint32_t getOldAlignedMarkerSize() const; 
 
-  void setVPack(TRI_df_marker_t const* marker);
+  void setVPack(uint8_t const* vpack);
 
-  void setFid(TRI_voc_fid_t fid);
-  
   void setTick(TRI_voc_tick_t tick) { _tick = tick; }
   TRI_voc_tick_t tick() const { return _tick; }
                     
@@ -76,7 +74,7 @@ struct DocumentOperation {
   }
 
   void handled() noexcept {
-    TRI_ASSERT(_oldHeader != nullptr || _newHeader != nullptr);
+    TRI_ASSERT(_oldHeader != nullptr || !_newRevision.empty());
     TRI_ASSERT(_status == StatusType::INDEXED);
 
     _status = StatusType::HANDLED;
@@ -88,7 +86,7 @@ struct DocumentOperation {
   arangodb::Transaction* _trx;
   LogicalCollection* _collection;
   TRI_doc_mptr_t const* _oldHeader;
-  TRI_doc_mptr_t* _newHeader;
+  DocumentDescriptor _newRevision;
   TRI_voc_tick_t _tick;
   TRI_voc_document_operation_e _type;
   StatusType _status;

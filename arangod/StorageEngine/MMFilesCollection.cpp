@@ -1203,3 +1203,12 @@ void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId, bool free) {
     _revisionCache.erase(revisionId);
   }
 }
+  
+void MMFilesCollection::adjustStoragePosition(TRI_voc_rid_t revisionId, uint8_t const* vpack, TRI_voc_fid_t fid, bool isInWal) {
+  TRI_ASSERT(vpack != nullptr);
+  TRI_ASSERT(fid > 0);
+
+  TRI_doc_mptr_t* mptr = lookupRevisionMptr(revisionId);
+  mptr->setFid(fid, isInWal);
+  mptr->setVPack(vpack);
+}
