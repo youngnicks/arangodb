@@ -238,7 +238,7 @@ int FulltextIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId,
 
   // TODO: use status codes
   if (!TRI_InsertWordsFulltextIndex(
-          _fulltextIndex, (TRI_fulltext_doc_t)revisionId, words)) {
+          _fulltextIndex, fromRevision(revisionId), words)) {
     LOG(ERR) << "adding document to fulltext index failed";
     res = TRI_ERROR_INTERNAL;
   }
@@ -247,8 +247,7 @@ int FulltextIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId,
 
 int FulltextIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId,
                           VPackSlice const& doc, bool isRollback) {
-  TRI_DeleteDocumentFulltextIndex(_fulltextIndex,
-                                  (TRI_fulltext_doc_t)revisionId);
+  TRI_DeleteDocumentFulltextIndex(_fulltextIndex, fromRevision(revisionId));
 
   return TRI_ERROR_NO_ERROR;
 }

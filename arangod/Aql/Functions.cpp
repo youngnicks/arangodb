@@ -98,11 +98,6 @@ static void ValidateParameters(std::vector<AqlValue> const& parameters,
   return ValidateParameters(parameters, function, minParams, static_cast<int>(Function::MaxArguments));
 }
 
-/// @brief Insert a vpack slice into the result
-static void InsertExternal(uint8_t const* vpack, VPackBuilder& builder) {
-  builder.addExternal(vpack);
-}
-
 /// @brief clear the regex cache in a thread
 static void ClearRegexCache() {
   if (RegexCache != nullptr) {
@@ -786,8 +781,7 @@ static AqlValue buildGeoResult(arangodb::Transaction* trx,
         VPackObjectBuilder docGuard(builder.get());
         builder->add(attributeName, VPackValue(it._distance));
         TRI_voc_rid_t revisionId = it._revisionId;
-        TRI_doc_mptr_t* mptr = collection->getPhysical()->lookupRevisionMptr(revisionId);
-        VPackSlice doc(mptr->vpack()); // TODO
+        VPackSlice doc(collection->getPhysical()->lookupRevision(revisionId));
         for (auto const& entry : VPackObjectIterator(doc)) {
           std::string key = entry.key.copyString();
           if (key != attributeName) {
@@ -798,9 +792,7 @@ static AqlValue buildGeoResult(arangodb::Transaction* trx,
 
     } else {
       for (auto& it : distances) {
-        TRI_voc_rid_t revisionId = it._revisionId;
-        TRI_doc_mptr_t* mptr = collection->getPhysical()->lookupRevisionMptr(revisionId);
-        InsertExternal(mptr->vpack(), *builder.get());
+        builder->addExternal(collection->getPhysical()->lookupRevision(it._revisionId));
       }
     }
     builder->close();
@@ -3879,9 +3871,8 @@ AqlValue Functions::Fulltext(arangodb::aql::Query* query,
 
     size_t const numResults = queryResult->_numDocuments;
     for (size_t i = 0; i < numResults; ++i) {
-      TRI_voc_rid_t revisionId = (TRI_voc_rid_t) queryResult->_documents[i];
-      TRI_doc_mptr_t* mptr = collection->getPhysical()->lookupRevisionMptr(revisionId);
-      InsertExternal(mptr->vpack(), *builder.get());
+      TRI_voc_rid_t revisionId = FulltextIndex::toRevision(queryResult->_documents[i]);
+      builder->addExternal(collection->getPhysical()->lookupRevision(revisionId));
     }
     builder->close();
     TRI_FreeResultFulltextIndex(queryResult);

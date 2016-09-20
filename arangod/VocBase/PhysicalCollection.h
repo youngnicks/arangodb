@@ -104,7 +104,7 @@ class PhysicalCollection {
   virtual TRI_doc_mptr_t* lookupRevisionMptr(TRI_voc_rid_t revisionId) = 0; // TODO: remove
   virtual TRI_doc_mptr_t* insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) = 0;
   virtual void insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t*) = 0;
-  virtual void updateRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) = 0;
+  virtual void updateRevision(TRI_voc_rid_t oldRevisionId, TRI_voc_rid_t newRevisionId, TRI_doc_mptr_t*) = 0;
   virtual void removeRevision(TRI_voc_rid_t revisionId, bool free) = 0;
 
  protected:

@@ -123,7 +123,7 @@ class MMFilesCollection final : public PhysicalCollection {
   uint8_t const* lookupRevision(TRI_voc_rid_t revisionId) override;
   TRI_doc_mptr_t* insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) override;
   void insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t*) override;
-  void updateRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) override;
+  void updateRevision(TRI_voc_rid_t oldRevisionId, TRI_voc_rid_t newRevisionId, TRI_doc_mptr_t*) override;
   void removeRevision(TRI_voc_rid_t revisionId, bool free) override;
   
   TRI_doc_mptr_t* lookupRevisionMptr(TRI_voc_rid_t revisionId) override; // TODO: remove

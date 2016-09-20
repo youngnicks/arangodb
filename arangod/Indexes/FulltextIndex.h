@@ -83,6 +83,14 @@ class FulltextIndex final : public Index {
 
   TRI_fts_index_t* internals() { return _fulltextIndex; }
 
+  static TRI_fulltext_doc_t fromRevision(TRI_voc_rid_t revisionId) {
+    return (TRI_fulltext_doc_t)revisionId;
+  }
+
+  static TRI_voc_rid_t toRevision(TRI_fulltext_doc_t internal) {
+    return (TRI_voc_rid_t)internal;
+  }
+
  private:
   std::vector<std::string> wordlist(arangodb::velocypack::Slice const&);
 

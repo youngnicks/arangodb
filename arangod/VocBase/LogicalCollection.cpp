@@ -1856,11 +1856,12 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
     TRI_ASSERT(header != nullptr);
 
     // insert into indexes
-    res = insertDocument(trx, header, operation, marker, mptr, options.waitForSync);
+    res = insertDocument(trx, header->revisionId(), VPackSlice(header->vpack()), operation, marker, options.waitForSync);
 
     if (res != TRI_ERROR_NO_ERROR) {
       operation.revert();
     } else {
+      *mptr = *header;
       TRI_ASSERT(mptr->vpack() != nullptr);  
 
       // store the tick that was used for writing the document        
@@ -1993,13 +1994,19 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
     operation.header = oldHeader;
     operation.init();
 
-    res = updateDocument(trx, revisionId, oldHeader, operation, marker, mptr, options.waitForSync);
+    VPackSlice const newDoc(reinterpret_cast<uint8_t const*>(marker->vpack()));
+    res = updateDocument(trx, oldHeader, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()), revisionId, newDoc, operation, marker, options.waitForSync);
 
     if (res != TRI_ERROR_NO_ERROR) {
       operation.revert();
-    } else if (options.waitForSync) {
-      // store the tick that was used for writing the new document        
-      resultMarkerTick = operation.tick;
+    } else {
+      // write new header into result
+      *mptr = *oldHeader;
+
+      if (options.waitForSync) {
+        // store the tick that was used for writing the new document        
+        resultMarkerTick = operation.tick;
+      }
     }
   }
   
@@ -2134,13 +2141,17 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
     operation.header = oldHeader;
     operation.init();
 
-    res = updateDocument(trx, revisionId, oldHeader, operation, marker, mptr, options.waitForSync);
+    VPackSlice const newDoc(reinterpret_cast<uint8_t const*>(marker->vpack()));
+    res = updateDocument(trx, oldHeader, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()), revisionId, newDoc, operation, marker, options.waitForSync);
 
     if (res != TRI_ERROR_NO_ERROR) {
       operation.revert();
-    } else if (options.waitForSync) {
-      // store the tick that was used for writing the document        
-      resultMarkerTick = operation.tick;
+    } else {
+      *mptr = *oldHeader;
+      if (options.waitForSync) {
+        // store the tick that was used for writing the document        
+        resultMarkerTick = operation.tick;
+      }
     }
   }
   
@@ -2249,17 +2260,17 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
     operation.init();
 
     // delete from indexes
-    res = deleteSecondaryIndexes(trx, oldHeader, false);
+    res = deleteSecondaryIndexes(trx, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()), false);
 
     if (res != TRI_ERROR_NO_ERROR) {
-      insertSecondaryIndexes(trx, oldHeader, true);
+      insertSecondaryIndexes(trx, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()), true);
       return res;
     }
 
     res = deletePrimaryIndex(trx, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()));
 
     if (res != TRI_ERROR_NO_ERROR) {
-      insertSecondaryIndexes(trx, oldHeader, true);
+      insertSecondaryIndexes(trx, oldHeader->revisionId(), VPackSlice(oldHeader->vpack()), true);
       return res;
     }
 
@@ -2289,50 +2300,52 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
 /// @brief rolls back a document operation
 int LogicalCollection::rollbackOperation(arangodb::Transaction* trx,
                                          TRI_voc_document_operation_e type,
-                                         TRI_doc_mptr_t* header,
+                                         TRI_doc_mptr_t const* header,
                                          TRI_doc_mptr_t const* oldData) {
   if (type == TRI_VOC_DOCUMENT_OPERATION_INSERT) {
-    // ignore any errors we're getting from this
-    deletePrimaryIndex(trx, header->revisionId(), VPackSlice(header->vpack()));
-    deleteSecondaryIndexes(trx, header, true);
-  
     // remove new revision
-    getPhysical()->removeRevision(header->revisionId(), false);
+    TRI_voc_rid_t newRevisionId = header->revisionId();
+    VPackSlice newDoc = VPackSlice(header->vpack());
 
+    getPhysical()->removeRevision(newRevisionId, false);
+
+    // ignore any errors we're getting from this
+    deletePrimaryIndex(trx, newRevisionId, newDoc);
+    deleteSecondaryIndexes(trx, newRevisionId, newDoc, true);
+  
     TRI_ASSERT(_numberDocuments > 0);
     _numberDocuments--;
 
     return TRI_ERROR_NO_ERROR;
-  } else if (type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
-             type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
-    // copy the existing header's state
-    TRI_doc_mptr_t copy = *header;
+  } 
   
-    getPhysical()->removeRevision(header->revisionId(), false);
+  if (type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
+      type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
+    // copy the existing header's state
+    TRI_voc_rid_t newRevisionId = header->revisionId();
+    VPackSlice newDoc = VPackSlice(header->vpack());
+    TRI_voc_rid_t oldRevisionId = oldData->revisionId();
+    VPackSlice oldDoc = VPackSlice(oldData->vpack());
+  
+    getPhysical()->updateRevision(newRevisionId, oldRevisionId, const_cast<TRI_doc_mptr_t*>(header));
 
     // remove the current values from the indexes
-    deleteSecondaryIndexes(trx, header, true);
-    // revert to the old state
-    header->copy(*oldData);
+    deleteSecondaryIndexes(trx, newRevisionId, newDoc, true);
     // re-insert old state
-    int res = insertSecondaryIndexes(trx, header, true);
-    
+    return insertSecondaryIndexes(trx, oldRevisionId, oldDoc, true);
+  } 
+  
+  if (type == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
     // re-insert old revision
-    getPhysical()->insertRevision(header->revisionId(), header);
+    TRI_voc_rid_t newRevisionId = header->revisionId();
+    VPackSlice newDoc = VPackSlice(header->vpack());
 
-    // revert again to the new state, because other parts of the new state
-    // will be reverted at some other place
-    header->copy(copy);
+    getPhysical()->insertRevision(newRevisionId, const_cast<TRI_doc_mptr_t*>(header));
 
-    return res;
-  } else if (type == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
-    // re-insert old revision
-    getPhysical()->insertRevision(header->revisionId(), header);
-
-    int res = insertPrimaryIndex(trx, header->revisionId(), VPackSlice(header->vpack()));
+    int res = insertPrimaryIndex(trx, newRevisionId, newDoc);
 
     if (res == TRI_ERROR_NO_ERROR) {
-      res = insertSecondaryIndexes(trx, header, true);
+      res = insertSecondaryIndexes(trx, newRevisionId, newDoc, true);
       _numberDocuments++;
     } else {
       LOG(ERR) << "error rolling back remove operation";
@@ -2438,9 +2451,8 @@ int LogicalCollection::fillIndexBatch(arangodb::Transaction* trx,
       }
       
       TRI_voc_rid_t revisionId = element->revisionId();
-      TRI_doc_mptr_t* mptr = getPhysical()->lookupRevisionMptr(revisionId);
-
-      documents.emplace_back(std::make_pair(revisionId, VPackSlice(mptr->vpack())));
+      uint8_t const* vpack = getPhysical()->lookupRevision(revisionId);
+      documents.emplace_back(std::make_pair(revisionId, VPackSlice(vpack)));
 
       if (documents.size() == blockSize) {
         res = idx->batchInsert(trx, documents, indexPool->numThreads());
@@ -2505,9 +2517,8 @@ int LogicalCollection::fillIndexSequential(arangodb::Transaction* trx,
       }
 
       TRI_voc_rid_t revisionId = element->revisionId();
-      TRI_doc_mptr_t* mptr = getPhysical()->lookupRevisionMptr(revisionId);
-
-      int res = idx->insert(trx, revisionId, VPackSlice(mptr->vpack()), false);
+      uint8_t const* vpack = getPhysical()->lookupRevision(revisionId);
+      int res = idx->insert(trx, revisionId, VPackSlice(vpack), false);
 
       if (res != TRI_ERROR_NO_ERROR) {
         return res;
@@ -2803,62 +2814,48 @@ int LogicalCollection::checkRevision(Transaction* trx,
 /// @brief updates an existing document, low level worker
 /// the caller must make sure the write lock on the collection is held
 int LogicalCollection::updateDocument(
-    arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
-    TRI_doc_mptr_t* oldHeader, arangodb::wal::DocumentOperation& operation,
-    arangodb::wal::Marker const* marker,
-    TRI_doc_mptr_t* mptr, bool& waitForSync) {
-  // save the old data, remember
-  TRI_doc_mptr_t oldData = *oldHeader;
-
+    arangodb::Transaction* trx, TRI_doc_mptr_t* header, TRI_voc_rid_t oldRevisionId, VPackSlice const& oldDoc, 
+    TRI_voc_rid_t newRevisionId, VPackSlice const& newDoc, 
+    arangodb::wal::DocumentOperation& operation, arangodb::wal::Marker const* marker,
+    bool& waitForSync) {
   // remove old document from secondary indexes
   // (it will stay in the primary index as the key won't change)
-  int res = deleteSecondaryIndexes(trx, oldHeader, false);
+  int res = deleteSecondaryIndexes(trx, oldRevisionId, oldDoc, false);
 
   if (res != TRI_ERROR_NO_ERROR) {
     // re-enter the document in case of failure, ignore errors during rollback
-    insertSecondaryIndexes(trx, oldHeader, true);
+    insertSecondaryIndexes(trx, oldRevisionId, oldDoc, true);
     return res;
   }
 
-  TRI_voc_rid_t const oldRevisionId = oldHeader->revisionId();
-
-  // update header
-  TRI_doc_mptr_t* newHeader = oldHeader;
-
-  // update the header. this will modify oldHeader, too !!!
-  TRI_ASSERT(marker != nullptr);
-  void* mem = marker->vpack(); 
-  TRI_ASSERT(mem != nullptr);
-  newHeader->setVPack(mem);
-  
-  TRI_voc_rid_t const newRevisionId = newHeader->revisionId();
-
   // insert new document into secondary indexes
-  res = insertSecondaryIndexes(trx, newHeader, false);
+  res = insertSecondaryIndexes(trx, newRevisionId, newDoc, false);
 
   if (res != TRI_ERROR_NO_ERROR) {
     getPhysical()->removeRevision(newRevisionId, false);
 
     // rollback
-    deleteSecondaryIndexes(trx, newHeader, true);
+    deleteSecondaryIndexes(trx, newRevisionId, newDoc, true);
 
-    // copy back old header data
-    oldHeader->copy(oldData);
-
-    insertSecondaryIndexes(trx, oldHeader, true);
+    insertSecondaryIndexes(trx, oldRevisionId, oldDoc, true);
 
     return res;
   }
   
-  IndexElement* element = primaryIndex()->lookupKey(trx, Transaction::extractKeyFromDocument(VPackSlice(newHeader->vpack())));
+  IndexElement* element = primaryIndex()->lookupKey(trx, Transaction::extractKeyFromDocument(newDoc));
   if (element != nullptr) {
     element->revisionId(newRevisionId);
   }
   
   // store new revision
-  getPhysical()->insertRevision(newRevisionId, newHeader);
-  getPhysical()->removeRevision(oldRevisionId, false);
+  getPhysical()->updateRevision(oldRevisionId, newRevisionId, header);
 
+  // update the header
+  TRI_ASSERT(marker != nullptr);
+  void* mem = marker->vpack(); 
+  TRI_ASSERT(mem != nullptr);
+  header->setVPack(mem);
+  
   operation.indexed();
 
   TRI_IF_FAILURE("UpdateDocumentNoOperation") { return TRI_ERROR_DEBUG; }
@@ -2867,31 +2864,18 @@ int LogicalCollection::updateDocument(
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
 
-  res = TRI_AddOperationTransaction(trx->getInternals(), operation, marker, waitForSync);
-
-  if (res == TRI_ERROR_NO_ERROR) {
-    // write new header into result
-    *mptr = *newHeader;
-  }
-
-  return res;
+  return TRI_AddOperationTransaction(trx->getInternals(), operation, marker, waitForSync);
 }
 
 /// @brief insert a document, low level worker
 /// the caller must make sure the write lock on the collection is held
 int LogicalCollection::insertDocument(
-    arangodb::Transaction* trx, TRI_doc_mptr_t* header,
+    arangodb::Transaction* trx, TRI_voc_rid_t revisionId, VPackSlice const& doc,
     arangodb::wal::DocumentOperation& operation, arangodb::wal::Marker const* marker,
-    TRI_doc_mptr_t* mptr, bool& waitForSync) {
-  TRI_ASSERT(header != nullptr);
-  TRI_ASSERT(mptr != nullptr);
-
-  // .............................................................................
-  // insert into indexes
-  // .............................................................................
+    bool& waitForSync) {
 
   // insert into primary index first
-  int res = insertPrimaryIndex(trx, header->revisionId(), VPackSlice(header->vpack()));
+  int res = insertPrimaryIndex(trx, revisionId, doc);
 
   if (res != TRI_ERROR_NO_ERROR) {
     // insert has failed
@@ -2899,11 +2883,11 @@ int LogicalCollection::insertDocument(
   }
 
   // insert into secondary indexes
-  res = insertSecondaryIndexes(trx, header, false);
+  res = insertSecondaryIndexes(trx, revisionId, doc, false);
 
   if (res != TRI_ERROR_NO_ERROR) {
-    deleteSecondaryIndexes(trx, header, true);
-    deletePrimaryIndex(trx, header->revisionId(), VPackSlice(header->vpack()));
+    deleteSecondaryIndexes(trx, revisionId, doc, true);
+    deletePrimaryIndex(trx, revisionId, doc);
     return res;
   }
 
@@ -2917,13 +2901,7 @@ int LogicalCollection::insertDocument(
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
 
-  res = TRI_AddOperationTransaction(trx->getInternals(), operation, marker, waitForSync);
-
-  if (res == TRI_ERROR_NO_ERROR) {
-    *mptr = *header;
-  }
-
-  return res;
+  return TRI_AddOperationTransaction(trx->getInternals(), operation, marker, waitForSync);
 }
 
 /// @brief creates a new entry in the primary index
@@ -2946,7 +2924,7 @@ int LogicalCollection::deletePrimaryIndex(
 
 /// @brief creates a new entry in the secondary indexes
 int LogicalCollection::insertSecondaryIndexes(
-    arangodb::Transaction* trx, TRI_doc_mptr_t const* header, bool isRollback) {
+    arangodb::Transaction* trx, TRI_voc_rid_t revisionId, VPackSlice const& doc, bool isRollback) {
   // Coordintor doesn't know index internals
   TRI_ASSERT(!ServerState::instance()->isCoordinator());
   TRI_IF_FAILURE("InsertSecondaryIndexes") { return TRI_ERROR_DEBUG; }
@@ -2968,7 +2946,7 @@ int LogicalCollection::insertSecondaryIndexes(
       continue;
     }
 
-    int res = idx->insert(trx, header->revisionId(), VPackSlice(header->vpack()), isRollback);
+    int res = idx->insert(trx, revisionId, doc, isRollback);
 
     // in case of no-memory, return immediately
     if (res == TRI_ERROR_OUT_OF_MEMORY) {
@@ -2988,7 +2966,7 @@ int LogicalCollection::insertSecondaryIndexes(
 
 /// @brief deletes an entry from the secondary indexes
 int LogicalCollection::deleteSecondaryIndexes(
-    arangodb::Transaction* trx, TRI_doc_mptr_t const* header, bool isRollback) {
+    arangodb::Transaction* trx, TRI_voc_rid_t revisionId, VPackSlice const& doc, bool isRollback) {
   // Coordintor doesn't know index internals
   TRI_ASSERT(!ServerState::instance()->isCoordinator());
 
@@ -3011,7 +2989,7 @@ int LogicalCollection::deleteSecondaryIndexes(
       continue;
     }
 
-    int res = idx->remove(trx, header->revisionId(), VPackSlice(header->vpack()), isRollback);
+    int res = idx->remove(trx, revisionId, doc, isRollback);
 
     if (res != TRI_ERROR_NO_ERROR) {
       // an error occurred

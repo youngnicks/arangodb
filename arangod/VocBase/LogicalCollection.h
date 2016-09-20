@@ -331,7 +331,7 @@ class LogicalCollection {
              VPackSlice&, TRI_doc_mptr_t&);
 
   int rollbackOperation(arangodb::Transaction*, TRI_voc_document_operation_e, 
-                        TRI_doc_mptr_t*, TRI_doc_mptr_t const*);
+                        TRI_doc_mptr_t const*, TRI_doc_mptr_t const*);
 
   // TODO Make Private and IndexFiller als friend
   /// @brief initializes an index with all existing documents
@@ -378,12 +378,14 @@ class LogicalCollection {
   int checkRevision(arangodb::Transaction*, arangodb::velocypack::Slice const,
                     arangodb::velocypack::Slice const);
 
-  int updateDocument(arangodb::Transaction*, TRI_voc_rid_t, TRI_doc_mptr_t*,
+  int updateDocument(arangodb::Transaction*, TRI_doc_mptr_t*, 
+                     TRI_voc_rid_t oldRevisionId, arangodb::velocypack::Slice const& oldDoc,
+                     TRI_voc_rid_t newRevisionId, arangodb::velocypack::Slice const& newDoc,
                      arangodb::wal::DocumentOperation&, arangodb::wal::Marker const*,
-                     TRI_doc_mptr_t*, bool&);
-  int insertDocument(arangodb::Transaction*, TRI_doc_mptr_t*,
+                     bool& waitForSync);
+  int insertDocument(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&,
                      arangodb::wal::DocumentOperation&, arangodb::wal::Marker const*,
-                     TRI_doc_mptr_t*, bool&);
+                     bool& waitForSync);
 
   int insertPrimaryIndex(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&);
  public:
@@ -391,11 +393,11 @@ class LogicalCollection {
   int deletePrimaryIndex(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&);
  private:
 
-  int insertSecondaryIndexes(arangodb::Transaction*, TRI_doc_mptr_t const*,
-                             bool);
+  int insertSecondaryIndexes(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&,
+                             bool isRollback);
 
-  int deleteSecondaryIndexes(arangodb::Transaction*, TRI_doc_mptr_t const*,
-                             bool);
+  int deleteSecondaryIndexes(arangodb::Transaction*, TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&,
+                             bool isRollback);
 
   // SECTION: Document pre commit preperation (only local)
 

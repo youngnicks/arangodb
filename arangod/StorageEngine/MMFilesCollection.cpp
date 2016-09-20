@@ -1156,7 +1156,7 @@ TRI_doc_mptr_t* MMFilesCollection::lookupRevisionMptr(TRI_voc_rid_t revisionId) 
   LOG(TRACE) << "FOUND REVISION: " << (*it).second;
   return (*it).second;
 }
- 
+
 TRI_doc_mptr_t* MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& doc) {
   TRI_doc_mptr_t* mptr = _masterPointers.request();
   if (mptr == nullptr) {
@@ -1191,13 +1191,9 @@ void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t*
   }
 }
 
-void MMFilesCollection::updateRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& doc) {
-  auto it = _revisionCache.find(revisionId);
-  if (it == _revisionCache.end()) {
-  LOG(TRACE) << "EXPECTED REVISION NOT FOUND";
-    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected revision not found");
-  }
-  (*it).second->setVPack(doc.begin());
+void MMFilesCollection::updateRevision(TRI_voc_rid_t oldRevisionId, TRI_voc_rid_t newRevisionId, TRI_doc_mptr_t* mptr) {
+  removeRevision(oldRevisionId, false);
+  insertRevision(newRevisionId, mptr);
 }
 
 void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId, bool free) {
