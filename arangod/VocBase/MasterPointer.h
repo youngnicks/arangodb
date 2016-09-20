@@ -58,12 +58,6 @@ struct TRI_doc_mptr_t {
     setVPack(nullptr);
   }
 
-  // This is for cases where we explicitly have to copy originals!
-  void copy(TRI_doc_mptr_t const& that) {
-    _fid = that._fid;
-    _dataptr = that._dataptr;
-  }
-  
   // return the datafile id.
   inline TRI_voc_fid_t getFid() const { 
     // unmask the WAL bit

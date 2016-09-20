@@ -1191,11 +1191,6 @@ void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t*
   }
 }
 
-void MMFilesCollection::updateRevision(TRI_voc_rid_t oldRevisionId, TRI_voc_rid_t newRevisionId, TRI_doc_mptr_t* mptr) {
-  removeRevision(oldRevisionId, false);
-  insertRevision(newRevisionId, mptr);
-}
-
 void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId, bool free) {
   LOG(TRACE) << "REMOVING REVISION: " << revisionId;
   auto it = _revisionCache.find(revisionId);

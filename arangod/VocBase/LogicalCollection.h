@@ -331,7 +331,7 @@ class LogicalCollection {
              VPackSlice&, TRI_doc_mptr_t&);
 
   int rollbackOperation(arangodb::Transaction*, TRI_voc_document_operation_e, 
-                        TRI_doc_mptr_t const*, TRI_doc_mptr_t const*);
+                        TRI_doc_mptr_t const* oldHeader, TRI_doc_mptr_t const* newHeader);
 
   // TODO Make Private and IndexFiller als friend
   /// @brief initializes an index with all existing documents
@@ -373,12 +373,12 @@ class LogicalCollection {
 
   // SECTION: Index access (local only)
   int lookupDocument(arangodb::Transaction*, VPackSlice const,
-                     TRI_doc_mptr_t*&);
+                     TRI_doc_mptr_t const*&);
 
   int checkRevision(arangodb::Transaction*, arangodb::velocypack::Slice const,
                     arangodb::velocypack::Slice const);
 
-  int updateDocument(arangodb::Transaction*, TRI_doc_mptr_t*, 
+  int updateDocument(arangodb::Transaction*, 
                      TRI_voc_rid_t oldRevisionId, arangodb::velocypack::Slice const& oldDoc,
                      TRI_voc_rid_t newRevisionId, arangodb::velocypack::Slice const& newDoc,
                      arangodb::wal::DocumentOperation&, arangodb::wal::Marker const*,

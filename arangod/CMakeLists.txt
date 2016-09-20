@@ -356,6 +356,7 @@ add_executable(${BIN_ARANGOD}
   VocBase/vocbase.cpp
   Wal/AllocatorThread.cpp
   Wal/CollectorThread.cpp
+  Wal/DocumentOperation.cpp
   Wal/Logfile.cpp
   Wal/LogfileManager.cpp
   Wal/RecoverState.cpp

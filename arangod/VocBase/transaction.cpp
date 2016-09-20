@@ -202,17 +202,17 @@ static void FreeOperations(TRI_transaction_t* trx) {
            it != trxCollection->_operations->rend(); ++it) {
         arangodb::wal::DocumentOperation* op = (*it);
 
-        if (op->type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
-            op->type == TRI_VOC_DOCUMENT_OPERATION_REPLACE ||
-            op->type == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
-          TRI_voc_fid_t fid = op->oldHeader.getFid();
+        if (op->type() == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
+            op->type() == TRI_VOC_DOCUMENT_OPERATION_REPLACE ||
+            op->type() == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
+          TRI_voc_fid_t fid = op->getOldFid();
           auto it2 = stats.find(fid);
 
           if (it2 == stats.end()) {
-            stats.emplace(fid, std::make_pair(1, static_cast<int64_t>(op->oldHeader.alignedMarkerSize())));
+            stats.emplace(fid, std::make_pair(1, static_cast<int64_t>(op->getOldAlignedMarkerSize())));
           } else {
             (*it2).second.first++;
-            (*it2).second.second += static_cast<int64_t>(op->oldHeader.alignedMarkerSize());
+            (*it2).second.second += static_cast<int64_t>(op->getOldAlignedMarkerSize());
           }
         }
       }
@@ -957,9 +957,7 @@ int TRI_AddOperationTransaction(TRI_transaction_t* trx,
                                 arangodb::wal::DocumentOperation& operation,
                                 arangodb::wal::Marker const* marker,
                                 bool& waitForSync) {
-  TRI_ASSERT(operation.header != nullptr);
-
-  LogicalCollection* collection = operation.collection;
+  LogicalCollection* collection = operation.collection();
   bool const isSingleOperationTransaction = IsSingleOperationTransaction(trx);
 
   if (HasHint(trx, TRI_TRANSACTION_HINT_RECOVERY)) {
@@ -1027,7 +1025,7 @@ int TRI_AddOperationTransaction(TRI_transaction_t* trx,
       RocksDBFeature::syncWal();
     }
 #endif
-    operation.tick = slotInfo.tick;
+    operation.setTick(slotInfo.tick);
     fid = slotInfo.logfileId;
     position = slotInfo.mem;
   } else {
@@ -1040,18 +1038,17 @@ int TRI_AddOperationTransaction(TRI_transaction_t* trx,
   TRI_ASSERT(fid > 0);
   TRI_ASSERT(position != nullptr);
 
-  if (operation.type == TRI_VOC_DOCUMENT_OPERATION_INSERT ||
-      operation.type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
-      operation.type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
+  if (operation.type() == TRI_VOC_DOCUMENT_OPERATION_INSERT ||
+      operation.type() == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
+      operation.type() == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
     // adjust the data position in the header
-    operation.header->setVPackFromMarker(reinterpret_cast<TRI_df_marker_t const*>(position)); 
+    operation.setVPack(reinterpret_cast<TRI_df_marker_t const*>(position)); 
+    // set header file id
+    TRI_ASSERT(fid > 0);
+    operation.setFid(fid);
   }
 
   TRI_IF_FAILURE("TransactionOperationAfterAdjust") { return TRI_ERROR_DEBUG; }
-
-  // set header file id
-  TRI_ASSERT(fid > 0);
-  operation.header->setFid(fid, true); // always in WAL
 
   if (isSingleOperationTransaction) {
     // operation is directly executed
@@ -1064,19 +1061,19 @@ int TRI_AddOperationTransaction(TRI_transaction_t* trx,
       }
     }
 #endif
-    operation.handle();
+    operation.handled();
 
     arangodb::aql::QueryCache::instance()->invalidate(
         trx->_vocbase, collection->name());
 
     collection->increaseUncollectedLogfileEntries(1);
 
-    if (operation.type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
-        operation.type == TRI_VOC_DOCUMENT_OPERATION_REPLACE ||
-        operation.type == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
+    if (operation.type() == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
+        operation.type() == TRI_VOC_DOCUMENT_OPERATION_REPLACE ||
+        operation.type() == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
       // update datafile statistics for the old header
       
-      collection->increaseDeadStats(operation.oldHeader.getFid(), 1, static_cast<int64_t>(operation.oldHeader.alignedMarkerSize()));
+      collection->increaseDeadStats(operation.getOldFid(), 1, static_cast<int64_t>(operation.getOldAlignedMarkerSize()));
     }
   } else {
     // operation is buffered and might be rolled back
@@ -1100,11 +1097,12 @@ int TRI_AddOperationTransaction(TRI_transaction_t* trx,
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG); 
     }
 
-    arangodb::wal::DocumentOperation* copy = operation.swap();
+    std::unique_ptr<arangodb::wal::DocumentOperation> copy(operation.swap());
     
     // should not fail because we reserved enough room above 
-    trxCollection->_operations->push_back(copy);
-    copy->handle();
+    trxCollection->_operations->push_back(copy.get());
+    copy->handled();
+    copy.release();
   }
    
   { 
