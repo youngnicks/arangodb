@@ -30,6 +30,98 @@
 #include "Logger/Logger.h"
 #include "Rest/HttpRequest.h"
 
+#ifdef _WIN32
+/* socketpair.c
+Copyright 2007, 2010 by Nathan C. Myers <ncm@cantrip.org>
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+The name of the author must not be used to endorse or promote products
+derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+int dumb_socketpair(SOCKET socks[2], int make_overlapped)
+{
+	union {
+		struct sockaddr_in inaddr;
+		struct sockaddr addr;
+	} a;
+	SOCKET listener;
+	int e;
+	socklen_t addrlen = sizeof(a.inaddr);
+	DWORD flags = (make_overlapped ? WSA_FLAG_OVERLAPPED : 0);
+	int reuse = 1;
+
+	if (socks == 0) {
+		WSASetLastError(WSAEINVAL);
+		return SOCKET_ERROR;
+	}
+	socks[0] = socks[1] = -1;
+
+	listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (listener == -1)
+		return SOCKET_ERROR;
+
+	memset(&a, 0, sizeof(a));
+	a.inaddr.sin_family = AF_INET;
+	a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	a.inaddr.sin_port = 0;
+
+	for (;;) {
+		if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR,
+			(char*)&reuse, (socklen_t) sizeof(reuse)) == -1)
+			break;
+		if (bind(listener, &a.addr, sizeof(a.inaddr)) == SOCKET_ERROR)
+			break;
+
+		memset(&a, 0, sizeof(a));
+		if (getsockname(listener, &a.addr, &addrlen) == SOCKET_ERROR)
+			break;
+		// win32 getsockname may only set the port number, p=0.0005.
+		// ( http://msdn.microsoft.com/library/ms738543.aspx ):
+		a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+		a.inaddr.sin_family = AF_INET;
+
+		if (listen(listener, 1) == SOCKET_ERROR)
+			break;
+
+		socks[0] = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, flags);
+		if (socks[0] == -1)
+			break;
+		if (connect(socks[0], &a.addr, sizeof(a.inaddr)) == SOCKET_ERROR)
+			break;
+
+		socks[1] = accept(listener, NULL, NULL);
+		if (socks[1] == -1)
+			break;
+
+		closesocket(listener);
+		return 0;
+	}
+
+	e = WSAGetLastError();
+	closesocket(listener);
+	closesocket(socks[0]);
+	closesocket(socks[1]);
+	WSASetLastError(e);
+	socks[0] = socks[1] = -1;
+	return SOCKET_ERROR;
+}
+#endif
+
 using namespace arangodb;
 using namespace arangodb::communicator;
 
@@ -42,8 +134,12 @@ Communicator::Communicator()
   curl_global_init(CURL_GLOBAL_ALL);
   _curl = curl_multi_init();
 
-#if _WIN32
-#warning TODO
+#ifdef _WIN32
+	int err = dumb_socketpair(socks, 0);
+	if (err != 0) {
+		throw std::runtime_error("Couldn't setup sockets. Error was: " + std::to_string(err));
+	}
+	_wakeup.fd = socks[0];
 #else
   int result = pipe(_fds);
   if (result != 0) {
@@ -52,9 +148,12 @@ Communicator::Communicator()
 
   TRI_socket_t socket = {.fileDescriptor = _fds[0]};
   TRI_SetNonBlockingSocket(socket);
+  _wakeup.fd = socket;
 #endif
+  
+  
 
-  _wakeup.fd = _fds[0];
+  
   _wakeup.events = CURL_WAIT_POLLIN | CURL_WAIT_POLLPRI;
 }
 
@@ -68,11 +167,19 @@ Ticket Communicator::addRequest(Destination destination,
     _newRequests.emplace_back(
         NewRequest{destination, std::move(request), callbacks, options, id});
   }
+#ifdef _WIN32
+  // mop: just send \0 terminated empty string to wake up worker thread
+  ssize_t numBytes = send(socks[1], "", 1, 0);
+  if (numBytes != 1) {
+	  LOG_TOPIC(WARN, Logger::REQUESTS) << "Couldn't wake up pipe. numBytes was " + std::to_string(numBytes);
+  }
+#else
   // mop: just send \0 terminated empty string to wake up worker thread
   ssize_t numBytes = write(_fds[1], "", 1);
   if (numBytes != 1) {
     LOG_TOPIC(WARN, Logger::REQUESTS) << "Couldn't wake up pipe. numBytes was " + std::to_string(numBytes);
   }
+#endif
 
   return Ticket{id};
 }
@@ -119,9 +226,14 @@ void Communicator::wait() {
 
   // drain the pipe
   char a[16];
-
+#ifdef _WIN32
+  while (0 < recv(socks[0], a, sizeof(a), 0)) {
+  }
+#else
   while (0 < read(_fds[0], a, sizeof(a))) {
   }
+#endif
+
 }
 
 // -----------------------------------------------------------------------------
@@ -278,7 +390,7 @@ size_t Communicator::readBody(void* data, size_t size, size_t nitems, void* user
   try {
     rip->_responseBody->appendText((char*) data, realsize);
     return realsize;
-  } catch (std::bad_alloc& ba) {
+  } catch (std::bad_alloc&) {
     return 0;
   }
 }

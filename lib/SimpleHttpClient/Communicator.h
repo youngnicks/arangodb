@@ -96,7 +96,7 @@ namespace communicator {
 
 class Communicator {
  public:
-  Communicator();
+	 Communicator();
 
  public:
   Ticket addRequest(Destination, std::unique_ptr<GeneralRequest>, Callbacks,
@@ -127,8 +127,13 @@ class Communicator {
   CURLM* _curl;
   CURLMcode _mc;
   curl_waitfd _wakeup;
-
+#ifdef _WIN32
+  SOCKET socks[2];
+  HANDLE _fds[2];
+#else
   int _fds[2];
+#endif
+
   int _numFds;
 
  private:
