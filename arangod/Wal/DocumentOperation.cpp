@@ -38,8 +38,9 @@ DocumentOperation::DocumentOperation(arangodb::Transaction* trx,
                                      TRI_voc_document_operation_e type)
       : _trx(trx),
         _collection(collection),
-        _oldHeader(nullptr),
         _tick(0),
+        _oldFid(0),
+        _oldSize(0),
         _type(type),
         _status(StatusType::CREATED) {
 }
@@ -50,14 +51,14 @@ DocumentOperation::~DocumentOperation() {
       if (_type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
           _type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
         // remove old, now unused revision
-        TRI_ASSERT(_oldHeader != nullptr);
+        TRI_ASSERT(!_oldRevision.empty());
         TRI_ASSERT(!_newRevision.empty());
-        _collection->getPhysical()->removeRevision(_oldHeader->revisionId(), true);
+        _collection->getPhysical()->removeRevision(_oldRevision._revisionId, true);
       } else if (_type == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
         // remove old, now unused revision
-        TRI_ASSERT(_oldHeader != nullptr);
+        TRI_ASSERT(!_oldRevision.empty());
         TRI_ASSERT(_newRevision.empty());
-        _collection->getPhysical()->removeRevision(_oldHeader->revisionId(), true);
+        _collection->getPhysical()->removeRevision(_oldRevision._revisionId, true);
       }
     } else if (_status != StatusType::REVERTED) {
       revert();
@@ -71,26 +72,26 @@ DocumentOperation* DocumentOperation::swap() {
   DocumentOperation* copy =
       new DocumentOperation(_trx, _collection, _type);
   copy->_tick = _tick;
-  copy->_oldHeader = _oldHeader;
+  copy->_oldRevision = _oldRevision;
   copy->_newRevision = _newRevision;
+  copy->_oldSize = _oldSize;
+  copy->_oldFid = _oldFid;
   copy->_status = _status;
 
   _type = TRI_VOC_DOCUMENT_OPERATION_UNKNOWN;
   _status = StatusType::SWAPPED;
-  _oldHeader = nullptr;
+  _oldRevision.clear();
   _newRevision.clear();
 
   return copy;
 }
   
 TRI_voc_fid_t DocumentOperation::getOldFid() const {
-  TRI_ASSERT(_oldHeader != nullptr);
-  return _oldHeader->getFid();
+  return _oldFid;
 }
   
 uint32_t DocumentOperation::getOldAlignedMarkerSize() const { 
-  TRI_ASSERT(_oldHeader != nullptr);
-  return _oldHeader->alignedMarkerSize();
+  return _oldSize;
 }
 
 void DocumentOperation::setVPack(uint8_t const* vpack) {
@@ -98,26 +99,30 @@ void DocumentOperation::setVPack(uint8_t const* vpack) {
   _newRevision._vpack = vpack;
 }
 
-void DocumentOperation::setHeader(TRI_doc_mptr_t const* oldHeader, 
-                                  TRI_doc_mptr_t* newHeader) {
-  TRI_ASSERT(_oldHeader == nullptr);
+void DocumentOperation::setRevision(DocumentDescriptor const& oldRevision,
+                                    TRI_voc_fid_t oldFid, uint32_t oldSize,
+                                    DocumentDescriptor const& newRevision) {
+  TRI_ASSERT(_oldRevision.empty());
   TRI_ASSERT(_newRevision.empty());
 
+  _oldFid = oldFid;
+  _oldSize = oldSize; 
+
   if (_type == TRI_VOC_DOCUMENT_OPERATION_INSERT) {
-    TRI_ASSERT(oldHeader == nullptr);
-    TRI_ASSERT(newHeader != nullptr);
-    _oldHeader = nullptr;
-    _newRevision.reset(newHeader->revisionId(), newHeader->vpack());
+    TRI_ASSERT(oldRevision.empty());
+    TRI_ASSERT(!newRevision.empty());
+    _oldRevision.clear();
+    _newRevision.reset(newRevision);
   } else if (_type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
              _type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
-    TRI_ASSERT(oldHeader != nullptr);
-    TRI_ASSERT(newHeader != nullptr);
-    _oldHeader = oldHeader;
-    _newRevision.reset(newHeader->revisionId(), newHeader->vpack());
+    TRI_ASSERT(!oldRevision.empty());
+    TRI_ASSERT(!newRevision.empty());
+    _oldRevision.reset(oldRevision);
+    _newRevision.reset(newRevision);
   } else if (_type == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
-    TRI_ASSERT(oldHeader != nullptr);
-    TRI_ASSERT(newHeader == nullptr);
-    _oldHeader = oldHeader;
+    TRI_ASSERT(!oldRevision.empty());
+    TRI_ASSERT(newRevision.empty());
+    _oldRevision.reset(oldRevision);
     _newRevision.clear();
   }
 }
@@ -134,9 +139,9 @@ void DocumentOperation::revert() {
   TRI_voc_rid_t oldRevisionId = 0;
   VPackSlice oldDoc;
   if (_type != TRI_VOC_DOCUMENT_OPERATION_INSERT) {
-    TRI_ASSERT(_oldHeader != nullptr);
-    oldRevisionId = _oldHeader->revisionId();
-    oldDoc = VPackSlice(_oldHeader->vpack());
+    TRI_ASSERT(!_oldRevision.empty());
+    oldRevisionId = _oldRevision._revisionId;
+    oldDoc = VPackSlice(_oldRevision._vpack);
   }
 
   TRI_voc_rid_t newRevisionId = 0;
@@ -149,13 +154,13 @@ void DocumentOperation::revert() {
   _collection->rollbackOperation(_trx, _type, oldRevisionId, oldDoc, newRevisionId, newDoc);
 
   if (_type == TRI_VOC_DOCUMENT_OPERATION_INSERT) {
-    TRI_ASSERT(_oldHeader == nullptr);
+    TRI_ASSERT(_oldRevision.empty());
     TRI_ASSERT(!_newRevision.empty());
     // remove now obsolete new revision
     _collection->getPhysical()->removeRevision(newRevisionId, true);
   } else if (_type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
              _type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
-    TRI_ASSERT(_oldHeader != nullptr);
+    TRI_ASSERT(!_oldRevision.empty());
     TRI_ASSERT(!_newRevision.empty());
     IndexElement* element = _collection->primaryIndex()->lookupKey(_trx, Transaction::extractKeyFromDocument(newDoc));
     if (element != nullptr) {

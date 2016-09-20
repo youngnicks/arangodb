@@ -1856,7 +1856,7 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
     VPackSlice doc(reinterpret_cast<uint8_t const*>(marker->vpack()));
 
     TRI_doc_mptr_t* header = getPhysical()->insertRevision(revisionId, doc);
-    operation.setHeader(nullptr, header);
+    operation.setRevision(DocumentDescriptor(), 0, 0, DocumentDescriptor(revisionId, doc.begin()));
 
     // insert into indexes
     res = insertDocument(trx, revisionId, doc, operation, marker, options.waitForSync);
@@ -1998,7 +1998,7 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
       trx, this, TRI_VOC_DOCUMENT_OPERATION_UPDATE);
   
   TRI_doc_mptr_t* header = getPhysical()->insertRevision(revisionId, newDoc);
-  operation.setHeader(oldHeader, header);
+  operation.setRevision(DocumentDescriptor(oldRevisionId, oldDoc.begin()), oldHeader->getFid(), oldHeader->alignedMarkerSize(), DocumentDescriptor(revisionId, newDoc.begin()));
 
   try {
     res = updateDocument(trx, oldRevisionId, oldDoc, revisionId, newDoc, operation, marker, options.waitForSync);
@@ -2147,7 +2147,7 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
   arangodb::wal::DocumentOperation operation(trx, this, TRI_VOC_DOCUMENT_OPERATION_REPLACE);
   
   TRI_doc_mptr_t* header = getPhysical()->insertRevision(revisionId, newDoc);
-  operation.setHeader(oldHeader, header);
+  operation.setRevision(DocumentDescriptor(oldRevisionId, oldDoc.begin()), oldHeader->getFid(), oldHeader->alignedMarkerSize(), DocumentDescriptor(revisionId, newDoc.begin()));
 
   try {
     res = updateDocument(trx, oldRevisionId, oldDoc, revisionId, newDoc, operation, marker, options.waitForSync);
@@ -2265,22 +2265,23 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
     }
 
     TRI_voc_rid_t oldRevisionId = oldHeader->revisionId();
+    VPackSlice oldDoc(oldHeader->vpack());
 
     // we found a document to remove
-    operation.setHeader(oldHeader, nullptr);
+    operation.setRevision(DocumentDescriptor(oldRevisionId, oldDoc.begin()), oldHeader->getFid(), oldHeader->alignedMarkerSize(), DocumentDescriptor());
 
     // delete from indexes
-    res = deleteSecondaryIndexes(trx, oldRevisionId, VPackSlice(oldHeader->vpack()), false);
+    res = deleteSecondaryIndexes(trx, oldRevisionId, oldDoc, false);
 
     if (res != TRI_ERROR_NO_ERROR) {
-      insertSecondaryIndexes(trx, oldRevisionId, VPackSlice(oldHeader->vpack()), true);
+      insertSecondaryIndexes(trx, oldRevisionId, oldDoc, true);
       return res;
     }
 
-    res = deletePrimaryIndex(trx, oldRevisionId, VPackSlice(oldHeader->vpack()));
+    res = deletePrimaryIndex(trx, oldRevisionId, oldDoc);
 
     if (res != TRI_ERROR_NO_ERROR) {
-      insertSecondaryIndexes(trx, oldRevisionId, VPackSlice(oldHeader->vpack()), true);
+      insertSecondaryIndexes(trx, oldRevisionId, oldDoc, true);
       return res;
     }
 

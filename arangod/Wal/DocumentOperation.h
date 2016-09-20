@@ -53,7 +53,9 @@ struct DocumentOperation {
 
   DocumentOperation* swap();
 
-  void setHeader(TRI_doc_mptr_t const* oldHeader, TRI_doc_mptr_t* newHeader);
+  void setRevision(DocumentDescriptor const& oldRevision,
+                   TRI_voc_fid_t oldFid, uint32_t oldSize,
+                   DocumentDescriptor const& newRevision);
 
   TRI_voc_fid_t getOldFid() const;
 
@@ -74,7 +76,7 @@ struct DocumentOperation {
   }
 
   void handled() noexcept {
-    TRI_ASSERT(_oldHeader != nullptr || !_newRevision.empty());
+    TRI_ASSERT(!_oldRevision.empty() || !_newRevision.empty());
     TRI_ASSERT(_status == StatusType::INDEXED);
 
     _status = StatusType::HANDLED;
@@ -85,9 +87,11 @@ struct DocumentOperation {
  private:
   arangodb::Transaction* _trx;
   LogicalCollection* _collection;
-  TRI_doc_mptr_t const* _oldHeader;
+  DocumentDescriptor _oldRevision;
   DocumentDescriptor _newRevision;
   TRI_voc_tick_t _tick;
+  TRI_voc_fid_t _oldFid;
+  uint32_t _oldSize;
   TRI_voc_document_operation_e _type;
   StatusType _status;
 };
