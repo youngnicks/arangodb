@@ -319,34 +319,31 @@ class VelocyPackHelper {
   static uint64_t hashByAttributes(VPackSlice, std::vector<std::string> const&,
                                    bool, int&, std::string const& key = "");
 
-  static inline arangodb::velocypack::Slice NullValue() {
+  static constexpr arangodb::velocypack::Slice NullValue() {
     return arangodb::velocypack::Slice::nullSlice();
   }
 
-  static inline arangodb::velocypack::Slice TrueValue() {
+  static constexpr arangodb::velocypack::Slice TrueValue() {
     return arangodb::velocypack::Slice::trueSlice();
   }
 
-  static inline arangodb::velocypack::Slice FalseValue() {
+  static constexpr arangodb::velocypack::Slice FalseValue() {
     return arangodb::velocypack::Slice::falseSlice();
   }
 
-  static inline arangodb::velocypack::Slice BooleanValue(bool value) {
-    if (value) {
-      return arangodb::velocypack::Slice::trueSlice();
-    }
-    return arangodb::velocypack::Slice::falseSlice();
+  static constexpr arangodb::velocypack::Slice BooleanValue(bool value) {
+    return value ? arangodb::velocypack::Slice::trueSlice() : arangodb::velocypack::Slice::falseSlice();
   }
 
-  static inline arangodb::velocypack::Slice ZeroValue() {
+  static constexpr arangodb::velocypack::Slice ZeroValue() {
     return arangodb::velocypack::Slice::zeroSlice();
   }
 
-  static inline arangodb::velocypack::Slice EmptyArrayValue() {
+  static constexpr arangodb::velocypack::Slice EmptyArrayValue() {
     return arangodb::velocypack::Slice::emptyArraySlice();
   }
 
-  static inline arangodb::velocypack::Slice EmptyObjectValue() {
+  static constexpr arangodb::velocypack::Slice EmptyObjectValue() {
     return arangodb::velocypack::Slice::emptyObjectSlice();
   }
 
@@ -355,7 +352,7 @@ class VelocyPackHelper {
   ///        Are used in Array Indexes to distinguish NULL and not existent.
   //////////////////////////////////////////////////////////////////////////////
 
-  static inline arangodb::velocypack::Slice IllegalValue() {
+  static constexpr arangodb::velocypack::Slice IllegalValue() {
     return arangodb::velocypack::Slice::illegalSlice();
   }
 

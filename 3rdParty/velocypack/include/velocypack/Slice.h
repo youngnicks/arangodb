@@ -89,50 +89,50 @@ class Slice {
  public:
 
   // constructor for an empty Value of type None
-  Slice() noexcept : Slice("\x00") {}
+  constexpr Slice() noexcept : Slice("\x00") {}
 
   // creates a slice of type None
-  static Slice noneSlice() noexcept { return Slice("\x00"); }
+  static constexpr Slice noneSlice() noexcept { return Slice("\x00"); }
   
   // creates a slice of type Illegal
-  static Slice illegalSlice() noexcept { return Slice("\x17"); }
+  static constexpr Slice illegalSlice() noexcept { return Slice("\x17"); }
 
   // creates a slice of type Null
-  static Slice nullSlice() noexcept { return Slice("\x18"); }
+  static constexpr Slice nullSlice() noexcept { return Slice("\x18"); }
   
   // creates a slice of type Boolean with false value
-  static Slice falseSlice() noexcept { return Slice("\x19"); }
+  static constexpr Slice falseSlice() noexcept { return Slice("\x19"); }
 
   // creates a slice of type Boolean with true value
-  static Slice trueSlice() noexcept { return Slice("\x1a"); }
+  static constexpr Slice trueSlice() noexcept { return Slice("\x1a"); }
   
   // creates a slice of type Smallint(0)
-  static Slice zeroSlice() noexcept { return Slice("\x30"); }
+  static constexpr Slice zeroSlice() noexcept { return Slice("\x30"); }
   
   // creates a slice of type Array, empty
-  static Slice emptyArraySlice() noexcept { return Slice("\x01"); }
+  static constexpr Slice emptyArraySlice() noexcept { return Slice("\x01"); }
   
   // creates a slice of type Object, empty
-  static Slice emptyObjectSlice() noexcept { return Slice("\x0a"); }
+  static constexpr Slice emptyObjectSlice() noexcept { return Slice("\x0a"); }
   
   // creates a slice of type MinKey
-  static Slice minKeySlice() noexcept { return Slice("\x1e"); }
+  static constexpr Slice minKeySlice() noexcept { return Slice("\x1e"); }
 
   // creates a slice of type MaxKey
-  static Slice maxKeySlice() noexcept { return Slice("\x1f"); }
+  static constexpr Slice maxKeySlice() noexcept { return Slice("\x1f"); }
 
+  // creates a Slice from a pointer to a uint8_t array
+  explicit constexpr Slice(uint8_t const* start) noexcept
+      : _start(start) {}
+
+  // creates a Slice from a pointer to a char array
+  explicit constexpr Slice(char const* start) noexcept
+      : _start(reinterpret_cast<uint8_t const*>(start)) {}
+  
   // creates a Slice from Json and adds it to a scope
   static Slice fromJson(SliceScope& scope, std::string const& json,
                         Options const* options = &Options::Defaults);
   
-  // creates a Slice from a pointer to a uint8_t array
-  explicit Slice(uint8_t const* start) noexcept
-      : _start(start) {}
-
-  // creates a Slice from a pointer to a char array
-  explicit Slice(char const* start) noexcept
-      : _start(reinterpret_cast<uint8_t const*>(start)) {}
-
   uint8_t const* begin() noexcept { return _start; }
 
   uint8_t const* begin() const noexcept { return _start; }
