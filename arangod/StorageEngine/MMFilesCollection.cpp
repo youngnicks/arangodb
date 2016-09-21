@@ -45,41 +45,9 @@ using namespace arangodb;
 
 namespace {
 
-/// @brief state during opening of a collection
-struct OpenIteratorState {
-  LogicalCollection* _collection;
-  TRI_voc_tid_t _tid;
-  TRI_voc_fid_t _fid;
-  std::unordered_map<TRI_voc_fid_t, DatafileStatisticsContainer*> _stats;
-  DatafileStatisticsContainer* _dfi;
-  arangodb::Transaction* _trx;
-  uint64_t _deletions;
-  uint64_t _documents;
-  int64_t _initialCount;
-
-  explicit OpenIteratorState(LogicalCollection* collection) 
-      : _collection(collection),
-        _tid(0),
-        _fid(0),
-        _stats(),
-        _dfi(nullptr),
-        _trx(nullptr),
-        _deletions(0),
-        _documents(0),
-        _initialCount(-1) {
-    TRI_ASSERT(collection != nullptr);
-  }
-
-  ~OpenIteratorState() {
-    for (auto& it : _stats) {
-      delete it.second;
-    }
-  }
-};
-
 /// @brief find a statistics container for a given file id
 static DatafileStatisticsContainer* FindDatafileStats(
-    OpenIteratorState* state, TRI_voc_fid_t fid) {
+    MMFilesCollection::OpenIteratorState* state, TRI_voc_fid_t fid) {
   auto it = state->_stats.find(fid);
 
   if (it != state->_stats.end()) {
@@ -91,10 +59,12 @@ static DatafileStatisticsContainer* FindDatafileStats(
   return stats.release();
 }
 
+} // namespace
+
 /// @brief process a document (or edge) marker when opening a collection
-static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
-                                            TRI_datafile_t* datafile,
-                                            OpenIteratorState* state) {
+int MMFilesCollection::OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
+                                                        TRI_datafile_t* datafile,
+                                                        MMFilesCollection::OpenIteratorState* state) {
   auto const fid = datafile->fid();
   LogicalCollection* collection = state->_collection;
   arangodb::Transaction* trx = state->_trx;
@@ -127,14 +97,11 @@ static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
 
   // it is a new entry
   if (found == nullptr) {
-    TRI_doc_mptr_t* header = c->insertRevision(revisionId, VPackSlice(basics::VelocyPackHelper::EmptyObjectValue())); // TODO
-    TRI_ASSERT(header != nullptr);
-    // TODO: FIXME
-    header->setFid(fid, false);
-    header->setVPackFromMarker(marker);  
+    c->insertRevision(revisionId, fid, marker);
 
     // insert into primary index
-    int res = primaryIndex->insertKey(trx, revisionId, VPackSlice(header->vpack()));
+    uint8_t const* vpack = reinterpret_cast<uint8_t const*>(marker) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT);
+    int res = primaryIndex->insertKey(trx, revisionId, VPackSlice(vpack));
 
     if (res != TRI_ERROR_NO_ERROR) {
       c->removeRevision(revisionId, true);
@@ -191,9 +158,9 @@ static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
 }
 
 /// @brief process a deletion marker when opening a collection
-static int OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* marker,
-                                            TRI_datafile_t* datafile,
-                                            OpenIteratorState* state) {
+int MMFilesCollection::OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* marker,
+                                                        TRI_datafile_t* datafile,
+                                                        MMFilesCollection::OpenIteratorState* state) {
   LogicalCollection* collection = state->_collection;
   arangodb::Transaction* trx = state->_trx;
 
@@ -266,8 +233,8 @@ static int OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* marker,
 }
 
 /// @brief iterator for open
-static bool OpenIterator(TRI_df_marker_t const* marker, OpenIteratorState* data,
-                         TRI_datafile_t* datafile) {
+bool MMFilesCollection::OpenIterator(TRI_df_marker_t const* marker, MMFilesCollection::OpenIteratorState* data,
+                                     TRI_datafile_t* datafile) {
   TRI_voc_tick_t const tick = marker->getTick();
   TRI_df_marker_type_t const type = marker->getType();
 
@@ -315,8 +282,6 @@ static bool OpenIterator(TRI_df_marker_t const* marker, OpenIteratorState* data,
 
   return (res == TRI_ERROR_NO_ERROR);
 }
-
-} // namespace
 
 MMFilesCollection::MMFilesCollection(LogicalCollection* collection)
     : PhysicalCollection(collection), _ditches(collection), _initialCount(0), _lastRevision(0) {}
@@ -1159,7 +1124,7 @@ TRI_doc_mptr_t* MMFilesCollection::lookupRevisionMptr(TRI_voc_rid_t revisionId) 
   return (*it).second;
 }
 
-TRI_doc_mptr_t* MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& doc) {
+void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& doc) {
   WRITE_LOCKER(locker, _revisionsLock);
   TRI_doc_mptr_t* mptr = _masterPointers.request();
   if (mptr == nullptr) {
@@ -1173,7 +1138,28 @@ TRI_doc_mptr_t* MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, aran
   LOG(TRACE) << "----------------> REVISION ALREADY EXISTS";
      _revisionsCache[revisionId] = mptr;
     }
-    return mptr;
+  } catch (...) {
+    LOG(TRACE) << "OOPS; TRACEOR";
+    _masterPointers.release(mptr);
+    throw;
+  }
+}
+
+void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, TRI_voc_fid_t fid, TRI_df_marker_t const* marker) {
+  WRITE_LOCKER(locker, _revisionsLock);
+  TRI_doc_mptr_t* mptr = _masterPointers.request();
+  if (mptr == nullptr) {
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+  }
+
+  LOG(TRACE) << "INSERT REVISION: " << revisionId << ", MPTR: " << mptr;
+  mptr->setVPackFromMarker(marker);
+  mptr->setFid(fid, false);
+  try {
+    if (!_revisionsCache.emplace(revisionId, mptr).second) {
+  LOG(TRACE) << "----------------> REVISION ALREADY EXISTS";
+     _revisionsCache[revisionId] = mptr;
+    }
   } catch (...) {
     LOG(TRACE) << "OOPS; TRACEOR";
     _masterPointers.release(mptr);
@@ -1205,7 +1191,9 @@ void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId, bool free) {
   LOG(TRACE) << "FREEING REVISION: " << revisionId << " " << (*it).second;
   // TODO: adjust datafile statistics here!!!!!!!!!!!!!!!
       TRI_doc_mptr_t* mptr = (*it).second;
-      _datafileStatistics.increaseDead(mptr->getFid(), 1, mptr->alignedMarkerSize());
+      if (!mptr->pointsToWal()) {
+        _datafileStatistics.increaseDead(mptr->getFid(), 1, mptr->alignedMarkerSize());
+      }
       _masterPointers.release(mptr);
     }
     _revisionsCache.erase(revisionId);

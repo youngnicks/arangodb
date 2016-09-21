@@ -194,7 +194,6 @@ int RestImportHandler::handleSingleDocument(SingleCollectionTransaction& trx,
   }
 
   // document ok, now import it
-  TRI_doc_mptr_t document;
   VPackBuilder newBuilder;
 
   if (isEdgeCollection) {

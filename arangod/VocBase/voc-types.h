@@ -29,9 +29,6 @@
 #include <velocypack/Slice.h>
 #include <velocypack/velocypack-aliases.h>
 
-/// @brief forward declarations
-struct TRI_doc_mptr_t;
-
 /// @brief tick type (56bit)
 typedef uint64_t TRI_voc_tick_t;
 

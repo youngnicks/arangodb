@@ -32,7 +32,6 @@
 #include <velocypack/Slice.h>
 #include <velocypack/velocypack-aliases.h>
 
-struct TRI_df_marker_t;
 struct TRI_vocbase_t;
 
 namespace arangodb {
@@ -82,8 +81,7 @@ class CollectionKeys {
   }
 
   size_t count() const {
-    TRI_ASSERT(_markers != nullptr);
-    return _markers->size();
+    return _markers.size();
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -120,7 +118,7 @@ class CollectionKeys {
   std::string const _name;
   arangodb::CollectionNameResolver _resolver;
   TRI_voc_tick_t _blockerId;
-  std::vector<void const*>* _markers;
+  std::vector<uint8_t const*> _markers;
 
   CollectionKeysId _id;
   double _ttl;

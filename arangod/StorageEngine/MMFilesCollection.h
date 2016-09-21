@@ -41,6 +41,39 @@ class MMFilesCollection final : public PhysicalCollection {
  friend class MMFilesCompactorThread;
  friend class MMFilesEngine;
 
+ public:
+  /// @brief state during opening of a collection
+  struct OpenIteratorState {
+    LogicalCollection* _collection;
+    TRI_voc_tid_t _tid;
+    TRI_voc_fid_t _fid;
+    std::unordered_map<TRI_voc_fid_t, DatafileStatisticsContainer*> _stats;
+    DatafileStatisticsContainer* _dfi;
+    arangodb::Transaction* _trx;
+    uint64_t _deletions;
+    uint64_t _documents;
+    int64_t _initialCount;
+
+    explicit OpenIteratorState(LogicalCollection* collection) 
+        : _collection(collection),
+          _tid(0),
+          _fid(0),
+          _stats(),
+          _dfi(nullptr),
+          _trx(nullptr),
+          _deletions(0),
+          _documents(0),
+          _initialCount(-1) {
+      TRI_ASSERT(collection != nullptr);
+    }
+
+    ~OpenIteratorState() {
+      for (auto& it : _stats) {
+        delete it.second;
+      }
+    }
+  };
+
   struct DatafileDescription {
     TRI_datafile_t const* _data;
     TRI_voc_tick_t _dataMin;
@@ -116,14 +149,24 @@ class MMFilesCollection final : public PhysicalCollection {
   int iterateMarkersOnLoad(arangodb::Transaction* trx) override;
 
   uint8_t const* lookupRevision(TRI_voc_rid_t revisionId) override;
-  TRI_doc_mptr_t* insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) override;
-  void insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t*) override;
+  void insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) override;
   void removeRevision(TRI_voc_rid_t revisionId, bool free) override;
   
   TRI_doc_mptr_t* lookupRevisionMptr(TRI_voc_rid_t revisionId) override; // TODO: remove
   void adjustStoragePosition(TRI_voc_rid_t revisionId, uint8_t const* vpack, TRI_voc_fid_t, bool isInWal) override;
 
  private:
+  static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
+                                              TRI_datafile_t* datafile,
+                                              OpenIteratorState* state);
+  static int OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* marker,
+                                              TRI_datafile_t* datafile,
+                                              OpenIteratorState* state);
+  static bool OpenIterator(TRI_df_marker_t const* marker, OpenIteratorState* data, TRI_datafile_t* datafile);
+
+  void insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t*);
+  void insertRevision(TRI_voc_rid_t revisionId, TRI_voc_fid_t fid, TRI_df_marker_t const* marker);
+
   /// @brief create statistics for a datafile, using the stats provided
   void createStats(TRI_voc_fid_t fid, DatafileStatisticsContainer const& values) {
     _datafileStatistics.create(fid, values);

@@ -264,6 +264,7 @@ MMFilesCompactorThread::CompactionInitialContext MMFilesCompactorThread::getComp
     /// @brief datafile iterator, calculates necessary total size
     auto calculateSize = [&context](TRI_df_marker_t const* marker, TRI_datafile_t* datafile) -> bool {
       LogicalCollection* collection = context._collection;
+      MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
       TRI_df_marker_type_t const type = marker->getType();
 
       // new or updated document
@@ -279,7 +280,7 @@ MMFilesCompactorThread::CompactionInitialContext MMFilesCompactorThread::getComp
         IndexElement* element = primaryIndex->lookupKey(context._trx, keySlice);
         TRI_doc_mptr_t* found = nullptr;
         if (element != nullptr) {
-          found = collection->getPhysical()->lookupRevisionMptr(element->revisionId());
+          found = c->lookupRevisionMptr(element->revisionId());
         }
 
         bool deleted = (found == nullptr || marker != found->getMarkerPtr());
@@ -352,6 +353,7 @@ void MMFilesCompactorThread::compactDatafiles(LogicalCollection* collection,
   auto compactifier = [&context, &collection, this](TRI_df_marker_t const* marker, TRI_datafile_t* datafile) -> bool {
     LogicalCollection* collection = context->_collection;
     TRI_voc_fid_t const targetFid = context->_compactor->fid();
+    MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
 
     TRI_df_marker_type_t const type = marker->getType();
 
@@ -367,7 +369,7 @@ void MMFilesCompactorThread::compactDatafiles(LogicalCollection* collection,
       IndexElement* element = primaryIndex->lookupKey(context->_trx, keySlice);
       TRI_doc_mptr_t* found = nullptr;
       if (element != nullptr) {
-        found = collection->getPhysical()->lookupRevisionMptr(element->revisionId());
+        found = c->lookupRevisionMptr(element->revisionId());
       }
       bool deleted = (found == nullptr || marker != found->getMarkerPtr());
 
