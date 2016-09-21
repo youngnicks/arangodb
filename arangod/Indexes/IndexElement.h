@@ -41,18 +41,10 @@ class Slice;
 /// by the index element. If the last byte in data[] is 1, then 
 /// value.data contains the actual VelocyPack data in place.
 struct IndexElementValue {
-  friend struct IndexElement;
-
- private:
-  union {
-    uint8_t data[16];
-    struct {
-      uint8_t* data;
-      uint32_t size;
-    } managed;
-  } value;
-  
  public:
+  IndexElementValue() {}
+  ~IndexElementValue() {}
+
   /// @brief fill a IndexElementValue structure with a subvalue
   void fill(VPackSlice const value) {
     VPackValueLength len = value.byteSize();
@@ -79,6 +71,19 @@ struct IndexElementValue {
     } 
     return arangodb::velocypack::Slice(value.managed.data);
   }
+  
+  inline size_t managedSize() const noexcept {
+    TRI_ASSERT(isManaged());
+    return value.managed.size;
+  }
+  
+  inline bool isManaged() const noexcept {
+    return !isValue();
+  }
+
+  inline bool isValue() const noexcept {
+    return value.data[maxValueLength()] == 1;
+  }
 
  private:
   void setManaged(uint8_t const* data, size_t length) {
@@ -95,22 +100,18 @@ struct IndexElementValue {
     value.data[maxValueLength()] = 1; // type = value
   }
 
-  inline size_t managedSize() const noexcept {
-    TRI_ASSERT(isManaged());
-    return value.managed.size;
-  }
-  
-  inline bool isManaged() const noexcept {
-    return !isValue();
-  }
-
-  inline bool isValue() const noexcept {
-    return value.data[maxValueLength()] == 1;
-  }
-  
   static constexpr size_t maxValueLength() noexcept {
     return sizeof(value.data) - 1;
   }
+ 
+ private:
+  union {
+    uint8_t data[16];
+    struct {
+      uint8_t* data;
+      uint32_t size;
+    } managed;
+  } value;
 };
 
 static_assert(sizeof(IndexElementValue) == 16, "invalid size of IndexElementValue");
