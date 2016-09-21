@@ -256,6 +256,12 @@ struct ClusterCommResult {
     // :snake: OPST_CIRCUS
     answer_code = dynamic_cast<HttpResponse*>(response.get())->responseCode();
     HttpRequest* request = HttpRequest::createHttpRequest(ContentType::JSON, dynamic_cast<HttpResponse*>(response.get())->body().c_str(), dynamic_cast<HttpResponse*>(response.get())->body().length(), {});
+    
+    auto headers = response->headers();
+    auto errorCodes = headers.find(StaticStrings::ErrorCodes);
+    if (errorCodes != headers.end()) {
+      request->setHeader(StaticStrings::ErrorCodes, errorCodes->second);
+    }
     request->setHeader("x-arango-response-code", GeneralResponse::responseString(answer_code));
     answer.reset(request);
     TRI_ASSERT(response != nullptr);

@@ -551,11 +551,11 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
 
   bool wasSignaled = false;
   communicator::Callbacks callbacks([&cv, &result, &wasSignaled](std::unique_ptr<GeneralResponse> response) {
-	  result->fromResponse(std::move(response));
-	  response.release();
-	  CONDITION_LOCKER(isen, cv);
-	  wasSignaled = true;
-	  cv.signal();
+    result->fromResponse(std::move(response));
+    response.release();
+    CONDITION_LOCKER(isen, cv);
+    wasSignaled = true;
+    cv.signal();
   }, [&cv, &result, &doLogConnectionErrors, &wasSignaled](int errorCode, std::unique_ptr<GeneralResponse> response) {
       result->fromError(errorCode, std::move(response));
       if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
