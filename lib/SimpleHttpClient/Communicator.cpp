@@ -127,6 +127,7 @@ using namespace arangodb::communicator;
 
 namespace {
 std::atomic_uint_fast64_t NEXT_TICKET_ID(static_cast<uint64_t>(0));
+std::vector<char> urlDotSeparators {'/', '#', '?'};
 }
 
 Communicator::Communicator()
@@ -148,11 +149,8 @@ Communicator::Communicator()
 
   TRI_socket_t socket = {.fileDescriptor = _fds[0]};
   TRI_SetNonBlockingSocket(socket);
-  _wakeup.fd = socket;
+  _wakeup.fd = _fds[0];
 #endif
-  
-  
-
   
   _wakeup.events = CURL_WAIT_POLLIN | CURL_WAIT_POLLPRI;
 }
@@ -271,10 +269,12 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
     std::string thisHeader(header.first + ": " + header.second);
     requestHeaders = curl_slist_append(requestHeaders, thisHeader.c_str());
   }
+  
+  std::string url = createSafeDottedCurlUrl(newRequest._destination.url());
   handleInProgress->_rip->_requestHeaders = requestHeaders;
   curl_easy_setopt(handle, CURLOPT_HTTPHEADER, requestHeaders); 
   curl_easy_setopt(handle, CURLOPT_HEADER, 0L);
-  curl_easy_setopt(handle, CURLOPT_URL, newRequest._destination.url().c_str());
+  curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
   curl_easy_setopt(handle, CURLOPT_VERBOSE, 1L);
   curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, Communicator::readBody);
   curl_easy_setopt(handle, CURLOPT_WRITEDATA, handleInProgress->_rip.get());
@@ -461,4 +461,27 @@ size_t Communicator::readHeaders(char* buffer, size_t size, size_t nitems, void*
     rip->_responseHeaders.emplace(headerKey, header.substr(pivot + 2, header.length() - pivot -4));
   }
   return realsize;
+}
+
+std::string Communicator::createSafeDottedCurlUrl(std::string const& originalUrl) {
+  std::string url;
+  url.reserve(originalUrl.length());
+  
+  size_t length = originalUrl.length();
+  size_t currentFind = 0;
+  std::size_t found;
+  std::vector<char> urlDotSeparators {'/', '#', '?'};
+
+  while ((found = originalUrl.find("/.", currentFind)) != std::string::npos) {
+    if (found + 2 == length) {
+      url += originalUrl.substr(currentFind, found - currentFind)  + "/%2E";
+    } else if (std::find(urlDotSeparators.begin(), urlDotSeparators.end(), originalUrl.at(found + 2)) != urlDotSeparators.end()) {
+      url += originalUrl.substr(currentFind, found - currentFind)  + "/%2E";
+    } else {
+      url += originalUrl.substr(currentFind, found - currentFind)  + "/.";
+    }
+    currentFind = found + 2;
+  }
+  url += originalUrl.substr(currentFind);
+  return url;
 }

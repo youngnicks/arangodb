@@ -140,6 +140,9 @@ class Communicator {
   void createRequestInProgress(NewRequest const& newRequest);
   void handleResult(CURL*, CURLcode);
   void transformResult(CURL*, HeadersInProgress&&, std::unique_ptr<StringBuffer>, HttpResponse*);
+  /// @brief curl will strip standalone ".". ArangoDB allows using . as a key
+  /// so this thing will analyse the url and urlencode any unsafe .'s
+  std::string createSafeDottedCurlUrl(std::string const& originalUrl);
  
  private:
   static size_t readBody(void*, size_t, size_t, void*);
