@@ -25,7 +25,6 @@
 
 #include "Basics/Common.h"
 
-#include "Basics/WorkItem.h"
 #include "GeneralServer/RestStatus.h"
 #include "Scheduler/EventLoop.h"
 
@@ -45,33 +44,25 @@ class RestEngine {
   RestEngine();
 
  public:
-  void init();
-
-  void init(EventLoop loop, rest::RequestStatisticsAgent*,
+  void init(EventLoop loop, rest::RequestStatisticsAgent* agent,
             std::function<void(rest::RestHandler*)> processResult) {
     _loop = loop;
+    _agent = agent;
     _processResult = processResult;
   }
 
-  void run(WorkItem::uptr<rest::RestHandler>);
-
-  void run(rest::RestHandler*);
-
-  RestStatus syncRun();
+  void asyncRun(std::shared_ptr<rest::RestHandler>);
+  RestStatus syncRun(std::shared_ptr<rest::RestHandler>);
 
   void setState(State state) { _state = state; }
-
   void processResult(rest::RestHandler* handler) { _processResult(handler); }
-
   void appendRestStatus(std::shared_ptr<RestStatusElement>);
 
   void queue(std::function<void()> callback) {
     _loop._ioService->post(callback);
   }
 
-  bool hasSteps() {
-    return !_elements.empty();
-  }
+  bool hasSteps() { return !_elements.empty(); }
 
   std::shared_ptr<RestStatusElement> popStep() {
     auto element = *_elements.rbegin();
@@ -80,10 +71,12 @@ class RestEngine {
   }
 
  private:
-  EventLoop _loop;
   State _state = State::PREPARE;
-  std::function<void(rest::RestHandler*)> _processResult;
   std::vector<std::shared_ptr<RestStatusElement>> _elements;
+
+  EventLoop _loop;
+  rest::RequestStatisticsAgent* _agent = nullptr;
+  std::function<void(rest::RestHandler*)> _processResult;
 };
 }
 

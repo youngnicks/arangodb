@@ -212,7 +212,6 @@ RestStatus RestBatchHandler::executeHttp() {
 
     // start to work for this handler
     {
-      handler->initEngine();
       RestStatus result = handler->syncRunEngine();
 
       if (result.isFailed()) {

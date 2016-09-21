@@ -85,6 +85,7 @@ class V8Task : public std::enable_shared_from_this<V8Task> {
  private:
   void toVelocyPack(VPackBuilder&) const;
   void work();
+  std::function<void(boost::system::error_code const&)> callbackFunction();
 
  private:
   std::string const _id;
@@ -92,7 +93,6 @@ class V8Task : public std::enable_shared_from_this<V8Task> {
   double const _created;
 
   std::unique_ptr<boost::asio::steady_timer> _timer;
-  std::function<void(const boost::system::error_code&)> _handler = nullptr;
 
   VocbaseGuard _vocbaseGuard;  // guard to make sure the database is not dropped
                                // while used by us
@@ -214,6 +214,27 @@ void V8Task::setParameter(
   _parameters = parameters;
 }
 
+std::function<void(const boost::system::error_code&)>
+V8Task::callbackFunction() {
+  auto self = shared_from_this();
+
+  return [self, this](const boost::system::error_code& error) {
+    if (error) {
+      V8Task::unregisterTask(_id, false);
+      return;
+    }
+
+    work();
+
+    if (_periodic) {
+      _timer->expires_from_now(_interval);
+      _timer->async_wait(callbackFunction());
+    } else {
+      V8Task::unregisterTask(_id, false);
+    }
+  };
+}
+
 void V8Task::start(boost::asio::io_service* ioService) {
   _timer.reset(new boost::asio::steady_timer(*ioService));
 
@@ -221,26 +242,8 @@ void V8Task::start(boost::asio::io_service* ioService) {
     _offset = std::chrono::microseconds(1);
   }
 
-  auto self = shared_from_this();
-  std::function<void(const boost::system::error_code&)> handler =
-      [self, this, &handler](const boost::system::error_code& error) {
-        if (error) {
-          V8Task::unregisterTask(_id, false);
-          return;
-        }
-
-        work();
-
-        if (_periodic) {
-          _timer->expires_from_now(_interval);
-          _timer->async_wait(handler);
-        } else {
-          V8Task::unregisterTask(_id, false);
-        }
-      };
-
   _timer->expires_from_now(_offset);
-  _timer->async_wait(handler);
+  _timer->async_wait(callbackFunction());
 }
 
 void V8Task::cancel() {
@@ -300,7 +303,8 @@ void V8Task::work() {
     auto ctor = v8::Local<v8::Function>::Cast(
         current->Get(TRI_V8_ASCII_STRING("Function")));
 
-    // Invoke Function constructor to create function with the given body and no
+    // Invoke Function constructor to create function with the given body and
+    // no
     // arguments
     v8::Handle<v8::Value> args[2] = {TRI_V8_ASCII_STRING("params"),
                                      TRI_V8_STD_STRING(_command)};
@@ -350,7 +354,8 @@ void V8Task::work() {
 }
 
 // -----------------------------------------------------------------------------
-// --SECTION--                                          private helper functions
+// --SECTION--                                          private helper
+// functions
 // -----------------------------------------------------------------------------
 
 static bool TryCompile(v8::Isolate* isolate, std::string const& command) {
@@ -385,7 +390,8 @@ static std::string GetTaskId(v8::Isolate* isolate, v8::Handle<v8::Value> arg) {
 }
 
 // -----------------------------------------------------------------------------
-// --SECTION--                                              Javascript functions
+// --SECTION--                                              Javascript
+// functions
 // -----------------------------------------------------------------------------
 
 static void JS_RegisterTask(v8::FunctionCallbackInfo<v8::Value> const& args) {
@@ -565,7 +571,8 @@ static void JS_GetTask(v8::FunctionCallbackInfo<v8::Value> const& args) {
 }
 
 // -----------------------------------------------------------------------------
-// --SECTION--                                             module initialization
+// --SECTION--                                             module
+// initialization
 // -----------------------------------------------------------------------------
 
 void TRI_InitV8Dispatcher(v8::Isolate* isolate,

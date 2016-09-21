@@ -50,19 +50,21 @@ GeneralListenTask::GeneralListenTask(EventLoop loop, GeneralServer* server,
 
 void GeneralListenTask::handleConnected(std::unique_ptr<Socket> socket,
                                         ConnectionInfo&& info) {
-  GeneralCommTask* commTask = nullptr;
+  std::shared_ptr<GeneralCommTask> commTask;
 
   switch (_connectionType) {
     case ProtocolType::VPPS:
     case ProtocolType::VPP:
-      commTask = new VppCommTask(_loop, _server, std::move(socket),
-                                 std::move(info), _keepAliveTimeout);
+      commTask =
+          std::make_shared<VppCommTask>(_loop, _server, std::move(socket),
+                                        std::move(info), _keepAliveTimeout);
       break;
 
     case ProtocolType::HTTPS:
     case ProtocolType::HTTP:
-      commTask = new HttpCommTask(_loop, _server, std::move(socket),
-                                  std::move(info), _keepAliveTimeout);
+      commTask =
+          std::make_shared<HttpCommTask>(_loop, _server, std::move(socket),
+                                         std::move(info), _keepAliveTimeout);
       break;
 
     default:

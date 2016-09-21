@@ -31,7 +31,6 @@
 
 #include "Basics/Mutex.h"
 #include "Basics/StringBuffer.h"
-#include "Basics/WorkItem.h"
 #include "Scheduler/Socket.h"
 
 namespace arangodb {
@@ -131,9 +130,9 @@ class GeneralCommTask : public SocketTask {
 
   void signalTask(std::unique_ptr<TaskData>) override;
 
-  bool handleRequest(WorkItem::uptr<RestHandler>);
-  void handleRequestDirectly(WorkItem::uptr<RestHandler>);
-  bool handleRequestAsync(WorkItem::uptr<RestHandler>,
+  bool handleRequest(std::shared_ptr<RestHandler>);
+  void handleRequestDirectly(std::shared_ptr<RestHandler>);
+  bool handleRequestAsync(std::shared_ptr<RestHandler>,
                           uint64_t* jobId = nullptr);
 };
 }

@@ -38,65 +38,39 @@ RestEngine::RestEngine() {}
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
 
-void RestEngine::init() {}
-
-void RestEngine::run(WorkItem::uptr<rest::RestHandler> handler) {
-  return run(handler.release());
-}
-
-void RestEngine::run(rest::RestHandler* handler) {
+void RestEngine::asyncRun(std::shared_ptr<rest::RestHandler> handler) {
   while (true) {
-    LOG(ERR) << "HALLO";
+    int res = TRI_ERROR_INTERNAL;
 
     switch (_state) {
-      case State::PREPARE: {
-        int res = handler->prepareEngine(this);
+      case State::PREPARE:
+        res = handler->prepareEngine();
+        break;
 
-        if (res != TRI_ERROR_NO_ERROR) {
-          return;
-        }
+      case State::EXECUTE:
+        res = handler->executeEngine();
+        break;
 
-        continue;
-      }
+      case State::RUN:
+        res = handler->runEngine();
+        break;
 
-      case State::EXECUTE: {
-        int res = handler->executeEngine(this);
-
-        if (res != TRI_ERROR_NO_ERROR) {
-          return;
-        }
-
-        continue;
-      }
-
-      case State::RUN: {
-        int res = handler->runEngine(this);
-
-        if (res != TRI_ERROR_NO_ERROR) {
-          return;
-        }
-
-        return;
-      }
-
-      case State::FINALIZE: {
-        int res = handler->finalizeEngine(this);
-
-        if (res != TRI_ERROR_NO_ERROR) {
-          return;
-        }
-
-        continue;
-      }
+      case State::FINALIZE:
+        res = handler->finalizeEngine();
+        break;
 
       case State::DONE:
       case State::FAILED:
         return;
     }
+
+    if (res != TRI_ERROR_NO_ERROR) {
+      return;
+    }
   }
 }
 
-RestStatus RestEngine::syncRun() {}
+RestStatus RestEngine::syncRun(std::shared_ptr<rest::RestHandler> handler) {}
 
 void RestEngine::appendRestStatus(std::shared_ptr<RestStatusElement> element) {
   while (element.get() != nullptr) {

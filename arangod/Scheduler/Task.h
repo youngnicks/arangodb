@@ -37,13 +37,13 @@ class Builder;
 }
 
 namespace rest {
-class Task {
+class Task : public std::enable_shared_from_this<Task> {
   Task(Task const&) = delete;
   Task& operator=(Task const&) = delete;
 
  public:
   Task(EventLoop, std::string const& name);
-  virtual ~Task() {}
+  virtual ~Task() = default;
 
  public:
   uint64_t taskId() const { return _taskId; }

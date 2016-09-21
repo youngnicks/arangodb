@@ -60,9 +60,7 @@ RestHandler::RestHandler(GeneralRequest* request, GeneralResponse* response)
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
 
-void RestHandler::setTaskId(uint64_t id) { _taskId = id; }
-
-int RestHandler::prepareEngine(RestEngine* engine) {
+int RestHandler::prepareEngine() {
   requestStatisticsAgentSetRequestStart();
 
 #ifdef USE_DEV_TIMERS
@@ -70,20 +68,20 @@ int RestHandler::prepareEngine(RestEngine* engine) {
 #endif
 
   if (_canceled) {
-    engine->setState(RestEngine::State::DONE);
+    _engine.setState(RestEngine::State::DONE);
     requestStatisticsAgentSetExecuteError();
 
     Exception err(TRI_ERROR_REQUEST_CANCELED,
                   "request has been canceled by user", __FILE__, __LINE__);
     handleError(err);
 
-    engine->processResult(this);
+    _storeResult(this);
     return TRI_ERROR_REQUEST_CANCELED;
   }
 
   try {
     prepareExecute();
-    engine->setState(RestEngine::State::EXECUTE);
+    _engine.setState(RestEngine::State::EXECUTE);
     return TRI_ERROR_NO_ERROR;
   } catch (Exception const& ex) {
     requestStatisticsAgentSetExecuteError();
@@ -96,12 +94,12 @@ int RestHandler::prepareEngine(RestEngine* engine) {
     LOG(ERR) << "caught exception";
   }
 
-  engine->setState(RestEngine::State::FAILED);
-  engine->processResult(this);
+  _engine.setState(RestEngine::State::FAILED);
+  _storeResult(this);
   return TRI_ERROR_INTERNAL;
 }
 
-int RestHandler::finalizeEngine(RestEngine* engine) {
+int RestHandler::finalizeEngine() {
   int res = TRI_ERROR_NO_ERROR;
 
   try {
@@ -121,9 +119,9 @@ int RestHandler::finalizeEngine(RestEngine* engine) {
   }
 
   if (res == TRI_ERROR_NO_ERROR) {
-    engine->setState(RestEngine::State::DONE);
+    _engine.setState(RestEngine::State::DONE);
   } else {
-    engine->setState(RestEngine::State::FAILED);
+    _engine.setState(RestEngine::State::FAILED);
   }
 
   requestStatisticsAgentSetRequestEnd();
@@ -132,12 +130,11 @@ int RestHandler::finalizeEngine(RestEngine* engine) {
   TRI_request_statistics_t::STATS = nullptr;
 #endif
 
-  engine->processResult(this);
-
+  _storeResult(this);
   return res;
 }
 
-int RestHandler::executeEngine(RestEngine* engine) {
+int RestHandler::executeEngine() {
   try {
     RestStatus result = execute();
 
@@ -153,13 +150,13 @@ int RestHandler::executeEngine(RestEngine* engine) {
         handleError(err);
       }
 
-      engine->setState(RestEngine::State::FINALIZE);
-      engine->processResult(this);
+      _engine.setState(RestEngine::State::FINALIZE);
+      _storeResult(this);
       return TRI_ERROR_NO_ERROR;
     }
 
-    engine->setState(RestEngine::State::RUN);
-    engine->appendRestStatus(result.element());
+    _engine.setState(RestEngine::State::RUN);
+    _engine.appendRestStatus(result.element());
 
     return TRI_ERROR_NO_ERROR;
   } catch (Exception const& ex) {
@@ -184,42 +181,41 @@ int RestHandler::executeEngine(RestEngine* engine) {
     handleError(err);
   }
 
-  engine->setState(RestEngine::State::FAILED);
-  engine->processResult(this);
+  _engine.setState(RestEngine::State::FAILED);
+  _storeResult(this);
   return TRI_ERROR_INTERNAL;
 }
 
-int RestHandler::runEngine(RestEngine* engine) {
+int RestHandler::runEngine() {
   try {
-    while (engine->hasSteps()) {
-      std::shared_ptr<RestStatusElement> result = engine->popStep();
+    while (_engine.hasSteps()) {
+      std::shared_ptr<RestStatusElement> result = _engine.popStep();
 
       switch (result->state()) {
         case RestStatusElement::State::DONE:
-          engine->processResult(this);
+          _storeResult(this);
           break;
 
         case RestStatusElement::State::FAILED:
-          engine->setState(RestEngine::State::FINALIZE);
-          engine->processResult(this);
+          _engine.setState(RestEngine::State::FINALIZE);
+          _storeResult(this);
           return TRI_ERROR_NO_ERROR;
 
         case RestStatusElement::State::ABANDONED:
           // do nothing
           break;
 
-        case RestStatusElement::State::QUEUED:
-          engine->queue([this, engine]() {
-            engine->run(this);
-          });
-
+        case RestStatusElement::State::QUEUED: {
+          std::shared_ptr<RestHandler> self = shared_from_this();
+          _engine.queue([self, this]() { _engine.asyncRun(self); });
           return TRI_ERROR_NO_ERROR;
+        }
 
         case RestStatusElement::State::THEN: {
           auto status = result->callThen();
 
           if (status != nullptr) {
-            engine->appendRestStatus(status->element());
+            _engine.appendRestStatus(status->element());
           }
 
           break;
@@ -250,8 +246,8 @@ int RestHandler::runEngine(RestEngine* engine) {
     handleError(err);
   }
 
-  engine->setState(RestEngine::State::FAILED);
-  engine->processResult(this);
+  _engine.setState(RestEngine::State::FAILED);
+  _storeResult(this);
   return TRI_ERROR_INTERNAL;
 }
 

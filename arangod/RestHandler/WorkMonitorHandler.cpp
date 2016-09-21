@@ -54,7 +54,7 @@ RestStatus WorkMonitorHandler::execute() {
       return RestStatus::DONE;
     }
 
-    WorkMonitor::requestWorkOverview(this);
+    WorkMonitor::requestWorkOverview(shared_from_this());
     return RestStatus::ABANDON;
   }
 
