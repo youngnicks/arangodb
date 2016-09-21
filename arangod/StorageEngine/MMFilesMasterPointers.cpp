@@ -21,7 +21,7 @@
 /// @author Dr. Frank Celler
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "MasterPointers.h"
+#include "MMFilesMasterPointers.h"
 #include "Logger/Logger.h"
 #include "Utils/Transaction.h"
 #include "VocBase/MasterPointer.h"
@@ -56,7 +56,7 @@ static inline size_t GetBlockSize(size_t blockNumber) {
 /// @brief creates the headers
 ////////////////////////////////////////////////////////////////////////////////
 
-MasterPointers::MasterPointers()
+MMFilesMasterPointers::MMFilesMasterPointers()
     : _freelist(nullptr),
       _nrAllocated(0),
       _blocks() {
@@ -67,7 +67,7 @@ MasterPointers::MasterPointers()
 /// @brief destroys the headers
 ////////////////////////////////////////////////////////////////////////////////
 
-MasterPointers::~MasterPointers() {
+MMFilesMasterPointers::~MMFilesMasterPointers() {
   for (auto& it : _blocks) {
     delete[] it;
   }
@@ -77,7 +77,7 @@ MasterPointers::~MasterPointers() {
 /// @brief returns the memory usage
 ////////////////////////////////////////////////////////////////////////////////
 
-uint64_t MasterPointers::memory() const {
+uint64_t MMFilesMasterPointers::memory() const {
   return _nrAllocated * sizeof(TRI_doc_mptr_t); 
 }
 
@@ -85,7 +85,7 @@ uint64_t MasterPointers::memory() const {
 /// @brief requests a new header
 ////////////////////////////////////////////////////////////////////////////////
 
-TRI_doc_mptr_t* MasterPointers::request() {
+TRI_doc_mptr_t* MMFilesMasterPointers::request() {
   TRI_doc_mptr_t* header;
 
   if (_freelist == nullptr) {
@@ -138,7 +138,7 @@ TRI_doc_mptr_t* MasterPointers::request() {
 /// @brief releases a header, putting it back onto the freelist
 ////////////////////////////////////////////////////////////////////////////////
 
-void MasterPointers::release(TRI_doc_mptr_t* header) {
+void MMFilesMasterPointers::release(TRI_doc_mptr_t* header) {
   TRI_ASSERT(header != nullptr);
 
   header->clear();

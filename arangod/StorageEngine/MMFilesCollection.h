@@ -27,8 +27,8 @@
 #include "Basics/Common.h"
 #include "Basics/ReadWriteLock.h"
 #include "StorageEngine/MMFilesDatafileStatistics.h"
+#include "StorageEngine/MMFilesMasterPointers.h"
 #include "VocBase/Ditch.h"
-#include "VocBase/MasterPointers.h"
 #include "VocBase/PhysicalCollection.h"
 
 struct TRI_datafile_t;
@@ -192,7 +192,7 @@ class MMFilesCollection final : public PhysicalCollection {
                               std::function<bool(TRI_df_marker_t const*, TRI_datafile_t*)> const& cb);
 
  public: // TODO
-  arangodb::MasterPointers _masterPointers;
+  MMFilesMasterPointers _masterPointers;
 
  private:
   mutable arangodb::Ditches _ditches;

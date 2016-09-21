@@ -295,6 +295,7 @@ add_executable(${BIN_ARANGOD}
   StorageEngine/MMFilesCompactorThread.cpp
   StorageEngine/MMFilesDatafileStatistics.cpp
   StorageEngine/MMFilesEngine.cpp
+  StorageEngine/MMFilesMasterPointers.cpp
   StorageEngine/OtherEngine.cpp
   Utils/AqlTransaction.cpp
   Utils/CollectionExport.cpp
@@ -339,7 +340,6 @@ add_executable(${BIN_ARANGOD}
   VocBase/IndexPoolFeature.cpp
   VocBase/KeyGenerator.cpp
   VocBase/LogicalCollection.cpp
-  VocBase/MasterPointers.cpp
   VocBase/PathEnumerator.cpp
   VocBase/RevisionCacheChunk.cpp
   VocBase/RevisionCacheChunkAllocator.cpp
