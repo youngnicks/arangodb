@@ -26,6 +26,7 @@
 
 #include "Basics/Common.h"
 #include "Utils/CollectionNameResolver.h"
+#include "VocBase/ManagedDocumentResult.h"
 #include "VocBase/voc-types.h"
 
 struct TRI_vocbase_t;
@@ -60,13 +61,13 @@ class CollectionExport {
   void run(uint64_t, size_t);
 
  private:
-  arangodb::CollectionGuard* _guard;
+  std::unique_ptr<arangodb::CollectionGuard> _guard;
   LogicalCollection* _collection;
   arangodb::DocumentDitch* _ditch;
   std::string const _name;
   arangodb::CollectionNameResolver _resolver;
   Restrictions _restrictions;
-  std::vector<void const*>* _documents;
+  ManagedMultiDocumentResult _result;
 };
 }
 

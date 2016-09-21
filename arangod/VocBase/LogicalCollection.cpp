@@ -1849,7 +1849,7 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
   if (res != TRI_ERROR_NO_ERROR) {
     operation.revert();
   } else {
-    readRevision(revisionId, result);
+    readRevision(result, revisionId);
 
     // store the tick that was used for writing the document        
     resultMarkerTick = operation.tick();
@@ -1991,7 +1991,7 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
   if (res != TRI_ERROR_NO_ERROR) {
     operation.revert();
   } else {
-    readRevision(revisionId, result);
+    readRevision(result, revisionId);
 
     if (options.waitForSync) {
       // store the tick that was used for writing the new document        
@@ -2137,7 +2137,7 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
   if (res != TRI_ERROR_NO_ERROR) {
     operation.revert();
   } else {
-    readRevision(revisionId, result);
+    readRevision(result, revisionId);
     
     if (options.waitForSync) {
       // store the tick that was used for writing the document        
@@ -2775,7 +2775,7 @@ int LogicalCollection::lookupDocument(
 
   IndexElement* element = primaryIndex()->lookupKey(trx, key);
   if (element != nullptr) {
-    readRevision(element->revisionId(), result);
+    readRevision(result, element->revisionId());
     return TRI_ERROR_NO_ERROR;
   }
 
@@ -3263,8 +3263,23 @@ void LogicalCollection::newObjectForRemove(
   builder.close();
 }
 
-void LogicalCollection::readRevision(TRI_voc_rid_t revisionId, ManagedDocumentResult& result) {
+void LogicalCollection::readRevision(ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
   uint8_t const* vpack = getPhysical()->lookupRevisionMptr(revisionId)->vpack();
   result.set(vpack);
+}
+
+bool LogicalCollection::readRevision(ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
+  TRI_doc_mptr_t* mptr = getPhysical()->lookupRevisionMptr(revisionId);
+  if (excludeWal && mptr->pointsToWal()) {
+    return false;
+  }
+  if (maxTick > 0) {
+    TRI_df_marker_t const* marker = mptr->getMarkerPtr();
+    if (marker->getTick() > maxTick) {
+      return false;
+    }
+  }
+  result.push_back(mptr->vpack());
+  return true;
 }
 

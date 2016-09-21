@@ -63,6 +63,42 @@ class ManagedDocumentResult {
   uint8_t const* _vpack;
 };
 
+class ManagedMultiDocumentResult {
+ public:
+  ManagedMultiDocumentResult() {}
+  ManagedMultiDocumentResult(ManagedMultiDocumentResult const& other) = delete;
+  ManagedMultiDocumentResult& operator=(ManagedMultiDocumentResult const& other) = delete;
+
+  ~ManagedMultiDocumentResult() {}
+
+  inline uint8_t const* at(size_t position) const {
+    return _results.at(position); 
+  }
+  
+  inline uint8_t const* operator[](size_t position) const {
+    return _results[position]; 
+  }
+  
+  bool empty() const { return _results.empty(); }
+  size_t size() const { return _results.size(); }
+  void clear() { _results.clear(); }
+  void reserve(size_t size) { _results.reserve(size); }
+  
+  std::vector<uint8_t const*>::iterator begin() { return _results.begin(); }
+  std::vector<uint8_t const*>::iterator end() { return _results.end(); }
+  
+  void emplace_back(uint8_t const* vpack) {
+    _results.push_back(vpack);
+  }
+
+  void push_back(uint8_t const* vpack) {
+    _results.push_back(vpack);
+  }
+
+ private:
+  std::vector<uint8_t const*> _results;
+};
+
 }
 
 #endif

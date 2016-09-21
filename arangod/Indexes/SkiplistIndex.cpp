@@ -714,6 +714,7 @@ SkiplistIndex::SkiplistIndex(TRI_idx_iid_t iid,
 SkiplistIndex::~SkiplistIndex() { delete _skiplistIndex; }
 
 size_t SkiplistIndex::memory() const {
+  // TODO: add dynamic allocations here!!!
   return _skiplistIndex->memoryUsage() +
          static_cast<size_t>(_skiplistIndex->getNrUsed()) * elementSize();
 }

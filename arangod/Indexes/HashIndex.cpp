@@ -585,6 +585,7 @@ double HashIndex::selectivityEstimate() const {
 ////////////////////////////////////////////////////////////////////////////////
 
 size_t HashIndex::memory() const {
+  // TODO: add dynamic allocations here!!!
   if (_unique) {
     return static_cast<size_t>(elementSize() *
                                    _uniqueArray->_hashArray->size() +

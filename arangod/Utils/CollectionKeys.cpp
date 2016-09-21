@@ -32,7 +32,6 @@
 #include "VocBase/DatafileHelper.h"
 #include "VocBase/Ditch.h"
 #include "VocBase/LogicalCollection.h"
-#include "VocBase/MasterPointer.h"
 #include "VocBase/ticks.h"
 #include "VocBase/vocbase.h"
 #include "Wal/LogfileManager.h"
@@ -46,7 +45,6 @@ using namespace arangodb;
 CollectionKeys::CollectionKeys(TRI_vocbase_t* vocbase, std::string const& name,
                                TRI_voc_tick_t blockerId, double ttl)
     : _vocbase(vocbase),
-      _guard(nullptr),
       _collection(nullptr),
       _ditch(nullptr),
       _name(name),
@@ -63,7 +61,7 @@ CollectionKeys::CollectionKeys(TRI_vocbase_t* vocbase, std::string const& name,
 
   // prevent the collection from being unloaded while the export is ongoing
   // this may throw
-  _guard = new arangodb::CollectionGuard(vocbase, _name.c_str(), false);
+  _guard.reset(new arangodb::CollectionGuard(vocbase, _name.c_str(), false));
 
   _collection = _guard->collection();
   TRI_ASSERT(_collection != nullptr);
@@ -77,8 +75,6 @@ CollectionKeys::~CollectionKeys() {
   if (_ditch != nullptr) {
     _ditch->ditches()->freeDocumentDitch(_ditch, false);
   }
-
-  delete _guard;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +96,7 @@ void CollectionKeys::create(TRI_voc_tick_t maxTick) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
   }
 
-  _markers.reserve(16384);
+  _result.reserve(16384);
 
   // copy all datafile markers into the result under the read-lock
   {
@@ -116,16 +112,7 @@ void CollectionKeys::create(TRI_voc_tick_t maxTick) {
 
     trx.invokeOnAllElements(
         _collection->name(), [this, &maxTick](IndexElement const* element) {
-          // only use those markers that point into datafiles
-          TRI_doc_mptr_t* mptr = _collection->getPhysical()->lookupRevisionMptr(element->revisionId());
-          if (!mptr->pointsToWal()) {
-            TRI_df_marker_t const* marker = mptr->getMarkerPtr();
-
-            if (marker->getTick() <= maxTick) {
-              _markers.emplace_back(mptr->vpack());
-            }
-          }
-
+          _collection->readRevision(_result, element->revisionId(), maxTick, true);
           return true;
         });
 
@@ -133,7 +120,7 @@ void CollectionKeys::create(TRI_voc_tick_t maxTick) {
   }
 
   // now sort all markers without the read-lock
-  std::sort(_markers.begin(), _markers.end(),
+  std::sort(_result.begin(), _result.end(),
             [](uint8_t const* lhs, uint8_t const* rhs) -> bool {
     return (StringRef(VPackSlice(lhs)) < StringRef(VPackSlice(rhs)));
   });
@@ -145,13 +132,13 @@ void CollectionKeys::create(TRI_voc_tick_t maxTick) {
 
 std::tuple<std::string, std::string, uint64_t> CollectionKeys::hashChunk(
     size_t from, size_t to) const {
-  if (from >= _markers.size() || to > _markers.size() || from >= to ||
+  if (from >= _result.size() || to > _result.size() || from >= to ||
       to == 0) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_BAD_PARAMETER);
   }
 
-  VPackSlice first(_markers.at(from));
-  VPackSlice last(_markers.at(to - 1));
+  VPackSlice first(_result.at(from));
+  VPackSlice last(_result.at(to - 1));
 
   TRI_ASSERT(first.isObject());
   TRI_ASSERT(last.isObject());
@@ -159,7 +146,7 @@ std::tuple<std::string, std::string, uint64_t> CollectionKeys::hashChunk(
   uint64_t hash = 0x012345678;
 
   for (size_t i = from; i < to; ++i) {
-    VPackSlice current(_markers.at(i));
+    VPackSlice current(_result.at(i));
     TRI_ASSERT(current.isObject());
 
     // we can get away with the fast hash function here, as key values are 
@@ -183,16 +170,16 @@ void CollectionKeys::dumpKeys(VPackBuilder& result, size_t chunk,
   size_t from = chunk * chunkSize;
   size_t to = (chunk + 1) * chunkSize;
 
-  if (to > _markers.size()) {
-    to = _markers.size();
+  if (to > _result.size()) {
+    to = _result.size();
   }
 
-  if (from >= _markers.size() || from >= to || to == 0) {
+  if (from >= _result.size() || from >= to || to == 0) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_BAD_PARAMETER);
   }
   
   for (size_t i = from; i < to; ++i) {
-    VPackSlice current(_markers.at(i));
+    VPackSlice current(_result.at(i));
     TRI_ASSERT(current.isObject());
 
     result.openArray();
@@ -219,11 +206,11 @@ void CollectionKeys::dumpDocs(arangodb::velocypack::Builder& result, size_t chun
 
     size_t position = chunk * chunkSize + it.getNumber<size_t>();
 
-    if (position >= _markers.size()) {
+    if (position >= _result.size()) {
       THROW_ARANGO_EXCEPTION(TRI_ERROR_BAD_PARAMETER);
     }
     
-    VPackSlice current(_markers.at(position));
+    VPackSlice current(_result.at(position));
     TRI_ASSERT(current.isObject());
   
     result.add(current);

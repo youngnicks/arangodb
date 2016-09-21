@@ -58,6 +58,7 @@ class FollowerInfo;
 class Index;
 class KeyGenerator;
 class ManagedDocumentResult;
+class ManagedMultiDocumentResult;
 struct OperationOptions;
 class PhysicalCollection;
 class PrimaryIndex;
@@ -339,6 +340,9 @@ class LogicalCollection {
   int beginWriteTimed(bool useDeadlockDetector, uint64_t, uint64_t);
   int endRead(bool useDeadlockDetector);
   int endWrite(bool useDeadlockDetector);
+  
+  void readRevision(ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
+  bool readRevision(ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal);
 
  private:
   // SECTION: Private functions
@@ -436,8 +440,6 @@ class LogicalCollection {
       arangodb::velocypack::Builder& builder);
 
   void increaseInternalVersion();
-
-  void readRevision(TRI_voc_rid_t revisionId, ManagedDocumentResult& result);
 
  private:
   // SECTION: Private variables

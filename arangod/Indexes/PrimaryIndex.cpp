@@ -196,7 +196,10 @@ size_t PrimaryIndex::size() const { return _primaryIndex->size(); }
 /// @brief return the memory usage of the index
 ////////////////////////////////////////////////////////////////////////////////
 
-size_t PrimaryIndex::memory() const { return _primaryIndex->memoryUsage(); }
+size_t PrimaryIndex::memory() const { 
+  // TODO: add dynamic allocations here!!!
+  return _primaryIndex->memoryUsage(); 
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief return a VelocyPack representation of the index

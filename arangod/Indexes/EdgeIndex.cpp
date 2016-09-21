@@ -440,6 +440,7 @@ double EdgeIndex::selectivityEstimate() const {
 ////////////////////////////////////////////////////////////////////////////////
 
 size_t EdgeIndex::memory() const {
+  // TODO: add dynamic allocations here!!!
   TRI_ASSERT(_edgesFrom != nullptr);
   TRI_ASSERT(_edgesTo != nullptr);
   return _edgesFrom->memoryUsage() + _edgesTo->memoryUsage();

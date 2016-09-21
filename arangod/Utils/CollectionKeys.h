@@ -26,6 +26,7 @@
 
 #include "Basics/Common.h"
 #include "Utils/CollectionNameResolver.h"
+#include "VocBase/ManagedDocumentResult.h"
 #include "VocBase/voc-types.h"
 
 #include <velocypack/Builder.h>
@@ -81,7 +82,7 @@ class CollectionKeys {
   }
 
   size_t count() const {
-    return _markers.size();
+    return _result.size();
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -111,15 +112,14 @@ class CollectionKeys {
                 arangodb::velocypack::Slice const&) const;
 
  private:
-  struct TRI_vocbase_t* _vocbase;
-  arangodb::CollectionGuard* _guard;
+  TRI_vocbase_t* _vocbase;
+  std::unique_ptr<arangodb::CollectionGuard> _guard;
   arangodb::LogicalCollection* _collection;
   arangodb::DocumentDitch* _ditch;
   std::string const _name;
   arangodb::CollectionNameResolver _resolver;
   TRI_voc_tick_t _blockerId;
-  std::vector<uint8_t const*> _markers;
-
+  ManagedMultiDocumentResult _result;
   CollectionKeysId _id;
   double _ttl;
   double _expires;

@@ -38,30 +38,23 @@ using namespace arangodb;
 CollectionExport::CollectionExport(TRI_vocbase_t* vocbase,
                                    std::string const& name,
                                    Restrictions const& restrictions)
-    : _guard(nullptr),
-      _collection(nullptr),
+    : _collection(nullptr),
       _ditch(nullptr),
       _name(name),
       _resolver(vocbase),
-      _restrictions(restrictions),
-      _documents(nullptr) {
+      _restrictions(restrictions) {
   // prevent the collection from being unloaded while the export is ongoing
   // this may throw
-  _guard = new arangodb::CollectionGuard(vocbase, _name.c_str(), false);
+  _guard.reset(new arangodb::CollectionGuard(vocbase, _name.c_str(), false));
 
   _collection = _guard->collection();
   TRI_ASSERT(_collection != nullptr);
 }
 
 CollectionExport::~CollectionExport() {
-  delete _documents;
-
   if (_ditch != nullptr) {
     _ditch->ditches()->freeDocumentDitch(_ditch, false);
   }
-
-  // if not already done
-  delete _guard;
 }
 
 void CollectionExport::run(uint64_t maxWaitTime, size_t limit) {
@@ -77,9 +70,6 @@ void CollectionExport::run(uint64_t maxWaitTime, size_t limit) {
   if (_ditch == nullptr) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
   }
-
-  TRI_ASSERT(_documents == nullptr);
-  _documents = new std::vector<void const*>();
 
   {
     static uint64_t const SleepTime = 10000;
@@ -114,15 +104,13 @@ void CollectionExport::run(uint64_t maxWaitTime, size_t limit) {
     } else {
       limit = maxDocuments;
     }
-    _documents->reserve(maxDocuments);
+    _result.reserve(maxDocuments);
 
     trx.invokeOnAllElements(_collection->name(), [this, &limit](IndexElement const* element) {
       if (limit == 0) {
         return false;
       }
-      TRI_doc_mptr_t* mptr = _collection->getPhysical()->lookupRevisionMptr(element->revisionId());
-      if (!mptr->pointsToWal()) {
-        _documents->emplace_back(mptr->vpack());
+      if (_collection->readRevision(_result, element->revisionId(), 0, true)) {
         --limit;
       }
       return true;
@@ -138,6 +126,5 @@ void CollectionExport::run(uint64_t maxWaitTime, size_t limit) {
   // thread not unloading the collection (as we've acquired a document ditch
   // for the collection already - this will prevent unloading of the collection's
   // datafiles etc.)
-  delete _guard;
-  _guard = nullptr;
+  _guard.reset();
 }
