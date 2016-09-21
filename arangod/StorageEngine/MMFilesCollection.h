@@ -96,11 +96,6 @@ class MMFilesCollection final : public PhysicalCollection {
   int sealDatafile(TRI_datafile_t* datafile, bool isCompactor);
 
   /// @brief increase dead stats for a datafile, if it exists
-  void increaseDeadStats(TRI_voc_fid_t fid, int64_t number, int64_t size) override {
-    _datafileStatistics.increaseDead(fid, number, size);
-  }
-  
-  /// @brief increase dead stats for a datafile, if it exists
   void updateStats(TRI_voc_fid_t fid, DatafileStatisticsContainer const& values) override {
     _datafileStatistics.update(fid, values);
   }
@@ -171,7 +166,8 @@ class MMFilesCollection final : public PhysicalCollection {
 
   TRI_voc_rid_t _lastRevision;
 
-  std::unordered_map<TRI_voc_rid_t, TRI_doc_mptr_t*> _revisionCache;
+  arangodb::basics::ReadWriteLock _revisionsLock;
+  std::unordered_map<TRI_voc_rid_t, TRI_doc_mptr_t*> _revisionsCache;
 };
 
 }

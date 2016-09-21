@@ -26,6 +26,7 @@
 
 #include "Basics/Common.h"
 #include "VocBase/MasterPointers.h"
+#include "VocBase/ManagedDocumentResult.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/voc-types.h"
 #include "VocBase/vocbase.h"
@@ -252,11 +253,6 @@ class LogicalCollection {
   }
   
   /// @brief increase dead stats for a datafile, if it exists
-  void increaseDeadStats(TRI_voc_fid_t fid, int64_t number, int64_t size) {
-    return getPhysical()->increaseDeadStats(fid, number, size);
-  }
-  
-  /// @brief increase dead stats for a datafile, if it exists
   void updateStats(TRI_voc_fid_t fid, DatafileStatisticsContainer const& values) {
     return getPhysical()->updateStats(fid, values);
   }
@@ -319,16 +315,16 @@ class LogicalCollection {
   int read(arangodb::Transaction*, std::string const&, TRI_doc_mptr_t*, bool);
   int read(arangodb::Transaction*, arangodb::StringRef const&, TRI_doc_mptr_t*, bool);
   int insert(arangodb::Transaction*, arangodb::velocypack::Slice const,
-             TRI_doc_mptr_t*, arangodb::OperationOptions&, TRI_voc_tick_t&, bool);
+             ManagedDocumentResult& result, arangodb::OperationOptions&, TRI_voc_tick_t&, bool);
   int update(arangodb::Transaction*, arangodb::velocypack::Slice const,
              TRI_doc_mptr_t*, arangodb::OperationOptions&, TRI_voc_tick_t&, bool,
-             VPackSlice&, TRI_doc_mptr_t&);
+             TRI_voc_rid_t& prevRev, TRI_doc_mptr_t&);
   int replace(arangodb::Transaction*, arangodb::velocypack::Slice const,
              TRI_doc_mptr_t*, arangodb::OperationOptions&, TRI_voc_tick_t&, bool,
-             VPackSlice&, TRI_doc_mptr_t&);
+             TRI_voc_rid_t& prevRev, TRI_doc_mptr_t&);
   int remove(arangodb::Transaction*, arangodb::velocypack::Slice const,
              arangodb::OperationOptions&, TRI_voc_tick_t&, bool, 
-             VPackSlice&, TRI_doc_mptr_t&);
+             TRI_voc_rid_t& prevRev, ManagedDocumentResult& previous);
 
   int rollbackOperation(arangodb::Transaction*, TRI_voc_document_operation_e, 
                         TRI_voc_rid_t oldRevisionId, arangodb::velocypack::Slice const& oldDoc,
@@ -375,9 +371,14 @@ class LogicalCollection {
   // SECTION: Index access (local only)
   int lookupDocument(arangodb::Transaction*, VPackSlice const,
                      TRI_doc_mptr_t const*&);
+  
+  int lookupDocument(arangodb::Transaction*, VPackSlice const,
+                     ManagedDocumentResult& result);
 
   int checkRevision(arangodb::Transaction*, arangodb::velocypack::Slice const,
                     arangodb::velocypack::Slice const);
+  
+  int checkRevision(arangodb::Transaction*, TRI_voc_rid_t expected, TRI_voc_rid_t found);
 
   int updateDocument(arangodb::Transaction*, 
                      TRI_voc_rid_t oldRevisionId, arangodb::velocypack::Slice const& oldDoc,
@@ -441,6 +442,8 @@ class LogicalCollection {
       arangodb::velocypack::Builder& builder);
 
   void increaseInternalVersion();
+
+  void readRevision(TRI_voc_rid_t revisionId, ManagedDocumentResult& result);
 
  private:
   // SECTION: Private variables

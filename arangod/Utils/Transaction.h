@@ -366,6 +366,7 @@ class Transaction {
   //////////////////////////////////////////////////////////////////////////////
   
   static TRI_voc_rid_t extractRevFromDocument(VPackSlice slice);
+  static VPackSlice extractRevSliceFromDocument(VPackSlice slice);
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief read any (random) document
@@ -677,10 +678,10 @@ class Transaction {
 
   void buildDocumentIdentity(arangodb::LogicalCollection* collection,
                              VPackBuilder& builder, TRI_voc_cid_t cid,
-                             StringRef const& key, VPackSlice const rid,
-                             VPackSlice const oldRid,
-                             TRI_doc_mptr_t const* oldMptr,
-                             TRI_doc_mptr_t const* newMptr);
+                             StringRef const& key, TRI_voc_rid_t rid,
+                             TRI_voc_rid_t oldRid,
+                             uint8_t const* oldVPack,
+                             uint8_t const* newVPack);
 
   OperationResult documentCoordinator(std::string const& collectionName,
                                       VPackSlice const value,

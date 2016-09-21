@@ -50,14 +50,9 @@ struct DocumentOperation {
 
   DocumentOperation* swap();
 
-  void setRevision(DocumentDescriptor const& oldRevision,
-                   TRI_voc_fid_t oldFid, uint32_t oldSize,
-                   DocumentDescriptor const& newRevision);
-
-  TRI_voc_fid_t getOldFid() const;
-
-  uint32_t getOldAlignedMarkerSize() const; 
-
+  void setRevisions(DocumentDescriptor const& oldRevision,
+                    DocumentDescriptor const& newRevision);
+  
   void setVPack(uint8_t const* vpack);
 
   void setTick(TRI_voc_tick_t tick) { _tick = tick; }
@@ -87,8 +82,6 @@ struct DocumentOperation {
   DocumentDescriptor _oldRevision;
   DocumentDescriptor _newRevision;
   TRI_voc_tick_t _tick;
-  TRI_voc_fid_t _oldFid;
-  uint32_t _oldSize;
   TRI_voc_document_operation_e _type;
   StatusType _status;
 };

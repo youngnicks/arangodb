@@ -48,6 +48,7 @@
 #include "VocBase/Ditch.h"
 #include "VocBase/KeyGenerator.h"
 #include "VocBase/LogicalCollection.h"
+#include "VocBase/ManagedDocumentResult.h"
 #include "VocBase/MasterPointers.h"
 #include "VocBase/ticks.h"
 #include "Wal/LogfileManager.h"
@@ -1045,6 +1046,27 @@ TRI_voc_rid_t Transaction::extractRevFromDocument(VPackSlice slice) {
   return 0;
 }
 
+VPackSlice Transaction::extractRevSliceFromDocument(VPackSlice slice) {
+  TRI_ASSERT(slice.isObject());
+  TRI_ASSERT(slice.length() >= 2); 
+
+  uint8_t const* p = slice.begin() + slice.findDataOffset(slice.head());
+  VPackValueLength count = 0;
+
+  while (*p <= basics::VelocyPackHelper::ToAttribute && ++count <= 5) {
+    if (*p == basics::VelocyPackHelper::RevAttribute) {
+      return VPackSlice(p + 1);
+    }
+    // skip over the attribute name
+    ++p;
+    // skip over the attribute value
+    p += VPackSlice(p).byteSize();
+  }
+
+  TRI_ASSERT(false);
+  return VPackSlice();
+}
+
 //////////////////////////////////////////////////////////////////////////////
 /// @brief build a VPack object with _id, _key and _rev, the result is
 /// added to the builder in the argument as a single object.
@@ -1054,10 +1076,10 @@ void Transaction::buildDocumentIdentity(LogicalCollection* collection,
                                         VPackBuilder& builder,
                                         TRI_voc_cid_t cid,
                                         StringRef const& key,
-                                        VPackSlice const rid,
-                                        VPackSlice const oldRid,
-                                        TRI_doc_mptr_t const* oldMptr,
-                                        TRI_doc_mptr_t const* newMptr) {
+                                        TRI_voc_rid_t rid,
+                                        TRI_voc_rid_t oldRid,
+                                        uint8_t const* oldVPack,
+                                        uint8_t const* newVPack) {
   builder.openObject();
   if (ServerState::isRunningInCluster(_serverRole)) {
     builder.add(StaticStrings::IdString, VPackValue(resolver()->getCollectionName(cid) + "/" + key.toString()));
@@ -1066,16 +1088,16 @@ void Transaction::buildDocumentIdentity(LogicalCollection* collection,
                 VPackValue(collection->name() + "/" + key.toString()));
   }
   builder.add(StaticStrings::KeyString, VPackValuePair(key.data(), key.length(), VPackValueType::String));
-  TRI_ASSERT(!rid.isNone());
-  builder.add(StaticStrings::RevString, rid);
-  if (!oldRid.isNone()) {
-    builder.add("_oldRev", oldRid);
+  TRI_ASSERT(rid != 0);
+  builder.add(StaticStrings::RevString, VPackValue(TRI_RidToString(rid)));
+  if (oldRid != 0) {
+    builder.add("_oldRev", VPackValue(TRI_RidToString(oldRid)));
   }
-  if (oldMptr != nullptr) {
-    builder.add("old", VPackValue(oldMptr->vpack(), VPackValueType::External));
+  if (oldVPack != nullptr) {
+    builder.add("old", VPackValue(oldVPack, VPackValueType::External));
   }
-  if (newMptr != nullptr) {
-    builder.add("new", VPackValue(newMptr->vpack(), VPackValueType::External));
+  if (newVPack != nullptr) {
+    builder.add("new", VPackValue(newVPack, VPackValueType::External));
   }
   builder.close();
 }
@@ -1546,9 +1568,9 @@ OperationResult Transaction::documentLocal(std::string const& collectionName,
       return TRI_ERROR_ARANGO_DOCUMENT_HANDLE_BAD;
     }
 
-    VPackSlice expectedRevision;
-    if (!options.ignoreRevs) {
-      expectedRevision = TRI_ExtractRevisionIdAsSlice(value);
+    TRI_voc_rid_t expectedRevision = 0;
+    if (!options.ignoreRevs && value.isObject()) {
+      expectedRevision = TRI_ExtractRevisionId(value);
     }
     
     TIMER_STOP(TRANSACTION_DOCUMENT_EXTRACT);
@@ -1566,13 +1588,13 @@ OperationResult Transaction::documentLocal(std::string const& collectionName,
     TRI_ASSERT(hasDitch(cid));
   
     TRI_ASSERT(mptr.vpack() != nullptr);
-    if (!expectedRevision.isNone()) {
-      VPackSlice foundRevision = mptr.revisionIdAsSlice();
+    if (expectedRevision != 0) {
+      TRI_voc_rid_t foundRevision = mptr.revisionId();
       if (expectedRevision != foundRevision) {
         if (!isMultiple) {
           // still return
           buildDocumentIdentity(collection, resultBuilder, cid, key,
-                                foundRevision, VPackSlice(), nullptr, nullptr);
+                                foundRevision, 0, nullptr, nullptr);
         }
         return TRI_ERROR_ARANGO_CONFLICT;
       }
@@ -1714,11 +1736,11 @@ OperationResult Transaction::insertLocal(std::string const& collectionName,
       return TRI_ERROR_ARANGO_DOCUMENT_TYPE_INVALID;
     }
 
-    TRI_doc_mptr_t mptr;
+    ManagedDocumentResult result;
     TRI_voc_tick_t resultMarkerTick = 0;
 
     TIMER_START(TRANSACTION_INSERT_DOCUMENT_INSERT);
-    int res = collection->insert(this, value, &mptr, options, resultMarkerTick,
+    int res = collection->insert(this, value, result, options, resultMarkerTick,
                                  !isLocked(collection, TRI_TRANSACTION_WRITE));
     TIMER_STOP(TRANSACTION_INSERT_DOCUMENT_INSERT);
 
@@ -1737,15 +1759,16 @@ OperationResult Transaction::insertLocal(std::string const& collectionName,
       return TRI_ERROR_NO_ERROR;
     }
 
-    TRI_ASSERT(mptr.vpack() != nullptr);
+    uint8_t const* vpack = result.vpack();
+    TRI_ASSERT(vpack != nullptr);
     
-    StringRef keyString(VPackSlice(mptr.vpack()).get(StaticStrings::KeyString));
+    StringRef keyString(Transaction::extractKeyFromDocument(VPackSlice(vpack)));
 
     TIMER_START(TRANSACTION_INSERT_BUILD_DOCUMENT_IDENTITY);
 
     buildDocumentIdentity(collection, resultBuilder, cid, keyString, 
-        mptr.revisionIdAsSlice(), VPackSlice(),
-        nullptr, options.returnNew ? &mptr : nullptr);
+        Transaction::extractRevFromDocument(VPackSlice(vpack)), 0,
+        nullptr, options.returnNew ? vpack : nullptr);
 
     TIMER_STOP(TRANSACTION_INSERT_BUILD_DOCUMENT_IDENTITY);
 
@@ -2066,7 +2089,7 @@ OperationResult Transaction::modifyLocal(
       return TRI_ERROR_ARANGO_DOCUMENT_TYPE_INVALID;
     }
     TRI_doc_mptr_t mptr;
-    VPackSlice actualRevision;
+    TRI_voc_rid_t actualRevision = 0;
     TRI_doc_mptr_t previous;
     TRI_voc_tick_t resultMarkerTick = 0;
 
@@ -2088,9 +2111,8 @@ OperationResult Transaction::modifyLocal(
       // still return 
       if ((!options.silent || doingSynchronousReplication) && !isBabies) {
         StringRef key(newVal.get(StaticStrings::KeyString));
-        buildDocumentIdentity(collection, resultBuilder, cid, key, actualRevision,
-                              VPackSlice(), 
-                              options.returnOld ? &previous : nullptr, nullptr);
+        buildDocumentIdentity(collection, resultBuilder, cid, key, actualRevision, 0,
+                              options.returnOld ? previous.vpack() : nullptr, nullptr);
       }
       return TRI_ERROR_ARANGO_CONFLICT;
     } else if (res != TRI_ERROR_NO_ERROR) {
@@ -2102,9 +2124,9 @@ OperationResult Transaction::modifyLocal(
     if (!options.silent || doingSynchronousReplication) {
       StringRef key(newVal.get(StaticStrings::KeyString));
       buildDocumentIdentity(collection, resultBuilder, cid, key, 
-          mptr.revisionIdAsSlice(), actualRevision, 
-          options.returnOld ? &previous : nullptr , 
-          options.returnNew ? &mptr : nullptr);
+          mptr.revisionId(), actualRevision, 
+          options.returnOld ? previous.vpack() : nullptr , 
+          options.returnNew ? mptr.vpack() : nullptr);
     }
     return TRI_ERROR_NO_ERROR;
   };
@@ -2322,8 +2344,8 @@ OperationResult Transaction::removeLocal(std::string const& collectionName,
   TRI_voc_tick_t maxTick = 0;
 
   auto workOnOneDocument = [&](VPackSlice value, bool isBabies) -> int {
-    VPackSlice actualRevision;
-    TRI_doc_mptr_t previous;
+    TRI_voc_rid_t actualRevision = 0;
+    ManagedDocumentResult previous;
     TransactionBuilderLeaser builder(this);
     StringRef key;
     if (value.isString()) {
@@ -2358,17 +2380,15 @@ OperationResult Transaction::removeLocal(std::string const& collectionName,
       if (res == TRI_ERROR_ARANGO_CONFLICT && 
           (!options.silent || doingSynchronousReplication) && 
           !isBabies) {
-        buildDocumentIdentity(collection, resultBuilder, cid, key,
-                              actualRevision, VPackSlice(), 
-                              options.returnOld ? &previous : nullptr, nullptr);
+        buildDocumentIdentity(collection, resultBuilder, cid, key, actualRevision, 0, 
+                              options.returnOld ? previous.vpack() : nullptr, nullptr);
       }
       return res;
     }
 
     if (!options.silent || doingSynchronousReplication) {
-      buildDocumentIdentity(collection, resultBuilder, cid, key,
-                            actualRevision, VPackSlice(),
-                            options.returnOld ? &previous : nullptr, nullptr);
+      buildDocumentIdentity(collection, resultBuilder, cid, key, actualRevision, 0,
+                            options.returnOld ? previous.vpack() : nullptr, nullptr);
     }
 
     return TRI_ERROR_NO_ERROR;
@@ -2622,8 +2642,8 @@ OperationResult Transaction::truncateLocal(std::string const& collectionName,
   TRI_voc_tick_t resultMarkerTick = 0;
 
   auto callback = [&](IndexElement const* element) {
-    VPackSlice actualRevision;
-    TRI_doc_mptr_t previous;
+    TRI_voc_rid_t actualRevision = 0;
+    ManagedDocumentResult previous;
     TRI_voc_rid_t revisionId = element->revisionId();
     uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
     int res =

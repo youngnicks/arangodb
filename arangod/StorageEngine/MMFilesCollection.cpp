@@ -1137,9 +1137,10 @@ int MMFilesCollection::iterateMarkersOnLoad(arangodb::Transaction* trx) {
 }
 
 uint8_t const* MMFilesCollection::lookupRevision(TRI_voc_rid_t revisionId) {
+  READ_LOCKER(locker, _revisionsLock);
   LOG(TRACE) << "LOOKING UP REVISION: " << revisionId;
-  auto it = _revisionCache.find(revisionId);
-  if (it == _revisionCache.end()) {
+  auto it = _revisionsCache.find(revisionId);
+  if (it == _revisionsCache.end()) {
   LOG(TRACE) << "-------------> REVISION NOT FOUND";
     THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected revision not found");
   }
@@ -1147,9 +1148,10 @@ uint8_t const* MMFilesCollection::lookupRevision(TRI_voc_rid_t revisionId) {
 }
 
 TRI_doc_mptr_t* MMFilesCollection::lookupRevisionMptr(TRI_voc_rid_t revisionId) {
+  READ_LOCKER(locker, _revisionsLock);
   LOG(TRACE) << "LOOKING UP REVISION BY MPTR: " << revisionId;
-  auto it = _revisionCache.find(revisionId);
-  if (it == _revisionCache.end()) {
+  auto it = _revisionsCache.find(revisionId);
+  if (it == _revisionsCache.end()) {
   LOG(TRACE) << "-------------> REVISION NOT FOUND";
     THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected revision not found");
   }
@@ -1158,6 +1160,7 @@ TRI_doc_mptr_t* MMFilesCollection::lookupRevisionMptr(TRI_voc_rid_t revisionId) 
 }
 
 TRI_doc_mptr_t* MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& doc) {
+  WRITE_LOCKER(locker, _revisionsLock);
   TRI_doc_mptr_t* mptr = _masterPointers.request();
   if (mptr == nullptr) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
@@ -1166,9 +1169,9 @@ TRI_doc_mptr_t* MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, aran
   LOG(TRACE) << "INSERT REVISION: " << revisionId << ", MPTR: " << mptr;
   mptr->setVPack(doc.begin());
   try {
-    if (!_revisionCache.emplace(revisionId, mptr).second) {
+    if (!_revisionsCache.emplace(revisionId, mptr).second) {
   LOG(TRACE) << "----------------> REVISION ALREADY EXISTS";
-     _revisionCache[revisionId] = mptr;
+     _revisionsCache[revisionId] = mptr;
     }
     return mptr;
   } catch (...) {
@@ -1179,11 +1182,12 @@ TRI_doc_mptr_t* MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, aran
 }
 
 void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t* mptr) {
+  WRITE_LOCKER(locker, _revisionsLock);
   LOG(TRACE) << "INSERT REVISION: " << revisionId << ", MPTR: " << mptr;
   try {
-    if (!_revisionCache.emplace(revisionId, mptr).second) {
+    if (!_revisionsCache.emplace(revisionId, mptr).second) {
   LOG(TRACE) << "----------------> REVISION ALREADY EXISTS";
-     _revisionCache[revisionId] = mptr;
+     _revisionsCache[revisionId] = mptr;
     }
   } catch (...) {
     LOG(TRACE) << "OOPS; TRACEOR";
@@ -1192,15 +1196,19 @@ void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t*
 }
 
 void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId, bool free) {
+  WRITE_LOCKER(locker, _revisionsLock);
   LOG(TRACE) << "REMOVING REVISION: " << revisionId;
-  auto it = _revisionCache.find(revisionId);
-  if (it != _revisionCache.end()) {
+  auto it = _revisionsCache.find(revisionId);
+  if (it != _revisionsCache.end()) {
   LOG(TRACE) << "FOUND REVISION: " << revisionId << " " << (*it).second;
     if (free) {
   LOG(TRACE) << "FREEING REVISION: " << revisionId << " " << (*it).second;
-      _masterPointers.release((*it).second);
+  // TODO: adjust datafile statistics here!!!!!!!!!!!!!!!
+      TRI_doc_mptr_t* mptr = (*it).second;
+      _datafileStatistics.increaseDead(mptr->getFid(), 1, mptr->alignedMarkerSize());
+      _masterPointers.release(mptr);
     }
-    _revisionCache.erase(revisionId);
+    _revisionsCache.erase(revisionId);
   }
 }
   

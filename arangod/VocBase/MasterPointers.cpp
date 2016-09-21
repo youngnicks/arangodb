@@ -139,9 +139,7 @@ TRI_doc_mptr_t* MasterPointers::request() {
 ////////////////////////////////////////////////////////////////////////////////
 
 void MasterPointers::release(TRI_doc_mptr_t* header) {
-  if (header == nullptr) {
-    return;
-  }
+  TRI_ASSERT(header != nullptr);
 
   header->clear();
   TRI_ASSERT(_nrAllocated > 0);

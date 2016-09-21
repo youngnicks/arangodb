@@ -176,8 +176,6 @@ static void FreeOperations(TRI_transaction_t* trx) {
   bool const mustRollback = (trx->_status == TRI_TRANSACTION_ABORTED);
   bool const isSingleOperation = IsSingleOperationTransaction(trx);
       
-  std::unordered_map<TRI_voc_fid_t, std::pair<int64_t, int64_t>> stats;
-
   for (auto& trxCollection : trx->_collections) {
     if (trxCollection->_operations == nullptr) {
       continue;
@@ -193,35 +191,7 @@ static void FreeOperations(TRI_transaction_t* trx) {
 
         op->revert();
       }
-    } else {
-      // update datafile statistics for all operations
-      // pair (number of dead markers, size of dead markers)
-      stats.clear();
-
-      for (auto it = trxCollection->_operations->rbegin();
-           it != trxCollection->_operations->rend(); ++it) {
-        arangodb::wal::DocumentOperation* op = (*it);
-
-        if (op->type() == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
-            op->type() == TRI_VOC_DOCUMENT_OPERATION_REPLACE ||
-            op->type() == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
-          TRI_voc_fid_t fid = op->getOldFid();
-          auto it2 = stats.find(fid);
-
-          if (it2 == stats.end()) {
-            stats.emplace(fid, std::make_pair(1, static_cast<int64_t>(op->getOldAlignedMarkerSize())));
-          } else {
-            (*it2).second.first++;
-            (*it2).second.second += static_cast<int64_t>(op->getOldAlignedMarkerSize());
-          }
-        }
-      }
-
-      // now update the stats for all datafiles of the collection in one go
-      for (auto const& it : stats) {
-        trxCollection->_collection->increaseDeadStats(it.first, it.second.first, it.second.second);
-      }
-    }
+    } 
 
     for (auto it = trxCollection->_operations->rbegin();
          it != trxCollection->_operations->rend(); ++it) {
@@ -1074,7 +1044,7 @@ int TRI_AddOperationTransaction(TRI_transaction_t* trx,
         operation.type() == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
       // update datafile statistics for the old header
       
-      collection->increaseDeadStats(operation.getOldFid(), 1, static_cast<int64_t>(operation.getOldAlignedMarkerSize()));
+    //  collection->increaseDeadStats(operation.getOldFid(), 1, static_cast<int64_t>(operation.getOldAlignedMarkerSize()));
     }
   } else {
     // operation is buffered and might be rolled back

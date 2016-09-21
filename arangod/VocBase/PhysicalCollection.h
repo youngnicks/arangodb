@@ -68,9 +68,6 @@ class PhysicalCollection {
                                 std::function<bool(TRI_voc_tick_t foundTick, TRI_df_marker_t const* marker)> const& callback) = 0;
 
   /// @brief increase dead stats for a datafile, if it exists
-  virtual void increaseDeadStats(TRI_voc_fid_t fid, int64_t number, int64_t size) = 0;
-  
-  /// @brief increase dead stats for a datafile, if it exists
   virtual void updateStats(TRI_voc_fid_t fid, DatafileStatisticsContainer const& values) = 0;
   
   /// @brief report extra memory used by indexes etc.
