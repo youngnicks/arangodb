@@ -31,8 +31,8 @@
 
 #include <velocypack/Buffer.h>
 
-struct TRI_datafile_t;
 struct TRI_df_marker_t;
+struct IndexElement;
 
 namespace arangodb {
 namespace velocypack {
@@ -373,11 +373,12 @@ class LogicalCollection {
 
   // SECTION: Index access (local only)
   int lookupDocument(arangodb::Transaction*, VPackSlice const,
-                     ManagedDocumentResult& result);
+                     ManagedDocumentResult& result,
+                     IndexElement*& element);
 
   int checkRevision(arangodb::Transaction*, TRI_voc_rid_t expected, TRI_voc_rid_t found);
 
-  int updateDocument(arangodb::Transaction*, 
+  int updateDocument(arangodb::Transaction*, IndexElement* element, 
                      TRI_voc_rid_t oldRevisionId, arangodb::velocypack::Slice const& oldDoc,
                      TRI_voc_rid_t newRevisionId, arangodb::velocypack::Slice const& newDoc,
                      arangodb::wal::DocumentOperation&, arangodb::wal::Marker const*,

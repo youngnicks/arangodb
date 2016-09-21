@@ -1208,3 +1208,18 @@ void MMFilesCollection::adjustStoragePosition(TRI_voc_rid_t revisionId, uint8_t 
   mptr->setFid(fid, isInWal);
   mptr->setVPack(vpack);
 }
+  
+bool MMFilesCollection::adjustStoragePositionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) {
+  TRI_doc_mptr_t* mptr = lookupRevisionMptr(revisionId);
+
+  if (mptr->getMarkerPtr() != oldPosition) {
+    // element already outdated
+    return false;
+  }
+      
+  // we can safely update the master pointer's dataptr value
+  mptr->setVPackFromMarker(newPosition);
+  mptr->setFid(newFid, isInWal);
+
+  return true;
+}

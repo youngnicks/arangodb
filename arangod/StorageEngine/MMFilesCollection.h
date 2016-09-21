@@ -154,6 +154,7 @@ class MMFilesCollection final : public PhysicalCollection {
   
   TRI_doc_mptr_t* lookupRevisionMptr(TRI_voc_rid_t revisionId) override; // TODO: remove
   void adjustStoragePosition(TRI_voc_rid_t revisionId, uint8_t const* vpack, TRI_voc_fid_t, bool isInWal) override;
+  bool adjustStoragePositionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) override;
 
  private:
   static int OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,

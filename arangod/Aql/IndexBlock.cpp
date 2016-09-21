@@ -33,7 +33,6 @@
 #include "Utils/OperationCursor.h"
 #include "V8/v8-globals.h"
 #include "VocBase/LogicalCollection.h"
-#include "VocBase/MasterPointer.h"
 #include "VocBase/vocbase.h"
 
 #include <velocypack/Iterator.h>

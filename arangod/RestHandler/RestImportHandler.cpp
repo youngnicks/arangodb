@@ -31,7 +31,6 @@
 #include "Utils/OperationOptions.h"
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/StandaloneTransactionContext.h"
-#include "VocBase/MasterPointer.h"
 #include "VocBase/vocbase.h"
 
 #include <velocypack/Collection.h>

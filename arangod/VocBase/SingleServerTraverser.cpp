@@ -26,7 +26,6 @@
 #include "Utils/Transaction.h"
 #include "VocBase/LogicalCollection.h"
 #include "VocBase/ManagedDocumentResult.h"
-#include "VocBase/MasterPointer.h"
 
 using namespace arangodb;
 using namespace arangodb::traverser;

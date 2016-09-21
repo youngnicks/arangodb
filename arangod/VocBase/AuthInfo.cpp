@@ -39,7 +39,6 @@
 #include "Ssl/SslInterface.h"
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/StandaloneTransactionContext.h"
-#include "VocBase/MasterPointer.h"
 
 using namespace arangodb;
 using namespace arangodb::basics;

@@ -56,6 +56,7 @@
 #include "VocBase/IndexPoolFeature.h"
 #include "VocBase/KeyGenerator.h"
 #include "VocBase/ManagedDocumentResult.h"
+#include "VocBase/MasterPointer.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/ticks.h"
 #include "VocBase/transaction.h"
@@ -1739,7 +1740,8 @@ int LogicalCollection::read(Transaction* trx, StringRef const& key,
   bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
   CollectionReadLocker collectionLocker(this, useDeadlockDetector, lock);
 
-  int res = lookupDocument(trx, slice, result);
+  IndexElement* element = nullptr; // not used here
+  int res = lookupDocument(trx, slice, result, element);
 
   if (res != TRI_ERROR_NO_ERROR) {
     return res;
@@ -1902,7 +1904,8 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
   arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
   
   // get the previous revision
-  int res = lookupDocument(trx, key, previous);
+  IndexElement* element = nullptr;
+  int res = lookupDocument(trx, key, previous, element);
 
   if (res != TRI_ERROR_NO_ERROR) {
     return res;
@@ -1981,7 +1984,7 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
   operation.setRevisions(DocumentDescriptor(oldRevisionId, oldDoc.begin()), DocumentDescriptor(revisionId, newDoc.begin()));
 
   try {
-    res = updateDocument(trx, oldRevisionId, oldDoc, revisionId, newDoc, operation, marker, options.waitForSync);
+    res = updateDocument(trx, element, oldRevisionId, oldDoc, revisionId, newDoc, operation, marker, options.waitForSync);
   } catch (basics::Exception const& ex) {
     res = ex.code();
   } catch (...) {
@@ -2050,17 +2053,18 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
   
   TRI_IF_FAILURE("ReplaceDocumentNoLock") { return TRI_ERROR_DEBUG; }
 
-  bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
-  arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
-  
   // get the previous revision
   VPackSlice key = newSlice.get(StaticStrings::KeyString);
   if (key.isNone()) {
     return TRI_ERROR_ARANGO_DOCUMENT_HANDLE_BAD;
   }
+  
+  bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
+  arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
 
   // get the previous revision
-  int res = lookupDocument(trx, key, previous);
+  IndexElement* element = nullptr;
+  int res = lookupDocument(trx, key, previous, element);
 
   if (res != TRI_ERROR_NO_ERROR) {
     return res;
@@ -2127,7 +2131,7 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
   operation.setRevisions(DocumentDescriptor(oldRevisionId, oldDoc.begin()), DocumentDescriptor(revisionId, newDoc.begin()));
 
   try {
-    res = updateDocument(trx, oldRevisionId, oldDoc, revisionId, newDoc, operation, marker, options.waitForSync);
+    res = updateDocument(trx, element, oldRevisionId, oldDoc, revisionId, newDoc, operation, marker, options.waitForSync);
   } catch (basics::Exception const& ex) {
     res = ex.code();
   } catch (...) {
@@ -2206,8 +2210,6 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
     return TRI_ERROR_DEBUG;
   }
 
-  arangodb::wal::DocumentOperation operation(trx, this, TRI_VOC_DOCUMENT_OPERATION_REMOVE);
-
   VPackSlice key;
   if (slice.isString()) {
     key = slice;
@@ -2216,11 +2218,14 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
   }
   TRI_ASSERT(!key.isNone());
   
+  arangodb::wal::DocumentOperation operation(trx, this, TRI_VOC_DOCUMENT_OPERATION_REMOVE);
+  
   bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
   arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
   
   // get the previous revision
-  int res = lookupDocument(trx, key, previous);
+  IndexElement* element = nullptr; // not used here
+  int res = lookupDocument(trx, key, previous, element);
 
   if (res != TRI_ERROR_NO_ERROR) {
     return res;
@@ -2765,15 +2770,17 @@ int LogicalCollection::beginWriteTimed(bool useDeadlockDetector, uint64_t timeou
 /// the key must be a string slice, no revision check is performed
 int LogicalCollection::lookupDocument(
     arangodb::Transaction* trx, VPackSlice const key,
-    ManagedDocumentResult& result) {
- 
+    ManagedDocumentResult& result,
+    IndexElement*& element) {
+
+  element = nullptr; 
   result.clear(); 
   
   if (!key.isString()) {
     return TRI_ERROR_ARANGO_DOCUMENT_KEY_BAD;
   }
 
-  IndexElement* element = primaryIndex()->lookupKey(trx, key);
+  element = primaryIndex()->lookupKey(trx, key);
   if (element != nullptr) {
     readRevision(result, element->revisionId());
     return TRI_ERROR_NO_ERROR;
@@ -2795,10 +2802,13 @@ int LogicalCollection::checkRevision(Transaction* trx,
 /// @brief updates an existing document, low level worker
 /// the caller must make sure the write lock on the collection is held
 int LogicalCollection::updateDocument(
-    arangodb::Transaction* trx, TRI_voc_rid_t oldRevisionId, VPackSlice const& oldDoc, 
+    arangodb::Transaction* trx, IndexElement* element,
+    TRI_voc_rid_t oldRevisionId, VPackSlice const& oldDoc, 
     TRI_voc_rid_t newRevisionId, VPackSlice const& newDoc, 
     arangodb::wal::DocumentOperation& operation, arangodb::wal::Marker const* marker,
     bool& waitForSync) {
+  TRI_ASSERT(element != nullptr);
+
   // remove old document from secondary indexes
   // (it will stay in the primary index as the key won't change)
   int res = deleteSecondaryIndexes(trx, oldRevisionId, oldDoc, false);
@@ -2817,16 +2827,13 @@ int LogicalCollection::updateDocument(
 
     // rollback
     deleteSecondaryIndexes(trx, newRevisionId, newDoc, true);
-
     insertSecondaryIndexes(trx, oldRevisionId, oldDoc, true);
 
     return res;
   }
-  
-  IndexElement* element = primaryIndex()->lookupKey(trx, Transaction::extractKeyFromDocument(newDoc));
-  if (element != nullptr) {
-    element->revisionId(newRevisionId);
-  }
+ 
+  // update the index element (primary index only - other index have been adjusted) 
+  element->revisionId(newRevisionId);
   
   operation.indexed();
 

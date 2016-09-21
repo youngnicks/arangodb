@@ -28,7 +28,6 @@
 #include "Basics/AttributeNameParser.h"
 #include "Basics/Exceptions.h"
 #include "Indexes/IndexElement.h"
-#include "VocBase/MasterPointer.h"
 #include "VocBase/vocbase.h"
 #include "VocBase/voc-types.h"
 

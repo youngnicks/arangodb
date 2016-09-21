@@ -30,7 +30,6 @@
 #include "Utils/Transaction.h"
 #include "VocBase/EdgeCollectionInfo.h"
 #include "VocBase/LogicalCollection.h"
-#include "VocBase/MasterPointer.h"
 
 #include <velocypack/Iterator.h>
 #include <velocypack/velocypack-aliases.h>

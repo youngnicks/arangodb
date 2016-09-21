@@ -25,6 +25,7 @@
 #include "Aql/QueryCache.h"
 #include "Logger/Logger.h"
 #include "Basics/Exceptions.h"
+#include "Basics/StaticStrings.h"
 #include "VocBase/DatafileHelper.h"
 #include "VocBase/ticks.h"
 #include "Wal/DocumentOperation.h"

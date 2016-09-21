@@ -25,7 +25,7 @@
 #include "Aql/AstNode.h"
 #include "Aql/SortCondition.h"
 #include "Basics/AttributeNameParser.h"
-#include "Basics/debugging.h"
+#include "Basics/StaticStrings.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Indexes/PrimaryIndex.h"
 #include "Indexes/RocksDBFeature.h"

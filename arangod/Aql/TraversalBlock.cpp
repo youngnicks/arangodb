@@ -36,7 +36,6 @@
 #include "Utils/OperationCursor.h"
 #include "Utils/Transaction.h"
 #include "V8/v8-globals.h"
-#include "VocBase/MasterPointer.h"
 #include "VocBase/SingleServerTraverser.h"
 #include "VocBase/ticks.h"
 

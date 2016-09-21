@@ -26,7 +26,6 @@
 #include "Basics/Exceptions.h"
 #include "Logger/Logger.h"
 #include "VocBase/LogicalCollection.h"
-#include "VocBase/MasterPointer.h"
 
 using namespace arangodb;
 

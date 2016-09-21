@@ -26,7 +26,6 @@
 
 #include "Basics/Common.h"
 #include "Logger/Logger.h"
-#include "VocBase/MasterPointer.h"
 #include "VocBase/vocbase.h"
 #include "VocBase/voc-types.h"
 
