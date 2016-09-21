@@ -27,8 +27,6 @@
 #include "Utils/Transaction.h"
 #include "VocBase/DatafileHelper.h"
 #include "VocBase/LogicalCollection.h"
-#include "VocBase/MasterPointer.h"
-#include "VocBase/MasterPointers.h"
 
 using namespace arangodb;
 using namespace arangodb::wal;
