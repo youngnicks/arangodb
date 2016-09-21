@@ -2175,7 +2175,7 @@ void RecursivePotDump(GeoIx* gix, FILE* f, int pot) {
       GeoCoordinate* gc = gix->gc + gp->points[i];
       fprintf(f, "Lat.  %9.4f,  Long. %9.4f", gc->latitude, gc->longitude);
 #if TRI_GEO_DEBUG == 2
-      fprintf(f, " %s", (char*)gc->data);
+      fprintf(f, " %llu", (unsigned long long)gc->data);
 #endif
       fprintf(f, "\n");
     }

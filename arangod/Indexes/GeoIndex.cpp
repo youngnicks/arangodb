@@ -268,7 +268,7 @@ int GeoIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId,
   GeoCoordinate gc;
   gc.latitude = latitude;
   gc.longitude = longitude;
-  gc.data = reinterpret_cast<void*>(revisionId);
+  gc.data = fromRevision(revisionId);
 
   int res = GeoIndex_insert(_geoIndex, &gc);
 
@@ -338,7 +338,7 @@ int GeoIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId,
   GeoCoordinate gc;
   gc.latitude = latitude;
   gc.longitude = longitude;
-  gc.data = reinterpret_cast<void*>(revisionId);
+  gc.data = fromRevision(revisionId);
 
   // ignore non-existing elements in geo-index
   GeoIndex_remove(_geoIndex, &gc);

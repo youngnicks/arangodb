@@ -756,7 +756,7 @@ static AqlValue buildGeoResult(arangodb::Transaction* trx,
     for (size_t i = 0; i < nCoords; ++i) {
       distances.emplace_back(geo_coordinate_distance_t(
           cors->distances[i],
-          (TRI_voc_rid_t) (cors->coordinates[i].data)));
+          arangodb::GeoIndex::toRevision(cors->coordinates[i].data)));
     }
   } catch (...) {
     GeoIndex_CoordinatesFree(cors);

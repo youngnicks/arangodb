@@ -33,6 +33,9 @@
 #include <velocypack/Builder.h>
 #include <velocypack/velocypack-aliases.h>
 
+// GeoCoordinate.data must be capable of storing revision ids
+static_assert(sizeof(GeoCoordinate::data) >= sizeof(TRI_voc_rid_t), "invalid size of GeoCoordinate.data");
+
 namespace arangodb {
 
 class GeoIndex final : public Index {
@@ -117,6 +120,14 @@ class GeoIndex final : public Index {
               std::vector<std::string> const& longitude) const {
     return (!_latitude.empty() && !_longitude.empty() &&
             _latitude == latitude && _longitude == longitude);
+  }
+  
+  static uint64_t fromRevision(TRI_voc_rid_t revisionId) {
+    return static_cast<uint64_t>(revisionId);
+  }
+
+  static TRI_voc_rid_t toRevision(uint64_t internal) {
+    return static_cast<TRI_voc_rid_t>(internal);
   }
 
  private:
