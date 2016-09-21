@@ -29,55 +29,6 @@
 
 using namespace arangodb;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create a new geo index, type "geo1"
-///        Lat and Lon are stored in the same Array
-////////////////////////////////////////////////////////////////////////////////
-
-GeoIndex::GeoIndex(
-    TRI_idx_iid_t iid, arangodb::LogicalCollection* collection,
-    std::vector<std::vector<arangodb::basics::AttributeName>> const& fields,
-    std::vector<std::string> const& path, bool geoJson)
-    : Index(iid, collection, fields, false, true),
-      _location(path),
-      _variant(geoJson ? INDEX_GEO_COMBINED_LAT_LON
-                       : INDEX_GEO_COMBINED_LON_LAT),
-      _geoJson(geoJson),
-      _geoIndex(nullptr) {
-  TRI_ASSERT(iid != 0);
-
-  _geoIndex = GeoIndex_new();
-
-  if (_geoIndex == nullptr) {
-    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create a new geo index, type "geo2"
-////////////////////////////////////////////////////////////////////////////////
-
-GeoIndex::GeoIndex(
-    TRI_idx_iid_t iid, arangodb::LogicalCollection* collection,
-    std::vector<std::vector<arangodb::basics::AttributeName>> const& fields,
-    std::vector<std::vector<std::string>> const& paths)
-    : Index(iid, collection, fields, false, true),
-      _latitude(paths[0]),
-      _longitude(paths[1]),
-      _variant(INDEX_GEO_INDIVIDUAL_LAT_LON),
-      _geoJson(false),
-      _geoIndex(nullptr) {
-  TRI_ASSERT(iid != 0);
-
-  _geoIndex = GeoIndex_new();
-
-  if (_geoIndex == nullptr) {
-    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-  }
-}
-
-/// @brief create a new geo index, type "geo2"
-
 GeoIndex::GeoIndex(TRI_idx_iid_t iid, arangodb::LogicalCollection* collection,
                      VPackSlice const& info)
     : Index(iid, collection, info),

@@ -714,9 +714,8 @@ SkiplistIndex::SkiplistIndex(TRI_idx_iid_t iid,
 SkiplistIndex::~SkiplistIndex() { delete _skiplistIndex; }
 
 size_t SkiplistIndex::memory() const {
-  // TODO: add dynamic allocations here!!!
   return _skiplistIndex->memoryUsage() +
-         static_cast<size_t>(_skiplistIndex->getNrUsed()) * elementSize();
+         static_cast<size_t>(_skiplistIndex->getNrUsed()) * elementSize() + _extraMemory;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -746,6 +745,7 @@ void SkiplistIndex::toVelocyPackFigures(VPackBuilder& builder) const {
 
 int SkiplistIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId, 
                           VPackSlice const& doc, bool isRollback) {
+  size_t const np = numPaths();
   std::vector<IndexElement*> elements;
 
   int res;
@@ -758,23 +758,24 @@ int SkiplistIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId,
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& element : elements) {
       // free all elements to prevent leak
-      element->free(numPaths());
+      element->free(np);
     }
     return res;
   }
 
   // insert into the index. the memory for the element will be owned or freed
   // by the index
-
+  size_t extraMemory = 0;
   size_t const count = elements.size();
 
   for (size_t i = 0; i < count; ++i) {
+    extraMemory += elements[i]->totalMemoryUsage(np);
     res = _skiplistIndex->insert(elements[i]);
 
     if (res != TRI_ERROR_NO_ERROR) {
       // Note: this element is freed already
       for (size_t j = i; j < count; ++j) {
-        elements[j]->free(numPaths());
+        elements[j]->free(np);
       }
       for (size_t j = 0; j < i; ++j) {
         _skiplistIndex->remove(elements[j]);
@@ -788,6 +789,11 @@ int SkiplistIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId,
       break;
     }
   }
+
+  if (res == TRI_ERROR_NO_ERROR) {
+    _extraMemory += extraMemory;
+  }
+
   return res;
 }
 
@@ -797,6 +803,7 @@ int SkiplistIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId,
 
 int SkiplistIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId,
                           VPackSlice const& doc, bool isRollback) {
+  size_t const np = numPaths();
   std::vector<IndexElement*> elements;
 
   int res;
@@ -809,14 +816,14 @@ int SkiplistIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId,
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& element : elements) {
       // free all elements to prevent leak
-      element->free(numPaths());
+      element->free(np);
     }
     return res;
   }
 
   // attempt the removal for skiplist indexes
   // ownership for the index element is transferred to the index
-
+  size_t extraMemory = 0;
   size_t const count = elements.size();
 
   for (size_t i = 0; i < count; ++i) {
@@ -827,8 +834,14 @@ int SkiplistIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId,
     if (result != TRI_ERROR_NO_ERROR) {
       res = result;
     }
+    
+    extraMemory += elements[i]->totalMemoryUsage(np);
+    elements[i]->free(np);
+  }
 
-    elements[i]->free(numPaths());
+  if (res == TRI_ERROR_NO_ERROR) {
+    TRI_ASSERT(_extraMemory >= extraMemory);
+    _extraMemory -= extraMemory;
   }
 
   return res;
@@ -836,6 +849,7 @@ int SkiplistIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId,
 
 int SkiplistIndex::unload() {
   _skiplistIndex->truncate(true);
+  _extraMemory = 0;
   return TRI_ERROR_NO_ERROR;
 }
 

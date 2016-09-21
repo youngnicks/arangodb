@@ -45,14 +45,6 @@ class GeoIndex final : public Index {
   GeoIndex(TRI_idx_iid_t, LogicalCollection*,
             arangodb::velocypack::Slice const&);
 
-  GeoIndex(TRI_idx_iid_t, arangodb::LogicalCollection*,
-            std::vector<std::vector<arangodb::basics::AttributeName>> const&,
-            std::vector<std::string> const&, bool);
-
-  GeoIndex(TRI_idx_iid_t, arangodb::LogicalCollection*,
-            std::vector<std::vector<arangodb::basics::AttributeName>> const&,
-            std::vector<std::vector<std::string>> const&);
-
   ~GeoIndex();
 
  public:

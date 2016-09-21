@@ -2285,7 +2285,7 @@ int GeoIndex_INDEXVALID(GeoIdx* gi) {
 
 size_t GeoIndex_MemoryUsage(void* theIndex) {
   GeoIx* geoIndex = (GeoIx*)theIndex;
-  if (geoIndex != NULL) {
+  if (geoIndex != nullptr) {
     return geoIndex->_memoryUsed;
   }
   return 0;

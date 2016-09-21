@@ -50,64 +50,18 @@ arangodb::aql::AstNode const* PathBasedIndex::PermutationState::getValue()
 /// @brief create the index
 ////////////////////////////////////////////////////////////////////////////////
 
-PathBasedIndex::PathBasedIndex(
-    TRI_idx_iid_t iid, arangodb::LogicalCollection* collection,
-    std::vector<std::vector<arangodb::basics::AttributeName>> const& fields,
-    bool unique, bool sparse, bool allowPartialIndex)
-    : Index(iid, collection, fields, unique, sparse),
-      _useExpansion(false),
-      _allowPartialIndex(allowPartialIndex) {
-  TRI_ASSERT(!fields.empty());
-
-  TRI_ASSERT(iid != 0);
-
-  fillPaths(_paths, _expanding);
-
-  for (auto const& it : fields) {
-    if (TRI_AttributeNamesHaveExpansion(it)) {
-      _useExpansion = true;
-      break;
-    }
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create the index
-////////////////////////////////////////////////////////////////////////////////
-
 PathBasedIndex::PathBasedIndex(TRI_idx_iid_t iid,
                                arangodb::LogicalCollection* collection,
                                VPackSlice const& info, bool allowPartialIndex)
     : Index(iid, collection, info),
       _useExpansion(false),
-      _allowPartialIndex(allowPartialIndex) {
+      _allowPartialIndex(allowPartialIndex),
+      _extraMemory(0) {
   TRI_ASSERT(!_fields.empty());
 
   TRI_ASSERT(iid != 0);
 
   fillPaths(_paths, _expanding);
-
-  for (auto const& it : _fields) {
-    if (TRI_AttributeNamesHaveExpansion(it)) {
-      _useExpansion = true;
-      break;
-    }
-  }
-}
-
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create an index stub with a hard-coded selectivity estimate
-/// this is used in the cluster coordinator case
-////////////////////////////////////////////////////////////////////////////////
-
-PathBasedIndex::PathBasedIndex(VPackSlice const& slice, bool allowPartialIndex)
-    : Index(slice),
-      _paths(),
-      _useExpansion(false),
-      _allowPartialIndex(allowPartialIndex) {
-  TRI_ASSERT(!_fields.empty());
 
   for (auto const& it : _fields) {
     if (TRI_AttributeNamesHaveExpansion(it)) {

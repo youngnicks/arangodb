@@ -65,26 +65,6 @@ static void ExtractWords(std::vector<std::string>& words,
 
 FulltextIndex::FulltextIndex(TRI_idx_iid_t iid,
                              arangodb::LogicalCollection* collection,
-                             std::string const& attribute, int minWordLength)
-    : Index(iid, collection,
-            std::vector<std::vector<arangodb::basics::AttributeName>>{
-                {arangodb::basics::AttributeName(attribute, false)}},
-            false, true),
-      _fulltextIndex(nullptr),
-      _minWordLength(minWordLength > 0 ? minWordLength : 1) {
-  TRI_ASSERT(iid != 0);
-
-  _attr = arangodb::basics::StringUtils::split(attribute, ".");
-
-  _fulltextIndex = TRI_CreateFtsIndex(2048, 1, 1);
-
-  if (_fulltextIndex == nullptr) {
-    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-  }
-}
-
-FulltextIndex::FulltextIndex(TRI_idx_iid_t iid,
-                             arangodb::LogicalCollection* collection,
                              VPackSlice const& info)
     : Index(iid, collection, info),
       _fulltextIndex(nullptr),

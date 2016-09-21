@@ -241,7 +241,6 @@ void AnyDirectionEdgeIndexIterator::reset() {
   _inbound->reset();
 }
 
-
 EdgeIndex::EdgeIndex(TRI_idx_iid_t iid, arangodb::LogicalCollection* collection)
     : Index(iid, collection,
             std::vector<std::vector<arangodb::basics::AttributeName>>(
@@ -250,7 +249,8 @@ EdgeIndex::EdgeIndex(TRI_idx_iid_t iid, arangodb::LogicalCollection* collection)
             false, false),
       _edgesFrom(nullptr),
       _edgesTo(nullptr),
-      _numBuckets(1) {
+      _numBuckets(1),
+      _extraMemory(0) {
   TRI_ASSERT(iid != 0);
 
   if (collection != nullptr) {
@@ -269,14 +269,6 @@ EdgeIndex::EdgeIndex(TRI_idx_iid_t iid, arangodb::LogicalCollection* collection)
       HashElementKey, HashElementEdge, IsEqualKeyEdge, IsEqualElementEdge,
       IsEqualElementEdgeByKey, _numBuckets, 64, context);
 }
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create an index stub with a hard-coded selectivity estimate
-/// this is used in the cluster coordinator case
-////////////////////////////////////////////////////////////////////////////////
-
-EdgeIndex::EdgeIndex(VPackSlice const& slice)
-    : Index(slice), _edgesFrom(nullptr), _edgesTo(nullptr), _numBuckets(1) {}
 
 EdgeIndex::~EdgeIndex() {
   auto cb = [this](IndexElement* element) -> bool { 
@@ -440,10 +432,9 @@ double EdgeIndex::selectivityEstimate() const {
 ////////////////////////////////////////////////////////////////////////////////
 
 size_t EdgeIndex::memory() const {
-  // TODO: add dynamic allocations here!!!
   TRI_ASSERT(_edgesFrom != nullptr);
   TRI_ASSERT(_edgesTo != nullptr);
-  return _edgesFrom->memoryUsage() + _edgesTo->memoryUsage();
+  return _edgesFrom->memoryUsage() + _edgesTo->memoryUsage() + _extraMemory;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -486,6 +477,9 @@ int EdgeIndex::insert(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
     return TRI_ERROR_OUT_OF_MEMORY;
   }
 
+  _extraMemory += fromElement->totalMemoryUsage(1);
+  _extraMemory += toElement->totalMemoryUsage(1);
+
   // transfer ownership
   fromElement.release();
   toElement.release();
@@ -505,6 +499,13 @@ int EdgeIndex::remove(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
   // will free the elements that were removed from the index...
   IndexElementGuard oldFrom(_edgesFrom->remove(trx, fromElement.get()), 1);
   IndexElementGuard oldTo(_edgesTo->remove(trx, toElement.get()), 1);
+  
+  if (oldFrom != nullptr) {
+    _extraMemory -= oldFrom->totalMemoryUsage(1);
+  }
+  if (oldTo != nullptr) {
+    _extraMemory -= oldTo->totalMemoryUsage(1);
+  }
 
   return TRI_ERROR_NO_ERROR;
 }
@@ -529,9 +530,10 @@ int EdgeIndex::batchInsert(arangodb::Transaction* trx,
   
   for (auto const& it : documents) {
     IndexElementGuard fromElement(buildFromElement(it.first, it.second), 1);
-    if (!fromElement) {
+    if (fromElement == nullptr) {
       return TRI_ERROR_OUT_OF_MEMORY;
     }
+    _extraMemory += fromElement->totalMemoryUsage(1);
     elements.emplace_back(fromElement.get());
     fromElement.release();
   }
@@ -551,6 +553,7 @@ int EdgeIndex::batchInsert(arangodb::Transaction* trx,
       // TODO: remove the elements that were inserted into _edgesFrom!
       return TRI_ERROR_OUT_OF_MEMORY;
     }
+    _extraMemory += toElement->totalMemoryUsage(1);
     elements.emplace_back(toElement.get());
     toElement.release();
   }
@@ -575,6 +578,8 @@ int EdgeIndex::unload() {
   };
   _edgesFrom->truncate(cb);
   _edgesTo->truncate(cb);
+
+  _extraMemory = 0;
 
   return TRI_ERROR_NO_ERROR;
 }

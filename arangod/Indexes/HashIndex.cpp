@@ -452,53 +452,6 @@ HashIndex::MultiArray::~MultiArray() {
   delete _isEqualElElByKey;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create the index
-////////////////////////////////////////////////////////////////////////////////
-
-HashIndex::HashIndex(
-    TRI_idx_iid_t iid, arangodb::LogicalCollection* collection,
-    std::vector<std::vector<arangodb::basics::AttributeName>> const& fields,
-    bool unique, bool sparse)
-    : PathBasedIndex(iid, collection, fields, unique, sparse, false),
-      _uniqueArray(nullptr) {
-  uint32_t indexBuckets = 1;
-
-  if (collection != nullptr) {
-    // document is a nullptr in the coordinator case
-    indexBuckets = collection->indexBuckets();
-  }
-
-  auto func = std::make_unique<HashElementFunc>(_paths.size());
-  auto compare = std::make_unique<IsEqualElementElementByKey>(_paths.size());
-
-  if (unique) {
-    auto array = std::make_unique<TRI_HashArray_t>(
-        HashKey, *(func.get()), IsEqualKeyElementHash, IsEqualElementElement,
-        *(compare.get()), indexBuckets,
-        []() -> std::string { return "unique hash-array"; });
-
-    _uniqueArray =
-        new HashIndex::UniqueArray(numPaths(), array.get(), func.get(), compare.get());
-    array.release();
-  } else {
-    _multiArray = nullptr;
-
-    auto array = std::make_unique<TRI_HashArrayMulti_t>(
-        HashKey, *(func.get()), IsEqualKeyElement, IsEqualElementElement,
-        *(compare.get()), indexBuckets, 64,
-        []() -> std::string { return "multi hash-array"; });
-
-    _multiArray =
-        new HashIndex::MultiArray(numPaths(), array.get(), func.get(), compare.get());
-
-    array.release();
-  }
-  compare.release();
-
-  func.release();
-}
-
 HashIndex::HashIndex(TRI_idx_iid_t iid, LogicalCollection* collection,
                      VPackSlice const& info)
     : PathBasedIndex(iid, collection, info, false), _uniqueArray(nullptr) {
@@ -541,14 +494,6 @@ HashIndex::HashIndex(TRI_idx_iid_t iid, LogicalCollection* collection,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief create an index stub with a hard-coded selectivity estimate
-/// this is used in the cluster coordinator case
-////////////////////////////////////////////////////////////////////////////////
-
-HashIndex::HashIndex(VPackSlice const& slice)
-    : PathBasedIndex(slice, false), _uniqueArray(nullptr) {}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief destroys the index
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -585,15 +530,16 @@ double HashIndex::selectivityEstimate() const {
 ////////////////////////////////////////////////////////////////////////////////
 
 size_t HashIndex::memory() const {
-  // TODO: add dynamic allocations here!!!
+  size_t base;
   if (_unique) {
-    return static_cast<size_t>(elementSize() *
+    base = static_cast<size_t>(elementSize() *
                                    _uniqueArray->_hashArray->size() +
                                _uniqueArray->_hashArray->memoryUsage());
-  }
-
-  return static_cast<size_t>(elementSize() * _multiArray->_hashArray->size() +
+  } else {
+    base = static_cast<size_t>(elementSize() * _multiArray->_hashArray->size() +
                              _multiArray->_hashArray->memoryUsage());
+  }
+  return base + _extraMemory;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -700,11 +646,43 @@ int HashIndex::insert(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
 
 int HashIndex::remove(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
                       VPackSlice const& doc, bool isRollback) {
-  if (_unique) {
-    return removeUnique(trx, revisionId, doc, isRollback);
+  size_t const np = numPaths();
+  std::vector<IndexElement*> elements;
+  int res = fillElement(elements, revisionId, doc);
+
+  if (res != TRI_ERROR_NO_ERROR) {
+    for (auto& hashElement : elements) {
+      hashElement->free(np);
+    }
+    return res;
   }
 
-  return removeMulti(trx, revisionId, doc, isRollback);
+  size_t extraMemory = 0;
+
+  for (auto& hashElement : elements) {
+    int result;
+    if (_unique) {
+      result = removeUniqueElement(trx, hashElement, isRollback);
+    } else {
+      result = removeMultiElement(trx, hashElement, isRollback);
+    }
+
+    // we may be looping through this multiple times, and if an error
+    // occurs, we want to keep it
+    if (result != TRI_ERROR_NO_ERROR) {
+      res = result;
+    }
+    extraMemory += hashElement->totalMemoryUsage(np);
+    hashElement->free(np);
+  }
+
+  if (res == TRI_ERROR_NO_ERROR && !isRollback) {
+    // on rollback, the _extraMemory value had not been increased
+    TRI_ASSERT(_extraMemory >= extraMemory);
+    _extraMemory -= extraMemory;
+  }
+
+  return res;
 }
 
 int HashIndex::batchInsert(arangodb::Transaction* trx,
@@ -724,6 +702,7 @@ int HashIndex::unload() {
   } else {
     _multiArray->_hashArray->truncate([&n](IndexElement* element) -> bool { element->free(n); return true; });
   }
+  _extraMemory = 0;
   return TRI_ERROR_NO_ERROR;
 }
 
@@ -786,13 +765,14 @@ int HashIndex::lookup(arangodb::Transaction* trx,
 
 int HashIndex::insertUnique(arangodb::Transaction* trx, TRI_voc_rid_t revisionId, 
                             VPackSlice const& doc, bool isRollback) {
+  size_t const np = numPaths();
   std::vector<IndexElement*> elements;
   int res = fillElement(elements, revisionId, doc);
 
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& it : elements) {
       // free all elements to prevent leak
-      it->free(numPaths());
+      it->free(np);
     }
 
     return res;
@@ -804,26 +784,33 @@ int HashIndex::insertUnique(arangodb::Transaction* trx, TRI_voc_rid_t revisionId
         return _uniqueArray->_hashArray->insert(trx, element);
       };
 
+  size_t extraMemory = 0;
   size_t const n = elements.size();
 
   for (size_t i = 0; i < n; ++i) {
     auto hashElement = elements[i];
+    extraMemory += hashElement->totalMemoryUsage(np);
     res = work(hashElement, isRollback);
 
     if (res != TRI_ERROR_NO_ERROR) {
       for (size_t j = i; j < n; ++j) {
         // Free all elements that are not yet in the index
-        elements[j]->free(numPaths());
+        elements[j]->free(np);
       }
       // Already indexed elements will be removed by the rollback
       break;
     }
+  }
+
+  if (res == TRI_ERROR_NO_ERROR) {
+    _extraMemory += extraMemory;
   }
   return res;
 }
 
 int HashIndex::batchInsertUnique(arangodb::Transaction* trx, 
      std::vector<std::pair<TRI_voc_rid_t, VPackSlice>> const& documents, size_t numThreads) {
+  size_t const np = numPaths();
   std::vector<IndexElement*> elements;
   elements.reserve(documents.size());
 
@@ -833,7 +820,7 @@ int HashIndex::batchInsertUnique(arangodb::Transaction* trx,
     if (res != TRI_ERROR_NO_ERROR) {
       for (auto& it : elements) {
         // free all elements to prevent leak
-        it->free(numPaths());
+        it->free(np);
       }
       return res;
     }
@@ -843,14 +830,21 @@ int HashIndex::batchInsertUnique(arangodb::Transaction* trx,
     // no elements left to insert
     return TRI_ERROR_NO_ERROR;
   }
+  
+  size_t extraMemory = 0;
+  for (auto const& element : elements) {
+    extraMemory += element->totalMemoryUsage(np);
+  }
 
   int res = _uniqueArray->_hashArray->batchInsert(trx, &elements, numThreads);
 
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& it : elements) {
       // free all elements to prevent leak
-      it->free(numPaths());
+      it->free(np);
     }
+  } else {
+    _extraMemory += extraMemory;
   }
 
   return res;
@@ -858,17 +852,18 @@ int HashIndex::batchInsertUnique(arangodb::Transaction* trx,
 
 int HashIndex::insertMulti(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
                            VPackSlice const& doc, bool isRollback) {
+  size_t const np = numPaths();
   std::vector<IndexElement*> elements;
   int res = fillElement(elements, revisionId, doc);
 
   if (res != TRI_ERROR_NO_ERROR) {
     for (auto& hashElement : elements) {
-      hashElement->free(numPaths());
+      hashElement->free(np);
     }
     return res;
   }
 
-  auto work = [this, trx](IndexElement*& element, bool) {
+  auto work = [this, trx, np](IndexElement*& element, bool) {
     TRI_IF_FAILURE("InsertHashIndex") {
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
     }
@@ -878,16 +873,16 @@ int HashIndex::insertMulti(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
 
     if (found != nullptr) {
       // already got the exact same index entry. now free our local element...
-      element->free(numPaths());
-      // we're not responsible for this element anymore
-      element = nullptr;
+      element->free(np);
     }
   };
 
+  size_t extraMemory = 0;
   size_t const n = elements.size();
 
   for (size_t i = 0; i < n; ++i) {
     auto hashElement = elements[i];
+    extraMemory += hashElement->totalMemoryUsage(np);
 
     try {
       work(hashElement, isRollback);
@@ -900,7 +895,7 @@ int HashIndex::insertMulti(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
     if (res != TRI_ERROR_NO_ERROR) {
       for (size_t j = i; j < n; ++j) {
         // Free all elements that are not yet in the index
-        elements[j]->free(numPaths());
+        elements[j]->free(np);
       }
       for (size_t j = 0; j < i; ++j) {
         // Remove all already indexed elements and free them
@@ -913,11 +908,14 @@ int HashIndex::insertMulti(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
     }
   }
 
+  _extraMemory += extraMemory;
+
   return TRI_ERROR_NO_ERROR;
 }
 
 int HashIndex::batchInsertMulti(arangodb::Transaction* trx, 
         std::vector<std::pair<TRI_voc_rid_t, VPackSlice>> const& documents, size_t numThreads) {
+  size_t const np = numPaths();
   std::vector<IndexElement*> elements;
   elements.reserve(documents.size());
 
@@ -928,7 +926,7 @@ int HashIndex::batchInsertMulti(arangodb::Transaction* trx,
       // Filling the elements failed for some reason. Assume loading as failed
       for (auto& el : elements) {
         // Free all elements that are not yet in the index
-        el->free(numPaths());
+        el->free(np);
       }
       return res;
     }
@@ -938,8 +936,19 @@ int HashIndex::batchInsertMulti(arangodb::Transaction* trx,
     // no elements left to insert
     return TRI_ERROR_NO_ERROR;
   }
+  
+  size_t extraMemory = 0;
+  for (auto const& element : elements) {
+    extraMemory += element->totalMemoryUsage(np);
+  }
 
-  return _multiArray->_hashArray->batchInsert(trx, &elements, numThreads);
+  int res = _multiArray->_hashArray->batchInsert(trx, &elements, numThreads);
+
+  if (res == TRI_ERROR_NO_ERROR) {
+    _extraMemory += extraMemory;
+  }
+
+  return res;
 }
 
 int HashIndex::removeUniqueElement(arangodb::Transaction* trx,
@@ -960,32 +969,6 @@ int HashIndex::removeUniqueElement(arangodb::Transaction* trx,
   return TRI_ERROR_NO_ERROR;
 }
 
-int HashIndex::removeUnique(arangodb::Transaction* trx,
-                            TRI_voc_rid_t revisionId, VPackSlice const& doc, bool isRollback) {
-  std::vector<IndexElement*> elements;
-  int res = fillElement(elements, revisionId, doc);
-
-  if (res != TRI_ERROR_NO_ERROR) {
-    for (auto& hashElement : elements) {
-      hashElement->free(numPaths());
-    }
-    return res;
-  }
-
-  for (auto& hashElement : elements) {
-    int result = removeUniqueElement(trx, hashElement, isRollback);
-
-    // we may be looping through this multiple times, and if an error
-    // occurs, we want to keep it
-    if (result != TRI_ERROR_NO_ERROR) {
-      res = result;
-    }
-    hashElement->free(numPaths());
-  }
-
-  return res;
-}
-
 int HashIndex::removeMultiElement(arangodb::Transaction* trx,
                                   IndexElement* element,
                                   bool isRollback) {
@@ -1002,33 +985,6 @@ int HashIndex::removeMultiElement(arangodb::Transaction* trx,
   old->free(numPaths());
 
   return TRI_ERROR_NO_ERROR;
-}
-
-int HashIndex::removeMulti(arangodb::Transaction* trx,
-                           TRI_voc_rid_t revisionId, VPackSlice const& doc, bool isRollback) {
-  std::vector<IndexElement*> elements;
-  int res = fillElement(elements, revisionId, doc);
-
-  if (res != TRI_ERROR_NO_ERROR) {
-    for (auto& hashElement : elements) {
-      hashElement->free(numPaths());
-    }
-    return res;
-  }
-
-  for (auto& hashElement : elements) {
-    int result = removeMultiElement(trx, hashElement, isRollback);
-
-    // we may be looping through this multiple times, and if an error
-    // occurs, we want to keep it
-    if (result != TRI_ERROR_NO_ERROR) {
-      res = result;
-    }
-
-    hashElement->free(numPaths());
-  }
-
-  return res;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

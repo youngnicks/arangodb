@@ -207,32 +207,11 @@ IndexElement* RocksDBIterator::next() {
 /// @brief create the index
 ////////////////////////////////////////////////////////////////////////////////
 
-RocksDBIndex::RocksDBIndex(
-    TRI_idx_iid_t iid, arangodb::LogicalCollection* collection,
-    std::vector<std::vector<arangodb::basics::AttributeName>> const& fields,
-    bool unique, bool sparse)
-    : PathBasedIndex(iid, collection, fields, unique, sparse, true),
-      _db(RocksDBFeature::instance()->db()) {
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create the index
-////////////////////////////////////////////////////////////////////////////////
-
 RocksDBIndex::RocksDBIndex(TRI_idx_iid_t iid,
                            arangodb::LogicalCollection* collection,
                            arangodb::velocypack::Slice const& info)
     : PathBasedIndex(iid, collection, info, true),
       _db(RocksDBFeature::instance()->db()) {}
-
-////////////////////////////////////////////////////////////////////////////////
-/// @brief create an index stub with a hard-coded selectivity estimate
-/// this is used in the cluster coordinator case
-////////////////////////////////////////////////////////////////////////////////
-
-RocksDBIndex::RocksDBIndex(VPackSlice const& slice)
-    : PathBasedIndex(slice, true),
-      _db(nullptr) {}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief destroy the index

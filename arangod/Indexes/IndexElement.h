@@ -41,11 +41,18 @@ class Slice;
 /// by the index element. If the last byte in data[] is 1, then 
 /// value.data contains the actual VelocyPack data in place.
 struct IndexElementValue {
+  friend struct IndexElement;
+
+ private:
   union {
     uint8_t data[16];
-    uint8_t* managed;
+    struct {
+      uint8_t* data;
+      uint32_t size;
+    } managed;
   } value;
   
+ public:
   /// @brief fill a IndexElementValue structure with a subvalue
   void fill(VPackSlice const value) {
     VPackValueLength len = value.byteSize();
@@ -58,7 +65,7 @@ struct IndexElementValue {
 
   void free() {
     if (isManaged()) {
-      delete[] value.managed;
+      delete[] value.managed.data;
     }
   }
   
@@ -70,13 +77,14 @@ struct IndexElementValue {
     if (isValue()) {
       return arangodb::velocypack::Slice(&value.data[0]);
     } 
-    return arangodb::velocypack::Slice(value.managed);
+    return arangodb::velocypack::Slice(value.managed.data);
   }
 
  private:
   void setManaged(uint8_t const* data, size_t length) {
-    value.managed = new uint8_t[length];
-    memcpy(value.managed, data, length);
+    value.managed.data = new uint8_t[length];
+    value.managed.size = static_cast<uint32_t>(length);
+    memcpy(value.managed.data, data, length);
     value.data[maxValueLength()] = 0; // type = offset
   }
     
@@ -85,6 +93,11 @@ struct IndexElementValue {
     TRI_ASSERT(length <= maxValueLength());
     memcpy(&value.data[0], data, length);
     value.data[maxValueLength()] = 1; // type = value
+  }
+
+  inline size_t managedSize() const noexcept {
+    TRI_ASSERT(isManaged());
+    return value.managed.size;
   }
   
   inline bool isManaged() const noexcept {
@@ -145,16 +158,28 @@ struct IndexElement {
 
   void free(size_t numSubs);
   
-  /// @brief memory usage of an index element
-  static constexpr size_t memoryUsage(size_t numSubs) {
+  /// @brief base memory usage of an index element
+  static constexpr size_t baseMemoryUsage(size_t numSubs) {
     return sizeof(TRI_voc_rid_t) + (sizeof(IndexElementValue) * numSubs);
+  }
+  
+  /// @brief total memory usage of an index element, including dynamic allocations
+  size_t totalMemoryUsage(size_t numSubs) {
+    size_t base = baseMemoryUsage(numSubs);
+    for (size_t i = 0; i < numSubs; ++i) {
+      IndexElementValue const* sub = subObject(i);
+      if (sub->isManaged()) {
+        base += sub->managedSize();
+      }
+    }
+    return base;
   }
 
  private:
   static IndexElement* create(TRI_voc_rid_t revisionId, size_t numSubs);
 
   inline IndexElementValue* subObject(size_t position) {
-    char* p = reinterpret_cast<char*>(this) + memoryUsage(position);
+    char* p = reinterpret_cast<char*>(this) + baseMemoryUsage(position);
     return reinterpret_cast<IndexElementValue*>(p);
   }
   
@@ -178,8 +203,11 @@ class IndexElementGuard {
   }
 
   operator bool() const { return _element != nullptr; }
-  
   bool operator==(nullptr_t) const { return _element == nullptr; }
+  bool operator!=(nullptr_t) const { return _element != nullptr; }
+
+  IndexElement* operator->() { return _element; }
+  IndexElement const* operator->() const { return _element; }
 
  private:
   IndexElement* _element;

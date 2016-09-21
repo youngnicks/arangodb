@@ -72,7 +72,7 @@ IndexElement* IndexElement::create(TRI_voc_rid_t revisionId, arangodb::velocypac
 }
 
 IndexElement* IndexElement::create(TRI_voc_rid_t revisionId, size_t numSubs) {
-  void* space = TRI_Allocate(TRI_UNKNOWN_MEM_ZONE, memoryUsage(numSubs), false);
+  void* space = TRI_Allocate(TRI_UNKNOWN_MEM_ZONE, baseMemoryUsage(numSubs), false);
 
   if (space == nullptr) {
     return nullptr;

@@ -155,14 +155,8 @@ class HashIndex final : public PathBasedIndex {
  public:
   HashIndex() = delete;
 
-  HashIndex(TRI_idx_iid_t, arangodb::LogicalCollection*,
-            std::vector<std::vector<arangodb::basics::AttributeName>> const&,
-            bool, bool);
-
   HashIndex(TRI_idx_iid_t, LogicalCollection*,
             arangodb::velocypack::Slice const&);
-
-  explicit HashIndex(VPackSlice const&);
 
   ~HashIndex();
 
@@ -243,11 +237,7 @@ class HashIndex final : public PathBasedIndex {
 
   int removeUniqueElement(arangodb::Transaction*, IndexElement*, bool);
 
-  int removeUnique(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback);
-
   int removeMultiElement(arangodb::Transaction*, IndexElement*, bool);
-
-  int removeMulti(arangodb::Transaction*, TRI_voc_rid_t, arangodb::velocypack::Slice const&, bool isRollback);
 
   bool accessFitsIndex(arangodb::aql::AstNode const* access,
                        arangodb::aql::AstNode const* other,

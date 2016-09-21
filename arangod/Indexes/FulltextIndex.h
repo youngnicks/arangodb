@@ -42,9 +42,6 @@ class FulltextIndex final : public Index {
  public:
   FulltextIndex() = delete;
 
-  FulltextIndex(TRI_idx_iid_t, arangodb::LogicalCollection*, std::string const&,
-                int);
-
   FulltextIndex(TRI_idx_iid_t, LogicalCollection*,
                 arangodb::velocypack::Slice const&);
 

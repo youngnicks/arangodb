@@ -851,9 +851,9 @@ static void CreateCollectionCoordinator(
       ArrayBuilder ab(&velocy, "indexes");
 
       // create a dummy primary index
-      arangodb::LogicalCollection* doc = nullptr;
+      arangodb::LogicalCollection* collection = nullptr;
       std::unique_ptr<arangodb::PrimaryIndex> primaryIndex(
-          new arangodb::PrimaryIndex(doc));
+          new arangodb::PrimaryIndex(collection));
 
       velocy.openObject();
       primaryIndex->toVelocyPack(velocy, false);

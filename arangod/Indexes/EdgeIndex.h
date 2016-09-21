@@ -111,8 +111,6 @@ class EdgeIndex final : public Index {
 
   EdgeIndex(TRI_idx_iid_t, arangodb::LogicalCollection*);
 
-  explicit EdgeIndex(VPackSlice const&);
-
   ~EdgeIndex();
 
   static void buildSearchValue(TRI_edge_direction_e, std::string const&,
@@ -211,10 +209,7 @@ class EdgeIndex final : public Index {
                                   bool) const override;
 
  private:
-  //////////////////////////////////////////////////////////////////////////////
   /// @brief create the iterator
-  //////////////////////////////////////////////////////////////////////////////
-
   IndexIterator* createEqIterator(
       arangodb::Transaction*, IndexIteratorContext*,
       arangodb::aql::AstNode const*,
@@ -225,33 +220,24 @@ class EdgeIndex final : public Index {
       arangodb::aql::AstNode const*,
       arangodb::aql::AstNode const*) const;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief add a single value node to the iterator's keys
-////////////////////////////////////////////////////////////////////////////////
-    
+  /// @brief add a single value node to the iterator's keys
   void handleValNode(VPackBuilder* keys, arangodb::aql::AstNode const* valNode) const;
 
   IndexElement* buildFromElement(TRI_voc_rid_t, arangodb::velocypack::Slice const& doc) const;
   IndexElement* buildToElement(TRI_voc_rid_t, arangodb::velocypack::Slice const& doc) const;
 
  private:
-  //////////////////////////////////////////////////////////////////////////////
   /// @brief the hash table for _from
-  //////////////////////////////////////////////////////////////////////////////
-
   TRI_EdgeIndexHash_t* _edgesFrom;
 
-  //////////////////////////////////////////////////////////////////////////////
   /// @brief the hash table for _to
-  //////////////////////////////////////////////////////////////////////////////
-
   TRI_EdgeIndexHash_t* _edgesTo;
 
-  //////////////////////////////////////////////////////////////////////////////
   /// @brief number of buckets effectively used by the index
-  //////////////////////////////////////////////////////////////////////////////
-
   size_t _numBuckets;
+
+  /// @brief amount of extra memory allocated by index elements
+  size_t _extraMemory;
 };
 }
 

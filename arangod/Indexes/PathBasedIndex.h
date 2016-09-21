@@ -60,15 +60,8 @@ class PathBasedIndex : public Index {
  public:
   PathBasedIndex() = delete;
 
-  PathBasedIndex(
-      TRI_idx_iid_t, arangodb::LogicalCollection*,
-      std::vector<std::vector<arangodb::basics::AttributeName>> const&,
-      bool unique, bool sparse, bool allowPartialIndex);
-
   PathBasedIndex(TRI_idx_iid_t, arangodb::LogicalCollection*,
-                 arangodb::velocypack::Slice const&, bool);
-
-  PathBasedIndex(VPackSlice const&, bool);
+                 arangodb::velocypack::Slice const&, bool allowPartialIndex);
 
   ~PathBasedIndex();
 
@@ -94,7 +87,7 @@ class PathBasedIndex : public Index {
   //////////////////////////////////////////////////////////////////////////////
 
   inline size_t elementSize() const {
-    return IndexElement::memoryUsage(_paths.size());
+    return IndexElement::baseMemoryUsage(_paths.size());
   }
 
  protected:
@@ -149,6 +142,9 @@ class PathBasedIndex : public Index {
   //////////////////////////////////////////////////////////////////////////////
 
   bool _allowPartialIndex;
+  
+  /// @brief amount of extra memory allocated by index elements
+  size_t _extraMemory;
 };
 }
 

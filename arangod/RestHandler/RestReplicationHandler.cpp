@@ -1732,9 +1732,9 @@ int RestReplicationHandler::processRestoreCollectionCoordinator(
 
   // create a dummy primary index
   {
-    arangodb::LogicalCollection* doc = nullptr;
+    arangodb::LogicalCollection* collection = nullptr;
     std::unique_ptr<arangodb::PrimaryIndex> primaryIndex(
-        new arangodb::PrimaryIndex(doc));
+        new arangodb::PrimaryIndex(collection));
     toMerge.openObject();
     primaryIndex->toVelocyPack(toMerge, false);
     toMerge.close();

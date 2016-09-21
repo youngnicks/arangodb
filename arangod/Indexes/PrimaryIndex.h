@@ -125,8 +125,6 @@ class PrimaryIndex final : public Index {
 
   explicit PrimaryIndex(arangodb::LogicalCollection*);
 
-  explicit PrimaryIndex(VPackSlice const&);
-
   ~PrimaryIndex();
 
  public:
@@ -265,6 +263,9 @@ class PrimaryIndex final : public Index {
  private:
   /// @brief the actual index
   PrimaryIndexImpl* _primaryIndex;
+
+  /// @brief amount of extra memory allocated by index elements
+  size_t _extraMemory;
 };
 }
 
