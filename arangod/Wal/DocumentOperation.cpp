@@ -146,7 +146,7 @@ void DocumentOperation::revert() {
     TRI_ASSERT(!_newRevision.empty());
     IndexElement* element = _collection->primaryIndex()->lookupKey(_trx, Transaction::extractKeyFromDocument(newDoc));
     if (element != nullptr) {
-      element->revisionId(oldRevisionId);
+      element->updateRevisionId(oldRevisionId);
     }
     
     // remove now obsolete new revision

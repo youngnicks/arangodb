@@ -129,7 +129,7 @@ int MMFilesCollection::OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* m
     f->setFid(fid, false); // when we're here, we're looking at a datafile
     f->setVPackFromMarker(marker);
 
-    found->revisionId(revisionId);
+    found->updateRevisionId(revisionId);
     c->removeRevision(oldRevisionId, false);
     c->insertRevision(revisionId, f);
 

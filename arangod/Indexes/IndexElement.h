@@ -25,7 +25,6 @@
 #define ARANGOD_INDEXES_INDEX_ELEMENT_H 1
 
 #include "Basics/Common.h"
-#include "Logger/Logger.h"
 #include "VocBase/vocbase.h"
 #include "VocBase/voc-types.h"
 
@@ -41,13 +40,13 @@ class Slice;
 /// if the last byte in data[] is 0, then the VelocyPack data is managed 
 /// by the index element. If the last byte in data[] is 1, then 
 /// value.data contains the actual VelocyPack data in place.
-struct TRI_vpack_sub_t {
+struct IndexElementValue {
   union {
     uint8_t data[16];
     uint8_t* managed;
   } value;
   
-  /// @brief fill a TRI_vpack_sub_t structure with a subvalue
+  /// @brief fill a IndexElementValue structure with a subvalue
   void fill(VPackSlice const value) {
     VPackValueLength len = value.byteSize();
     if (len <= maxValueLength()) {
@@ -101,7 +100,7 @@ struct TRI_vpack_sub_t {
   }
 };
 
-static_assert(sizeof(TRI_vpack_sub_t) == 16, "invalid size of TRI_vpack_sub_t");
+static_assert(sizeof(IndexElementValue) == 16, "invalid size of IndexElementValue");
 
 /// @brief Unified index element. Do not directly construct it.
 struct IndexElement {
@@ -116,13 +115,14 @@ struct IndexElement {
 
  public:
   /// @brief get the revision id of the document
-  TRI_voc_rid_t revisionId() const { return _revisionId; }
-  /// @brief set the revision id of the document
-  void revisionId(TRI_voc_rid_t revisionId);
+  inline TRI_voc_rid_t revisionId() const { return _revisionId; }
   
-  inline TRI_vpack_sub_t const* subObject(size_t position) const {
-    char const* p = reinterpret_cast<char const*>(this) + sizeof(TRI_voc_rid_t) + position * sizeof(TRI_vpack_sub_t);
-    return reinterpret_cast<TRI_vpack_sub_t const*>(p);
+  /// @brief set the revision id of the document
+  void updateRevisionId(TRI_voc_rid_t revisionId);
+  
+  inline IndexElementValue const* subObject(size_t position) const {
+    char const* p = reinterpret_cast<char const*>(this) + sizeof(TRI_voc_rid_t) + position * sizeof(IndexElementValue);
+    return reinterpret_cast<IndexElementValue const*>(p);
   }
   
   inline arangodb::velocypack::Slice slice(size_t position) const {
@@ -144,20 +144,20 @@ struct IndexElement {
   static IndexElement* create(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& value);
 
   void free(size_t numSubs);
-
+  
   /// @brief memory usage of an index element
   static constexpr size_t memoryUsage(size_t numSubs) {
-    return sizeof(TRI_voc_rid_t) + (sizeof(TRI_vpack_sub_t) * numSubs);
+    return sizeof(TRI_voc_rid_t) + (sizeof(IndexElementValue) * numSubs);
   }
 
  private:
   static IndexElement* create(TRI_voc_rid_t revisionId, size_t numSubs);
 
-  inline TRI_vpack_sub_t* subObject(size_t position) {
+  inline IndexElementValue* subObject(size_t position) {
     char* p = reinterpret_cast<char*>(this) + memoryUsage(position);
-    return reinterpret_cast<TRI_vpack_sub_t*>(p);
+    return reinterpret_cast<IndexElementValue*>(p);
   }
- 
+  
  private:
   TRI_voc_rid_t _revisionId;
 };

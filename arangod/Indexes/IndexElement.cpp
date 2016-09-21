@@ -72,7 +72,6 @@ IndexElement* IndexElement::create(TRI_voc_rid_t revisionId, arangodb::velocypac
 }
 
 IndexElement* IndexElement::create(TRI_voc_rid_t revisionId, size_t numSubs) {
-  //LOG(ERR) << "CREATING INDEX ELEMENT WITH REVISION " << revisionId;
   void* space = TRI_Allocate(TRI_UNKNOWN_MEM_ZONE, memoryUsage(numSubs), false);
 
   if (space == nullptr) {
@@ -84,14 +83,12 @@ IndexElement* IndexElement::create(TRI_voc_rid_t revisionId, size_t numSubs) {
 }
 
 void IndexElement::free(size_t numSubs) {
-  //LOG(ERR) << "FREEING INDEX ELEMENT WITH REVISION " << _revisionId;
   for (size_t i = 0; i < numSubs; ++i) {
     subObject(i)->free();
   }
   TRI_Free(TRI_UNKNOWN_MEM_ZONE, this);
 }
    
-void IndexElement::revisionId(TRI_voc_rid_t revisionId) { 
-  //LOG(ERR) << "PATCHING REVISION FROM " << _revisionId << " TO " << revisionId;
+void IndexElement::updateRevisionId(TRI_voc_rid_t revisionId) { 
   _revisionId = revisionId; 
 }

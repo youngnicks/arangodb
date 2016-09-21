@@ -2833,7 +2833,7 @@ int LogicalCollection::updateDocument(
   }
  
   // update the index element (primary index only - other index have been adjusted) 
-  element->revisionId(newRevisionId);
+  element->updateRevisionId(newRevisionId);
   
   operation.indexed();
 
