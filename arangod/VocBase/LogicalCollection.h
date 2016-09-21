@@ -26,7 +26,6 @@
 
 #include "Basics/Common.h"
 #include "VocBase/MasterPointers.h"
-#include "VocBase/ManagedDocumentResult.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/voc-types.h"
 #include "VocBase/vocbase.h"
@@ -58,6 +57,7 @@ class Ditches;
 class FollowerInfo;
 class Index;
 class KeyGenerator;
+class ManagedDocumentResult;
 struct OperationOptions;
 class PhysicalCollection;
 class PrimaryIndex;
@@ -312,16 +312,16 @@ class LogicalCollection {
 
   // SECTION: Index access (local only)
   
-  int read(arangodb::Transaction*, std::string const&, TRI_doc_mptr_t*, bool);
-  int read(arangodb::Transaction*, arangodb::StringRef const&, TRI_doc_mptr_t*, bool);
+  int read(arangodb::Transaction*, std::string const&, ManagedDocumentResult& result, bool);
+  int read(arangodb::Transaction*, arangodb::StringRef const&, ManagedDocumentResult& result, bool);
   int insert(arangodb::Transaction*, arangodb::velocypack::Slice const,
              ManagedDocumentResult& result, arangodb::OperationOptions&, TRI_voc_tick_t&, bool);
   int update(arangodb::Transaction*, arangodb::velocypack::Slice const,
-             TRI_doc_mptr_t*, arangodb::OperationOptions&, TRI_voc_tick_t&, bool,
-             TRI_voc_rid_t& prevRev, TRI_doc_mptr_t&);
+             ManagedDocumentResult& result, arangodb::OperationOptions&, TRI_voc_tick_t&, bool,
+             TRI_voc_rid_t& prevRev, ManagedDocumentResult& previous);
   int replace(arangodb::Transaction*, arangodb::velocypack::Slice const,
-             TRI_doc_mptr_t*, arangodb::OperationOptions&, TRI_voc_tick_t&, bool,
-             TRI_voc_rid_t& prevRev, TRI_doc_mptr_t&);
+             ManagedDocumentResult& result, arangodb::OperationOptions&, TRI_voc_tick_t&, bool,
+             TRI_voc_rid_t& prevRev, ManagedDocumentResult& previous);
   int remove(arangodb::Transaction*, arangodb::velocypack::Slice const,
              arangodb::OperationOptions&, TRI_voc_tick_t&, bool, 
              TRI_voc_rid_t& prevRev, ManagedDocumentResult& previous);
@@ -370,14 +370,8 @@ class LogicalCollection {
 
   // SECTION: Index access (local only)
   int lookupDocument(arangodb::Transaction*, VPackSlice const,
-                     TRI_doc_mptr_t const*&);
-  
-  int lookupDocument(arangodb::Transaction*, VPackSlice const,
                      ManagedDocumentResult& result);
 
-  int checkRevision(arangodb::Transaction*, arangodb::velocypack::Slice const,
-                    arangodb::velocypack::Slice const);
-  
   int checkRevision(arangodb::Transaction*, TRI_voc_rid_t expected, TRI_voc_rid_t found);
 
   int updateDocument(arangodb::Transaction*, 

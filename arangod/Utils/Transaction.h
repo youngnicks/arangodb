@@ -55,6 +55,7 @@ class Builder;
 }
 
 class Index;
+class ManagedDocumentResult;
 
 namespace aql {
 class Ast;
@@ -474,7 +475,7 @@ class Transaction {
   
   int documentFastPathLocal(std::string const& collectionName,
                             std::string const& key,
-                            TRI_doc_mptr_t* result);
+                            ManagedDocumentResult& result);
  
   //////////////////////////////////////////////////////////////////////////////
   /// @brief return one or multiple documents from a collection

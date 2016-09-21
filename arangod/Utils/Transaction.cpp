@@ -1435,9 +1435,8 @@ int Transaction::documentFastPath(std::string const& collectionName,
     return TRI_ERROR_ARANGO_DOCUMENT_HANDLE_BAD;
   }
 
-  TRI_doc_mptr_t mptr;
-  int res = collection->read(
-      this, key, &mptr,
+  ManagedDocumentResult doc;
+  int res = collection->read(this, key, doc,
       shouldLock && !isLocked(collection, TRI_TRANSACTION_READ));
 
   if (res != TRI_ERROR_NO_ERROR) {
@@ -1446,8 +1445,9 @@ int Transaction::documentFastPath(std::string const& collectionName,
   
   TRI_ASSERT(hasDitch(cid));
 
-  TRI_ASSERT(mptr.vpack() != nullptr);
-  result.addExternal(mptr.vpack());
+  uint8_t const* vpack = doc.vpack();
+  TRI_ASSERT(vpack != nullptr);
+  result.addExternal(vpack);
   return TRI_ERROR_NO_ERROR;
 }
 
@@ -1462,7 +1462,7 @@ int Transaction::documentFastPath(std::string const& collectionName,
 
 int Transaction::documentFastPathLocal(std::string const& collectionName,
                                        std::string const& key,
-                                       TRI_doc_mptr_t* result) {
+                                       ManagedDocumentResult& result) {
   TRI_ASSERT(getStatus() == TRI_TRANSACTION_RUNNING);
 
   TRI_voc_cid_t cid = addCollectionAtRuntime(collectionName);
@@ -1474,8 +1474,7 @@ int Transaction::documentFastPathLocal(std::string const& collectionName,
     return TRI_ERROR_ARANGO_DOCUMENT_HANDLE_BAD;
   }
 
-  int res = collection->read(this, key, result,
-                             !isLocked(collection, TRI_TRANSACTION_READ));
+  int res = collection->read(this, key, result, !isLocked(collection, TRI_TRANSACTION_READ));
 
   if (res != TRI_ERROR_NO_ERROR) {
     return res;
@@ -1575,9 +1574,9 @@ OperationResult Transaction::documentLocal(std::string const& collectionName,
     
     TIMER_STOP(TRANSACTION_DOCUMENT_EXTRACT);
 
-    TRI_doc_mptr_t mptr;
+    ManagedDocumentResult result;
     TIMER_START(TRANSACTION_DOCUMENT_DOCUMENT_DOCUMENT);
-    int res = collection->read(this, key, &mptr,
+    int res = collection->read(this, key, result,
                                !isLocked(collection, TRI_TRANSACTION_READ));
     TIMER_STOP(TRANSACTION_DOCUMENT_DOCUMENT_DOCUMENT);
 
@@ -1586,10 +1585,11 @@ OperationResult Transaction::documentLocal(std::string const& collectionName,
     }
   
     TRI_ASSERT(hasDitch(cid));
+
+    uint8_t const* vpack = result.vpack();
   
-    TRI_ASSERT(mptr.vpack() != nullptr);
     if (expectedRevision != 0) {
-      TRI_voc_rid_t foundRevision = mptr.revisionId();
+      TRI_voc_rid_t foundRevision = Transaction::extractRevFromDocument(VPackSlice(vpack));
       if (expectedRevision != foundRevision) {
         if (!isMultiple) {
           // still return
@@ -1601,7 +1601,7 @@ OperationResult Transaction::documentLocal(std::string const& collectionName,
     }
   
     if (!options.silent) {
-      resultBuilder.addExternal(mptr.vpack());
+      resultBuilder.addExternal(vpack);
     } else if (isMultiple) {
       resultBuilder.add(VPackSlice::nullSlice());
     }
@@ -2088,17 +2088,17 @@ OperationResult Transaction::modifyLocal(
     if (!newVal.isObject()) {
       return TRI_ERROR_ARANGO_DOCUMENT_TYPE_INVALID;
     }
-    TRI_doc_mptr_t mptr;
+    ManagedDocumentResult result;
     TRI_voc_rid_t actualRevision = 0;
-    TRI_doc_mptr_t previous;
+    ManagedDocumentResult previous;
     TRI_voc_tick_t resultMarkerTick = 0;
 
     if (operation == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
-      res = collection->replace(this, newVal, &mptr, options, resultMarkerTick, 
+      res = collection->replace(this, newVal, result, options, resultMarkerTick, 
           !isLocked(collection, TRI_TRANSACTION_WRITE), actualRevision,
           previous);
     } else {
-      res = collection->update(this, newVal, &mptr, options, resultMarkerTick,
+      res = collection->update(this, newVal, result, options, resultMarkerTick,
           !isLocked(collection, TRI_TRANSACTION_WRITE), actualRevision,
           previous);
     }
@@ -2119,14 +2119,15 @@ OperationResult Transaction::modifyLocal(
       return res;
     }
 
-    TRI_ASSERT(mptr.vpack() != nullptr);
+    uint8_t const* vpack = result.vpack();
+    TRI_ASSERT(vpack != nullptr);
 
     if (!options.silent || doingSynchronousReplication) {
       StringRef key(newVal.get(StaticStrings::KeyString));
       buildDocumentIdentity(collection, resultBuilder, cid, key, 
-          mptr.revisionId(), actualRevision, 
+          TRI_ExtractRevisionId(VPackSlice(vpack)), actualRevision, 
           options.returnOld ? previous.vpack() : nullptr , 
-          options.returnNew ? mptr.vpack() : nullptr);
+          options.returnNew ? vpack : nullptr);
     }
     return TRI_ERROR_NO_ERROR;
   };

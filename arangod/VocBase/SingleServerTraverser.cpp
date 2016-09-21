@@ -25,6 +25,7 @@
 #include "Basics/StringRef.h"
 #include "Utils/Transaction.h"
 #include "VocBase/LogicalCollection.h"
+#include "VocBase/ManagedDocumentResult.h"
 #include "VocBase/MasterPointer.h"
 
 using namespace arangodb;
@@ -39,7 +40,7 @@ using namespace arangodb::traverser;
 
 static int FetchDocumentById(arangodb::Transaction* trx,
                              StringRef const& id,
-                             TRI_doc_mptr_t* mptr) {
+                             ManagedDocumentResult& result) {
   size_t pos = id.find('/');
   if (pos == std::string::npos) {
     TRI_ASSERT(false);
@@ -47,7 +48,7 @@ static int FetchDocumentById(arangodb::Transaction* trx,
   }
 
   int res = trx->documentFastPathLocal(id.substr(0, pos).toString(),
-                                       id.substr(pos + 1).toString(), mptr);
+                                       id.substr(pos + 1).toString(), result);
 
   if (res != TRI_ERROR_NO_ERROR && res != TRI_ERROR_ARANGO_DOCUMENT_NOT_FOUND) {
     THROW_ARANGO_EXCEPTION(res);
@@ -154,15 +155,15 @@ aql::AqlValue SingleServerTraverser::fetchVertexData(VPackSlice id) {
   auto it = _vertices.find(id);
 
   if (it == _vertices.end()) {
-    TRI_doc_mptr_t mptr;
+    ManagedDocumentResult doc;
     StringRef ref(id);
-    int res = FetchDocumentById(_trx, ref, &mptr);
+    int res = FetchDocumentById(_trx, ref, doc);
     ++_readDocuments;
     if (res != TRI_ERROR_NO_ERROR) {
       return aql::AqlValue(basics::VelocyPackHelper::NullValue());
     }
 
-    uint8_t const* p = mptr.vpack();
+    uint8_t const* p = doc.vpack();
     _vertices.emplace(id, p);
     return aql::AqlValue(p, aql::AqlValueFromMasterPointer());
   }
@@ -180,14 +181,14 @@ void SingleServerTraverser::addVertexToVelocyPack(VPackSlice id,
   auto it = _vertices.find(id);
 
   if (it == _vertices.end()) {
-    TRI_doc_mptr_t mptr;
+    ManagedDocumentResult doc;
     StringRef ref(id);
-    int res = FetchDocumentById(_trx, ref, &mptr);
+    int res = FetchDocumentById(_trx, ref, doc);
     ++_readDocuments;
     if (res != TRI_ERROR_NO_ERROR) {
       result.add(basics::VelocyPackHelper::NullValue());
     } else {
-      uint8_t const* p = mptr.vpack();
+      uint8_t const* p = doc.vpack();
       _vertices.emplace(id, p);
       result.addExternal(p);
     }

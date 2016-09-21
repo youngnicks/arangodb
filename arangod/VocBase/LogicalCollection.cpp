@@ -1717,15 +1717,12 @@ int LogicalCollection::cleanupIndexes() {
 
 /// @brief reads an element from the document collection
 int LogicalCollection::read(Transaction* trx, std::string const& key,
-                            TRI_doc_mptr_t* mptr, bool lock) {
-  return read(trx, StringRef(key.c_str(), key.size()), mptr, lock);
+                            ManagedDocumentResult& result, bool lock) {
+  return read(trx, StringRef(key.c_str(), key.size()), result, lock);
 }
 
 int LogicalCollection::read(Transaction* trx, StringRef const& key,
-                            TRI_doc_mptr_t* mptr, bool lock) {
-  TRI_ASSERT(mptr != nullptr);
-  mptr->setVPack(nullptr);  
-
+                            ManagedDocumentResult& result, bool lock) {
   TransactionBuilderLeaser builder(trx);
   builder->add(VPackValuePair(key.data(), key.size(), VPackValueType::String));
   VPackSlice slice = builder->slice();
@@ -1742,19 +1739,13 @@ int LogicalCollection::read(Transaction* trx, StringRef const& key,
   bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
   CollectionReadLocker collectionLocker(this, useDeadlockDetector, lock);
 
-  TRI_doc_mptr_t const* header = nullptr;
-  int res = lookupDocument(trx, slice, header);
+  int res = lookupDocument(trx, slice, result);
 
   if (res != TRI_ERROR_NO_ERROR) {
     return res;
   }
 
-  TRI_ASSERT(header != nullptr);
-
-  // we found a document, now copy it over
-  *mptr = *header;
-  TRI_ASSERT(mptr->vpack() != nullptr);
-
+  // we found a document
   return TRI_ERROR_NO_ERROR;
 }
 
@@ -1823,49 +1814,45 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
   }
 
   // now insert into indexes
-  {
-    TRI_IF_FAILURE("InsertDocumentNoLock") {
-      // test what happens if no lock can be acquired
-      return TRI_ERROR_DEBUG;
-    }
+  TRI_IF_FAILURE("InsertDocumentNoLock") {
+    // test what happens if no lock can be acquired
+    return TRI_ERROR_DEBUG;
+  }
 
-    arangodb::wal::DocumentOperation operation(
-        trx, this, TRI_VOC_DOCUMENT_OPERATION_INSERT);
+  arangodb::wal::DocumentOperation operation(
+      trx, this, TRI_VOC_DOCUMENT_OPERATION_INSERT);
 
-    TRI_IF_FAILURE("InsertDocumentNoHeader") {
-      // test what happens if no header can be acquired
-      return TRI_ERROR_DEBUG;
-    }
+  TRI_IF_FAILURE("InsertDocumentNoHeader") {
+    // test what happens if no header can be acquired
+    return TRI_ERROR_DEBUG;
+  }
 
-    TRI_IF_FAILURE("InsertDocumentNoHeaderExcept") {
-      // test what happens if no header can be acquired
-      THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
-    }
-    
-    bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
-    arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
+  TRI_IF_FAILURE("InsertDocumentNoHeaderExcept") {
+    // test what happens if no header can be acquired
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
+  }
+  
+  bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
+  arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
 
-    TRI_voc_rid_t revisionId = Transaction::extractRevFromDocument(newSlice); 
-    VPackSlice doc(reinterpret_cast<uint8_t const*>(marker->vpack()));
+  TRI_voc_rid_t revisionId = Transaction::extractRevFromDocument(newSlice); 
+  VPackSlice doc(reinterpret_cast<uint8_t const*>(marker->vpack()));
 
-    operation.setRevisions(DocumentDescriptor(), DocumentDescriptor(revisionId, doc.begin()));
-    
-    // create a new header
-    getPhysical()->insertRevision(revisionId, doc);
+  operation.setRevisions(DocumentDescriptor(), DocumentDescriptor(revisionId, doc.begin()));
+  
+  // create a new header
+  getPhysical()->insertRevision(revisionId, doc);
 
-    // insert into indexes
-    res = insertDocument(trx, revisionId, doc, operation, marker, options.waitForSync);
+  // insert into indexes
+  res = insertDocument(trx, revisionId, doc, operation, marker, options.waitForSync);
 
-    if (res != TRI_ERROR_NO_ERROR) {
-      operation.revert();
-    } else {
-      readRevision(revisionId, result);
-      //*mptr = *header;
-      //TRI_ASSERT(mptr->vpack() != nullptr);  
+  if (res != TRI_ERROR_NO_ERROR) {
+    operation.revert();
+  } else {
+    readRevision(revisionId, result);
 
-      // store the tick that was used for writing the document        
-      resultMarkerTick = operation.tick();
-    }
+    // store the tick that was used for writing the document        
+    resultMarkerTick = operation.tick();
   }
   
   return res;
@@ -1873,18 +1860,15 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
 
 /// @brief updates a document or edge in a collection
 int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
-                              TRI_doc_mptr_t* mptr, OperationOptions& options,
+                              ManagedDocumentResult& result, OperationOptions& options,
                               TRI_voc_tick_t& resultMarkerTick, bool lock,
-                              TRI_voc_rid_t& prevRev, TRI_doc_mptr_t& previous) {
+                              TRI_voc_rid_t& prevRev, ManagedDocumentResult& previous) {
   resultMarkerTick = 0;
 
   if (!newSlice.isObject()) {
     return TRI_ERROR_ARANGO_DOCUMENT_TYPE_INVALID;
   }
  
-  // initialize the result
-  TRI_ASSERT(mptr != nullptr);
-  mptr->setVPack(nullptr);
   prevRev = 0;
 
   TRI_voc_rid_t revisionId = 0;
@@ -1917,14 +1901,17 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
   bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
   arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
   
-  // get the header pointer of the previous revision
-  TRI_doc_mptr_t const* oldHeader = nullptr;
-  int res = lookupDocument(trx, key, oldHeader);
+  // get the previous revision
+  int res = lookupDocument(trx, key, previous);
+
   if (res != TRI_ERROR_NO_ERROR) {
     return res;
   }
   
-  TRI_ASSERT(oldHeader != nullptr);
+  uint8_t const* vpack = previous.vpack();
+  VPackSlice oldDoc(vpack);
+  TRI_voc_rid_t oldRevisionId = Transaction::extractRevFromDocument(oldDoc);
+  prevRev = oldRevisionId;
 
   TRI_IF_FAILURE("UpdateDocumentNoMarker") {
     // test what happens when no marker can be created
@@ -1935,9 +1922,6 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
     // test what happens when no marker can be created
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
-
-  prevRev = oldHeader->revisionId();
-  previous = *oldHeader;
 
   // Check old revision:
   if (!options.ignoreRevs) {
@@ -1953,12 +1937,9 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
 
   if (newSlice.length() <= 1) {
     // no need to do anything
-    *mptr = *oldHeader;
+    result = previous;
     return TRI_ERROR_NO_ERROR;
   }
-
-  TRI_voc_rid_t oldRevisionId = oldHeader->revisionId();
-  VPackSlice oldDoc(oldHeader->vpack());
 
   // merge old and new values 
   TransactionBuilderLeaser builder(trx);
@@ -1996,7 +1977,7 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
   arangodb::wal::DocumentOperation operation(
       trx, this, TRI_VOC_DOCUMENT_OPERATION_UPDATE);
   
-  TRI_doc_mptr_t* header = getPhysical()->insertRevision(revisionId, newDoc);
+  getPhysical()->insertRevision(revisionId, newDoc);
   operation.setRevisions(DocumentDescriptor(oldRevisionId, oldDoc.begin()), DocumentDescriptor(revisionId, newDoc.begin()));
 
   try {
@@ -2010,9 +1991,8 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
   if (res != TRI_ERROR_NO_ERROR) {
     operation.revert();
   } else {
-    // write new header into result
-    *mptr = *header;
-    TRI_ASSERT(mptr->vpack() != nullptr); 
+    readRevision(revisionId, result);
+
     if (options.waitForSync) {
       // store the tick that was used for writing the new document        
       resultMarkerTick = operation.tick();
@@ -2024,9 +2004,9 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
 
 /// @brief replaces a document or edge in a collection
 int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
-                               TRI_doc_mptr_t* mptr, OperationOptions& options,
+                               ManagedDocumentResult& result, OperationOptions& options,
                                TRI_voc_tick_t& resultMarkerTick, bool lock,
-                               TRI_voc_rid_t& prevRev, TRI_doc_mptr_t& previous) {
+                               TRI_voc_rid_t& prevRev, ManagedDocumentResult& previous) {
   resultMarkerTick = 0;
 
   if (!newSlice.isObject()) {
@@ -2049,10 +2029,6 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
       return TRI_ERROR_ARANGO_INVALID_EDGE_ATTRIBUTE;
     }
   }
-
-  // initialize the result
-  TRI_ASSERT(mptr != nullptr);
-  mptr->setVPack(nullptr);
 
   TRI_voc_rid_t revisionId = 0;
   if (options.isRestore) {
@@ -2077,19 +2053,19 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
   bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
   arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
   
-  // get the header pointer of the previous revision
-  TRI_doc_mptr_t const* oldHeader = nullptr;
+  // get the previous revision
   VPackSlice key = newSlice.get(StaticStrings::KeyString);
   if (key.isNone()) {
     return TRI_ERROR_ARANGO_DOCUMENT_HANDLE_BAD;
   }
-  int res = lookupDocument(trx, key, oldHeader);
+
+  // get the previous revision
+  int res = lookupDocument(trx, key, previous);
+
   if (res != TRI_ERROR_NO_ERROR) {
     return res;
   }
   
-  TRI_ASSERT(oldHeader != nullptr);
-
   TRI_IF_FAILURE("ReplaceDocumentNoMarker") {
     // test what happens when no marker can be created
     return TRI_ERROR_DEBUG;
@@ -2100,8 +2076,10 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
 
-  prevRev = oldHeader->revisionId();
-  previous = *oldHeader;
+  uint8_t const* vpack = previous.vpack();
+  VPackSlice oldDoc(vpack);
+  TRI_voc_rid_t oldRevisionId = Transaction::extractRevFromDocument(oldDoc);
+  prevRev = oldRevisionId;
 
   // Check old revision:
   if (!options.ignoreRevs) {
@@ -2118,8 +2096,7 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
   // merge old and new values 
   TransactionBuilderLeaser builder(trx);
   newObjectForReplace(
-      trx, VPackSlice(oldHeader->vpack()),
-      newSlice, fromSlice, toSlice, isEdgeCollection,
+      trx, oldDoc, newSlice, fromSlice, toSlice, isEdgeCollection,
       TRI_RidToString(revisionId), *builder.get());
 
   if (ServerState::isDBServer(trx->serverRole())) {
@@ -2127,7 +2104,7 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
     if (arangodb::shardKeysChanged(
             _vocbase->name(),
             trx->resolver()->getCollectionNameCluster(_planId),
-            VPackSlice(oldHeader->vpack()), builder->slice(), false)) {
+            oldDoc, builder->slice(), false)) {
       return TRI_ERROR_CLUSTER_MUST_NOT_CHANGE_SHARDING_ATTRIBUTES;
     }
   }
@@ -2142,13 +2119,11 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
     marker = options.recoveryMarker;
   }
 
-  TRI_voc_rid_t oldRevisionId = oldHeader->revisionId();
-  VPackSlice oldDoc(oldHeader->vpack());
   VPackSlice const newDoc(reinterpret_cast<uint8_t const*>(marker->vpack()));
-
+  
   arangodb::wal::DocumentOperation operation(trx, this, TRI_VOC_DOCUMENT_OPERATION_REPLACE);
   
-  TRI_doc_mptr_t* header = getPhysical()->insertRevision(revisionId, newDoc);
+  getPhysical()->insertRevision(revisionId, newDoc);
   operation.setRevisions(DocumentDescriptor(oldRevisionId, oldDoc.begin()), DocumentDescriptor(revisionId, newDoc.begin()));
 
   try {
@@ -2162,8 +2137,8 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
   if (res != TRI_ERROR_NO_ERROR) {
     operation.revert();
   } else {
-    *mptr = *header;
-    TRI_ASSERT(mptr->vpack() != nullptr); 
+    readRevision(revisionId, result);
+    
     if (options.waitForSync) {
       // store the tick that was used for writing the document        
       resultMarkerTick = operation.tick();
@@ -2790,32 +2765,6 @@ int LogicalCollection::beginWriteTimed(bool useDeadlockDetector, uint64_t timeou
 /// the key must be a string slice, no revision check is performed
 int LogicalCollection::lookupDocument(
     arangodb::Transaction* trx, VPackSlice const key,
-    TRI_doc_mptr_t const*& header) {
-  
-  header = nullptr;
-  
-  if (!key.isString()) {
-    return TRI_ERROR_ARANGO_DOCUMENT_KEY_BAD;
-  }
-
-  IndexElement* element = primaryIndex()->lookupKey(trx, key);
-  if (element != nullptr) {
-    TRI_voc_rid_t revisionId = element->revisionId();
-    header = getPhysical()->lookupRevisionMptr(revisionId);
-  }
-
-  if (header == nullptr) {
-    return TRI_ERROR_ARANGO_DOCUMENT_NOT_FOUND;
-  }
-
-  return TRI_ERROR_NO_ERROR;
-}
-
-/// @brief looks up a document by key, low level worker
-/// the caller must make sure the read lock on the collection is held
-/// the key must be a string slice, no revision check is performed
-int LogicalCollection::lookupDocument(
-    arangodb::Transaction* trx, VPackSlice const key,
     ManagedDocumentResult& result) {
  
   result.clear(); 
@@ -2831,16 +2780,6 @@ int LogicalCollection::lookupDocument(
   }
 
   return TRI_ERROR_ARANGO_DOCUMENT_NOT_FOUND;
-}
-
-/// @brief checks the revision of a document
-int LogicalCollection::checkRevision(Transaction* trx,
-                                     VPackSlice const expected,
-                                     VPackSlice const found) {
-  if (!expected.isNone() && found != expected) {
-    return TRI_ERROR_ARANGO_CONFLICT;
-  }
-  return TRI_ERROR_NO_ERROR;
 }
 
 /// @brief checks the revision of a document

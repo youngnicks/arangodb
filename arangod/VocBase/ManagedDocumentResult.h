@@ -32,6 +32,22 @@ namespace arangodb {
 class ManagedDocumentResult {
  public:
   ManagedDocumentResult() : _vpack(nullptr) {}
+  ManagedDocumentResult(ManagedDocumentResult const& other) : _vpack(other._vpack) {}
+  ManagedDocumentResult& operator=(ManagedDocumentResult const& other) {
+    _vpack = other._vpack;
+    return *this;
+  }
+  
+  ManagedDocumentResult(ManagedDocumentResult&& other) : _vpack(other._vpack) {
+    other.clear();
+  }
+
+  ManagedDocumentResult& operator=(ManagedDocumentResult&& other) {
+    _vpack = other._vpack;
+    other.clear();
+    return *this;
+  }
+
   ~ManagedDocumentResult() {}
 
   inline uint8_t const* vpack() const { 
