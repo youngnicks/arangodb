@@ -66,8 +66,6 @@ ClusterFeature::ClusterFeature(application_features::ApplicationServer* server)
 }
 
 ClusterFeature::~ClusterFeature() {
-  delete _heartbeatThread;
-
   if (_enableCluster) {
     AgencyComm::cleanup();
   }
@@ -411,7 +409,7 @@ void ClusterFeature::start() {
     }
 
     // start heartbeat thread
-    _heartbeatThread = new HeartbeatThread(
+    _heartbeatThread = std::make_shared<HeartbeatThread>(
         _agencyCallbackRegistry.get(), _heartbeatInterval * 1000, 5,
         SchedulerFeature::SCHEDULER->ioService());
 

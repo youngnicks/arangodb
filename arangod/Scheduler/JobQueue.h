@@ -51,20 +51,20 @@ class JobQueue {
 
   int64_t queueSize(size_t i) { return _queuesSize[i]; }
 
-  bool queue(size_t i, Job* job) {
+  bool queue(size_t i, std::unique_ptr<Job> job) {
     if (i >= SYSTEM_QUEUE_SIZE) {
       return false;
     }
 
     try {
-      if (!_queues[i]->push(job)) {
+      if (!_queues[i]->push(job.get())) {
         throw "failed to add to queue";
       }
 
+      job.release();
       ++_queuesSize[i];
     } catch (...) {
       wakeup();
-      delete job;
       return false;
     }
 

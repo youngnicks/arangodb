@@ -49,7 +49,8 @@ struct AgencyVersions {
 
 class AgencyCallbackRegistry;
 
-class HeartbeatThread : public Thread {
+class HeartbeatThread : public Thread,
+                        public std::enable_shared_from_this<HeartbeatThread> {
  public:
   HeartbeatThread(AgencyCallbackRegistry*, uint64_t interval,
                   uint64_t maxFailsBeforeWarning, boost::asio::io_service*);

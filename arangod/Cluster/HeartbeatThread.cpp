@@ -684,7 +684,8 @@ bool HeartbeatThread::syncDBServerStatusQuo() {
     LOG_TOPIC(TRACE, Logger::HEARTBEAT) << "dispatching sync";
 
     // schedule a job for the change
-    _strand.post([this]() {
+    auto self = shared_from_this();
+    _strand.post([self, this]() {
       DBServerAgencySync job(this);
 
       job.work();
@@ -693,6 +694,7 @@ bool HeartbeatThread::syncDBServerStatusQuo() {
     MUTEX_LOCKER(mutexLocker, _statusLock);
     _isDispatchingChange = false;
   }
+
   return false;
 }
 

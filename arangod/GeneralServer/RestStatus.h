@@ -25,7 +25,47 @@
 
 #include "Basics/Common.h"
 
+// -----------------------------------------------------------------------------
+// --SECTION--                                                 RestStatusElement
+// -----------------------------------------------------------------------------
+
 namespace arangodb {
+class RestStatus;
+
+class RestStatusElement {
+  friend class RestStatus;
+
+ public:
+  enum class State { DONE, FAIL, ABANDONED, QUEUED, THEN };
+
+ public:
+  RestStatusElement(State status) : _state(status), _previous(nullptr) {
+    TRI_ASSERT(_state != State::THEN);
+  }
+
+  RestStatusElement(State status, std::shared_ptr<RestStatusElement> previous,
+                    std::function<std::shared_ptr<RestStatus>()> callback)
+      : _state(status), _previous(previous), _callback(callback) {}
+
+ public:
+  std::shared_ptr<RestStatusElement> previous() const { return _previous; }
+  bool isLeaf() const { return _previous == nullptr; }
+  State state() const { return _state; }
+
+ public:
+  std::shared_ptr<RestStatus> callThen() { return _callback(); }
+  void printTree() const;
+
+ private:
+  State _state;
+  std::shared_ptr<RestStatusElement> _previous;
+  std::function<std::shared_ptr<RestStatus>()> _callback;
+};
+
+// -----------------------------------------------------------------------------
+// --SECTION--                                                        RestStatus
+// -----------------------------------------------------------------------------
+
 class RestStatus {
  public:
   static RestStatus const ABANDON;
@@ -34,22 +74,53 @@ class RestStatus {
   static RestStatus const QUEUE;
 
  public:
-  enum class Status { DONE, FAIL, ABANDONED, QUEUED };
+  explicit RestStatus(RestStatusElement* element) : _element(element) {}
+
+  RestStatus(RestStatus const& that) = default;
+  RestStatus(RestStatus&& that) = default;
+
+  ~RestStatus() = default;
 
  public:
-  RestStatus(Status status) : _status(status) {}
+  template <typename FUNC>
+  auto then(FUNC callback) const ->
+      typename std::enable_if<std::is_void<decltype(callback())>::value,
+                              RestStatus>::type {
+    return RestStatus(new RestStatusElement(
+        RestStatusElement::State::THEN, _element, [callback]() {
+          callback();
+          return std::shared_ptr<RestStatus>(nullptr);
+        }));
+  }
+
+  template <typename FUNC>
+  auto then(FUNC callback) const ->
+      typename std::enable_if<std::is_class<decltype(callback())>::value,
+                              RestStatus>::type {
+    return RestStatus(new RestStatusElement(
+        RestStatusElement::State::THEN, _element, [callback]() {
+          return std::shared_ptr<RestStatus>(new RestStatus(callback()));
+        }));
+  }
 
  public:
-  RestStatus then(std::function<void()>);
-  RestStatus then(std::function<RestStatus>);
+  std::shared_ptr<RestStatusElement> element() { return _element; }
+
+  bool isLeaf() const { return _element->isLeaf(); }
+
+  bool isFailed() const {
+    return _element->_state == RestStatusElement::State::FAIL;
+  }
+
+  bool isAbandoned() const {
+    return _element->_state == RestStatusElement::State::ABANDONED;
+  }
 
  public:
-  bool done() const { return _status == Status::DONE; }
-  bool failed() const { return _status == Status::FAIL; }
-  bool abandoned() const { return _status == Status::ABANDONED; }
+  void printTree() const;
 
  private:
-  Status _status = Status::DONE;
+  std::shared_ptr<RestStatusElement> _element;
 };
 }
 

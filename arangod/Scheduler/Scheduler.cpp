@@ -92,7 +92,7 @@ class SchedulerThread : public Thread {
  public:
   void run() {
     static size_t EVERY_LOOP = 1000;
-    static double MIN_SECONDS = 5;
+    static double MIN_SECONDS = 30;
 
     _scheduler->incRunning();
     LOG_TOPIC(DEBUG, Logger::THREADS) << "running (" << _scheduler->infoStatus()
@@ -248,7 +248,7 @@ void Scheduler::startNewThread() {
 
 bool Scheduler::stopThread() {
   if (_nrRunning >= 3) {
-    int64_t low = (_nrRunning <= 4) ? 0 : (_nrRunning * 1 / 4);
+    int64_t low = ((_nrRunning <= 4) ? 0 : (_nrRunning * 1 / 4)) - _nrBlocked;
 
     if (_nrBusy <= low && _nrWorking <= low) {
       return true;
@@ -292,7 +292,7 @@ void Scheduler::rebalanceThreads() {
   static double const MIN_WARN_INTERVAL = 10;
   static double const MIN_ERR_INTERVAL = 300;
 
-  int64_t high = (_nrRunning <= 4) ? 1 : (_nrRunning * 3 / 4);
+  int64_t high = (_nrRunning <= 4) ? 1 : (_nrRunning * 11 / 16);
   int64_t working = (_nrBusy > _nrWorking) ? _nrBusy : _nrWorking;
 
   LOG_TOPIC(DEBUG, Logger::THREADS) << "rebalancing threads, high: " << high

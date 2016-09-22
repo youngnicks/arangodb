@@ -20,74 +20,61 @@
 /// @author Dr. Frank Celler
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "RestStatus.h"
+#include "RestEngine.h"
 
+#include "GeneralServer/RestHandler.h"
 #include "Logger/Logger.h"
 
 using namespace arangodb;
+using namespace arangodb::rest;
 
 // -----------------------------------------------------------------------------
-// --SECTION--                                                    static members
+// --SECTION--                                      constructors and destructors
 // -----------------------------------------------------------------------------
 
-RestStatus const RestStatus::ABANDON(
-    new RestStatusElement(RestStatusElement::State::ABANDONED));
-
-RestStatus const RestStatus::DONE(
-    new RestStatusElement(RestStatusElement::State::DONE));
-
-RestStatus const RestStatus::FAIL(
-    new RestStatusElement(RestStatusElement::State::FAIL));
-
-RestStatus const RestStatus::QUEUE(
-    new RestStatusElement(RestStatusElement::State::QUEUED));
+RestEngine::RestEngine() {}
 
 // -----------------------------------------------------------------------------
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
 
-void RestStatusElement::printTree() const {
-  std::string s = "TREE: ";
-  std::string sep = "";
-  RestStatusElement const* element = this;
+void RestEngine::asyncRun(std::shared_ptr<rest::RestHandler> handler) {
+  while (true) {
+    int res = TRI_ERROR_INTERNAL;
 
-  while (element != nullptr) {
-    s += sep;
+    switch (_state) {
+      case State::PREPARE:
+        res = handler->prepareEngine();
+        break;
 
-    switch (element->_state) {
+      case State::EXECUTE:
+        res = handler->executeEngine();
+        break;
+
+      case State::RUN:
+        res = handler->runEngine();
+        break;
+
+      case State::FINALIZE:
+        res = handler->finalizeEngine();
+        break;
+
       case State::DONE:
-        s += "DONE";
-        break;
-
-      case State::FAIL:
-        s += "FAILED";
-        break;
-
-      case State::ABANDONED:
-        s += "ABANDONED";
-        break;
-
-      case State::QUEUED:
-        s += "QUEUED";
-        break;
-
-      case State::THEN:
-        s += "THEN";
-        break;
+      case State::FAILED:
+        return;
     }
 
-    sep = " -> ";
-
-    element = element->_previous.get();
+    if (res != TRI_ERROR_NO_ERROR) {
+      return;
+    }
   }
-
-  LOG(INFO) << s;
 }
 
-void RestStatus::printTree() const {
-  if (_element != nullptr) {
-    _element->printTree();
-  } else {
-    LOG(INFO) << "TREE: EMPTY";
+RestStatus RestEngine::syncRun(std::shared_ptr<rest::RestHandler> handler) {}
+
+void RestEngine::appendRestStatus(std::shared_ptr<RestStatusElement> element) {
+  while (element.get() != nullptr) {
+    _elements.emplace_back(element);
+    element = element->previous();
   }
 }

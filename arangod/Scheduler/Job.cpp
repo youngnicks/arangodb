@@ -25,12 +25,13 @@
 #include "GeneralServer/RestHandler.h"
 
 using namespace arangodb;
+using namespace arangodb::rest;
 
-Job::Job(std::function<void(WorkItem::uptr<rest::RestHandler>)> callback)
+Job::Job(std::function<void(std::shared_ptr<RestHandler>)> callback)
     : _server(nullptr), _handler(nullptr), _callback(callback) {}
 
-Job::Job(rest::GeneralServer* server, WorkItem::uptr<rest::RestHandler> handler,
-         std::function<void(WorkItem::uptr<rest::RestHandler>)> callback)
+Job::Job(rest::GeneralServer* server, std::shared_ptr<RestHandler> handler,
+         std::function<void(std::shared_ptr<RestHandler>)> callback)
     : _server(server), _handler(std::move(handler)), _callback(callback) {}
 
 // trival, but needs definition of RestHandler

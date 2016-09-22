@@ -60,11 +60,7 @@ RestHandler::RestHandler(GeneralRequest* request, GeneralResponse* response)
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
 
-void RestHandler::setTaskId(uint64_t id) { _taskId = id; }
-
-RestStatus RestHandler::executeFull() {
-  RestStatus result = RestStatus::FAIL;
-
+int RestHandler::prepareEngine() {
   requestStatisticsAgentSetRequestStart();
 
 #ifdef USE_DEV_TIMERS
@@ -72,61 +68,60 @@ RestStatus RestHandler::executeFull() {
 #endif
 
   if (_canceled) {
+    _engine.setState(RestEngine::State::DONE);
     requestStatisticsAgentSetExecuteError();
+
     Exception err(TRI_ERROR_REQUEST_CANCELED,
                   "request has been canceled by user", __FILE__, __LINE__);
     handleError(err);
-    return result;
+
+    _storeResult(this);
+    return TRI_ERROR_REQUEST_CANCELED;
   }
 
   try {
     prepareExecute();
-
-    try {
-      result = execute();
-    } catch (Exception const& ex) {
-      requestStatisticsAgentSetExecuteError();
-      handleError(ex);
-    } catch (arangodb::velocypack::Exception const& ex) {
-      requestStatisticsAgentSetExecuteError();
-      Exception err(TRI_ERROR_INTERNAL,
-                    std::string("VPack error: ") + ex.what(), __FILE__,
-                    __LINE__);
-      handleError(err);
-    } catch (std::bad_alloc const& ex) {
-      requestStatisticsAgentSetExecuteError();
-      Exception err(TRI_ERROR_OUT_OF_MEMORY, ex.what(), __FILE__, __LINE__);
-      handleError(err);
-    } catch (std::exception const& ex) {
-      requestStatisticsAgentSetExecuteError();
-      Exception err(TRI_ERROR_INTERNAL, ex.what(), __FILE__, __LINE__);
-      handleError(err);
-    } catch (...) {
-      requestStatisticsAgentSetExecuteError();
-      Exception err(TRI_ERROR_INTERNAL, __FILE__, __LINE__);
-      handleError(err);
-    }
-
-    finalizeExecute();
-
-    if (!result.abandoned() && _response == nullptr) {
-      Exception err(TRI_ERROR_INTERNAL, "no response received from handler",
-                    __FILE__, __LINE__);
-
-      handleError(err);
-    }
+    _engine.setState(RestEngine::State::EXECUTE);
+    return TRI_ERROR_NO_ERROR;
   } catch (Exception const& ex) {
-    result = RestStatus::FAIL;
     requestStatisticsAgentSetExecuteError();
     LOG(ERR) << "caught exception: " << DIAGNOSTIC_INFORMATION(ex);
   } catch (std::exception const& ex) {
-    result = RestStatus::FAIL;
     requestStatisticsAgentSetExecuteError();
     LOG(ERR) << "caught exception: " << ex.what();
   } catch (...) {
-    result = RestStatus::FAIL;
     requestStatisticsAgentSetExecuteError();
     LOG(ERR) << "caught exception";
+  }
+
+  _engine.setState(RestEngine::State::FAILED);
+  _storeResult(this);
+  return TRI_ERROR_INTERNAL;
+}
+
+int RestHandler::finalizeEngine() {
+  int res = TRI_ERROR_NO_ERROR;
+
+  try {
+    finalizeExecute();
+  } catch (Exception const& ex) {
+    requestStatisticsAgentSetExecuteError();
+    LOG(ERR) << "caught exception: " << DIAGNOSTIC_INFORMATION(ex);
+    res = TRI_ERROR_INTERNAL;
+  } catch (std::exception const& ex) {
+    requestStatisticsAgentSetExecuteError();
+    LOG(ERR) << "caught exception: " << ex.what();
+    res = TRI_ERROR_INTERNAL;
+  } catch (...) {
+    requestStatisticsAgentSetExecuteError();
+    LOG(ERR) << "caught exception";
+    res = TRI_ERROR_INTERNAL;
+  }
+
+  if (res == TRI_ERROR_NO_ERROR) {
+    _engine.setState(RestEngine::State::DONE);
+  } else {
+    _engine.setState(RestEngine::State::FAILED);
   }
 
   requestStatisticsAgentSetRequestEnd();
@@ -135,11 +130,126 @@ RestStatus RestHandler::executeFull() {
   TRI_request_statistics_t::STATS = nullptr;
 #endif
 
-  return result;
+  _storeResult(this);
+  return res;
+}
+
+int RestHandler::executeEngine() {
+  try {
+    RestStatus result = execute();
+
+    if (result.isLeaf()) {
+      if (!result.isAbandoned() && _response == nullptr) {
+        Exception err(TRI_ERROR_INTERNAL, "no response received from handler",
+                      __FILE__, __LINE__);
+
+        handleError(err);
+      }
+
+      _engine.setState(RestEngine::State::FINALIZE);
+      _storeResult(this);
+      return TRI_ERROR_NO_ERROR;
+    }
+
+    _engine.setState(RestEngine::State::RUN);
+    _engine.appendRestStatus(result.element());
+
+    return TRI_ERROR_NO_ERROR;
+  } catch (Exception const& ex) {
+    requestStatisticsAgentSetExecuteError();
+    handleError(ex);
+  } catch (arangodb::velocypack::Exception const& ex) {
+    requestStatisticsAgentSetExecuteError();
+    Exception err(TRI_ERROR_INTERNAL, std::string("VPack error: ") + ex.what(),
+                  __FILE__, __LINE__);
+    handleError(err);
+  } catch (std::bad_alloc const& ex) {
+    requestStatisticsAgentSetExecuteError();
+    Exception err(TRI_ERROR_OUT_OF_MEMORY, ex.what(), __FILE__, __LINE__);
+    handleError(err);
+  } catch (std::exception const& ex) {
+    requestStatisticsAgentSetExecuteError();
+    Exception err(TRI_ERROR_INTERNAL, ex.what(), __FILE__, __LINE__);
+    handleError(err);
+  } catch (...) {
+    requestStatisticsAgentSetExecuteError();
+    Exception err(TRI_ERROR_INTERNAL, __FILE__, __LINE__);
+    handleError(err);
+  }
+
+  _engine.setState(RestEngine::State::FAILED);
+  _storeResult(this);
+  return TRI_ERROR_INTERNAL;
+}
+
+int RestHandler::runEngine() {
+  try {
+    while (_engine.hasSteps()) {
+      std::shared_ptr<RestStatusElement> result = _engine.popStep();
+
+      switch (result->state()) {
+        case RestStatusElement::State::DONE:
+          _storeResult(this);
+          break;
+
+        case RestStatusElement::State::FAIL:
+          _engine.setState(RestEngine::State::FINALIZE);
+          _storeResult(this);
+          return TRI_ERROR_NO_ERROR;
+
+        case RestStatusElement::State::ABANDONED:
+          // do nothing
+          break;
+
+        case RestStatusElement::State::QUEUED: {
+          std::shared_ptr<RestHandler> self = shared_from_this();
+          _engine.queue([self, this]() { _engine.asyncRun(self); });
+          return TRI_ERROR_NO_ERROR;
+        }
+
+        case RestStatusElement::State::THEN: {
+          auto status = result->callThen();
+
+          if (status != nullptr) {
+            _engine.appendRestStatus(status->element());
+          }
+
+          break;
+        }
+      }
+    }
+
+    return TRI_ERROR_NO_ERROR;
+  } catch (Exception const& ex) {
+    requestStatisticsAgentSetExecuteError();
+    handleError(ex);
+  } catch (arangodb::velocypack::Exception const& ex) {
+    requestStatisticsAgentSetExecuteError();
+    Exception err(TRI_ERROR_INTERNAL, std::string("VPack error: ") + ex.what(),
+                  __FILE__, __LINE__);
+    handleError(err);
+  } catch (std::bad_alloc const& ex) {
+    requestStatisticsAgentSetExecuteError();
+    Exception err(TRI_ERROR_OUT_OF_MEMORY, ex.what(), __FILE__, __LINE__);
+    handleError(err);
+  } catch (std::exception const& ex) {
+    requestStatisticsAgentSetExecuteError();
+    Exception err(TRI_ERROR_INTERNAL, ex.what(), __FILE__, __LINE__);
+    handleError(err);
+  } catch (...) {
+    requestStatisticsAgentSetExecuteError();
+    Exception err(TRI_ERROR_INTERNAL, __FILE__, __LINE__);
+    handleError(err);
+  }
+
+  _engine.setState(RestEngine::State::FAILED);
+  _storeResult(this);
+  return TRI_ERROR_INTERNAL;
 }
 
 // -----------------------------------------------------------------------------
-// --SECTION--                                                 protected methods
+// --SECTION--                                                 protected
+// methods
 // -----------------------------------------------------------------------------
 
 void RestHandler::resetResponse(rest::ResponseCode code) {

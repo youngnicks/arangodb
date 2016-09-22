@@ -97,7 +97,8 @@ void SocketTask::start() {
   LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "starting communication on "
                                           << _peer->_socket.native_handle();
 
-  _loop._ioService.post([this]() { asyncReadSome(); });
+  auto self = shared_from_this();
+  _loop._ioService->post([self, this]() { asyncReadSome(); });
 }
 
 // -----------------------------------------------------------------------------
@@ -163,34 +164,29 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
       }
     }
 
+    auto self = shared_from_this();
+    auto handler = [this](const boost::system::error_code& ec,
+                          std::size_t transferred) {
+      if (ec) {
+        LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+            << "write on stream " << _peer->_socket.native_handle()
+            << " failed with " << ec;
+        closeStream();
+      } else {
+        completedWriteBuffer();
+      }
+    };
+
     if (!_peer->_encrypted) {
       boost::asio::async_write(  // is ok
           _peer->_socket,
           boost::asio::buffer(_writeBuffer->begin() + written, total - written),
-          [this](const boost::system::error_code& ec, std::size_t transferred) {
-            if (ec) {
-              LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-                  << "write on stream " << _peer->_socket.native_handle()
-                  << " failed with " << ec;
-              closeStream();
-            } else {
-              completedWriteBuffer();
-            }
-          });
+          handler);
     } else {
       boost::asio::async_write(
           _peer->_sslSocket,
           boost::asio::buffer(_writeBuffer->begin() + written, total - written),
-          [this](const boost::system::error_code& ec, std::size_t transferred) {
-            if (ec) {
-              LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-                  << "write on stream " << _peer->_socket.native_handle()
-                  << " failed with " << ec;
-              closeStream();
-            } else {
-              completedWriteBuffer();
-            }
-          });
+          handler);
     }
   }
 }
@@ -368,68 +364,42 @@ void SocketTask::asyncReadSome() {
     return;
   }
 
+  auto self = shared_from_this();
+  auto handler = [self, this, info](const boost::system::error_code& ec,
+                                    std::size_t transferred) {
+    if (ec) {
+      LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "read on stream " << info
+                                              << " failed with " << ec;
+      closeStream();
+    } else {
+      JobGuard guard(_loop);
+      guard.enterLoop();
+
+      _readBuffer.increaseLength(transferred);
+
+      while (processRead()) {
+        if (_closeRequested) {
+          break;
+        }
+      }
+
+      if (_closeRequested) {
+        LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+            << "close requested, closing receive stream";
+
+        closeReceiveStream();
+      } else {
+        asyncReadSome();
+      }
+    }
+  };
+
   if (!_peer->_encrypted) {
     _peer->_socket.async_read_some(
-        boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE),
-        [this, info](const boost::system::error_code& ec,
-                     std::size_t transferred) {
-          if (ec) {
-            LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "read on stream " << info
-                                                    << " failed with " << ec;
-            closeStream();
-          } else {
-            JobGuard guard(_loop);
-            guard.enterLoop();
-
-            _readBuffer.increaseLength(transferred);
-
-            while (processRead()) {
-              if (_closeRequested) {
-                break;
-              }
-            }
-
-            if (_closeRequested) {
-              LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-                  << "close requested, closing receive stream";
-
-              closeReceiveStream();
-            } else {
-              asyncReadSome();
-            }
-          }
-        });
+        boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE), handler);
   } else {
     _peer->_sslSocket.async_read_some(
-        boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE),
-        [this, info](const boost::system::error_code& ec,
-                     std::size_t transferred) {
-          if (ec) {
-            LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "read on stream " << info
-                                                    << " failed with " << ec;
-            closeStream();
-          } else {
-            JobGuard guard(_loop);
-            guard.enterLoop();
-
-            _readBuffer.increaseLength(transferred);
-
-            while (processRead()) {
-              if (_closeRequested) {
-                break;
-              }
-            }
-
-            if (_closeRequested) {
-              LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-                  << "close requested, closing receive stream";
-
-              closeReceiveStream();
-            } else {
-              asyncReadSome();
-            }
-          }
-        });
+        boost::asio::buffer(_readBuffer.end(), READ_BLOCK_SIZE), handler);
   }
 }
 

@@ -82,7 +82,7 @@ void GeneralCommTask::executeRequest(
   }
 
   // create a handler, this takes ownership of request and response
-  WorkItem::uptr<RestHandler> handler(
+  std::shared_ptr<RestHandler> handler(
       GeneralServerFeature::HANDLER_FACTORY->createHandler(
           std::move(request), std::move(response)));
 
@@ -175,15 +175,13 @@ void GeneralCommTask::signalTask(std::unique_ptr<TaskData> data) {
   }
 }
 
-bool GeneralCommTask::handleRequest(WorkItem::uptr<RestHandler> handler) {
-  JobGuard guard(_loop);
-
+bool GeneralCommTask::handleRequest(std::shared_ptr<RestHandler> handler) {
   if (handler->isDirect()) {
     handleRequestDirectly(std::move(handler));
     return true;
   }
 
-  if (guard.isIdle()) {
+  if (_loop._scheduler->isIdle()) {
     handleRequestDirectly(std::move(handler));
     return true;
   }
@@ -191,7 +189,6 @@ bool GeneralCommTask::handleRequest(WorkItem::uptr<RestHandler> handler) {
   bool startThread = handler->needsOwnThread();
 
   if (startThread) {
-    guard.block();
     handleRequestDirectly(std::move(handler));
     return true;
   }
@@ -201,12 +198,14 @@ bool GeneralCommTask::handleRequest(WorkItem::uptr<RestHandler> handler) {
   size_t queue = handler->queue();
   uint64_t messageId = handler->messageId();
 
-  auto job = new arangodb::Job(_server, std::move(handler),
-                               [this](WorkItem::uptr<RestHandler> h) {
-                                 handleRequestDirectly(std::move(h));
-                               });
+  auto self = shared_from_this();
+  std::unique_ptr<Job> job(
+      new Job(_server, std::move(handler), [self, this](std::shared_ptr<RestHandler> h) {
+        handleRequestDirectly(h);
+      }));
 
-  bool ok = SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, job);
+  bool ok =
+      SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, std::move(job));
 
   if (!ok) {
     handleSimpleError(rest::ResponseCode::SERVER_ERROR, TRI_ERROR_QUEUE_FULL,
@@ -216,29 +215,23 @@ bool GeneralCommTask::handleRequest(WorkItem::uptr<RestHandler> handler) {
   return ok;
 }
 
-void GeneralCommTask::handleRequestDirectly(WorkItem::uptr<RestHandler> h) {
+void GeneralCommTask::handleRequestDirectly(
+    std::shared_ptr<RestHandler> handler) {
   JobGuard guard(_loop);
-  guard.work();
+  guard.block();
 
-  HandlerWorkStack work(std::move(h));
-  auto handler = work.handler();
-  uint64_t messageId = handler->messageId();
-  auto agent = getAgent(messageId);
+  RequestStatisticsAgent* agent = getAgent(handler->messageId());
 
-  agent->transferTo(handler);
-  RestStatus result = handler->executeFull();
-  handler->RequestStatisticsAgent::transferTo(agent);
+  auto self = shared_from_this();
+  handler->initEngine(_loop, agent, [self, this](RestHandler* h) {
+    addResponse(h->response());
+  });
 
-  if (result.failed() || result.done()) {
-    addResponse(handler->response());
-  } else if (result.abandoned()) {
-    handler->release();
-  } else {
-#pragma message("TODO")
-  }
+  HandlerWorkStack monitor(handler);
+  monitor->asyncRunEngine();
 }
 
-bool GeneralCommTask::handleRequestAsync(WorkItem::uptr<RestHandler> handler,
+bool GeneralCommTask::handleRequestAsync(std::shared_ptr<RestHandler> handler,
                                          uint64_t* jobId) {
   // extract the coordinator flag
   bool found;
@@ -255,26 +248,26 @@ bool GeneralCommTask::handleRequestAsync(WorkItem::uptr<RestHandler> handler,
     GeneralServerFeature::JOB_MANAGER->initAsyncJob(handler.get(), hdr);
   }
 
+  if (store) {
+    handler->initEngine(_loop, nullptr, [](RestHandler* handler) {
+      GeneralServerFeature::JOB_MANAGER->finishAsyncJob(handler);
+    });
+  } else {
+    handler->initEngine(_loop, nullptr, [](RestHandler* handler) {});
+  }
+
   // queue this job
   size_t queue = handler->queue();
-  auto job = new arangodb::Job(
-      _server, std::move(handler),
-      [this, store](WorkItem::uptr<RestHandler> h) {
-        JobGuard guard(_loop);
-        guard.work();
+  auto self = shared_from_this();
 
-        HandlerWorkStack work(std::move(h));
-        auto handler = work.handler();
-        RestStatus result = handler->executeFull();
+  std::unique_ptr<Job> job(
+              new Job(_server, std::move(handler),
+		      [self, this](std::shared_ptr<RestHandler> h) {
+			JobGuard guard(_loop);
+			guard.block();
 
-        if (result.failed() || result.done()) {
-          if (store) {
-            GeneralServerFeature::JOB_MANAGER->finishAsyncJob(handler);
-          }
-        } else if (result.abandoned()) {
-          handler->release();
-        }
-      });
+			h->asyncRunEngine();
+		      }));
 
-  return SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, job);
+  return SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, std::move(job));
 }
