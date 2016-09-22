@@ -54,19 +54,17 @@ std::size_t appendToBuffer(basics::StringBuffer* buffer, T& value) {
 }
 
 inline constexpr std::size_t chunkHeaderLength(bool firstOfMany) {
-  // chunkLength uint32 , chunkX uint32 , id uint64 , messageLength unit32
+  // chunkLength uint32 , chunkX uint32 , id uint64 , messageLength unit64
   return sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t) +
-         (firstOfMany ? sizeof(uint32_t) : 0);
+         (firstOfMany ? sizeof(uint64_t) : 0);
 }
 
 // Send Message Created from Slices
-// /////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////
 
 // working version of single chunk message creation
 inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkDetail(
     std::vector<VPackSlice> const& slices, bool isFirstChunk, uint32_t chunk,
-    uint64_t id, uint32_t totalMessageLength = 0) {
+    uint64_t id, uint64_t totalMessageLength = 0) {
   using basics::StringBuffer;
   bool firstOfMany = false;
 
@@ -137,12 +135,10 @@ inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkSingle(
 //}
 
 // helper functions for sending chunks when given a string buffer as input
-// //////////
-/////////////////////////////////////////////////////////////////////////////////////
 // working version of single chunk message creation
 inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkDetail(
     char const* data, std::size_t begin, std::size_t end, bool isFirstChunk,
-    uint32_t chunk, uint64_t id, uint32_t totalMessageLength = 0) {
+    uint32_t chunk, uint64_t id, uint64_t totalMessageLength = 0) {
   using basics::StringBuffer;
   bool firstOfMany = false;
 
@@ -182,7 +178,7 @@ inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkDetail(
 
 inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkMultiFirst(
     char const* data, std::size_t begin, std::size_t end, uint64_t id,
-    uint32_t numberOfChunks, uint32_t totalMessageLength) {
+    uint32_t numberOfChunks, uint64_t totalMessageLength) {
   return createChunkForNetworkDetail(data, begin, end, true, numberOfChunks, id,
                                      totalMessageLength);
 }
