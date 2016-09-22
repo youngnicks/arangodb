@@ -23,7 +23,7 @@ else()
         ${boost_src}/libs/system/src/error_code.cpp
     )
     target_link_libraries(boost_system PUBLIC boost_boost) #this will add required includes
-    target_compile_definitions(boost_system PRIVATE "BOOST_SYSTEM_STATIC_LINK=1")
+    target_compile_definitions(boost_system PRIVATE "BOOST_SYSTEM_STATIC_LINK=1" "BOOST_ALL_NO_LIB=1")
 
     #set boost include path and add libraries to Boost_LIBRARIES variable
     #set(Boost_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/1.61.0)
