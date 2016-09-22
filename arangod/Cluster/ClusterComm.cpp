@@ -676,15 +676,6 @@ ClusterCommResult const ClusterComm::wait(
   
   ResponseIterator i;
   AsyncResponse response;
-  double endtime;
-  double timeleft;
-
-  if (0.0 == timeout) {
-    endtime = TRI_microtime() +
-              24.0 * 60.0 * 60.0;  // this is the Sankt Nimmerleinstag
-  } else {
-    endtime = TRI_microtime() + timeout;
-  }
 
   // tell Dispatcher that we are waiting:
   auto dt = arangodb::rest::DispatcherThread::current();
@@ -718,39 +709,19 @@ ClusterCommResult const ClusterComm::wait(
   }
   response = i->second;
   
-  while (true) {
-    if (response.result->status >= CL_COMM_TIMEOUT ||
-        (!response.result->single && response.result->status == CL_COMM_RECEIVED) ||
-        (response.result->single && response.result->status == CL_COMM_SENT)) {
-      // It is done, let's remove it from the queue and return it:
-      CONDITION_LOCKER(locker, somethingReceived);
-      responses.erase(i);
-      // tell Dispatcher that we are back in business
-      if (dt != nullptr) {
-        dt->unblock();
-      }
-      return *response.result.get();
-    }
-    // Here it could either be in the receive or the send queue, let's wait
-    timeleft = endtime - TRI_microtime();
-    if (timeleft <= 0) {
-      break;
-    }
+  while (response.result->status == CL_COMM_SUBMITTED) {
     CONDITION_LOCKER(locker, somethingReceived);
-    somethingReceived.wait(uint64_t(timeleft * 1000000.0));
+    somethingReceived.wait(60000000.0);
   }
-  // Now we have to react on timeout:
-  ClusterCommResult res;
-  res.clientTransactionID = clientTransactionID;
-  res.coordTransactionID = coordTransactionID;
-  res.operationID = ticketId;
-  res.shardID = shardID;
-  res.status = CL_COMM_TIMEOUT;
-  // tell Dispatcher that we are back in business
+
+  {
+    CONDITION_LOCKER(locker, somethingReceived);
+    responses.erase(i);
+  }
   if (dt != nullptr) {
     dt->unblock();
   }
-  return res;
+  return *response.result.get();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1196,6 +1167,7 @@ size_t ClusterComm::performRequests(std::vector<ClusterCommRequest>& requests,
         }
         auto res =
             wait("", coordinatorTransactionID, 0, "", actionNeeded - now);
+
         if (res.status == CL_COMM_TIMEOUT && res.operationID == 0) {
           // Did not receive any result until the timeout (of wait) was hit.
           break;
@@ -1232,6 +1204,7 @@ size_t ClusterComm::performRequests(std::vector<ClusterCommRequest>& requests,
               << (int)res.answer_code;
         } else if (res.status == CL_COMM_BACKEND_UNAVAILABLE ||
                    (res.status == CL_COMM_TIMEOUT && !res.sendWasComplete)) {
+          TRI_ASSERT(false);
           requests[index].result = res;
 
           // In this case we will retry:

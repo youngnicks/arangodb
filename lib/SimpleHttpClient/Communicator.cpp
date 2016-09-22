@@ -344,6 +344,8 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
   if (rip == nullptr) {
     return;
   }
+  std::string prefix("Communicator("  + std::to_string(rip->_ticketId) + ") // ");
+  LOG_TOPIC(TRACE, Logger::REQUESTS) << prefix << "Curl rc is : " << rc;
 
   switch (rc) {
     case CURLE_OK: {

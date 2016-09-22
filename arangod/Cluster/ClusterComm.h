@@ -234,6 +234,7 @@ struct ClusterCommResult {
         break;
       case TRI_ERROR_CLUSTER_TIMEOUT:
         status = CL_COMM_TIMEOUT;
+        sendWasComplete = true;
         break;
       default:
         if (response == nullptr) {
@@ -246,6 +247,7 @@ struct ClusterCommResult {
   }
 
   void fromResponse(std::unique_ptr<GeneralResponse> response) {
+    sendWasComplete = true;
     // mop: simulate the old behaviour where the original request
     // was sent to the recipient and was simply accepted. Then the backend would
     // do its work and send a request to the target containing the result of that
