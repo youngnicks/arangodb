@@ -161,6 +161,7 @@ Ticket Communicator::addRequest(Destination destination,
   uint64_t id = NEXT_TICKET_ID.fetch_add(1, std::memory_order_seq_cst);
 
   {
+    TRI_ASSERT(request != nullptr);
     MUTEX_LOCKER(guard, _newRequestsLock);
     _newRequests.emplace_back(
         NewRequest{destination, std::move(request), callbacks, options, id});
@@ -240,6 +241,7 @@ void Communicator::wait() {
 
 void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   auto request = (HttpRequest*) newRequest._request.get();
+  TRI_ASSERT(request != nullptr);
 
   // mop: the curl handle will be managed safely via unique_ptr and hold ownership for rip
   auto rip = new RequestInProgress(newRequest._callbacks, newRequest._ticketId, std::string(request->body().c_str(), request->body().length()));
@@ -363,9 +365,11 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
     case CURLE_COULDNT_CONNECT:
     case CURLE_COULDNT_RESOLVE_HOST:
     case CURLE_URL_MALFORMAT:
+    case CURLE_SEND_ERROR:
       rip->_callbacks._onError(TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT, {nullptr});
       break;
     case CURLE_OPERATION_TIMEDOUT:
+    case CURLE_RECV_ERROR:
       rip->_callbacks._onError(TRI_ERROR_CLUSTER_TIMEOUT, {nullptr});
       break;
     default:

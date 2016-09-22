@@ -331,7 +331,15 @@ OperationID ClusterComm::asyncRequest(
   std::shared_ptr<ClusterCommResult> result(prepared.first);
   result->clientTransactionID = clientTransactionID;
   result->coordTransactionID = coordTransactionID;
-  std::unique_ptr<HttpRequest> request(prepared.second);
+  result->single = singleRequest;
+
+  std::unique_ptr<HttpRequest> request;
+  if (prepared.second == nullptr) {
+    request.reset(HttpRequest::createHttpRequest(ContentType::JSON, "", 0, {}));
+    request->setRequestType(reqtype); // mop: a fake but a good one
+  } else {
+    request.reset(prepared.second);
+  }
 
   communicator::Options opt;
   opt.connectionTimeout = initTimeout;
@@ -348,7 +356,7 @@ OperationID ClusterComm::asyncRequest(
             << "cannot create connection to server '" << result->serverID
             << "' at endpoint '" << result->endpoint << "'";
         } else {
-          LOG_TOPIC(INFO, Logger::CLUSTER)
+          LOG_TOPIC(ERR, Logger::CLUSTER)
             << "cannot create connection to server '" << result->serverID
             << "' at endpoint '" << result->endpoint << "'";
         }
@@ -387,15 +395,17 @@ OperationID ClusterComm::asyncRequest(
       somethingReceived.broadcast();
     };
   }
-
+  
+  TRI_ASSERT(request != nullptr);
   auto ticketId = _communicator->addRequest(createCommunicatorDestination(result->endpoint, path),
                std::move(request), callbacks, opt);
   
-  result->single = singleRequest;
-  result->status = CL_COMM_SUBMITTED;
   result->operationID = ticketId;
-  CONDITION_LOCKER(locker, somethingReceived);
-  responses.emplace(ticketId, AsyncResponse{TRI_microtime(), result});
+  {
+    CONDITION_LOCKER(locker, somethingReceived);
+    responses.emplace(ticketId, AsyncResponse{TRI_microtime(), result});
+  }
+  result->status = CL_COMM_SUBMITTED;
   return ticketId;
 
   /*
@@ -544,6 +554,14 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
     ClusterCommTimeout timeout) {
   auto prepared = prepareRequest(destination, reqtype, &body, headerFields);
   std::unique_ptr<ClusterCommResult> result(prepared.first);
+  // mop: this is used to distinguish a syncRequest from an asyncRequest while processing
+  // the answer...
+  result->single = true;
+  
+  if (prepared.second == nullptr) {
+    return result;
+  }
+
   std::unique_ptr<HttpRequest> request(prepared.second);
 
   arangodb::basics::ConditionVariable cv;
@@ -577,12 +595,10 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
   
   communicator::Options opt;
   opt.requestTimeout = timeout;
+  TRI_ASSERT(request != nullptr);
   _communicator->addRequest(createCommunicatorDestination(result->endpoint, path),
                std::move(request), callbacks, opt);
   result->status = CL_COMM_SENDING;
-  // mop: this is used to distinguish a syncRequest from an asyncRequest while processing
-  // the answer...
-  result->single = true;
   
   CONDITION_LOCKER(isen, cv);
   while (!wasSignaled) {
@@ -1354,11 +1370,11 @@ std::pair<ClusterCommResult*, HttpRequest*> ClusterComm::prepareRequest(std::str
       std::unordered_map<std::string, std::string> const& headerFields) {
   HttpRequest* request = nullptr;
   auto result = new ClusterCommResult();
-  result->status = CL_COMM_SUBMITTED;
   result->setDestination(destination, logConnectionErrors());
   if (result->endpoint.empty()) {
     return std::make_pair(result, request);
   }
+  result->status = CL_COMM_SUBMITTED;
   
   std::unordered_map<std::string, std::string> headersCopy(headerFields);
   if (destination.substr(0, 6) == "shard:") {
