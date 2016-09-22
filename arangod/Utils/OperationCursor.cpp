@@ -83,7 +83,7 @@ void OperationCursor::getMore(std::shared_ptr<OperationResult>& opRes,
       --batchSize;
       --_limit;
       TRI_voc_rid_t revisionId = element->revisionId();
-      uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+      uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
       
       if (useExternals) {
         builder.addExternal(vpack);

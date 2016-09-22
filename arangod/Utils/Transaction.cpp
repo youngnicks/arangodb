@@ -1265,7 +1265,7 @@ OperationResult Transaction::anyLocal(std::string const& collectionName,
     cursor->getMoreMptr(result);
     for (auto const& mptr : result) {
       TRI_voc_rid_t revisionId = mptr->revisionId();
-      uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+      uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
       resultBuilder.add(VPackSlice(vpack));
     }
   }
@@ -2574,7 +2574,7 @@ OperationResult Transaction::allLocal(std::string const& collectionName,
     cursor->getMoreMptr(result, 1000);
     for (auto const& mptr : result) {
       TRI_voc_rid_t revisionId = mptr->revisionId();
-      uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+      uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
       resultBuilder.addExternal(vpack);
     }
   }
@@ -2649,7 +2649,7 @@ OperationResult Transaction::truncateLocal(std::string const& collectionName,
     TRI_voc_rid_t actualRevision = 0;
     ManagedDocumentResult previous;
     TRI_voc_rid_t revisionId = element->revisionId();
-    uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+    uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
     int res =
         collection->remove(this, VPackSlice(vpack), options,
                            resultMarkerTick, false, actualRevision, previous);

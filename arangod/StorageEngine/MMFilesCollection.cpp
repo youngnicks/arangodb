@@ -37,7 +37,6 @@
 #include "VocBase/DatafileHelper.h"
 #include "VocBase/KeyGenerator.h"
 #include "VocBase/LogicalCollection.h"
-#include "VocBase/MasterPointer.h"
 #include "VocBase/datafile.h"
 #include "Wal/LogfileManager.h"
 
@@ -93,18 +92,17 @@ int MMFilesCollection::OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* m
   // no primary index lock required here because we are the only ones reading
   // from the index ATM
   IndexElement* found = primaryIndex->lookupKey(trx, keySlice);
-  MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
 
   // it is a new entry
   if (found == nullptr) {
-    c->insertRevision(revisionId, fid, marker);
+    uint8_t const* vpack = reinterpret_cast<uint8_t const*>(marker) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT);
+    collection->insertRevision(revisionId, vpack, fid, false); 
 
     // insert into primary index
-    uint8_t const* vpack = reinterpret_cast<uint8_t const*>(marker) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT);
     int res = primaryIndex->insertKey(trx, revisionId, VPackSlice(vpack));
 
     if (res != TRI_ERROR_NO_ERROR) {
-      c->removeRevision(revisionId, true);
+      collection->removeRevision(revisionId, false);
       LOG(ERR) << "inserting document into primary index failed with error: " << TRI_errno_string(res);
 
       return res;
@@ -117,32 +115,32 @@ int MMFilesCollection::OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* m
     state->_dfi->sizeAlive += DatafileHelper::AlignedMarkerSize<int64_t>(marker);
   }
 
-  // it is an update, but only if found has a smaller revision identifier
+  // it is an update
   else {
-    // save the old data
+    uint8_t const* vpack = reinterpret_cast<uint8_t const*>(marker) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT);
     TRI_voc_rid_t const oldRevisionId = found->revisionId();
-    // TODO
-    TRI_doc_mptr_t* f = c->lookupRevisionMptr(oldRevisionId);
-    TRI_doc_mptr_t oldData = *f;
-
-    // update the header info
-    f->setFid(fid, false); // when we're here, we're looking at a datafile
-    f->setVPackFromMarker(marker);
-
+    // update the revision id in primary index
     found->updateRevisionId(revisionId);
-    c->removeRevision(oldRevisionId, false);
-    c->insertRevision(revisionId, f);
+
+    DocumentPosition const old = collection->lookupRevision(oldRevisionId);
+
+    // remove old revision
+    collection->removeRevision(oldRevisionId, false);
+
+    // insert new revision
+    collection->insertRevision(revisionId, vpack, fid, false);
 
     // update the datafile info
     DatafileStatisticsContainer* dfi;
-    if (oldData.getFid() == state->_fid) {
+    if (old.fid() == state->_fid) {
       dfi = state->_dfi;
     } else {
-      dfi = FindDatafileStats(state, oldData.getFid());
+      dfi = FindDatafileStats(state, old.fid());
     }
 
-    if (oldData.vpack() != nullptr) { 
-      int64_t size = static_cast<int64_t>(oldData.markerSize());
+    if (old.dataptr() != nullptr) { 
+      uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());
+      int64_t size = static_cast<int64_t>(arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT) + VPackSlice(vpack).byteSize());
 
       dfi->numberAlive--;
       dfi->sizeAlive -= DatafileHelper::AlignedSize<int64_t>(size);
@@ -187,12 +185,7 @@ int MMFilesCollection::OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* m
   // no primary index lock required here because we are the only ones reading
   // from the index ATM
   auto primaryIndex = collection->primaryIndex();
-  IndexElement* element = primaryIndex->lookupKey(trx, keySlice);
-  TRI_doc_mptr_t* found = nullptr;
-  if (element != nullptr) {
-    MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
-    found = c->lookupRevisionMptr(element->revisionId());
-  }
+  IndexElement* found = primaryIndex->lookupKey(trx, keySlice);
 
   // it is a new entry, so we missed the create
   if (found == nullptr) {
@@ -202,18 +195,23 @@ int MMFilesCollection::OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* m
 
   // it is a real delete
   else {
+    TRI_voc_rid_t oldRevisionId = found->revisionId();
+
+    DocumentPosition const old = collection->lookupRevision(oldRevisionId);
+    
     // update the datafile info
     DatafileStatisticsContainer* dfi;
 
-    if (found->getFid() == state->_fid) {
+    if (old.fid() == state->_fid) {
       dfi = state->_dfi;
     } else {
-      dfi = FindDatafileStats(state, found->getFid());
+      dfi = FindDatafileStats(state, old.fid());
     }
 
-    TRI_ASSERT(found->vpack() != nullptr);
+    TRI_ASSERT(old.dataptr() != nullptr);
 
-    int64_t size = DatafileHelper::AlignedSize<int64_t>(found->markerSize());
+    uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());
+    int64_t size = DatafileHelper::AlignedSize<int64_t>(arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT) + VPackSlice(vpack).byteSize());
 
     dfi->numberAlive--;
     dfi->sizeAlive -= DatafileHelper::AlignedSize<int64_t>(size);
@@ -221,12 +219,10 @@ int MMFilesCollection::OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* m
     dfi->sizeDead += DatafileHelper::AlignedSize<int64_t>(size);
     state->_dfi->numberDeletions++;
 
-    collection->deletePrimaryIndex(trx, found->revisionId(), VPackSlice(found->vpack()));
+    collection->deletePrimaryIndex(trx, oldRevisionId, VPackSlice(vpack));
     collection->decNumberDocuments();
 
-    // free the header
-    MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
-    c->removeRevision(found->revisionId(), true);
+    collection->removeRevision(oldRevisionId, true);
   }
 
   return TRI_ERROR_NO_ERROR;
@@ -1026,7 +1022,7 @@ int MMFilesCollection::applyForTickRange(TRI_voc_tick_t dataMin, TRI_voc_tick_t 
   
 /// @brief report extra memory used by indexes etc.
 size_t MMFilesCollection::memory() const {
-  return _masterPointers.memory();
+  return 0; // TODO
 }
 
 /// @brief disallow compaction of the collection 
@@ -1101,125 +1097,3 @@ int MMFilesCollection::iterateMarkersOnLoad(arangodb::Transaction* trx) {
   return TRI_ERROR_NO_ERROR;
 }
 
-uint8_t const* MMFilesCollection::lookupRevision(TRI_voc_rid_t revisionId) {
-  READ_LOCKER(locker, _revisionsLock);
-  LOG(TRACE) << "LOOKING UP REVISION: " << revisionId;
-  auto it = _revisionsCache.find(revisionId);
-  if (it == _revisionsCache.end()) {
-  LOG(TRACE) << "-------------> REVISION NOT FOUND";
-    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected revision not found");
-  }
-  return (*it).second->vpack();
-}
-
-TRI_doc_mptr_t* MMFilesCollection::lookupRevisionMptr(TRI_voc_rid_t revisionId) {
-  READ_LOCKER(locker, _revisionsLock);
-  LOG(TRACE) << "LOOKING UP REVISION BY MPTR: " << revisionId;
-  auto it = _revisionsCache.find(revisionId);
-  if (it == _revisionsCache.end()) {
-  LOG(TRACE) << "-------------> REVISION NOT FOUND";
-    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "expected revision not found");
-  }
-  LOG(TRACE) << "FOUND REVISION: " << (*it).second;
-  return (*it).second;
-}
-
-void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const& doc) {
-  WRITE_LOCKER(locker, _revisionsLock);
-  TRI_doc_mptr_t* mptr = _masterPointers.request();
-  if (mptr == nullptr) {
-    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-  }
-
-  LOG(TRACE) << "INSERT REVISION: " << revisionId << ", MPTR: " << mptr;
-  mptr->setVPack(doc.begin());
-  try {
-    if (!_revisionsCache.emplace(revisionId, mptr).second) {
-  LOG(TRACE) << "----------------> REVISION ALREADY EXISTS";
-     _revisionsCache[revisionId] = mptr;
-    }
-  } catch (...) {
-    LOG(TRACE) << "OOPS; TRACEOR";
-    _masterPointers.release(mptr);
-    throw;
-  }
-}
-
-void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, TRI_voc_fid_t fid, TRI_df_marker_t const* marker) {
-  WRITE_LOCKER(locker, _revisionsLock);
-  TRI_doc_mptr_t* mptr = _masterPointers.request();
-  if (mptr == nullptr) {
-    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-  }
-
-  LOG(TRACE) << "INSERT REVISION: " << revisionId << ", MPTR: " << mptr;
-  mptr->setVPackFromMarker(marker);
-  mptr->setFid(fid, false);
-  try {
-    if (!_revisionsCache.emplace(revisionId, mptr).second) {
-  LOG(TRACE) << "----------------> REVISION ALREADY EXISTS";
-     _revisionsCache[revisionId] = mptr;
-    }
-  } catch (...) {
-    LOG(TRACE) << "OOPS; TRACEOR";
-    _masterPointers.release(mptr);
-    throw;
-  }
-}
-
-void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, TRI_doc_mptr_t* mptr) {
-  WRITE_LOCKER(locker, _revisionsLock);
-  LOG(TRACE) << "INSERT REVISION: " << revisionId << ", MPTR: " << mptr;
-  try {
-    if (!_revisionsCache.emplace(revisionId, mptr).second) {
-  LOG(TRACE) << "----------------> REVISION ALREADY EXISTS";
-     _revisionsCache[revisionId] = mptr;
-    }
-  } catch (...) {
-    LOG(TRACE) << "OOPS; TRACEOR";
-    throw;
-  }
-}
-
-void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId, bool free) {
-  WRITE_LOCKER(locker, _revisionsLock);
-  LOG(TRACE) << "REMOVING REVISION: " << revisionId;
-  auto it = _revisionsCache.find(revisionId);
-  if (it != _revisionsCache.end()) {
-  LOG(TRACE) << "FOUND REVISION: " << revisionId << " " << (*it).second;
-    if (free) {
-  LOG(TRACE) << "FREEING REVISION: " << revisionId << " " << (*it).second;
-  // TODO: adjust datafile statistics here!!!!!!!!!!!!!!!
-      TRI_doc_mptr_t* mptr = (*it).second;
-      if (!mptr->pointsToWal()) {
-        _datafileStatistics.increaseDead(mptr->getFid(), 1, mptr->alignedMarkerSize());
-      }
-      _masterPointers.release(mptr);
-    }
-    _revisionsCache.erase(revisionId);
-  }
-}
-  
-void MMFilesCollection::adjustStoragePosition(TRI_voc_rid_t revisionId, uint8_t const* vpack, TRI_voc_fid_t fid, bool isInWal) {
-  TRI_ASSERT(vpack != nullptr);
-  TRI_ASSERT(fid > 0);
-
-  TRI_doc_mptr_t* mptr = lookupRevisionMptr(revisionId);
-  mptr->setFid(fid, isInWal);
-  mptr->setVPack(vpack);
-}
-  
-bool MMFilesCollection::adjustStoragePositionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) {
-  TRI_doc_mptr_t* mptr = lookupRevisionMptr(revisionId);
-
-  if (mptr->getMarkerPtr() != oldPosition) {
-    // element already outdated
-    return false;
-  }
-      
-  // we can safely update the master pointer's dataptr value
-  mptr->setVPackFromMarker(newPosition);
-  mptr->setFid(newFid, isInWal);
-
-  return true;
-}

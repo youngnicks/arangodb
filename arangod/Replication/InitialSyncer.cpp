@@ -1073,7 +1073,7 @@ int InitialSyncer::handleSyncKeys(arangodb::LogicalCollection* col,
 
     uint64_t iterations = 0;
     trx.invokeOnAllElements(trx.name(), [this, &markers, &iterations, &idx](IndexElement const* element) {
-      uint8_t const* vpack = idx->collection()->getPhysical()->lookupRevision(element->revisionId());
+      uint8_t const* vpack = idx->collection()->lookupRevisionVPack(element->revisionId());
       markers.emplace_back(vpack);
       
       if (++iterations % 10000 == 0) {

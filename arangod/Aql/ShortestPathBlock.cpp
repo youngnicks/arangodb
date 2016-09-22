@@ -97,7 +97,7 @@ struct ConstDistanceExpanderLocal {
         edgeCursor->getMoreMptr(_cursor, UINT64_MAX);
         for (auto const& mptr : _cursor) {
           TRI_voc_rid_t revisionId = mptr->revisionId();
-          uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+          uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
           VPackSlice edge(vpack);
           VPackSlice from =
               arangodb::Transaction::extractFromFromDocument(edge);
@@ -239,7 +239,7 @@ struct EdgeWeightExpanderLocal {
         edgeCursor->getMoreMptr(cursor, UINT64_MAX);
         for (auto const& mptr : cursor) {
           TRI_voc_rid_t revisionId = mptr->revisionId();
-          uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+          uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
           VPackSlice edge(vpack);
           VPackSlice from =
               arangodb::Transaction::extractFromFromDocument(edge);

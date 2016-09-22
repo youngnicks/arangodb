@@ -51,12 +51,10 @@
 #include "Utils/CollectionWriteLocker.h"
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/StandaloneTransactionContext.h"
-#include "VocBase/CollectionRevisionCache.h"
 #include "VocBase/DatafileStatisticsContainer.h"
 #include "VocBase/IndexPoolFeature.h"
 #include "VocBase/KeyGenerator.h"
 #include "VocBase/ManagedDocumentResult.h"
-#include "VocBase/MasterPointer.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/ticks.h"
 #include "VocBase/transaction.h"
@@ -338,7 +336,6 @@ LogicalCollection::LogicalCollection(
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
-      _revisionCache(new CollectionRevisionCache(RevisionCacheFeature::ALLOCATOR, wal::LogfileManager::instance())),
       _keyGenerator(),
       _nextCompactionStartIndex(0),
       _lastCompactionStatus(nullptr),
@@ -402,7 +399,6 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase, VPackSlice const& i
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
-      _revisionCache(new CollectionRevisionCache(RevisionCacheFeature::ALLOCATOR, wal::LogfileManager::instance())),
       _keyGenerator(),
       _nextCompactionStartIndex(0),
       _lastCompactionStatus(nullptr),
@@ -951,7 +947,9 @@ void LogicalCollection::toVelocyPack(VPackBuilder& result, bool withPath) const 
   result.add("waitForSync", VPackValue(_waitForSync));
   result.add("journalSize", VPackValue(_journalSize));
   result.add("version", VPackValue(_version)); 
-  result.add("count", VPackValue(_physical->initialCount()));
+  if (_physical != nullptr) {
+    result.add("count", VPackValue(_physical->initialCount()));
+  }
   
   if (_keyOptions != nullptr) {
     result.add("keyOptions", VPackSlice(_keyOptions->data()));
@@ -1848,8 +1846,7 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
 
   operation.setRevisions(DocumentDescriptor(), DocumentDescriptor(revisionId, doc.begin()));
   
-  // create a new header
-  getPhysical()->insertRevision(revisionId, doc);
+  insertRevision(revisionId, marker->vpack(), 0, true);
 
   // insert into indexes
   res = insertDocument(trx, revisionId, doc, operation, marker, options.waitForSync);
@@ -1986,7 +1983,7 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
   arangodb::wal::DocumentOperation operation(
       trx, this, TRI_VOC_DOCUMENT_OPERATION_UPDATE);
   
-  getPhysical()->insertRevision(revisionId, newDoc);
+  insertRevision(revisionId, marker->vpack(), 0, true);
   operation.setRevisions(DocumentDescriptor(oldRevisionId, oldDoc.begin()), DocumentDescriptor(revisionId, newDoc.begin()));
 
   try {
@@ -2133,7 +2130,7 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
   
   arangodb::wal::DocumentOperation operation(trx, this, TRI_VOC_DOCUMENT_OPERATION_REPLACE);
   
-  getPhysical()->insertRevision(revisionId, newDoc);
+  insertRevision(revisionId, marker->vpack(), 0, true);
   operation.setRevisions(DocumentDescriptor(oldRevisionId, oldDoc.begin()), DocumentDescriptor(revisionId, newDoc.begin()));
 
   try {
@@ -2306,7 +2303,7 @@ int LogicalCollection::rollbackOperation(arangodb::Transaction* trx,
     TRI_ASSERT(newRevisionId != 0);
     TRI_ASSERT(!newDoc.isNone());
     // remove new revision
-    getPhysical()->removeRevision(newRevisionId, false);
+    removeRevision(newRevisionId, false);
 
     // ignore any errors we're getting from this
     deletePrimaryIndex(trx, newRevisionId, newDoc);
@@ -2446,7 +2443,7 @@ int LogicalCollection::fillIndexBatch(arangodb::Transaction* trx,
       }
       
       TRI_voc_rid_t revisionId = element->revisionId();
-      uint8_t const* vpack = getPhysical()->lookupRevision(revisionId);
+      uint8_t const* vpack = lookupRevisionVPack(revisionId);
       documents.emplace_back(std::make_pair(revisionId, VPackSlice(vpack)));
 
       if (documents.size() == blockSize) {
@@ -2512,7 +2509,7 @@ int LogicalCollection::fillIndexSequential(arangodb::Transaction* trx,
       }
 
       TRI_voc_rid_t revisionId = element->revisionId();
-      uint8_t const* vpack = getPhysical()->lookupRevision(revisionId);
+      uint8_t const* vpack = lookupRevisionVPack(revisionId);
       int res = idx->insert(trx, revisionId, VPackSlice(vpack), false);
 
       if (res != TRI_ERROR_NO_ERROR) {
@@ -2829,7 +2826,7 @@ int LogicalCollection::updateDocument(
   res = insertSecondaryIndexes(trx, newRevisionId, newDoc, false);
 
   if (res != TRI_ERROR_NO_ERROR) {
-    getPhysical()->removeRevision(newRevisionId, false);
+    removeRevision(newRevisionId, false);
 
     // rollback
     deleteSecondaryIndexes(trx, newRevisionId, newDoc, true);
@@ -3277,22 +3274,63 @@ void LogicalCollection::newObjectForRemove(
 }
 
 void LogicalCollection::readRevision(Transaction* trx, ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
-  uint8_t const* vpack = getPhysical()->lookupRevisionMptr(revisionId)->vpack();
-  result.set(vpack);
+  DocumentPosition const old = lookupRevision(revisionId);
+  result.set(static_cast<uint8_t const*>(old.dataptr()));
 }
 
 bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
-  TRI_doc_mptr_t* mptr = getPhysical()->lookupRevisionMptr(revisionId);
-  if (excludeWal && mptr->pointsToWal()) {
+  DocumentPosition const old = lookupRevision(revisionId);
+  if (excludeWal && old.pointsToWal()) {
     return false;
   }
+  
+  uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());
   if (maxTick > 0) {
-    TRI_df_marker_t const* marker = mptr->getMarkerPtr();
+    TRI_df_marker_t const* marker = reinterpret_cast<TRI_df_marker_t const*>(vpack - arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT));
     if (marker->getTick() > maxTick) {
       return false;
     }
   }
-  result.push_back(mptr->vpack());
+
+  result.push_back(vpack);
   return true;
+}
+
+DocumentPosition LogicalCollection::lookupRevision(TRI_voc_rid_t revisionId) const {
+  return _revisionsCache.lookup(revisionId);
+}
+
+uint8_t const* LogicalCollection::lookupRevisionVPack(TRI_voc_rid_t revisionId) const {
+  DocumentPosition const old = _revisionsCache.lookup(revisionId);
+  if (old.valid()) {
+    return static_cast<uint8_t const*>(old.dataptr());
+  }
+  THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "got invalid vpack value on lookup");
+}
+
+void LogicalCollection::insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+  _revisionsCache.insert(revisionId, dataptr, fid, isInWal);
+}
+
+void LogicalCollection::updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+  _revisionsCache.update(revisionId, dataptr, fid, isInWal);
+}
+  
+bool LogicalCollection::updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) {
+  return _revisionsCache.updateConditional(revisionId, oldPosition, newPosition, newFid, isInWal);
+}
+
+void LogicalCollection::removeRevision(TRI_voc_rid_t revisionId, bool updateStats) {
+  if (updateStats) {
+    DocumentPosition const old = _revisionsCache.fetchAndRemove(revisionId);
+    if (old.valid() && !old.pointsToWal()) {
+      TRI_ASSERT(old.dataptr() != nullptr);
+      uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());
+      int64_t size = DatafileHelper::AlignedSize<int64_t>(arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT) + VPackSlice(vpack).byteSize());
+      getPhysical()->increaseDeadStats(old.fid(), 1, size);
+    }
+  } else {
+    _revisionsCache.remove(revisionId);
+  }
 }
 

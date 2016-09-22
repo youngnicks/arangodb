@@ -781,7 +781,7 @@ static AqlValue buildGeoResult(arangodb::Transaction* trx,
         VPackObjectBuilder docGuard(builder.get());
         builder->add(attributeName, VPackValue(it._distance));
         TRI_voc_rid_t revisionId = it._revisionId;
-        VPackSlice doc(collection->getPhysical()->lookupRevision(revisionId));
+        VPackSlice doc(collection->lookupRevisionVPack(revisionId));
         for (auto const& entry : VPackObjectIterator(doc)) {
           std::string key = entry.key.copyString();
           if (key != attributeName) {
@@ -792,7 +792,7 @@ static AqlValue buildGeoResult(arangodb::Transaction* trx,
 
     } else {
       for (auto& it : distances) {
-        builder->addExternal(collection->getPhysical()->lookupRevision(it._revisionId));
+        builder->addExternal(collection->lookupRevisionVPack(it._revisionId));
       }
     }
     builder->close();
@@ -3872,7 +3872,7 @@ AqlValue Functions::Fulltext(arangodb::aql::Query* query,
     size_t const numResults = queryResult->_numDocuments;
     for (size_t i = 0; i < numResults; ++i) {
       TRI_voc_rid_t revisionId = FulltextIndex::toRevision(queryResult->_documents[i]);
-      builder->addExternal(collection->getPhysical()->lookupRevision(revisionId));
+      builder->addExternal(collection->lookupRevisionVPack(revisionId));
     }
     builder->close();
     TRI_FreeResultFulltextIndex(queryResult);

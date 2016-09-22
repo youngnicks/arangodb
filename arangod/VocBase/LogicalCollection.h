@@ -25,6 +25,8 @@
 #define ARANGOD_VOCBASE_LOGICAL_COLLECTION_H 1
 
 #include "Basics/Common.h"
+#include "VocBase/CollectionRevisionsCache.h"
+#include "VocBase/DocumentPosition.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/voc-types.h"
 #include "VocBase/vocbase.h"
@@ -50,7 +52,7 @@ typedef std::string CollectionID;  // ID of a collection
 typedef std::string ShardID;       // ID of a shard
 typedef std::unordered_map<ShardID, std::vector<ServerID>> ShardMap;
 
-class CollectionRevisionCache;
+class CollectionRevisionsCache;
 class DatafileStatisticsContainer;
 class Ditches;
 class FollowerInfo;
@@ -343,6 +345,13 @@ class LogicalCollection {
   void readRevision(arangodb::Transaction*, ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
   bool readRevision(arangodb::Transaction*, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal);
 
+  DocumentPosition lookupRevision(TRI_voc_rid_t revisionId) const;
+  uint8_t const* lookupRevisionVPack(TRI_voc_rid_t revisionId) const;
+  void insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
+  void updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
+  bool updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal);
+  void removeRevision(TRI_voc_rid_t revisionId, bool updateStats);
+
  private:
   // SECTION: Private functions
 
@@ -518,7 +527,7 @@ class LogicalCollection {
 
   TRI_voc_tick_t _maxTick;
 
-  std::unique_ptr<CollectionRevisionCache> _revisionCache;
+  CollectionRevisionsCache _revisionsCache;
 
   std::unique_ptr<arangodb::KeyGenerator> _keyGenerator;
   

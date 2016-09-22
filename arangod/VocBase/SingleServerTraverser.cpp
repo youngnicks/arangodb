@@ -70,7 +70,7 @@ bool SingleServerEdgeCursor::next(std::vector<VPackSlice>& result,
   if (_cachePos < _cache.size()) {
     LogicalCollection* collection = _cursors[_currentCursor][_currentSubCursor]->collection();
     TRI_voc_rid_t revisionId = _cache[_cachePos]->revisionId();
-    uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+    uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
     result.emplace_back(vpack);
     cursorId = _currentCursor;
     return true;
@@ -113,7 +113,7 @@ bool SingleServerEdgeCursor::next(std::vector<VPackSlice>& result,
   TRI_ASSERT(_cachePos < _cache.size());
   LogicalCollection* collection = cursor->collection();
   TRI_voc_rid_t revisionId = _cache[_cachePos]->revisionId();
-  uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+  uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
   result.emplace_back(vpack);
   cursorId = _currentCursor;
   return true;
@@ -134,7 +134,7 @@ bool SingleServerEdgeCursor::readAll(std::unordered_set<VPackSlice>& result,
       cursor->getMoreMptr(_cache);
       for (auto const& mptr : _cache) {
         TRI_voc_rid_t revisionId = mptr->revisionId();
-        uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+        uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
         result.emplace(vpack);
       }
     }

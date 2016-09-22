@@ -49,12 +49,12 @@ DocumentOperation::~DocumentOperation() {
         // remove old, now unused revision
         TRI_ASSERT(!_oldRevision.empty());
         TRI_ASSERT(!_newRevision.empty());
-        _collection->getPhysical()->removeRevision(_oldRevision._revisionId, true);
+        _collection->removeRevision(_oldRevision._revisionId, true);
       } else if (_type == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
         // remove old, now unused revision
         TRI_ASSERT(!_oldRevision.empty());
         TRI_ASSERT(_newRevision.empty());
-        _collection->getPhysical()->removeRevision(_oldRevision._revisionId, true);
+        _collection->removeRevision(_oldRevision._revisionId, true);
       }
     } else if (_status != StatusType::REVERTED) {
       revert();
@@ -139,7 +139,7 @@ void DocumentOperation::revert() {
     TRI_ASSERT(_oldRevision.empty());
     TRI_ASSERT(!_newRevision.empty());
     // remove now obsolete new revision
-    _collection->getPhysical()->removeRevision(newRevisionId, true);
+    _collection->removeRevision(newRevisionId, true);
   } else if (_type == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
              _type == TRI_VOC_DOCUMENT_OPERATION_REPLACE) {
     TRI_ASSERT(!_oldRevision.empty());
@@ -150,7 +150,7 @@ void DocumentOperation::revert() {
     }
     
     // remove now obsolete new revision
-    _collection->getPhysical()->removeRevision(newRevisionId, true);
+    _collection->removeRevision(newRevisionId, true);
   }
 
   _status = StatusType::REVERTED;

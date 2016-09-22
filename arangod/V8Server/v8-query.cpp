@@ -380,7 +380,7 @@ static void JS_ChecksumCollection(
   uint64_t hash = 0;
         
   trx.invokeOnAllElements(col->name(), [&hash, &withData, &withRevisions, &collection](IndexElement const* element) {
-    uint8_t const* vpack = collection->getPhysical()->lookupRevision(element->revisionId());
+    uint8_t const* vpack = collection->lookupRevisionVPack(element->revisionId());
     VPackSlice const slice(vpack);
 
     uint64_t localHash = Transaction::extractKeyFromDocument(slice).hash(); 

@@ -1017,7 +1017,7 @@ int TRI_AddOperationTransaction(TRI_transaction_t* trx,
     uint8_t const* vpack = reinterpret_cast<uint8_t const*>(position) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT);
     TRI_ASSERT(fid > 0);
     operation.setVPack(vpack);
-    collection->getPhysical()->adjustStoragePosition(revisionId, vpack, fid, true); // always in WAL
+    collection->updateRevision(revisionId, vpack, fid, true); // always in WAL
   }
 
   TRI_IF_FAILURE("TransactionOperationAfterAdjust") { return TRI_ERROR_DEBUG; }

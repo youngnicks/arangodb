@@ -584,7 +584,7 @@ void CollectorThread::processCollectionMarker(
         element->revisionId() == revisionId) { 
       // make it point to datafile now
       TRI_df_marker_t const* newPosition = reinterpret_cast<TRI_df_marker_t const*>(operation.datafilePosition);
-      wasAdjusted = collection->getPhysical()->adjustStoragePositionConditional(element->revisionId(), walMarker, newPosition, fid, false); 
+      wasAdjusted = collection->updateRevisionConditional(element->revisionId(), walMarker, newPosition, fid, false); 
     }
       
     if (wasAdjusted) {

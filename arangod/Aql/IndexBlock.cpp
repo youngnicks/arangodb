@@ -395,7 +395,7 @@ bool IndexBlock::readIndex(size_t atMost) {
     if (hasMultipleIndexes) {
       for (auto const& mptr : _result) {
         TRI_voc_rid_t revisionId = mptr->revisionId();
-        uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+        uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
         // uniqueness checks
         if (!isLastIndex) {
           // insert & check for duplicates in one go
@@ -412,7 +412,7 @@ bool IndexBlock::readIndex(size_t atMost) {
     } else {
       for (auto const& mptr : _result) {
         TRI_voc_rid_t revisionId = mptr->revisionId();
-        uint8_t const* vpack = collection->getPhysical()->lookupRevision(revisionId);
+        uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
         _documents.emplace_back(vpack);
       } 
     }

@@ -39,7 +39,6 @@
 #include "VocBase/CompactionLocker.h"
 #include "VocBase/DatafileHelper.h"
 #include "VocBase/LogicalCollection.h"
-#include "VocBase/MasterPointer.h"
 #include "VocBase/vocbase.h"
 
 using namespace arangodb;
@@ -265,7 +264,6 @@ MMFilesCompactorThread::CompactionInitialContext MMFilesCompactorThread::getComp
     /// @brief datafile iterator, calculates necessary total size
     auto calculateSize = [&context](TRI_df_marker_t const* marker, TRI_datafile_t* datafile) -> bool {
       LogicalCollection* collection = context._collection;
-      MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
       TRI_df_marker_type_t const type = marker->getType();
 
       // new or updated document
@@ -277,14 +275,14 @@ MMFilesCompactorThread::CompactionInitialContext MMFilesCompactorThread::getComp
 
         // check if the document is still active
         auto primaryIndex = collection->primaryIndex();
-
+        TRI_df_marker_t const* markerPtr = nullptr;
         IndexElement* element = primaryIndex->lookupKey(context._trx, keySlice);
-        TRI_doc_mptr_t* found = nullptr;
         if (element != nullptr) {
-          found = c->lookupRevisionMptr(element->revisionId());
+          DocumentPosition const old = collection->lookupRevision(element->revisionId());
+          markerPtr = reinterpret_cast<TRI_df_marker_t const*>(static_cast<uint8_t const*>(old.dataptr()) - arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT));
         }
 
-        bool deleted = (found == nullptr || marker != found->getMarkerPtr());
+        bool deleted = (markerPtr == nullptr || marker != markerPtr);
 
         if (deleted) {
           return true;
@@ -354,7 +352,6 @@ void MMFilesCompactorThread::compactDatafiles(LogicalCollection* collection,
   auto compactifier = [&context, &collection, this](TRI_df_marker_t const* marker, TRI_datafile_t* datafile) -> bool {
     LogicalCollection* collection = context->_collection;
     TRI_voc_fid_t const targetFid = context->_compactor->fid();
-    MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
 
     TRI_df_marker_type_t const type = marker->getType();
 
@@ -367,12 +364,14 @@ void MMFilesCompactorThread::compactDatafiles(LogicalCollection* collection,
 
       // check if the document is still active
       auto primaryIndex = collection->primaryIndex();
+      TRI_df_marker_t const* markerPtr = nullptr;
       IndexElement* element = primaryIndex->lookupKey(context->_trx, keySlice);
-      TRI_doc_mptr_t* found = nullptr;
       if (element != nullptr) {
-        found = c->lookupRevisionMptr(element->revisionId());
+        DocumentPosition const old = collection->lookupRevision(element->revisionId());
+        markerPtr = reinterpret_cast<TRI_df_marker_t const*>(static_cast<uint8_t const*>(old.dataptr()) - arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT));
       }
-      bool deleted = (found == nullptr || marker != found->getMarkerPtr());
+        
+      bool deleted = (markerPtr == nullptr || marker != markerPtr);
 
       if (deleted) {
         // found a dead document
@@ -393,15 +392,9 @@ void MMFilesCompactorThread::compactDatafiles(LogicalCollection* collection,
         FATAL_ERROR_EXIT();
       }
 
-      TRI_ASSERT(found->vpack() != nullptr);
-      TRI_ASSERT(found->vpackSize() > 0);
-
       // let marker point to the new position
-      found->setVPackFromMarker(result);
-      // update fid in case it changes
-      if (found->getFid() != targetFid) {
-        found->setFid(targetFid, false);
-      }
+      void const* dataptr = reinterpret_cast<char const*>(result) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT);
+      collection->updateRevision(element->revisionId(), dataptr, targetFid, false);
 
       context->_dfi.numberAlive++;
       context->_dfi.sizeAlive += DatafileHelper::AlignedMarkerSize<int64_t>(marker);

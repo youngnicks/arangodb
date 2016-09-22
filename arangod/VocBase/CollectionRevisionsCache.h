@@ -18,50 +18,39 @@
 ///
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
-/// @author Dr. Frank Celler
+/// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_STORAGE_ENGINE_MMFILES_MASTER_POINTERS_H
-#define ARANGOD_STORAGE_ENGINE_MMFILES_MASTER_POINTERS_H 1
+#ifndef ARANGOD_VOCBASE_COLLECTION_REVISIONS_CACHE_H
+#define ARANGOD_VOCBASE_COLLECTION_REVISIONS_CACHE_H 1
 
 #include "Basics/Common.h"
+#include "Basics/ReadWriteLock.h"
+#include "VocBase/DocumentPosition.h"
+#include "VocBase/voc-types.h"
 
-struct TRI_doc_mptr_t;
+struct TRI_df_marker_t;
 
 namespace arangodb {
 
-class MMFilesMasterPointers {
-  MMFilesMasterPointers(MMFilesMasterPointers const&) = delete;
-  MMFilesMasterPointers& operator=(MMFilesMasterPointers const&) = delete;
-
+class CollectionRevisionsCache {
  public:
-  MMFilesMasterPointers();
-
-  ~MMFilesMasterPointers();
-
+  CollectionRevisionsCache();
+  ~CollectionRevisionsCache();
+  
  public:
-  /// @brief returns the number of allocated headers
-  uint64_t numAllocated() const { return _nrAllocated; }
+  DocumentPosition lookup(TRI_voc_rid_t revisionId) const;
+  void insert(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
+  void update(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
+  bool updateConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal);
+  void remove(TRI_voc_rid_t revisionId);
+  DocumentPosition fetchAndRemove(TRI_voc_rid_t revisionId);
 
-  /// @brief returns the memory usage
-  uint64_t memory() const;
-
-  /// @brief request a new header
-  TRI_doc_mptr_t* request();
-
-  /// @brief release/free an existing header, putting it back onto the freelist
-  void release(TRI_doc_mptr_t*);
-
-  /// @brief return the total size of linked headers
  private:
-
-  TRI_doc_mptr_t* _freelist;  // free headers
-
-  uint64_t _nrAllocated;     // number of allocated headers
-
-  std::vector<TRI_doc_mptr_t*> _blocks;
+  mutable arangodb::basics::ReadWriteLock _lock; 
+  std::unordered_map<TRI_voc_rid_t, DocumentPosition> _positions;
 };
 
-}
+} // namespace arangodb
 
 #endif

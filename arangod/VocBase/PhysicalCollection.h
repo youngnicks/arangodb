@@ -32,7 +32,6 @@
 
 struct TRI_datafile_t;
 struct TRI_df_marker_t;
-struct TRI_doc_mptr_t;
 
 namespace arangodb {
 class Ditches;
@@ -69,6 +68,8 @@ class PhysicalCollection {
 
   /// @brief increase dead stats for a datafile, if it exists
   virtual void updateStats(TRI_voc_fid_t fid, DatafileStatisticsContainer const& values) = 0;
+      
+  virtual void increaseDeadStats(TRI_voc_fid_t fid, int64_t number, int64_t size) = 0;
   
   /// @brief report extra memory used by indexes etc.
   virtual size_t memory() const = 0;
@@ -97,13 +98,6 @@ class PhysicalCollection {
   /// @brief iterate all markers of a collection on load
   virtual int iterateMarkersOnLoad(arangodb::Transaction* trx) = 0;
   
-  virtual uint8_t const* lookupRevision(TRI_voc_rid_t revisionId) = 0;
-  virtual TRI_doc_mptr_t* lookupRevisionMptr(TRI_voc_rid_t revisionId) = 0; // TODO: remove
-  virtual void insertRevision(TRI_voc_rid_t revisionId, arangodb::velocypack::Slice const&) = 0;
-  virtual void removeRevision(TRI_voc_rid_t revisionId, bool free) = 0;
-  virtual void adjustStoragePosition(TRI_voc_rid_t revisionId, uint8_t const* vpack, TRI_voc_fid_t, bool isInWal) = 0;
-  virtual bool adjustStoragePositionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) = 0;
-
  protected:
   LogicalCollection* _logicalCollection;
 };
