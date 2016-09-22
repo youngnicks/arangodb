@@ -26,8 +26,8 @@ else()
     target_compile_definitions(boost_system PRIVATE "BOOST_SYSTEM_STATIC_LINK=1")
 
     #set boost include path and add libraries to Boost_LIBRARIES variable
-    set(Boost_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/1.61.0)
-    set(Boost_LIBRARIES boost_system)
+    #set(Boost_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/1.61.0)
+    #set(Boost_LIBRARIES boost_system)
 endif()
 
 if (NOT USE_BOOST_UNITTESTS)

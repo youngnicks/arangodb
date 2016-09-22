@@ -357,7 +357,6 @@ target_link_libraries(${BIN_ARANGOD}
   ${LIB_ARANGO_FE}
   ${LIB_ARANGO_V8}
   ${LIB_ARANGO}
-  ${BOOST_LIBS}
   ${LINENOISE_LIBS}
   ${MSVC_LIBS}
   ${V8_LIBS}
