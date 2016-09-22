@@ -232,6 +232,9 @@ struct ClusterCommResult {
       case TRI_SIMPLE_CLIENT_COULD_NOT_CONNECT:
         status = CL_COMM_BACKEND_UNAVAILABLE;
         break;
+      case TRI_COMMUNICATOR_REQUEST_ABORTED:
+        status = CL_COMM_BACKEND_UNAVAILABLE;
+        break;
       case TRI_ERROR_CLUSTER_TIMEOUT:
         status = CL_COMM_TIMEOUT;
         sendWasComplete = true;

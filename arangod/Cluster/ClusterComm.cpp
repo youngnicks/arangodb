@@ -1134,18 +1134,14 @@ size_t ClusterComm::performRequests(std::vector<ClusterCommRequest>& requests,
               << "ClusterComm::performRequests: sending request to "
               << requests[i].destination << ":" << requests[i].path
               << "body:" << requests[i].body;
-          double localInitTimeout =
-              (std::min)((std::max)(1.0, now - startTime), 10.0);
+          
+          dueTime[i] = endTime + 10; 
           double localTimeout = endTime - now;
-          dueTime[i] = endTime + 10;  // no retry unless ordered elsewhere
-          if (localInitTimeout > localTimeout) {
-            localInitTimeout = localTimeout;
-          }
           OperationID opId = asyncRequest(
               "", coordinatorTransactionID, requests[i].destination,
               requests[i].requestType, requests[i].path, requests[i].body,
               requests[i].headerFields, nullptr, localTimeout, false,
-              localInitTimeout);
+              2.0);
 
           opIDtoIndex.insert(std::make_pair(opId, i));
           // It is possible that an error occurs right away, we will notice
@@ -1153,60 +1149,32 @@ size_t ClusterComm::performRequests(std::vector<ClusterCommRequest>& requests,
         }
       }
 
-      // Now see how long we can afford to wait:
-      ClusterCommTimeout actionNeeded = endTime;
-      for (size_t i = 0; i < dueTime.size(); i++) {
-        if (!requests[i].done && dueTime[i] < actionNeeded) {
-          actionNeeded = dueTime[i];
-        }
+      now = TRI_microtime();
+      auto res =
+          wait("", coordinatorTransactionID, 0, "", endTime - now);
+
+      auto it = opIDtoIndex.find(res.operationID);
+      if (it == opIDtoIndex.end()) {
+        // Ooops, we got a response to which we did not send the request
+        LOG_TOPIC(TRACE, Logger::CLUSTER) << "Received ClusterComm response for a request we did not send!";
+        continue;
       }
-
-      // Now wait for results:
-      while (true) {
-        now = TRI_microtime();
-        if (now >= actionNeeded) {
-          break;
+      size_t index = it->second;
+      if (res.status == CL_COMM_RECEIVED) {
+        requests[index].result = res;
+        requests[index].done = true;
+        nrDone++;
+        if (res.answer_code == rest::ResponseCode::OK ||
+            res.answer_code == rest::ResponseCode::CREATED ||
+            res.answer_code == rest::ResponseCode::ACCEPTED) {
+          nrGood++;
         }
-        auto res =
-            wait("", coordinatorTransactionID, 0, "", actionNeeded - now);
-
-        if (res.status == CL_COMM_TIMEOUT && res.operationID == 0) {
-          // Did not receive any result until the timeout (of wait) was hit.
-          break;
-        }
-        if (res.status == CL_COMM_DROPPED) {
-          // Nothing in flight, simply wait:
-          now = TRI_microtime();
-          if (now >= actionNeeded) {
-            break;
-          }
-          usleep((std::min)(500000,
-                            static_cast<int>((actionNeeded - now) * 1000000)));
-          continue;
-        }
-        auto it = opIDtoIndex.find(res.operationID);
-        if (it == opIDtoIndex.end()) {
-          // Ooops, we got a response to which we did not send the request
-          LOG_TOPIC(ERR, Logger::CLUSTER) << "Received ClusterComm response for a request we did not send!";
-          continue;
-        }
-        size_t index = it->second;
-        if (res.status == CL_COMM_RECEIVED) {
-          requests[index].result = res;
-          requests[index].done = true;
-          nrDone++;
-          if (res.answer_code == rest::ResponseCode::OK ||
-              res.answer_code == rest::ResponseCode::CREATED ||
-              res.answer_code == rest::ResponseCode::ACCEPTED) {
-            nrGood++;
-          }
-          LOG_TOPIC(TRACE, Logger::CLUSTER) << "ClusterComm::performRequests: "
-              << "got answer from " << requests[index].destination << ":"
-              << requests[index].path << " with return code "
-              << (int)res.answer_code;
-        } else if (res.status == CL_COMM_BACKEND_UNAVAILABLE ||
-                   (res.status == CL_COMM_TIMEOUT && !res.sendWasComplete)) {
-          TRI_ASSERT(false);
+        LOG_TOPIC(TRACE, Logger::CLUSTER) << "ClusterComm::performRequests: "
+          << "got answer from " << requests[index].destination << ":"
+          << requests[index].path << " with return code "
+          << (int)res.answer_code;
+      } else if (res.status == CL_COMM_BACKEND_UNAVAILABLE ||
+           (res.status == CL_COMM_TIMEOUT && !res.sendWasComplete)) {
           requests[index].result = res;
 
           // In this case we will retry:
@@ -1216,17 +1184,14 @@ size_t ClusterComm::performRequests(std::vector<ClusterCommRequest>& requests,
             requests[index].done = true;
             nrDone++;
           }
-          if (dueTime[index] < actionNeeded) {
-            actionNeeded = dueTime[index];
-          }
-          LOG_TOPIC(TRACE, Logger::CLUSTER) << "ClusterComm::performRequests: "
+          LOG_TOPIC(ERR, Logger::CLUSTER) << "ClusterComm::performRequests: "
               << "got BACKEND_UNAVAILABLE or TIMEOUT from "
               << requests[index].destination << ":" << requests[index].path;
         } else {  // a "proper error"
           requests[index].result = res;
           requests[index].done = true;
           nrDone++;
-          LOG_TOPIC(TRACE, Logger::CLUSTER) << "ClusterComm::performRequests: "
+          LOG_TOPIC(ERR, Logger::CLUSTER) << "ClusterComm::performRequests: "
               << "got no answer from " << requests[index].destination << ":"
               << requests[index].path << " with error " << res.status;
         }
@@ -1235,7 +1200,6 @@ size_t ClusterComm::performRequests(std::vector<ClusterCommRequest>& requests,
           return nrGood;
         }
       }
-    }
   } catch (...) {
     LOG_TOPIC(ERR, Logger::CLUSTER) << "ClusterComm::performRequests: "
         << "caught exception, ignoring...";
@@ -1401,7 +1365,7 @@ void ClusterCommThread::stopRequestsToFailedServers() {
   failedServerEndpoints.reserve(failedServers.size());
   
   for (auto const& failedServer: failedServers) {
-    failedServerEndpoints.push_back(_cc->createCommunicatorDestination(failedServer, "/").url());
+    failedServerEndpoints.push_back(_cc->createCommunicatorDestination(ci->getServerEndpoint(failedServer), "/").url());
   }
 
   for (auto const& request: _cc->communicator()->requestsInProgress()) {

@@ -458,13 +458,12 @@ void HeartbeatThread::runCoordinator() {
           std::vector<std::string> failedServers = {};
           for (auto const& server : VPackObjectIterator(failedServersSlice)) {
             if (server.value.isArray() && server.value.length() == 0) {
-              LOG(ERR) << "FAILED SERVER " << server.key.copyString();
               failedServers.push_back(server.key.copyString());
             }
           }
           ClusterInfo::instance()->setFailedServers(failedServers);
         } else {
-          LOG_TOPIC(WARN, Logger::HEARTBEAT) << "failedServers is not an object. ignoring for now";
+          LOG_TOPIC(WARN, Logger::HEARTBEAT) << "FailedServers is not an object. ignoring for now";
         }
       }
 
