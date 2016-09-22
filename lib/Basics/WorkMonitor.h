@@ -133,6 +133,7 @@ class HandlerWorkStack {
 
  public:
   rest::RestHandler* handler() const { return _handler.get(); }
+  rest::RestHandler* operator->() { return _handler.get();  }
 
  private:
   std::shared_ptr<rest::RestHandler> _handler;

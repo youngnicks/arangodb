@@ -138,10 +138,6 @@ int RestHandler::executeEngine() {
   try {
     RestStatus result = execute();
 
-    LOG(ERR) << "AAAAAAAAAAAAAAAAAAAAAAAAA";
-    result.printTree();
-    LOG(ERR) << "AAAAAAAAAAAAAAAAAAAAAAAAA";
-
     if (result.isLeaf()) {
       if (!result.isAbandoned() && _response == nullptr) {
         Exception err(TRI_ERROR_INTERNAL, "no response received from handler",

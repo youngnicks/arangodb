@@ -39,6 +39,10 @@
 using namespace arangodb;
 using namespace arangodb::rest;
 
+// -----------------------------------------------------------------------------
+// --SECTION--                                                       WorkMonitor
+// -----------------------------------------------------------------------------
+
 void WorkMonitor::run() {
   CONDITION_LOCKER(guard, _waiter);
 
@@ -235,7 +239,12 @@ void WorkMonitor::sendWorkOverview(
   // SchedulerFeature::SCHEDULER->signalTask(data);
 }
 
-HandlerWorkStack::HandlerWorkStack(std::shared_ptr<RestHandler> handler) {
+// -----------------------------------------------------------------------------
+// --SECTION--                                                  HandlerWorkStack
+// -----------------------------------------------------------------------------
+
+HandlerWorkStack::HandlerWorkStack(std::shared_ptr<RestHandler> handler)
+  : _handler(handler) {
   WorkMonitor::pushHandler(_handler);
 }
 

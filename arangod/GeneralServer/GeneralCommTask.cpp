@@ -103,10 +103,10 @@ void GeneralCommTask::executeRequest(
 
     if (asyncExecution == "store") {
       // persist the responses
-      ok = handleRequestAsync(handler, &jobId);
+      ok = handleRequestAsync(std::move(handler), &jobId);
     } else {
       // don't persist the responses
-      ok = handleRequestAsync(handler);
+      ok = handleRequestAsync(std::move(handler));
     }
 
     if (ok) {
@@ -128,7 +128,7 @@ void GeneralCommTask::executeRequest(
 
   // synchronous request
   else {
-    ok = handleRequest(handler);
+    ok = handleRequest(std::move(handler));
   }
 
   if (!ok) {
@@ -176,23 +176,20 @@ void GeneralCommTask::signalTask(std::unique_ptr<TaskData> data) {
 }
 
 bool GeneralCommTask::handleRequest(std::shared_ptr<RestHandler> handler) {
-  JobGuard guard(_loop);
-
   if (handler->isDirect()) {
-    handleRequestDirectly(handler);
+    handleRequestDirectly(std::move(handler));
     return true;
   }
 
-  if (guard.isIdle()) {
-    handleRequestDirectly(handler);
+  if (_loop._scheduler->isIdle()) {
+    handleRequestDirectly(std::move(handler));
     return true;
   }
 
   bool startThread = handler->needsOwnThread();
 
   if (startThread) {
-    guard.block();
-    handleRequestDirectly(handler);
+    handleRequestDirectly(std::move(handler));
     return true;
   }
 
@@ -203,7 +200,7 @@ bool GeneralCommTask::handleRequest(std::shared_ptr<RestHandler> handler) {
 
   auto self = shared_from_this();
   std::unique_ptr<Job> job(
-      new Job(_server, handler, [self, this](std::shared_ptr<RestHandler> h) {
+      new Job(_server, std::move(handler), [self, this](std::shared_ptr<RestHandler> h) {
         handleRequestDirectly(h);
       }));
 
@@ -220,6 +217,9 @@ bool GeneralCommTask::handleRequest(std::shared_ptr<RestHandler> handler) {
 
 void GeneralCommTask::handleRequestDirectly(
     std::shared_ptr<RestHandler> handler) {
+  JobGuard guard(_loop);
+  guard.block();
+
   RequestStatisticsAgent* agent = getAgent(handler->messageId());
 
   auto self = shared_from_this();
@@ -227,7 +227,8 @@ void GeneralCommTask::handleRequestDirectly(
     addResponse(h->response());
   });
 
-  handler->asyncRunEngine();
+  HandlerWorkStack monitor(handler);
+  monitor->asyncRunEngine();
 }
 
 bool GeneralCommTask::handleRequestAsync(std::shared_ptr<RestHandler> handler,
@@ -257,10 +258,16 @@ bool GeneralCommTask::handleRequestAsync(std::shared_ptr<RestHandler> handler,
 
   // queue this job
   size_t queue = handler->queue();
+  auto self = shared_from_this();
 
   std::unique_ptr<Job> job(
-      new Job(_server, handler,
-              [](std::shared_ptr<RestHandler> h) { h->runEngine(); }));
+              new Job(_server, std::move(handler),
+		      [self, this](std::shared_ptr<RestHandler> h) {
+			JobGuard guard(_loop);
+			guard.block();
+
+			h->asyncRunEngine();
+		      }));
 
   return SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, std::move(job));
 }
