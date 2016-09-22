@@ -74,7 +74,7 @@ class LogicalCollection {
 
   explicit LogicalCollection(std::shared_ptr<LogicalCollection> const&);
 
-  ~LogicalCollection();
+  virtual ~LogicalCollection();
 
   LogicalCollection(LogicalCollection const&) = delete;
   LogicalCollection& operator=(LogicalCollection const&) = delete;
@@ -174,6 +174,7 @@ class LogicalCollection {
   bool isSystem() const;
   bool isVolatile() const;
   bool waitForSync() const;
+  virtual bool isSmart() const;
   
   void waitForSync(bool value) { _waitForSync = value; }
 
@@ -218,9 +219,9 @@ class LogicalCollection {
   
   // SECTION: Modification Functions
   int rename(std::string const&);
-  void drop();
+  virtual void drop();
 
-  void setStatus(TRI_vocbase_col_status_e);
+  virtual void setStatus(TRI_vocbase_col_status_e);
 
   // SECTION: Serialisation
   void toVelocyPack(arangodb::velocypack::Builder&, bool withPath) const;
@@ -235,7 +236,7 @@ class LogicalCollection {
   void updateCount(size_t);
 
   // Update this collection.
-  int update(arangodb::velocypack::Slice const&, bool);
+  virtual int update(arangodb::velocypack::Slice const&, bool);
 
   /// @brief return the figures for a collection
   std::shared_ptr<arangodb::velocypack::Builder> figures();
@@ -284,7 +285,7 @@ class LogicalCollection {
   // SECTION: Indexes
 
   /// @brief Create a new Index based on VelocyPack description
-  std::shared_ptr<arangodb::Index> createIndex(
+  virtual std::shared_ptr<arangodb::Index> createIndex(
       arangodb::Transaction*, arangodb::velocypack::Slice const&, bool&);
 
   /// @brief Find index by definition
@@ -332,7 +333,7 @@ class LogicalCollection {
                         TRI_voc_rid_t oldRevisionId, arangodb::velocypack::Slice const& oldDoc,
                         TRI_voc_rid_t newRevisionId, arangodb::velocypack::Slice const& newDoc);
 
-  // TODO Make Private and IndexFiller als friend
+  // TODO Make Private and IndexFiller as friend
   /// @brief initializes an index with all existing documents
   int fillIndex(arangodb::Transaction*, arangodb::Index*,
                 bool skipPersistent = true);
