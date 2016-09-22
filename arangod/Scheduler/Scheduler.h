@@ -35,10 +35,10 @@
 #include "Basics/socket-utils.h"
 #include "Logger/Logger.h"
 #include "Scheduler/EventLoop.h"
+#include "Scheduler/TaskData.h"
 
 namespace arangodb {
 class JobQueue;
-class TaskData;
 
 namespace basics {
 class ConditionVariable;
@@ -63,8 +63,9 @@ class Scheduler {
   }
 
   EventLoop eventLoop() {
-    //return EventLoop{._ioService = *_ioService.get(), ._scheduler = this}; // windows complains ...
-    return EventLoop{ *_ioService.get(), this};
+    // return EventLoop{._ioService = *_ioService.get(), ._scheduler = this}; //
+    // windows complains ...
+    return EventLoop{*_ioService.get(), this};
   }
 
   bool start(basics::ConditionVariable*);
