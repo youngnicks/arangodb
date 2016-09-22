@@ -14,8 +14,8 @@
 
 using namespace arangodb;
 
-inline std::size_t validateAndCount(char const* vpHeaderStart,
-                                    char const* vpEnd) {
+inline std::size_t validateAndCount(char const *vpHeaderStart,
+                                    char const *vpEnd) {
   try {
     VPackValidator validator;
     // check for slice start to the end of Chunk
@@ -37,17 +37,17 @@ inline std::size_t validateAndCount(char const* vpHeaderStart,
       numPayloads++;
     }
     return numPayloads;
-  } catch (std::exception const& e) {
+  } catch (std::exception const &e) {
     throw std::runtime_error(
         std::string("error during validation of incoming VPack") + e.what());
   }
 }
 
 template <typename T>
-std::size_t appendToBuffer(basics::StringBuffer* buffer, T& value) {
+std::size_t appendToBuffer(basics::StringBuffer *buffer, T &value) {
   constexpr std::size_t len = sizeof(T);
   char charArray[len];
-  char const* charPtr = charArray;
+  char const *charPtr = charArray;
   std::memcpy(&charArray, &value, len);
   buffer->appendText(charPtr, len);
   return len;
@@ -60,9 +60,10 @@ inline constexpr std::size_t chunkHeaderLength(bool firstOfMany) {
 }
 
 // working version of single chunk message creation
-inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkDetail(
-    std::vector<VPackSlice> const& slices, bool isFirstChunk, uint32_t chunk,
-    uint64_t id, uint32_t totalMessageLength = 0) {
+inline std::unique_ptr<basics::StringBuffer>
+createChunkForNetworkDetail(std::vector<VPackSlice> const &slices,
+                            bool isFirstChunk, uint32_t chunk, uint64_t id,
+                            uint32_t totalMessageLength = 0) {
   using basics::StringBuffer;
   bool firstOfMany = false;
 
@@ -80,7 +81,7 @@ inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkDetail(
 
   // get the lenght of VPack data
   uint32_t dataLength = 0;
-  for (auto& slice : slices) {
+  for (auto &slice : slices) {
     // TODO: is a 32bit value sufficient for all Slices here?
     dataLength += static_cast<uint32_t>(slice.byteSize());
   }
@@ -100,7 +101,7 @@ inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkDetail(
   }
 
   // append data in slices
-  for (auto const& slice : slices) {
+  for (auto const &slice : slices) {
     buffer->appendText(std::string(slice.startAs<char>(), slice.byteSize()));
   }
 
@@ -108,8 +109,9 @@ inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkDetail(
 }
 
 //  slices, isFirstChunk, chunk, id, totalMessageLength
-inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkSingle(
-    std::vector<VPackSlice> const& slices, uint64_t id) {
+inline std::unique_ptr<basics::StringBuffer>
+createChunkForNetworkSingle(std::vector<VPackSlice> const &slices,
+                            uint64_t id) {
   return createChunkForNetworkDetail(slices, true, 1, id, 0 /*unused*/);
 }
 
@@ -132,20 +134,30 @@ inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkSingle(
 //  return createChunkForNetworkDetail(slices, false, chunkNumber, id, 0);
 //}
 
-inline std::vector<std::unique_ptr<basics::StringBuffer>> createChunkForNetwork(
-    std::vector<VPackSlice> const& slices, uint64_t id,
-    std::size_t maxChunkBytes, bool compress = false) {
+inline void send_many(
+    std::vector<std::unique_ptr<basics::StringBuffer>>& resultVecRef,
+    uint64_t id,
+    std::size_t maxChunkBytes,
+    std::unique_ptr<basics::StringBuffer> completeMessage,
+    std::size_t uncompressedCompleteMessageLength){
+  return;
+}
+
+
+inline std::vector<std::unique_ptr<basics::StringBuffer>>
+createChunkForNetwork(std::vector<VPackSlice> const &slices, uint64_t id,
+                      std::size_t maxChunkBytes, bool compress = false) {
   /// variables used in this function
   std::size_t uncompressedPayloadLength = 0;
   // worst case len in case of compression
   std::size_t preliminaryPayloadLength = 0;
-  std::size_t compressedPayloadLength = 0;
-  std::size_t payloadLength = 0;  // compressed or uncompressed
+  //std::size_t compressedPayloadLength = 0;
+  std::size_t payloadLength = 0; // compressed or uncompressed
 
   std::vector<std::unique_ptr<basics::StringBuffer>> rv;
 
   // find out the uncompressed payload length
-  for (auto const& slice : slices) {
+  for (auto const &slice : slices) {
     uncompressedPayloadLength += slice.byteSize();
   }
 
@@ -161,48 +173,49 @@ inline std::vector<std::unique_ptr<basics::StringBuffer>> createChunkForNetwork(
     // one chunk uncompressed
     rv.push_back(createChunkForNetworkSingle(slices, id));
     return rv;
-  }
-
-  if (compress &&
-      preliminaryPayloadLength < maxChunkBytes - chunkHeaderLength(false)) {
+  } else if (compress &&
+             preliminaryPayloadLength < maxChunkBytes - chunkHeaderLength(false)) {
+    throw std::logic_error("no implemented");
     // one chunk compressed
+  } else {
+    //// here we enter the domain of multichunck
+    LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+        << "VppCommTask: sending multichunk message";
+
+    // test if we have smaller slices that fit into chunks when there is
+    // no compression - optimization
+
+    LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+        << "VppCommTask: there are slices that do not fit into a single "
+           "totalMessageLength or compression is enabled";
+    // we have big slices that do not fit into single chunks
+    // now we will build one big buffer ans split it into pieces
+
+    // reseve buffer
+    auto vppPayload = std::make_unique<basics::StringBuffer>(
+        TRI_UNKNOWN_MEM_ZONE, uncompressedPayloadLength, false);
+
+    // fill buffer
+    for (auto const &slice : slices) {
+      vppPayload->appendText(
+          std::string(slice.startAs<char>(), slice.byteSize()));
+    }
+
+    if (compress) {
+      // compress uncompressedVppPayload -> vppPayload
+      auto uncommpressedVppPayload = std::move(vppPayload);
+      vppPayload = std::make_unique<basics::StringBuffer>(
+          TRI_UNKNOWN_MEM_ZONE, preliminaryPayloadLength, false);
+      // do compression
+      throw std::logic_error("no implemented");
+      //payloadLength = compressedPayloadLength;
+    }
+
+    // create chunks
+    //(void)vppPayload;
+    //(void)payloadLength;
+    send_many(rv, id, maxChunkBytes, std::move(vppPayload), uncompressedPayloadLength);
   }
-
-  LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-      << "VppCommTask: sending multichunk message";
-  //// here we enter the domain of multichunck
-
-  // test if we have smaller slices that fit into chunks when there is
-  // no compression - optimization
-
-  LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-      << "VppCommTask: there are slices that do not fit into a single "
-         "totalMessageLength or compression is enabled";
-  // we have big slices that do not fit into single chunks
-  // now we will build one big buffer ans split it into pieces
-
-  // reseve buffer
-  auto vppPayload = std::make_unique<basics::StringBuffer>(
-      TRI_UNKNOWN_MEM_ZONE, uncompressedPayloadLength, false);
-  // fill buffer
-  for (auto const& slice : slices) {
-    vppPayload->appendText(
-        std::string(slice.startAs<char>(), slice.byteSize()));
-  }
-
-  if (compress) {
-    // compress uncompressedVppPayload -> vppPayload
-    auto uncommpressedVppPayload = std::move(vppPayload);
-    vppPayload = std::make_unique<basics::StringBuffer>(
-        TRI_UNKNOWN_MEM_ZONE, preliminaryPayloadLength, false);
-    // do compression
-    payloadLength = compressedPayloadLength;
-  }
-
-  // create chunks
-  (void)vppPayload;
-  (void)payloadLength;
-
   return rv;
 }
 

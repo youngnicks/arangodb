@@ -238,5 +238,6 @@ add_library(${LIB_ARANGO_V8} STATIC
 )
 
 target_link_libraries(${LIB_ARANGO_V8}
+    boost_system
     boost_boost
 )
