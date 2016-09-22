@@ -1050,7 +1050,9 @@ void ClusterComm::cleanupAllQueues() {
   }
 }
 
-ClusterCommThread::ClusterCommThread() : Thread("ClusterComm") {}
+ClusterCommThread::ClusterCommThread() : Thread("ClusterComm"), _cc(nullptr) {
+  _cc = ClusterComm::instance();
+}
 
 ClusterCommThread::~ClusterCommThread() { shutdown(); }
 
@@ -1392,195 +1394,34 @@ std::pair<ClusterCommResult*, HttpRequest*> ClusterComm::prepareRequest(std::str
 /// @brief ClusterComm main loop
 ////////////////////////////////////////////////////////////////////////////////
 
-void ClusterCommThread::run() {
-  ClusterComm::QueueIterator q;
-  ClusterComm::IndexIterator i;
-  ClusterCommOperation* op;
-  ClusterComm* cc = ClusterComm::instance();
+void ClusterCommThread::stopRequestsToFailedServers() {
+  ClusterInfo* ci = ClusterInfo::instance();
+  auto failedServers = ci->getFailedServers();
+  std::vector<std::string> failedServerEndpoints;
+  failedServerEndpoints.reserve(failedServers.size());
+  
+  for (auto const& failedServer: failedServers) {
+    failedServerEndpoints.push_back(_cc->createCommunicatorDestination(failedServer, "/").url());
+  }
 
+  for (auto const& request: _cc->communicator()->requestsInProgress()) {
+    for (auto const& failedServerEndpoint: failedServerEndpoints) {
+      if (request->_destination.url().substr(0, failedServerEndpoint.length()) == failedServerEndpoint) {
+        _cc->communicator()->abortRequest(request->_ticketId);
+      }
+    }
+  }
+}
+
+void ClusterCommThread::run() {
   LOG_TOPIC(DEBUG, Logger::CLUSTER) << "starting ClusterComm thread";
 
   while (!isStopping()) {
-    cc->communicator()->work_once();
-    cc->communicator()->wait();
-    continue;
-    // First check the sending queue, as long as it is not empty, we send
-    // a request via SimpleHttpClient:
-    while (true) {  // left via break when there is no job in send queue
-      if (isStopping()) {
-        break;
-      }
-
-      {
-        CONDITION_LOCKER(locker, cc->somethingToSend);
-
-        if (cc->toSend.empty()) {
-          break;
-        } else {
-          LOG_TOPIC(DEBUG, Logger::CLUSTER) << "Noticed something to send";
-          op = cc->toSend.front();
-          TRI_ASSERT(op->result.status == CL_COMM_SUBMITTED);
-          op->result.status = CL_COMM_SENDING;
-        }
-      }
-
-      // We release the lock, if the operation is dropped now, the
-      // `dropped` flag is set. We find out about this after we have
-      // sent the request (happens in moveFromSendToReceived).
-
-      // Have we already reached the timeout?
-      double currentTime = TRI_microtime();
-      if (op->initEndTime <= currentTime) {
-        op->result.status = CL_COMM_TIMEOUT;
-      } else {
-        // We know that op->result.endpoint is nonempty here, otherwise
-        // the operation would not have been in the send queue!
-        httpclient::ConnectionManager* cm =
-            httpclient::ConnectionManager::instance();
-        httpclient::ConnectionManager::SingleServerConnection* connection =
-            cm->leaseConnection(op->result.endpoint);
-        if (nullptr == connection) {
-          op->result.status = CL_COMM_BACKEND_UNAVAILABLE;
-          op->result.errorMessage = "cannot create connection to server: ";
-          op->result.errorMessage += op->result.serverID;
-          if (cc->logConnectionErrors()) {
-            LOG_TOPIC(ERR, Logger::CLUSTER) << "cannot create connection to server '"
-                     << op->result.serverID << "' at endpoint '" << op->result.endpoint << "'";
-          } else {
-            LOG_TOPIC(INFO, Logger::CLUSTER) << "cannot create connection to server '"
-                      << op->result.serverID << "' at endpoint '" << op->result.endpoint << "'";
-          }
-        } else {
-          if (nullptr != op->body.get()) {
-            LOG_TOPIC(DEBUG, Logger::CLUSTER) << "sending "
-                       << arangodb::HttpRequest::translateMethod(
-                              op->reqtype)
-                       << " request to DB server '"
-                       << op->result.serverID << "' at endpoint '" << op->result.endpoint
-                       << "': " << std::string(op->body->c_str(), op->body->size());
-          } else {
-            LOG_TOPIC(DEBUG, Logger::CLUSTER) << "sending "
-                       << arangodb::HttpRequest::translateMethod(
-                              op->reqtype)
-                       << " request to DB server '"
-                       << op->result.serverID << "' at endpoint '" << op->result.endpoint << "'";
-          }
-
-          auto client =
-              std::make_unique<arangodb::httpclient::SimpleHttpClient>(
-                  connection->_connection, op->initEndTime - currentTime,
-                  false);
-          client->keepConnectionOnDestruction(true);
-
-          // We add this result to the operation struct without acquiring
-          // a lock, since we know that only we do such a thing:
-          if (nullptr != op->body.get()) {
-            op->result.result.reset(
-                client->request(op->reqtype, op->path, op->body->c_str(),
-                                op->body->size(), *(op->headerFields)));
-          } else {
-            op->result.result.reset(client->request(
-                op->reqtype, op->path, nullptr, 0, *(op->headerFields)));
-          }
-
-          if (op->result.result.get() == nullptr ||
-              !op->result.result->isComplete()) {
-            if (client->getErrorMessage() == "Request timeout reached") {
-              op->result.status = CL_COMM_TIMEOUT;
-              op->result.errorMessage = "timeout";
-              auto r = op->result.result->getResultType();
-              op->result.sendWasComplete =
-                  (r == arangodb::httpclient::SimpleHttpResult::READ_ERROR) ||
-                  (r == arangodb::httpclient::SimpleHttpResult::UNKNOWN);
-            } else {
-              op->result.status = CL_COMM_BACKEND_UNAVAILABLE;
-              op->result.errorMessage = client->getErrorMessage();
-              op->result.sendWasComplete = false;
-            }
-            cm->brokenConnection(connection);
-            client->invalidateConnection();
-          } else {
-            cm->returnConnection(connection);
-            op->result.sendWasComplete = true;
-            if (op->result.result->wasHttpError()) {
-              op->result.status = CL_COMM_ERROR;
-              op->result.errorMessage = "HTTP error, status ";
-              op->result.errorMessage += arangodb::basics::StringUtils::itoa(
-                  op->result.result->getHttpReturnCode());
-            }
-          }
-        }
-      }
-
-      if (op->result.single) {
-        // For single requests this is it, either it worked and is ready
-        // or there was an error (timeout or other). If there is a callback,
-        // we have to call it now:
-        if (nullptr != op->callback.get()) {
-          if (op->result.status == CL_COMM_SENDING) {
-            op->result.status = CL_COMM_SENT;
-          }
-          if ((*op->callback.get())(&op->result)) {
-            // This is fully processed, so let's remove it from the queue:
-            CONDITION_LOCKER(locker, cc->somethingToSend);
-            auto i = cc->toSendByOpID.find(op->result.operationID);
-            TRI_ASSERT(i != cc->toSendByOpID.end());
-            auto q = i->second;
-            cc->toSendByOpID.erase(i);
-            cc->toSend.erase(q);
-            delete op;
-            continue;  // do not move to the received queue but forget it
-          }
-        }
-      }
-
-      cc->moveFromSendToReceived(op->result.operationID);
-      // Potentially it was dropped in the meantime, then we forget about it.
-    }
-
-    // Now the send queue is empty (at least was empty, when we looked
-    // just now, so we can check on our receive queue to detect timeouts:
-
-    {
-      double currentTime = TRI_microtime();
-      CONDITION_LOCKER(locker, cc->somethingReceived);
-
-      ClusterComm::QueueIterator q;
-      for (q = cc->received.begin(); q != cc->received.end();) {
-        bool deleted = false;
-        op = *q;
-        if (op->result.status == CL_COMM_SENT) {
-          if (op->endTime < currentTime) {
-            op->result.status = CL_COMM_TIMEOUT;
-            if (nullptr != op->callback.get()) {
-              if ((*op->callback.get())(&op->result)) {
-                // This is fully processed, so let's remove it from the queue:
-                auto i = cc->receivedByOpID.find(op->result.operationID);
-                TRI_ASSERT(i != cc->receivedByOpID.end());
-                cc->receivedByOpID.erase(i);
-                std::unique_ptr<ClusterCommOperation> o(op);
-                auto qq = q++;
-                cc->received.erase(qq);
-                deleted = true;
-              }
-            }
-          }
-        }
-        if (!deleted) {
-          ++q;
-        }
-      }
-    }
-
-    // Finally, wait for some time or until something happens using
-    // the condition variable:
-    {
-      CONDITION_LOCKER(locker, cc->somethingToSend);
-      locker.wait(100000);
-    }
+    stopRequestsToFailedServers();
+    _cc->communicator()->work_once();
+    _cc->communicator()->wait();
   }
-  // mop: TODO stop all outstanding requests
-  // // communicator->killRequests()
+  _cc->communicator()->abortRequests();
 
   LOG_TOPIC(DEBUG, Logger::CLUSTER) << "stopped ClusterComm thread";
 }

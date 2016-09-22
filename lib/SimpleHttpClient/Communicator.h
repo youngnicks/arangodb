@@ -42,8 +42,8 @@ namespace communicator {
   typedef uint64_t Ticket;
 
   struct RequestInProgress {
-    RequestInProgress(Callbacks callbacks, Ticket ticketId, std::string const& requestBody)
-      : _callbacks(callbacks), _ticketId(ticketId), _requestBody(requestBody), _requestHeaders(nullptr), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)) {
+    RequestInProgress(Destination destination, Callbacks callbacks, Ticket ticketId, std::string const& requestBody)
+      : _destination(destination), _callbacks(callbacks), _ticketId(ticketId), _requestBody(requestBody), _requestHeaders(nullptr), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)) {
     }
 
     ~RequestInProgress() {
@@ -54,7 +54,9 @@ namespace communicator {
 
     RequestInProgress(RequestInProgress const& other) = delete;
     RequestInProgress& operator=(RequestInProgress const& other) = delete;
-
+    
+    // mop: i think we should just hold the full request here later
+    Destination _destination;
     Callbacks _callbacks;
     Ticket _ticketId;
     std::string _requestBody;
@@ -104,8 +106,9 @@ class Communicator {
 
   int work_once();
   void wait();
- 
- public:
+  std::vector<RequestInProgress const*> requestsInProgress();
+  void abortRequest(Ticket ticketId);
+  void abortRequests();
 
  private:
   struct NewRequest {

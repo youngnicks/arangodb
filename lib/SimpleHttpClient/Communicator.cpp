@@ -244,7 +244,7 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   TRI_ASSERT(request != nullptr);
 
   // mop: the curl handle will be managed safely via unique_ptr and hold ownership for rip
-  auto rip = new RequestInProgress(newRequest._callbacks, newRequest._ticketId, std::string(request->body().c_str(), request->body().length()));
+  auto rip = new RequestInProgress(newRequest._destination, newRequest._callbacks, newRequest._ticketId, std::string(request->body().c_str(), request->body().length()));
 
   auto handleInProgress = std::make_unique<CurlHandle>(rip);
 
@@ -490,4 +490,38 @@ std::string Communicator::createSafeDottedCurlUrl(std::string const& originalUrl
   }
   url += originalUrl.substr(currentFind);
   return url;
+}
+
+void Communicator::abortRequest(Ticket ticketId) {
+  LOG(ERR) << "Aborting " << ticketId;
+  auto handle = _handlesInProgress.find(ticketId);
+  if (handle == _handlesInProgress.end()) {
+    return;
+  }
+  RequestInProgress* rip = nullptr;
+  curl_easy_getinfo(handle->second->_handle, CURLINFO_PRIVATE, &rip);
+  if (rip == nullptr) {
+    return;
+  }
+  rip->_callbacks._onError(TRI_COMMUNICATOR_REQUEST_ABORTED, {nullptr});
+  _handlesInProgress.erase(rip->_ticketId);
+}
+
+void Communicator::abortRequests() {
+  for (auto &request: requestsInProgress()) {
+    abortRequest(request->_ticketId);
+  }
+}
+
+std::vector<RequestInProgress const*> Communicator::requestsInProgress() {
+  std::vector<RequestInProgress const*> vec;
+  vec.reserve(_handlesInProgress.size());
+
+  for (auto &handle: _handlesInProgress) {
+    RequestInProgress* rip = nullptr;
+    curl_easy_getinfo(handle.second->_handle, CURLINFO_PRIVATE, &rip);
+    TRI_ASSERT(rip != nullptr);
+    vec.push_back(rip);
+  }
+  return vec;
 }

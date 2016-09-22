@@ -642,9 +642,15 @@ class ClusterCommThread : public Thread {
  public:
   void beginShutdown() override;
   bool isSystem() override final { return true; }
+ 
+ private:
+  void stopRequestsToFailedServers();
 
  protected:
   void run() override final;
+
+ private:
+  ClusterComm* _cc;
 };
 }
 
