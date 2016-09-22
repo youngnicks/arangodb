@@ -111,8 +111,8 @@ void CollectionKeys::create(TRI_voc_tick_t maxTick) {
     }
 
     trx.invokeOnAllElements(
-        _collection->name(), [this, &maxTick](IndexElement const* element) {
-          _collection->readRevision(_result, element->revisionId(), maxTick, true);
+        _collection->name(), [this, &trx, &maxTick](IndexElement const* element) {
+          _collection->readRevision(&trx, _result, element->revisionId(), maxTick, true);
           return true;
         });
 

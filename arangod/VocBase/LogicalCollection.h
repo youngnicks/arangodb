@@ -340,8 +340,8 @@ class LogicalCollection {
   int endRead(bool useDeadlockDetector);
   int endWrite(bool useDeadlockDetector);
   
-  void readRevision(ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
-  bool readRevision(ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal);
+  void readRevision(arangodb::Transaction*, ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
+  bool readRevision(arangodb::Transaction*, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal);
 
  private:
   // SECTION: Private functions

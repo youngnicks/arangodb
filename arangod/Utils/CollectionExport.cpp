@@ -106,11 +106,11 @@ void CollectionExport::run(uint64_t maxWaitTime, size_t limit) {
     }
     _result.reserve(maxDocuments);
 
-    trx.invokeOnAllElements(_collection->name(), [this, &limit](IndexElement const* element) {
+    trx.invokeOnAllElements(_collection->name(), [this, &limit, &trx](IndexElement const* element) {
       if (limit == 0) {
         return false;
       }
-      if (_collection->readRevision(_result, element->revisionId(), 0, true)) {
+      if (_collection->readRevision(&trx, _result, element->revisionId(), 0, true)) {
         --limit;
       }
       return true;
