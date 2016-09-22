@@ -97,10 +97,7 @@ void VppCommTask::addResponse(VppResponse* response) {
   }
   LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "response -- end";
 
-  // adds chunk header infromation and creates SingBuffer* that can be
-  // used with _writeBuffers
-  // std::size_t chunkSize = (std::numeric_limits<std::size_t>::max)();
-  std::size_t chunkSize = 1460;
+  std::size_t chunkSize = 1024 * 30;
   auto buffers = createChunkForNetwork(slices, id, chunkSize,
                                        false);  // set some sensible maxchunk
                                                 // size and compression
