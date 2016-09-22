@@ -7,8 +7,8 @@ if python -c "import sys ; sys.exit(sys.platform != 'cygwin')"; then
 fi
 
 
-#          debian          mac   
-for f in /usr/bin/md5sum /sbin/md5; do 
+#          debian          mac
+for f in /usr/bin/md5sum /sbin/md5; do
     if test -e ${f}; then
         MD5=${f}
         break
@@ -18,7 +18,7 @@ if test -z "${f}"; then
     echo "didn't find a valid MD5SUM binary!"
     exit 1
 fi
-    
+
 if test -f /scripts/prepare_buildenv.sh; then
     echo "Sourcing docker container environment settings"
     . /scripts/prepare_buildenv.sh
@@ -146,7 +146,7 @@ case "$1" in
         CFLAGS="${CFLAGS} -O3"
         CXXFLAGS="${CXXFLAGS} -O3"
         CONFIGURE_OPTIONS="${CONFIGURE_OPTIONS} -DCMAKE_BUILD_TYPE=${BUILD_CONFIG}"
-        
+
         echo "using standard compile configuration"
         shift
         ;;
@@ -168,7 +168,7 @@ case "$1" in
         echo "using maintainer mode"
         shift
         ;;
-    
+
     scan-build)
         MAKE_CMD_PREFIX="scan-build"
         MAKE_PARAMS="-f Makefile"
@@ -214,7 +214,7 @@ while [ $# -gt 0 ];  do
             COVERAGE=1
             shift
             ;;
-        
+
         --msvc)
              shift
              MSVC=1
@@ -227,7 +227,7 @@ while [ $# -gt 0 ];  do
              PACKAGE_MAKE='cmake --build . --config RelWithDebInfo --target'
              CONFIGURE_OPTIONS="${CONFIGURE_OPTIONS} -DV8_TARGET_ARCHS=Release"
              ;;
-         
+
         --gold)
             GOLD=1
             shift
@@ -242,7 +242,7 @@ while [ $# -gt 0 ];  do
             VERBOSE=1
             shift
             ;;
-        
+
         --buildDir)
             shift
             BUILD_DIR=$1
@@ -257,7 +257,7 @@ while [ $# -gt 0 ];  do
 	    PATH=/opt/csw/bin/:${PATH}
 	    shift
 	    ;;
-        
+
         --package)
             shift
             CPACK="$1"
@@ -269,12 +269,12 @@ while [ $# -gt 0 ];  do
             USE_JEMALLOC=1
             shift
             ;;
-        
+
         --rpath)
             CONFIGURE_OPTIONS="${CONFIGURE_OPTIONS} -DCMAKE_SKIP_RPATH=On"
             shift
             ;;
-        
+
         --staticlibc)
             CFLAGS="${CFLAGS} -static-libgcc"
             CXXFLAGS="${CXXFLAGS} -static-libgcc -static-libstdc++"
@@ -289,13 +289,13 @@ while [ $# -gt 0 ];  do
             PARALLEL_BUILDS=$1
             shift
             ;;
-        
+
         --targetDir)
             shift
             TARGET_DIR=$1
             shift
             ;;
-        
+
         --checkCleanBuild)
             CLEAN_IT=1
             shift
@@ -364,7 +364,7 @@ elif [ "${CXGCC}" = 1 ]; then
     export LINK=$TOOL_PREFIX-g++
     export STRIP=$TOOL_PREFIX-strip
 
-    # we need ARM LD: 
+    # we need ARM LD:
     GOLD=0;
 
     # tell cmake we're cross compiling:
@@ -374,7 +374,7 @@ elif [ "${CXGCC}" = 1 ]; then
     MAKE_PARAMS="${MAKE_PARAMS} -i"
 fi
 
-if [ "${USE_JEMALLOC}" = 1 ]; then 
+if [ "${USE_JEMALLOC}" = 1 ]; then
     CONFIGURE_OPTIONS="${CONFIGURE_OPTIONS} -DUSE_JEMALLOC=On"
 fi
 
@@ -426,7 +426,7 @@ if [ "${VERBOSE}" == 1 ];  then
     MAKE_PARAMS="${MAKE_PARAMS} V=1 Verbose=1 VERBOSE=1"
 fi
 
-if [ -n "${PAR}" ]; then 
+if [ -n "${PAR}" ]; then
      MAKE_PARAMS="${MAKE_PARAMS} ${PAR} ${PARALLEL_BUILDS}"
 fi
 
@@ -495,7 +495,7 @@ if test -n "${TARGET_DIR}";  then
          arangod/.keepme \
          arangosh/.keepme
     )
-    
+
     tar -u -f ${TARFILE_TMP} \
         bin etc tests
 
