@@ -306,6 +306,7 @@ function makeArgsArangod (options, appDir) {
     'http.trusted-origin': options.httpTrustedOrigin || 'all',
     'log.level': 'warn',
     'log.level=replication=warn': null,
+    //'log.level=requests=trace': null,
     'server.allow-use-database': 'true',
     'server.authentication': 'false',
     'server.threads': '20',
@@ -1335,6 +1336,7 @@ function startInstanceCluster (instanceInfo, protocol, options,
     coordinatorArgs['cluster.my-local-info'] = endpoint;
     coordinatorArgs['cluster.my-role'] = 'COORDINATOR';
     coordinatorArgs['cluster.agency-endpoint'] = agencyEndpoint;
+    //coordinatorArgs['log.level=requests=trace'] =  null;
 
     startInstanceSingleServer(instanceInfo, protocol, options, ...makeArgs('coordinator' + i, coordinatorArgs), 'coordinator');
   }

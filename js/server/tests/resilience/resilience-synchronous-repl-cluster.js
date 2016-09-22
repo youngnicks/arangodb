@@ -181,11 +181,15 @@ function SynchronousReplicationSuite () {
     if (failure.place === 1) { makeFailure(failure); }
 
     // Insert with check:
+    console.warn("TESTCASE PRE INSERT");
     var id = c.insert({Hallo:12});
+    console.warn("TESTCASE POST INSERT");
     assertEqual(1, c.count());
+    console.warn("TESTCASE POST COUNT");
 
     if (healing.place === 1) { healFailure(healing); }
     if (failure.place === 2) { makeFailure(failure); }
+    console.warn("TESTCASE POST MAKE FAIL");
 
     var doc = c.document(id._key);
     assertEqual(12, doc.Hallo);
@@ -347,7 +351,7 @@ function SynchronousReplicationSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief check whether we have access to global.instanceInfo
 ////////////////////////////////////////////////////////////////////////////////
-
+  /*
     testCheckInstanceInfo : function () {
       assertTrue(global.instanceInfo !== undefined);
     },
@@ -588,7 +592,7 @@ function SynchronousReplicationSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief fail leader in place 2
 ////////////////////////////////////////////////////////////////////////////////
-
+  */
     testBasicOperationsLeaderFail2 : function () {
       assertTrue(waitForSynchronousReplication("_system"));
       runBasicOperations({place:2, follower: false},
