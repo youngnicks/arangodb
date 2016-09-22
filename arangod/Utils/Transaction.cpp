@@ -1040,9 +1040,13 @@ TRI_voc_rid_t Transaction::extractRevFromDocument(VPackSlice slice) {
     // skip over the attribute value
     p += VPackSlice(p).byteSize();
   }
-
-  TRI_ASSERT(false);
-  return 0;
+  
+  // fall back to regular lookup 
+  { 
+    VPackValueLength l;
+    char const* p = slice.get(StaticStrings::RevString).getString(l);
+    return TRI_StringToRid(p, l);
+  }
 }
 
 VPackSlice Transaction::extractRevSliceFromDocument(VPackSlice slice) {
@@ -1062,8 +1066,8 @@ VPackSlice Transaction::extractRevSliceFromDocument(VPackSlice slice) {
     p += VPackSlice(p).byteSize();
   }
 
-  TRI_ASSERT(false);
-  return VPackSlice();
+  // fall back to regular lookup 
+  return slice.get(StaticStrings::RevString);
 }
 
 //////////////////////////////////////////////////////////////////////////////

@@ -494,6 +494,11 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase, VPackSlice const& i
   _keyGenerator.reset(KeyGenerator::factory(info.get("keyOptions")));
 
   createPhysical();
+  
+  int64_t count = ReadNumericValue<int64_t>(info, "count", -1);
+  if (count != -1) {
+    _physical->updateCount(count);
+  }
 
   // TODO Only DBServer? Is this correct?
   if (ServerState::instance()->isDBServer()) {
@@ -946,6 +951,7 @@ void LogicalCollection::toVelocyPack(VPackBuilder& result, bool withPath) const 
   result.add("waitForSync", VPackValue(_waitForSync));
   result.add("journalSize", VPackValue(_journalSize));
   result.add("version", VPackValue(_version)); 
+  result.add("count", VPackValue(_physical->initialCount()));
   
   if (_keyOptions != nullptr) {
     result.add("keyOptions", VPackSlice(_keyOptions->data()));
