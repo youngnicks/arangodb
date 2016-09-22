@@ -136,7 +136,8 @@ inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkSingle(
 //  return createChunkForNetworkDetail(slices, false, chunkNumber, id, 0);
 //}
 
-/////////////////////////////////////////////////////////////////////////////////////
+// helper functions for sending chunks when given a string buffer as input
+// //////////
 /////////////////////////////////////////////////////////////////////////////////////
 // working version of single chunk message creation
 inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkDetail(
@@ -193,6 +194,8 @@ inline std::unique_ptr<basics::StringBuffer> createChunkForNetworkMultiFollow(
                                      0);
 }
 
+// this function will be called when we send multiple compressed
+// or uncompressed chunks
 inline void send_many(
     std::vector<std::unique_ptr<basics::StringBuffer>>& resultVecRef,
     uint64_t id, std::size_t maxChunkBytes,
@@ -240,6 +243,7 @@ inline void send_many(
   return;
 }
 
+// this function will be called by client code
 inline std::vector<std::unique_ptr<basics::StringBuffer>> createChunkForNetwork(
     std::vector<VPackSlice> const& slices, uint64_t id,
     std::size_t maxChunkBytes, bool compress = false) {
@@ -309,7 +313,6 @@ inline std::vector<std::unique_ptr<basics::StringBuffer>> createChunkForNetwork(
     }
 
     // create chunks
-    //(void)vppPayload;
     (void)payloadLength;
     send_many(rv, id, maxChunkBytes, std::move(vppPayload),
               uncompressedPayloadLength);
