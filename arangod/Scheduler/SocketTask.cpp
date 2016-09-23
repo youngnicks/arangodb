@@ -171,7 +171,7 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
     }
 
     auto self = shared_from_this();
-    auto handler = [this](const boost::system::error_code& ec,
+    auto handler = [self, this](const boost::system::error_code& ec,
                           std::size_t transferred) {
       if (ec) {
         LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
