@@ -284,6 +284,9 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   curl_easy_setopt(handle, CURLOPT_HEADERDATA, handleInProgress->_rip.get());
   curl_easy_setopt(handle, CURLOPT_DEBUGFUNCTION, Communicator::curlDebug);
   curl_easy_setopt(handle, CURLOPT_DEBUGDATA, handleInProgress->_rip.get());
+  // mop: XXX :S
+  curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L);
+  curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 0L);
 
   curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, static_cast<long>(newRequest._options.requestTimeout * 1000));
   long connectTimeout = static_cast<long>(newRequest._options.connectionTimeout);

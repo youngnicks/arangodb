@@ -396,12 +396,12 @@ OperationID ClusterComm::asyncRequest(
   }
   
   TRI_ASSERT(request != nullptr);
+  CONDITION_LOCKER(locker, somethingReceived);
+  result->status = CL_COMM_SUBMITTED;
   auto ticketId = _communicator->addRequest(createCommunicatorDestination(result->endpoint, path),
                std::move(request), callbacks, opt);
   
-  CONDITION_LOCKER(locker, somethingReceived);
   result->operationID = ticketId;
-  result->status = CL_COMM_SUBMITTED;
   responses.emplace(ticketId, AsyncResponse{TRI_microtime(), result});
   return ticketId;
 
