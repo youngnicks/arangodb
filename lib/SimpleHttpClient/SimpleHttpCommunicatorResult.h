@@ -32,7 +32,7 @@ class SimpleHttpCommunicatorResult: public SimpleHttpResult {
   public:
     SimpleHttpCommunicatorResult() = delete;
     explicit SimpleHttpCommunicatorResult(HttpResponse* response)
-      : SimpleHttpResult(), _response(response) {
+      : SimpleHttpResult(), _response(response), _headers(nullptr) {
     }
     virtual ~SimpleHttpCommunicatorResult() {}
 
@@ -68,10 +68,14 @@ class SimpleHttpCommunicatorResult: public SimpleHttpResult {
       message += " not implemented";
       throw std::runtime_error(message);
     }
-    virtual std::string getHeaderField(std::string const&, bool&) const override {
-      std::string message(__func__);
-      message += " not implemented";
-      throw std::runtime_error(message);
+    virtual std::string getHeaderField(std::string const& header, bool& found) const override {
+      auto headers = _response->headers();
+      auto it = headers.find(header);
+      if (it == headers.end()) {
+        return "";
+      }
+      found = true;
+      return it->second;
     }
     virtual bool hasHeaderField(std::string const&) const override {
       std::string message(__func__);
@@ -79,9 +83,10 @@ class SimpleHttpCommunicatorResult: public SimpleHttpResult {
       throw std::runtime_error(message);
     }
     virtual std::unordered_map<std::string, std::string> const& getHeaderFields() const override {
-      std::string message(__func__);
-      message += " not implemented";
-      throw std::runtime_error(message);
+      if (_headers == nullptr) {
+        _headers.reset(new std::unordered_map<std::string, std::string>(_response->headers()));
+      }
+      return *_headers.get();
     }
     virtual bool isJson() const override {
       std::string message(__func__);
@@ -92,6 +97,7 @@ class SimpleHttpCommunicatorResult: public SimpleHttpResult {
  
   private:
     std::unique_ptr<HttpResponse> _response;
+    mutable std::unique_ptr<std::unordered_map<std::string, std::string>> _headers;
 };
 }
 }
