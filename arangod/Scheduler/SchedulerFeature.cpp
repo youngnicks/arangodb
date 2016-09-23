@@ -114,17 +114,23 @@ void SchedulerFeature::start() {
 void SchedulerFeature::stop() {
   static size_t const MAX_TRIES = 10;
 
-  if (_scheduler != nullptr) {
-    _scheduler->beginShutdown();
+  _scheduler->beginShutdown();
 
-    for (size_t count = 0; count < MAX_TRIES && _scheduler->isRunning();
-         ++count) {
-      LOG_TOPIC(TRACE, Logger::STARTUP) << "waiting for scheduler to stop";
-      usleep(100000);
-    }
-
-    _scheduler->shutdown();
+  for (size_t count = 0; count < MAX_TRIES && _scheduler->isRunning();
+       ++count) {
+    LOG_TOPIC(TRACE, Logger::STARTUP) << "waiting for scheduler to stop";
+    usleep(100000);
   }
+
+  _scheduler->shutdown();
+
+  _exitSignals->cancel();
+  _exitSignals.reset();
+
+#ifndef WIN32
+  _hangupSignals->cancel();
+  _hangupSignals.reset();
+#endif
 }
 
 void SchedulerFeature::unprepare() { SCHEDULER = nullptr; }
@@ -217,13 +223,10 @@ void SchedulerFeature::buildControlCHandler() {
     }
   }
 #else
+
   auto ioService = _scheduler->managerService();
-
-  _exitSignals.reset(new boost::asio::signal_set(*ioService));
-  _exitSignals->add(SIGINT);
-  _exitSignals->add(SIGTERM);
-  _exitSignals->add(SIGQUIT);
-
+  _exitSignals = std::make_shared<boost::asio::signal_set>(*ioService, SIGINT, SIGTERM, SIGQUIT);
+  
   _signalHandler = [this](const boost::system::error_code& error, int number) {
     if (error) {
       return;
@@ -234,7 +237,7 @@ void SchedulerFeature::buildControlCHandler() {
     _exitSignals->async_wait(_exitHandler);
   };
 
-  _exitHandler = [this](const boost::system::error_code& error, int number) {
+  _exitHandler = [](const boost::system::error_code& error, int number) {
     if (error) {
       return;
     }
@@ -251,8 +254,7 @@ void SchedulerFeature::buildHangupHandler() {
 #ifndef WIN32
   auto ioService = _scheduler->managerService();
 
-  _hangupSignals.reset(new boost::asio::signal_set(*ioService));
-  _hangupSignals->add(SIGHUP);
+  _hangupSignals = std::make_shared<boost::asio::signal_set>(*ioService, SIGHUP);
 
   _hangupHandler = [this](const boost::system::error_code& error, int number) {
     if (error) {

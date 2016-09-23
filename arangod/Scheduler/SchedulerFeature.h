@@ -71,10 +71,10 @@ class SchedulerFeature final : public application_features::ApplicationFeature {
 #ifndef WIN32
   std::function<void(const boost::system::error_code&, int)> _signalHandler;
   std::function<void(const boost::system::error_code&, int)> _exitHandler;
-  std::unique_ptr<boost::asio::signal_set> _exitSignals;
-
+  std::shared_ptr<boost::asio::signal_set> _exitSignals;
+  
   std::function<void(const boost::system::error_code&, int)> _hangupHandler;
-  std::unique_ptr<boost::asio::signal_set> _hangupSignals;
+  std::shared_ptr<boost::asio::signal_set> _hangupSignals;
 #endif
 };
 }

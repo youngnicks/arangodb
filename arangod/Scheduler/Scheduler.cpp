@@ -171,10 +171,6 @@ Scheduler::~Scheduler() { deleteOldThreads(); }
 // --SECTION--                                      constructors and destructors
 // -----------------------------------------------------------------------------
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief starts scheduler, keeps running
-////////////////////////////////////////////////////////////////////////////////
-
 bool Scheduler::start(ConditionVariable* cv) {
   // start the I/O
   startIoService();
@@ -352,7 +348,14 @@ void Scheduler::beginShutdown() {
 }
 
 void Scheduler::shutdown() {
-#pragma message("TODO - IMPLEMENTATION REQUIRED???")
+  bool done = false;
+
+  while (!done) {
+    MUTEX_LOCKER(guard, _threadsLock);
+    done = _threads.empty();
+  }
+
+  deleteOldThreads();
 }
 
 void Scheduler::signalTask2(std::unique_ptr<TaskData> data) {
