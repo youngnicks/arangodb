@@ -101,7 +101,7 @@ function namedGraphSuite () {
 
   return {
 
-    setUp: function() {
+    setUpAll: function() {
       opts.allPlans = true;
       opts.verbosePlans = true;
       cleanup();
@@ -114,7 +114,7 @@ function namedGraphSuite () {
       g = gm._create(gn, [gm._relation(en, vn, vn)]);
     },
 
-    tearDown: function () {
+    tearDownAll: function () {
       gm._drop(gn);
       cleanup();
     },
@@ -432,7 +432,7 @@ function multiCollectionGraphSuite () {
 
   return {
 
-    setUp: function() {
+    setUpAll: function() {
       opts.allPlans = true;
       opts.verbosePlans = true;
       cleanup();
@@ -449,7 +449,7 @@ function multiCollectionGraphSuite () {
       db[en2].save(vn2 + "/G", vn + "/D", {});
     },
 
-    tearDown: function() {
+    tearDownAll: function() {
       gm._drop(gn);
       db._drop(vn2);
       db._drop(en2);
@@ -946,7 +946,7 @@ function multiEdgeCollectionGraphSuite () {
 
   return {
 
-    setUp: function() {
+    setUpAll: function() {
       opts.allPlans = true;
       opts.verbosePlans = true;
       cleanup();
@@ -974,7 +974,7 @@ function multiEdgeCollectionGraphSuite () {
       edge.EA = ec2.save(vertex.E, vertex.A, {})._id;
     },
 
-    tearDown: function() {
+    tearDownAll: function() {
       gm._drop(gn);
       db._drop(vn);
       db._drop(en);
@@ -1009,7 +1009,7 @@ function potentialErrorsSuite () {
 
   return {
 
-    setUp: function () {
+    setUpAll: function () {
       cleanup();
       vc = db._create(vn);
       ec = db._createEdgeCollection(en);
@@ -1020,7 +1020,7 @@ function potentialErrorsSuite () {
       ec.save(vertex.B, vertex.C, {});
     },
 
-    tearDown: cleanup,
+    tearDownAll: cleanup,
 
     testNonIntegerSteps: function () {
       var query = "FOR x IN 2.5 OUTBOUND @startId @@eCol RETURN x";
@@ -1446,7 +1446,7 @@ function optimizeInSuite () {
 
   return {
 
-    setUp: function () {
+    setUpAll: function () {
       cleanup();
       vc = db._create(vn, {numberOfShards: 4});
       ec = db._createEdgeCollection(en, {numberOfShards: 4});
@@ -1462,7 +1462,7 @@ function optimizeInSuite () {
       }
     },
 
-    tearDown: cleanup,
+    tearDownAll: cleanup,
 
     testSingleOptimize: function () {
       var vertexQuery = `WITH ${vn}
@@ -1660,7 +1660,7 @@ function complexFilteringSuite () {
    ***********************************************************************/
 
   return {
-    setUp: function() {
+    setUpAll: function() {
       cleanup();
       var vc = db._create(vn, {numberOfShards: 4});
       var ec = db._createEdgeCollection(en, {numberOfShards: 4});
@@ -1688,7 +1688,7 @@ function complexFilteringSuite () {
       edge.Tri31 = ec.save(vertex.Tri3, vertex.Tri1, {isLoop: true, lateLoop: true})._id;
     },
 
-    tearDown: cleanup,
+    tearDownAll: cleanup,
 
     testVertexEarlyPruneHighDepth: function () {
       var query = `WITH ${vn}
@@ -2071,7 +2071,7 @@ function brokenGraphSuite () {
 
   return {
 
-    setUp: function () {
+    setUpAll: function () {
       cleanup();
       vc = db._create(vn, {numberOfShards: 4});
       ec = db._createEdgeCollection(en, {numberOfShards: 4});
@@ -2083,7 +2083,7 @@ function brokenGraphSuite () {
       ec.save(vn + "/missing", vertex.B, {});
     },
 
-    tearDown: cleanup,
+    tearDownAll: cleanup,
 
     testRequestMissingVertex: function () {
       var query = `WITH ${vn} FOR x IN OUTBOUND @startId @@eCol RETURN x._id`;
@@ -2185,7 +2185,7 @@ function multiEdgeDirectionSuite () {
 
   return {
 
-    setUp: function () {
+    setUpAll: function () {
       cleanup();
       db._drop(en2);
 
@@ -2216,7 +2216,7 @@ function multiEdgeDirectionSuite () {
       ec.save(vertex.E, vertex.F, {});
     },
 
-    tearDown: function () {
+    tearDownAll: function () {
       cleanup();
       db._drop(en2);
     },
@@ -2315,7 +2315,7 @@ function subQuerySuite () {
      *
      */
 
-    setUp: function () {
+    setUpAll: function () {
       cleanup();
       vc = db._create(vn, {numberOfShards: 4});
       ec = db._createEdgeCollection(en, {numberOfShards: 4});
@@ -2374,7 +2374,7 @@ function subQuerySuite () {
       ec.save(vertex.D, vertex.D5, {});
     },
 
-    tearDown: function () {
+    tearDownAll: function () {
       try {
         gm._drop(gn);
       } catch (e) {
@@ -2511,32 +2511,18 @@ function optionsSuite() {
     },
 
     testEdgeUniquenessGlobal: function () {
+
       var start = vc.save({_key: "s"})._id;
-      var a = vc.save({_key: "a"})._id;
-      var b = vc.save({_key: "b"})._id;
-      var c = vc.save({_key: "c"})._id;
-      var d = vc.save({_key: "d"})._id;
-      ec.save(start, a, {});
-      ec.save(a, b, {});
-      ec.save(b, c, {});
-      ec.save(c, a, {});
-      ec.save(a, d, {});
-      var cursor = db._query(
-        `WITH ${vn}
-         FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {uniqueEdges: "global"}
-         SORT v._key
-         RETURN v`).toArray();
-      // We expect to get s->a->b->c->a
-      // and s->a->d
-      // But not s->a->b->c->a->b->*
-      // And not s->a->b->c->a->d
-      // And not to continue at a again
-      assertEqual(cursor.length, 5);
-      assertEqual(cursor[0]._id, a); // We start with a
-      assertEqual(cursor[1]._id, a); // We somehow return to a
-      assertEqual(cursor[2]._id, b); // We once find b
-      assertEqual(cursor[3]._id, c); // And once c
-      assertEqual(cursor[4]._id, d); // We once find d on long or short path
+      try {
+        var cursor = db._query(
+          `WITH ${vn}
+           FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {uniqueEdges: "global"}
+           SORT v._key
+           RETURN v`).toArray();
+        fail();
+      } catch (e) {
+        assertEqual(e.errorNum, errors.ERROR_BAD_PARAMETER.code, "We expect a bad parameter");
+      }
     },
 
     testEdgeUniquenessNone: function () {
@@ -2606,31 +2592,18 @@ function optionsSuite() {
       assertEqual(cursor[5]._id, d); // And find d on long path
     },
 
-    testVertexUniquenessGlobal: function () {
+    testVertexUniquenessGlobalDepthFirst: function () {
       var start = vc.save({_key: "s"})._id;
-      var a = vc.save({_key: "a"})._id;
-      var b = vc.save({_key: "b"})._id;
-      var c = vc.save({_key: "c"})._id;
-      var d = vc.save({_key: "d"})._id;
-      ec.save(start, a, {});
-      ec.save(a, b, {});
-      ec.save(b, c, {});
-      ec.save(c, a, {});
-      ec.save(a, d, {});
-      var cursor = db._query(
-        `WITH ${vn}
-         FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {uniqueVertices: "global"}
-         SORT v._key
-         RETURN v`).toArray();
-      // We expect to get s->a->b->c
-      // and s->a->d
-      // But not s->a->b->c->a
-      // And not to return to a again
-      assertEqual(cursor.length, 4);
-      assertEqual(cursor[0]._id, a); // We start with a
-      assertEqual(cursor[1]._id, b); // We once find b
-      assertEqual(cursor[2]._id, c); // And once c
-      assertEqual(cursor[3]._id, d); // We once find d on long or short path
+      try {
+        var cursor = db._query(
+          `WITH ${vn}
+           FOR v IN 1..10 OUTBOUND "${start}" ${en} OPTIONS {uniqueVertices: "global"}
+           SORT v._key
+           RETURN v`).toArray();
+        fail();
+      } catch (e) {
+        assertEqual(e.errorNum, errors.ERROR_BAD_PARAMETER.code, "We expect a bad parameter");
+      }
     },
 
     testVertexUniquenessPath: function () {
@@ -2686,7 +2659,7 @@ function optimizeQuantifierSuite() {
   let edges = {};
 
   return {
-    setUp: function () {
+    setUpAll: function () {
       cleanup();
       vc = db._create(vn, {numberOfShards: 4});
       ec = db._createEdgeCollection(en, {numberOfShards: 4});
@@ -2714,7 +2687,7 @@ function optimizeQuantifierSuite() {
       gm._create(gn, [gm._relation(en, vn, vn)]);
     },
 
-    tearDown: function () {
+    tearDownAll: function () {
       try {
         gm._drop(gn);
       } catch (e) {
@@ -2763,9 +2736,9 @@ function optimizeQuantifierSuite() {
         RETURN v._id
       `;
       let cursor = db._query(query);
-      assertEqual(cursor.count(), 4);
+      assertEqual(cursor.count(), 3);
       let result = cursor.toArray();
-      assertEqual(result, [vertices.A, vertices.B, vertices.C, vertices.D]);
+      assertEqual(result, [vertices.B, vertices.C, vertices.D]);
 
       let stats = cursor.getExtra().stats;
       assertEqual(stats.scannedFull, 0);
@@ -2774,7 +2747,7 @@ function optimizeQuantifierSuite() {
       } else {
         assertEqual(stats.scannedIndex, 8);
       }
-      assertEqual(stats.filtered, 1);
+      assertEqual(stats.filtered, 2);
 
       query = `
         FOR v, e, p IN 0..2 OUTBOUND "${vertices.A}" GRAPH "${gn}"
@@ -2783,9 +2756,9 @@ function optimizeQuantifierSuite() {
         RETURN v._id
       `;
       cursor = db._query(query);
-      assertEqual(cursor.count(), 4);
+      assertEqual(cursor.count(), 3);
       result = cursor.toArray();
-      assertEqual(result, [vertices.A, vertices.E, vertices.F, vertices.G]);
+      assertEqual(result, [vertices.E, vertices.F, vertices.G]);
 
       stats = cursor.getExtra().stats;
       assertEqual(stats.scannedFull, 0);
@@ -2794,7 +2767,7 @@ function optimizeQuantifierSuite() {
       } else {
         assertEqual(stats.scannedIndex, 8);
       }
-      assertEqual(stats.filtered, 1);
+      assertEqual(stats.filtered, 2);
     },
 
     testNoneVerticesSingle: function () {
@@ -2899,9 +2872,9 @@ function optimizeQuantifierSuite() {
         RETURN v._id
       `;
       let cursor = db._query(query);
-      assertEqual(cursor.count(), 3);
+      assertEqual(cursor.count(), 2);
       let result = cursor.toArray();
-      assertEqual(result, [vertices.A, vertices.B, vertices.C]);
+      assertEqual(result, [vertices.B, vertices.C]);
 
       let stats = cursor.getExtra().stats;
       assertEqual(stats.scannedFull, 0);
@@ -2910,7 +2883,7 @@ function optimizeQuantifierSuite() {
       } else {
         assertEqual(stats.scannedIndex, 7);
       }
-      assertEqual(stats.filtered, 2);
+      assertEqual(stats.filtered, 3);
     },
 
     testAllNoneVerticesMultiple: function () {
@@ -2941,9 +2914,9 @@ function optimizeQuantifierSuite() {
         RETURN v._id
       `;
       let cursor = db._query(query);
-      assertEqual(cursor.count(), 3);
+      assertEqual(cursor.count(), 2);
       let result = cursor.toArray();
-      assertEqual(result, [vertices.A, vertices.B, vertices.C]);
+      assertEqual(result, [vertices.B, vertices.C]);
 
       let stats = cursor.getExtra().stats;
       assertEqual(stats.scannedFull, 0);
@@ -2952,7 +2925,7 @@ function optimizeQuantifierSuite() {
       } else {
         assertEqual(stats.scannedIndex, 7);
       }
-      assertEqual(stats.filtered, 2);
+      assertEqual(stats.filtered, 3);
     },
 
     testAllVerticesDepth: function () {

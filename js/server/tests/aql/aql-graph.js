@@ -52,7 +52,7 @@ function ahuacatlQueryEdgesTestSuite () {
 /// @brief set up
 ////////////////////////////////////////////////////////////////////////////////
 
-    setUp : function () {
+    setUpAll : function () {
       db._drop(vn);
       db._drop("UnitTestsAhuacatlEdge");
 
@@ -86,7 +86,7 @@ function ahuacatlQueryEdgesTestSuite () {
 /// @brief tear down
 ////////////////////////////////////////////////////////////////////////////////
 
-    tearDown : function () {
+    tearDownAll : function () {
       db._drop("UnitTestsAhuacatlVertex");
       db._drop("UnitTestsAhuacatlEdge");
     },
@@ -410,7 +410,7 @@ function ahuacatlQueryNeighborsTestSuite () {
 /// @brief set up
 ////////////////////////////////////////////////////////////////////////////////
 
-    setUp : function () {
+    setUpAll : function () {
       db._drop(vn);
       db._drop("UnitTestsAhuacatlEdge");
 
@@ -444,7 +444,7 @@ function ahuacatlQueryNeighborsTestSuite () {
 /// @brief tear down
 ////////////////////////////////////////////////////////////////////////////////
 
-    tearDown : function () {
+    tearDownAll : function () {
       db._drop(vn);
       db._drop("UnitTestsAhuacatlEdge");
     },
@@ -673,7 +673,7 @@ function ahuacatlQueryBreadthFirstTestSuite () {
 ///       +--> C <--+
 ////////////////////////////////////////////////////////////////////////////////
 
-    setUp : function () {
+    setUpAll : function () {
       cleanUp();
 
       vertex = db._create(vn);
@@ -709,7 +709,7 @@ function ahuacatlQueryBreadthFirstTestSuite () {
       makeEdge("C","A","friend");
     },
 
-    tearDown : cleanUp,
+    tearDownAll : cleanUp,
 
     testNonUniqueVerticesDefaultDepth : function() {
       var query = `WITH ${vn}
@@ -823,102 +823,6 @@ function ahuacatlQueryBreadthFirstTestSuite () {
       var actual = getQueryResults(query);
       assertEqual(actual.length, 6);
       assertEqual(actual, [ "BC","BD","CA","CA","EC","EF" ]);
-    },
-    
-    testUniqueEdgesMaxDepth4 : function () {
-      var query = `WITH ${vn}
-        FOR v,e IN 1..3 OUTBOUND "${center}" ${en}
-        OPTIONS {bfs: true, uniqueEdges: 'global'}
-        SORT e._key RETURN e._key`;
-      var actual = getQueryResults(query);
-      assertEqual(actual.length, 9);
-      assertEqual(actual, [ "AB","AD","AE","AF","BC","BD","CA","EC","EF" ]);
-    },
-    
-    testUniqueEdgesMinDepth0 : function () {
-      var query = `WITH ${vn}
-        FOR v,e IN 0..3 OUTBOUND "${center}" ${en}
-        OPTIONS {bfs: true, uniqueEdges: 'global'}
-        SORT e._key RETURN e._key`;
-      var actual = getQueryResults(query);
-      assertEqual(actual.length, 10);
-      assertEqual(actual, [ null,"AB","AD","AE","AF","BC","BD","CA","EC","EF" ]);
-    },
-    
-    testUniqueEdgesMinDepth2 : function () {
-      var query = `WITH ${vn}
-        FOR v,e IN 2..3 OUTBOUND "${center}" ${en}
-        OPTIONS {bfs: true, uniqueEdges: 'global'}
-        SORT e._key RETURN e._key`;
-      var actual = getQueryResults(query);
-      assertEqual(actual.length, 5);
-      assertEqual(actual, [ "BC","BD","CA","EC","EF" ]);
-    },
-    
-    testFilterPathMaxDepth3 : function () {
-      var query = `WITH ${vn}
-        FOR v,e,p IN 1..3 OUTBOUND "${center}" ${en}
-        OPTIONS {bfs: true, uniqueEdges: 'global'}
-        FILTER p.edges[0].type == "friend" && p.edges[1].type == "enemy" 
-        SORT e._key RETURN e._key`;
-      var actual = getQueryResults(query);
-      assertEqual(actual.length, 2);
-      assertEqual(actual, [ "BC","CA" ]);
-    },
-    
-    testFilterPathMaxDepth2 : function () {
-      var query = `WITH ${vn}
-        FOR v,e,p IN 1..2 OUTBOUND "${center}" ${en}
-        OPTIONS {bfs: true, uniqueEdges: 'global'}
-        FILTER p.edges[0].type == "friend" && p.edges[1].type == "enemy" 
-        SORT e._key RETURN e._key`;
-      var actual = getQueryResults(query);
-      assertEqual(actual.length, 1);
-      assertEqual(actual, [ "BC" ]);
-    },
-    
-    testFilterPathMinDepth3 : function () {
-      var query = `WITH ${vn}
-        FOR v,e,p IN 3..3 OUTBOUND "${center}" ${en}
-        OPTIONS {bfs: true, uniqueEdges: 'global'}
-        FILTER p.edges[0].type == "friend" && p.edges[1].type == "enemy" 
-        SORT e._key RETURN e._key`;
-      var actual = getQueryResults(query);
-      assertEqual(actual.length, 1);
-      assertEqual(actual, [ "CA" ]);
-    },
-    
-    testFilterPathDepth3 : function () {
-      var query = `WITH ${vn}
-        FOR v,e,p IN 1..3 OUTBOUND "${center}" ${en}
-        OPTIONS {bfs: true, uniqueEdges: 'global'}
-        FILTER p.edges[0].type == "enemy" && p.edges[1].type == "enemy" && p.edges[2].type == "friend" 
-        SORT e._key RETURN e._key`;
-      var actual = getQueryResults(query);
-      assertEqual(actual.length, 1);
-      assertEqual(actual, [ "CA" ]);
-    },
-    
-    testFilterPathStartsWith : function () {
-      var query = `WITH ${vn}
-        FOR v,e,p IN 1..3 OUTBOUND "${center}" ${en}
-        OPTIONS {bfs: true, uniqueEdges: 'global'}
-        FILTER p.edges[0].type == "friend" 
-        SORT e._key RETURN e._key`;
-      var actual = getQueryResults(query);
-      assertEqual(actual.length, 5);
-      assertEqual(actual, [ "AB","AD","BC","BD","CA" ]);
-    },
-    
-    testFilterPathStartsWithDepth2 : function () {
-      var query = `WITH ${vn}
-        FOR v,e,p IN 2..3 OUTBOUND "${center}" ${en}
-        OPTIONS {bfs: true, uniqueEdges: 'global'}
-        FILTER p.edges[0].type == "friend" 
-        SORT e._key RETURN e._key`;
-      var actual = getQueryResults(query);
-      assertEqual(actual.length, 3);
-      assertEqual(actual, [ "BC","BD","CA" ]);
     }
   };
 }
@@ -939,7 +843,7 @@ function ahuacatlQueryShortestPathTestSuite () {
 /// @brief set up
 ////////////////////////////////////////////////////////////////////////////////
 
-    setUp : function () {
+    setUpAll : function () {
       db._drop(vn);
       db._drop(en);
 
@@ -962,7 +866,7 @@ function ahuacatlQueryShortestPathTestSuite () {
 /// @brief tear down
 ////////////////////////////////////////////////////////////////////////////////
 
-    tearDown : function () {
+    tearDownAll : function () {
       db._drop(vn);
       db._drop(en);
 
@@ -1101,7 +1005,7 @@ function ahuacatlQueryNeighborsErrorsSuite () {
 /// @brief set up
 ////////////////////////////////////////////////////////////////////////////////
 
-    setUp : function () {
+    setUpAll : function () {
       db._drop(vn);
       db._drop(en);
       internal.debugClearFailAt();
@@ -1124,7 +1028,7 @@ function ahuacatlQueryNeighborsErrorsSuite () {
 /// @brief tear down
 ////////////////////////////////////////////////////////////////////////////////
 
-    tearDown : function () {
+    tearDownAll : function () {
       db._drop(vn);
       db._drop(en);
       internal.debugClearFailAt();
@@ -1190,7 +1094,7 @@ function ahuacatlQueryShortestpathErrorsSuite () {
 /// @brief set up
 ////////////////////////////////////////////////////////////////////////////////
 
-    setUp : function () {
+    setUpAll : function () {
       db._drop(vn);
       db._drop(en);
       internal.debugClearFailAt();
@@ -1213,7 +1117,7 @@ function ahuacatlQueryShortestpathErrorsSuite () {
 /// @brief tear down
 ////////////////////////////////////////////////////////////////////////////////
 
-    tearDown : function () {
+    tearDownAll : function () {
       db._drop(vn);
       db._drop(en);
       internal.debugClearFailAt();
