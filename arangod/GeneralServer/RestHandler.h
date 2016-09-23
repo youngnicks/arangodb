@@ -106,12 +106,12 @@ class RestHandler : public RequestStatisticsAgent,
     _engine.init(loop, agent, storeResult);
   }
 
-  void asyncRunEngine() { _engine.asyncRun(shared_from_this()); }
-  RestStatus syncRunEngine() { return _engine.syncRun(shared_from_this()); }
+  int asyncRunEngine() { return _engine.asyncRun(shared_from_this()); }
+  int syncRunEngine() { return _engine.syncRun(shared_from_this()); }
 
   int prepareEngine();
   int executeEngine();
-  int runEngine();
+  int runEngine(bool synchron);
   int finalizeEngine();
 
  private:

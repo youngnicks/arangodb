@@ -213,9 +213,9 @@ RestStatus RestBatchHandler::executeHttp() {
 
     // start to work for this handler
     {
-      RestStatus result = handler->syncRunEngine();
+      int result = handler->syncRunEngine();
 
-      if (result.isFailed()) {
+      if (result != TRI_ERROR_NO_ERROR) {
         generateError(rest::ResponseCode::BAD, TRI_ERROR_INTERNAL,
                       "executing a handler for batch part failed");
 

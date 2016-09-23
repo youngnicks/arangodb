@@ -51,8 +51,8 @@ class RestEngine {
     _processResult = processResult;
   }
 
-  void asyncRun(std::shared_ptr<rest::RestHandler>);
-  RestStatus syncRun(std::shared_ptr<rest::RestHandler>);
+  int asyncRun(std::shared_ptr<rest::RestHandler>);
+  int syncRun(std::shared_ptr<rest::RestHandler>);
 
   void setState(State state) { _state = state; }
   void processResult(rest::RestHandler* handler) { _processResult(handler); }
@@ -77,6 +77,7 @@ class RestEngine {
   EventLoop _loop;
   rest::RequestStatisticsAgent* _agent = nullptr;
   std::function<void(rest::RestHandler*)> _processResult;
+  int run(std::shared_ptr<rest::RestHandler>, bool synchron);
 };
 }
 

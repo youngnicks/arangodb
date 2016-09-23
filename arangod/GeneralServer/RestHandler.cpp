@@ -186,7 +186,7 @@ int RestHandler::executeEngine() {
   return TRI_ERROR_INTERNAL;
 }
 
-int RestHandler::runEngine() {
+int RestHandler::runEngine(bool synchron) {
   try {
     while (_engine.hasSteps()) {
       std::shared_ptr<RestStatusElement> result = _engine.popStep();
@@ -205,11 +205,13 @@ int RestHandler::runEngine() {
           // do nothing
           break;
 
-        case RestStatusElement::State::QUEUED: {
-          std::shared_ptr<RestHandler> self = shared_from_this();
-          _engine.queue([self, this]() { _engine.asyncRun(self); });
-          return TRI_ERROR_NO_ERROR;
-        }
+        case RestStatusElement::State::QUEUED:
+          if (!synchron) {
+            std::shared_ptr<RestHandler> self = shared_from_this();
+            _engine.queue([self, this]() { _engine.asyncRun(self); });
+            return TRI_ERROR_NO_ERROR;
+          }
+          break;
 
         case RestStatusElement::State::THEN: {
           auto status = result->callThen();

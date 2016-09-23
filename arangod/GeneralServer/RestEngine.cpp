@@ -38,10 +38,9 @@ RestEngine::RestEngine() {}
 // -----------------------------------------------------------------------------
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
-
-void RestEngine::asyncRun(std::shared_ptr<rest::RestHandler> handler) {
+int RestEngine::run(std::shared_ptr<rest::RestHandler> handler, bool synchron) {
   while (true) {
-    int res = TRI_ERROR_INTERNAL;
+    int res = TRI_ERROR_NO_ERROR;
 
     switch (_state) {
       case State::PREPARE:
@@ -53,7 +52,7 @@ void RestEngine::asyncRun(std::shared_ptr<rest::RestHandler> handler) {
         break;
 
       case State::RUN:
-        res = handler->runEngine();
+        res = handler->runEngine(synchron);
         break;
 
       case State::FINALIZE:
@@ -62,19 +61,21 @@ void RestEngine::asyncRun(std::shared_ptr<rest::RestHandler> handler) {
 
       case State::DONE:
       case State::FAILED:
-        return;
+        return res;
     }
 
     if (res != TRI_ERROR_NO_ERROR) {
-      return;
+      return res;
     }
   }
 }
 
-RestStatus RestEngine::syncRun(std::shared_ptr<rest::RestHandler> handler) {
-#pragma message("TODO - needs to be implemented")
-  std::cout << "NOT IMPLEMENTED" << std::endl;
-  return RestStatus::FAIL;
+int RestEngine::asyncRun(std::shared_ptr<rest::RestHandler> handler) {
+  return run(handler, false);
+}
+
+int RestEngine::syncRun(std::shared_ptr<rest::RestHandler> handler) {
+  return run(handler, true);
 }
 
 void RestEngine::appendRestStatus(std::shared_ptr<RestStatusElement> element) {
