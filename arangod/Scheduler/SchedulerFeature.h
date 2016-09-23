@@ -66,7 +66,7 @@ class SchedulerFeature final : public application_features::ApplicationFeature {
   void buildScheduler();
 
  private:
-  rest::Scheduler* _scheduler;
+  std::unique_ptr<rest::Scheduler> _scheduler;
 
 #ifndef WIN32
   std::function<void(const boost::system::error_code&, int)> _signalHandler;

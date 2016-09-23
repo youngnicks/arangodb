@@ -57,11 +57,7 @@ SchedulerFeature::SchedulerFeature(
   startsAfter("WorkMonitor");
 }
 
-SchedulerFeature::~SchedulerFeature() {
-  if (_scheduler != nullptr) {
-    delete _scheduler;
-  }
-}
+SchedulerFeature::~SchedulerFeature() {}
 
 void SchedulerFeature::collectOptions(
     std::shared_ptr<options::ProgramOptions> options) {
@@ -205,9 +201,10 @@ bool CtrlHandler(DWORD eventType) {
 #endif
 
 void SchedulerFeature::buildScheduler() {
-  _scheduler = new Scheduler(static_cast<size_t>(_nrSchedulerThreads),
-                             static_cast<size_t>(_queueSize));
-  SCHEDULER = _scheduler;
+  _scheduler =
+      std::make_unique<Scheduler>(static_cast<size_t>(_nrSchedulerThreads),
+                                  static_cast<size_t>(_queueSize));
+  SCHEDULER = _scheduler.get();
 }
 
 void SchedulerFeature::buildControlCHandler() {
