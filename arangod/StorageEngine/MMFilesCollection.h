@@ -27,6 +27,7 @@
 #include "Basics/Common.h"
 #include "Basics/ReadWriteLock.h"
 #include "StorageEngine/MMFilesDatafileStatistics.h"
+#include "StorageEngine/MMFilesRevisionsCache.h"
 #include "VocBase/Ditch.h"
 #include "VocBase/PhysicalCollection.h"
 
@@ -132,10 +133,6 @@ class MMFilesCollection final : public PhysicalCollection {
     _datafileStatistics.update(fid, values);
   }
    
-  void increaseDeadStats(TRI_voc_fid_t fid, int64_t number, int64_t size) override {
-    _datafileStatistics.increaseDead(fid, number, size);
-  }
-   
   /// @brief report extra memory used by indexes etc.
   size_t memory() const override;
 
@@ -164,7 +161,7 @@ class MMFilesCollection final : public PhysicalCollection {
   void createStats(TRI_voc_fid_t fid, DatafileStatisticsContainer const& values) {
     _datafileStatistics.create(fid, values);
   }
-    
+  
   /// @brief iterates over a collection
   bool iterateDatafiles(std::function<bool(TRI_df_marker_t const*, TRI_datafile_t*)> const& cb);
   
@@ -183,6 +180,13 @@ class MMFilesCollection final : public PhysicalCollection {
   bool iterateDatafilesVector(std::vector<TRI_datafile_t*> const& files,
                               std::function<bool(TRI_df_marker_t const*, TRI_datafile_t*)> const& cb);
 
+  DocumentPosition lookupRevision(TRI_voc_rid_t revisionId) const override;
+  uint8_t const* lookupRevisionVPack(TRI_voc_rid_t revisionId) const override;
+  void insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) override;
+  void updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) override;
+  bool updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) override;
+  void removeRevision(TRI_voc_rid_t revisionId, bool updateStats) override;
+  
  private:
   mutable arangodb::Ditches _ditches;
 
@@ -198,6 +202,8 @@ class MMFilesCollection final : public PhysicalCollection {
   MMFilesDatafileStatistics _datafileStatistics;
 
   TRI_voc_rid_t _lastRevision;
+  
+  MMFilesRevisionsCache _revisionsCache;
 };
 
 }

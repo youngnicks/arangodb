@@ -21,8 +21,8 @@
 /// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_VOCBASE_COLLECTION_REVISIONS_CACHE_H
-#define ARANGOD_VOCBASE_COLLECTION_REVISIONS_CACHE_H 1
+#ifndef ARANGOD_STORAGE_ENGINE_MMFILES_REVISIONS_CACHE_H
+#define ARANGOD_STORAGE_ENGINE_MMFILES_REVISIONS_CACHE_H 1
 
 #include "Basics/Common.h"
 #include "Basics/ReadWriteLock.h"
@@ -33,10 +33,10 @@ struct TRI_df_marker_t;
 
 namespace arangodb {
 
-class CollectionRevisionsCache {
+class MMFilesRevisionsCache {
  public:
-  CollectionRevisionsCache();
-  ~CollectionRevisionsCache();
+  MMFilesRevisionsCache();
+  ~MMFilesRevisionsCache();
   
  public:
   DocumentPosition lookup(TRI_voc_rid_t revisionId) const;

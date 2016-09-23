@@ -21,7 +21,7 @@
 /// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "CollectionRevisionsCache.h"
+#include "MMFilesRevisionsCache.h"
 #include "Basics/ReadLocker.h"
 #include "Basics/WriteLocker.h"
 #include "Logger/Logger.h"
@@ -29,11 +29,11 @@
 
 using namespace arangodb;
 
-CollectionRevisionsCache::CollectionRevisionsCache() {}
+MMFilesRevisionsCache::MMFilesRevisionsCache() {}
 
-CollectionRevisionsCache::~CollectionRevisionsCache() {}
+MMFilesRevisionsCache::~MMFilesRevisionsCache() {}
 
-DocumentPosition CollectionRevisionsCache::lookup(TRI_voc_rid_t revisionId) const {
+DocumentPosition MMFilesRevisionsCache::lookup(TRI_voc_rid_t revisionId) const {
   READ_LOCKER(locker, _lock);
   auto it = _positions.find(revisionId);
   
@@ -43,7 +43,7 @@ DocumentPosition CollectionRevisionsCache::lookup(TRI_voc_rid_t revisionId) cons
   return (*it).second;
 }
 
-void CollectionRevisionsCache::insert(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+void MMFilesRevisionsCache::insert(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
   WRITE_LOCKER(locker, _lock);
   auto it = _positions.emplace(revisionId, DocumentPosition(dataptr, fid, isInWal));
   if (!it.second) {
@@ -53,7 +53,7 @@ void CollectionRevisionsCache::insert(TRI_voc_rid_t revisionId, void const* data
   }
 }
 
-void CollectionRevisionsCache::update(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+void MMFilesRevisionsCache::update(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
   WRITE_LOCKER(locker, _lock);
   
   auto it = _positions.find(revisionId);
@@ -66,7 +66,7 @@ void CollectionRevisionsCache::update(TRI_voc_rid_t revisionId, void const* data
   old.fid(fid, isInWal); 
 }
   
-bool CollectionRevisionsCache::updateConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) {
+bool MMFilesRevisionsCache::updateConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) {
   WRITE_LOCKER(locker, _lock);
 
   auto it = _positions.find(revisionId);
@@ -95,12 +95,12 @@ bool CollectionRevisionsCache::updateConditional(TRI_voc_rid_t revisionId, TRI_d
   return true;
 }
    
-void CollectionRevisionsCache::remove(TRI_voc_rid_t revisionId) {
+void MMFilesRevisionsCache::remove(TRI_voc_rid_t revisionId) {
   WRITE_LOCKER(locker, _lock);
   _positions.erase(revisionId);
 }
 
-DocumentPosition CollectionRevisionsCache::fetchAndRemove(TRI_voc_rid_t revisionId) {
+DocumentPosition MMFilesRevisionsCache::fetchAndRemove(TRI_voc_rid_t revisionId) {
   WRITE_LOCKER(locker, _lock);
   auto it = _positions.find(revisionId);
   if (it != _positions.end()) {

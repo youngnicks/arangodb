@@ -1097,3 +1097,40 @@ int MMFilesCollection::iterateMarkersOnLoad(arangodb::Transaction* trx) {
   return TRI_ERROR_NO_ERROR;
 }
 
+DocumentPosition MMFilesCollection::lookupRevision(TRI_voc_rid_t revisionId) const {
+  return _revisionsCache.lookup(revisionId);
+}
+
+uint8_t const* MMFilesCollection::lookupRevisionVPack(TRI_voc_rid_t revisionId) const {
+  DocumentPosition const old = _revisionsCache.lookup(revisionId);
+  if (old.valid()) {
+    return static_cast<uint8_t const*>(old.dataptr());
+  }
+  THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "got invalid vpack value on lookup");
+}
+
+void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+  _revisionsCache.insert(revisionId, dataptr, fid, isInWal);
+}
+
+void MMFilesCollection::updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+  _revisionsCache.update(revisionId, dataptr, fid, isInWal);
+}
+  
+bool MMFilesCollection::updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) {
+  return _revisionsCache.updateConditional(revisionId, oldPosition, newPosition, newFid, isInWal);
+}
+
+void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId, bool updateStats) {
+  if (updateStats) {
+    DocumentPosition const old = _revisionsCache.fetchAndRemove(revisionId);
+    if (old.valid() && !old.pointsToWal()) {
+      TRI_ASSERT(old.dataptr() != nullptr);
+      uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());
+      int64_t size = DatafileHelper::AlignedSize<int64_t>(arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT) + VPackSlice(vpack).byteSize());
+      _datafileStatistics.increaseDead(old.fid(), 1, size);
+    }
+  } else {
+    _revisionsCache.remove(revisionId);
+  }
+}

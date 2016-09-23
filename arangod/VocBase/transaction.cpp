@@ -1039,14 +1039,6 @@ int TRI_AddOperationTransaction(TRI_transaction_t* trx,
         trx->_vocbase, collection->name());
 
     collection->increaseUncollectedLogfileEntries(1);
-
-    if (operation.type() == TRI_VOC_DOCUMENT_OPERATION_UPDATE ||
-        operation.type() == TRI_VOC_DOCUMENT_OPERATION_REPLACE ||
-        operation.type() == TRI_VOC_DOCUMENT_OPERATION_REMOVE) {
-      // update datafile statistics for the old header
-      
-    //  collection->increaseDeadStats(operation.getOldFid(), 1, static_cast<int64_t>(operation.getOldAlignedMarkerSize()));
-    }
   } else {
     // operation is buffered and might be rolled back
     TRI_transaction_collection_t* trxCollection = TRI_GetCollectionTransaction(

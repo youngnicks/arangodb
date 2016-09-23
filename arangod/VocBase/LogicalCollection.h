@@ -25,7 +25,6 @@
 #define ARANGOD_VOCBASE_LOGICAL_COLLECTION_H 1
 
 #include "Basics/Common.h"
-#include "VocBase/CollectionRevisionsCache.h"
 #include "VocBase/DocumentPosition.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/voc-types.h"
@@ -527,8 +526,6 @@ class LogicalCollection {
   uint64_t _numberDocuments;
 
   TRI_voc_tick_t _maxTick;
-
-  CollectionRevisionsCache _revisionsCache;
 
   std::unique_ptr<arangodb::KeyGenerator> _keyGenerator;
   
