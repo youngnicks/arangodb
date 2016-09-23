@@ -362,7 +362,7 @@ void SocketTask::asyncReadSome() {
         return;
       }
     }
-  } catch (boost::system::system_error err) {
+  } catch (boost::system::system_error& err) {
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
         << "SocketTask::asyncReadSome - i/o stream " << info << " failed with "
         << err.what();
@@ -430,7 +430,7 @@ void SocketTask::closeReceiveStream() {
   if (!_closedReceive) {
     try {
       _peer->_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_receive);
-    } catch (boost::system::system_error err) {
+    } catch (boost::system::system_error& err) {
       LOG(WARN) << "shutdown receive stream " << info << " failed with "
                 << err.what();
     }

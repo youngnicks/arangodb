@@ -22,6 +22,7 @@
 
 #include "RestEngine.h"
 
+#include <iostream>
 #include "GeneralServer/RestHandler.h"
 #include "Logger/Logger.h"
 
@@ -70,7 +71,11 @@ void RestEngine::asyncRun(std::shared_ptr<rest::RestHandler> handler) {
   }
 }
 
-RestStatus RestEngine::syncRun(std::shared_ptr<rest::RestHandler> handler) {}
+RestStatus RestEngine::syncRun(std::shared_ptr<rest::RestHandler> handler) {
+#pragma message("TODO - needs to be implemented")
+  std::cout << "NOT IMPLEMENTED" << std::endl;
+  return RestStatus::FAIL;
+}
 
 void RestEngine::appendRestStatus(std::shared_ptr<RestStatusElement> element) {
   while (element.get() != nullptr) {

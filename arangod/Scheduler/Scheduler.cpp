@@ -91,17 +91,17 @@ class SchedulerThread : public Thread {
 
  public:
   void run() {
-    static size_t EVERY_LOOP = 1000;
-    static double MIN_SECONDS = 30;
-
     _scheduler->incRunning();
     LOG_TOPIC(DEBUG, Logger::THREADS) << "running (" << _scheduler->infoStatus()
                                       << ")";
 
-    size_t counter = 0;
     auto start = std::chrono::steady_clock::now();
 
     try {
+      static size_t EVERY_LOOP = 1000;
+      static double MIN_SECONDS = 30;
+
+      size_t counter = 0;
       while (!_scheduler->isStopping()) {
         _service->run_one();
 
@@ -352,6 +352,7 @@ void Scheduler::beginShutdown() {
 }
 
 void Scheduler::shutdown() {
+#pragma message("TODO - IMPLEMENTATION REQUIRED???")
 }
 
 void Scheduler::signalTask2(std::unique_ptr<TaskData> data) {
