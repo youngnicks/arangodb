@@ -36,7 +36,7 @@
 
 namespace arangodb {
   
-typedef arangodb::basics::AssocMulti<arangodb::velocypack::Slice, IndexElement,
+typedef arangodb::basics::AssocMulti<arangodb::velocypack::Slice, IndexElement*,
                                      uint32_t, true> TRI_EdgeIndexHash_t;
 
 

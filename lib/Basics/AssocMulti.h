@@ -40,6 +40,10 @@
 #include <velocypack/Builder.h>
 #include <velocypack/velocypack-aliases.h>
 
+#ifdef TRI_CHECK_MULTI_POINTER_HASH 
+#include <iostream>
+#endif
+
 namespace arangodb {
 namespace basics {
 
@@ -93,24 +97,34 @@ struct Entry {
                        // linked list and the hashByElm for all
                        // others
  public:
-  Element* ptr;    // a pointer to the data stored in this slot
+  Element value;   // the data stored in this slot
   IndexType next;  // index of the data following in the linked
                    // list of all items with the same key
   IndexType prev;  // index of the data preceding in the linked
                    // list of all items with the same key
   uint64_t readHashCache() { return hashCache; }
   void writeHashCache(uint64_t v) { hashCache = v; }
+
+  Entry() : hashCache(0), value(), next(INVALID_INDEX), prev(INVALID_INDEX) {}
+ 
+ private:
+  static IndexType const INVALID_INDEX = ((IndexType)0) - 1;
 };
 
 template <class Element, class IndexType>
 struct Entry<Element, IndexType, false> {
-  Element* ptr;    // a pointer to the data stored in this slot
+  Element value;   // the data stored in this slot
   IndexType next;  // index of the data following in the linked
                    // list of all items with the same key
   IndexType prev;  // index of the data preceding in the linked
                    // list of all items with the same key
   uint64_t readHashCache() { return 0; }
   void writeHashCache(uint64_t v) { TRI_ASSERT(false); }
+  
+  Entry() : value(), next(INVALID_INDEX), prev(INVALID_INDEX) {}
+  
+ private:
+  static IndexType const INVALID_INDEX = ((IndexType)0) - 1;
 };
 
 template <class Key, class Element, class IndexType = size_t,
@@ -123,13 +137,13 @@ class AssocMulti {
   static IndexType const INVALID_INDEX = ((IndexType)0) - 1;
 
   typedef std::function<uint64_t(UserData*, Key const*)> HashKeyFuncType;
-  typedef std::function<uint64_t(UserData*, Element const*, bool)>
+  typedef std::function<uint64_t(UserData*, Element const&, bool)>
       HashElementFuncType;
-  typedef std::function<bool(UserData*, Key const*, Element const*)>
+  typedef std::function<bool(UserData*, Key const*, Element const&)>
       IsEqualKeyElementFuncType;
-  typedef std::function<bool(UserData*, Element const*, Element const*)>
+  typedef std::function<bool(UserData*, Element const&, Element const&)>
       IsEqualElementElementFuncType;
-  typedef std::function<bool(Element*)> CallbackElementFuncType;
+  typedef std::function<bool(Element&)> CallbackElementFuncType;
 
  private:
   typedef Entry<Element, IndexType, useHashCache> EntryType;
@@ -217,7 +231,7 @@ class AssocMulti {
         b._table = nullptr;
 
         // may fail...
-        b._table = new EntryType[b._nrAlloc];
+        b._table = new EntryType[b._nrAlloc]();
 
 #ifdef __linux__
         if (b._nrAlloc > 1000000) {
@@ -229,10 +243,6 @@ class AssocMulti {
                            TRI_MADVISE_RANDOM);
         }
 #endif
-
-        for (IndexType i = 0; i < b._nrAlloc; i++) {
-          invalidateEntry(b, i);
-        }
       }
     } catch (...) {
       for (auto& b : _buckets) {
@@ -246,10 +256,7 @@ class AssocMulti {
 
   ~AssocMulti() {
     for (auto& b : _buckets) {
-      if (b._table != nullptr) {
-        delete[] b._table;
-        b._table = nullptr;
-      }
+      delete[] b._table;
     }
   }
 
@@ -311,19 +318,19 @@ class AssocMulti {
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief return the element at position.
-  /// this may return a nullptr
+  /// this may return a default-constructed Element if not found
   //////////////////////////////////////////////////////////////////////////////
 
-  Element* at(Bucket& b, size_t position) const {
-    return b._table[position].ptr;
+  Element at(Bucket& b, size_t position) const {
+    return b._table[position].value;
   }
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief adds a key/element to the array
   //////////////////////////////////////////////////////////////////////////////
 
-  Element* insert(UserData* userData, Element* element, bool overwrite,
-                  bool checkEquality) {
+  Element insert(UserData* userData, Element const& element, bool overwrite,
+                 bool checkEquality) {
 // if the checkEquality flag is not set, we do not check for element
 // equality we use this flag to speed up initial insertion into the
 // index, i.e. when the index is built for a collection and we know
@@ -351,7 +358,7 @@ class AssocMulti {
   /// @brief adds multiple elements to the array
   //////////////////////////////////////////////////////////////////////////////
 
-  int batchInsert(UserData* userData, std::vector<Element*> const* data,
+  int batchInsert(UserData* userData, std::vector<Element> const* data,
                   size_t numThreads) {
     if (data->empty()) {
       // nothing to do
@@ -363,7 +370,7 @@ class AssocMulti {
 #endif
     std::atomic<int> res(TRI_ERROR_NO_ERROR);
 
-    std::vector<Element*> const& elements = *(data);
+    std::vector<Element> const& elements = *(data);
 
     if (elements.size() < numThreads) {
       numThreads = elements.size();
@@ -376,7 +383,7 @@ class AssocMulti {
 
     size_t const chunkSize = elements.size() / numThreads;
 
-    typedef std::vector<std::pair<Element*, uint64_t>> DocumentsPerBucket;
+    typedef std::vector<std::pair<Element, uint64_t>> DocumentsPerBucket;
 
     arangodb::Mutex bucketMapLocker;
 
@@ -517,9 +524,8 @@ class AssocMulti {
     
     try {
       for (size_t i = 0; i < _buckets.size(); ++i) {
-        auto newBucket = new EntryType[static_cast<size_t>(_initialSize)];
+        auto newBucket = new EntryType[static_cast<size_t>(_initialSize)]();
         for (IndexType j = 0; j < _initialSize; ++j) {
-          newBucket[j].ptr = nullptr;
           newBucket[j].next = INVALID_INDEX;
           newBucket[j].prev = INVALID_INDEX;
           if (useHashCache) {
@@ -567,10 +573,10 @@ class AssocMulti {
   /// @brief a method to iterate over all elements in the hash
   bool invokeOnAllElements(CallbackElementFuncType const& callback, Bucket& b) {
     for (size_t i = 0; i < b._nrAlloc; ++i) {
-      if (b._table[i].ptr == nullptr) {
+      if (!b._table[i].value) {
         continue;
       }
-      if (!callback(b._table[i].ptr)) {
+      if (!callback(b._table[i].value)) {
         return false;
       }
     }
@@ -579,14 +585,11 @@ class AssocMulti {
 
  private:
   //////////////////////////////////////////////////////////////////////////////
-
- private:
-  //////////////////////////////////////////////////////////////////////////////
   /// @brief adds a key/element to the array
   //////////////////////////////////////////////////////////////////////////////
 
-  Element* doInsert(UserData* userData, Element* element, uint64_t hashByKey,
-                    Bucket& b, bool const overwrite, bool const checkEquality) {
+  Element doInsert(UserData* userData, Element const& element, uint64_t hashByKey,
+                   Bucket& b, bool const overwrite, bool const checkEquality) {
     // if the checkEquality flag is not set, we do not check for element
     // equality we use this flag to speed up initial insertion into the
     // index, i.e. when the index is built for a collection and we know
@@ -606,8 +609,8 @@ class AssocMulti {
     IndexType i = hashIndex % b._nrAlloc;
 
     // If this slot is free, just use it:
-    if (nullptr == b._table[i].ptr) {
-      b._table[i].ptr = element;
+    if (!b._table[i].value) {
+      b._table[i].value = element;
       b._table[i].next = INVALID_INDEX;
       b._table[i].prev = INVALID_INDEX;
       if (useHashCache) {
@@ -615,15 +618,15 @@ class AssocMulti {
       }
       b._nrUsed++;
       // no collision generated here!
-      return nullptr;
+      return Element();
     }
 
     // Now find the first slot with an entry with the same key
     // that is the start of a linked list, or a free slot:
-    while (b._table[i].ptr != nullptr &&
+    while (b._table[i].value &&
            (b._table[i].prev != INVALID_INDEX ||
             (useHashCache && b._table[i].readHashCache() != hashByKey) ||
-            !_isEqualElementElementByKey(userData, element, b._table[i].ptr))) {
+            !_isEqualElementElementByKey(userData, element, b._table[i].value))) {
       i = incr(b, i);
 #ifdef TRI_INTERNAL_STATS
       // update statistics
@@ -632,8 +635,8 @@ class AssocMulti {
     }
 
     // If this is free, we are the first with this key:
-    if (nullptr == b._table[i].ptr) {
-      b._table[i].ptr = element;
+    if (!b._table[i].value) {
+      b._table[i].value = element;
       b._table[i].next = INVALID_INDEX;
       b._table[i].prev = INVALID_INDEX;
       if (useHashCache) {
@@ -641,20 +644,18 @@ class AssocMulti {
       }
       b._nrUsed++;
       // no collision generated here either!
-      return nullptr;
+      return Element();
     }
-
-    Element* old;
 
     // Otherwise, entry i points to the beginning of the linked
     // list of which we want to make element a member. Perhaps an
     // equal element is right here:
     if (checkEquality &&
-        _isEqualElementElement(userData, element, b._table[i].ptr)) {
-      old = b._table[i].ptr;
+        _isEqualElementElement(userData, element, b._table[i].value)) {
+      Element old = b._table[i].value;
       if (overwrite) {
         TRI_ASSERT(!useHashCache || b._table[i].readHashCache() == hashByKey);
-        b._table[i].ptr = element;
+        b._table[i].value = element;
       }
       return old;
     }
@@ -664,21 +665,21 @@ class AssocMulti {
     IndexType j =
         findElementPlace(userData, b, element, checkEquality, hashByElm);
 
-    old = b._table[j].ptr;
+    Element old = b._table[j].value;
 
     // if we found an element, return
-    if (old != nullptr) {
+    if (old) {
       if (overwrite) {
         if (useHashCache) {
           b._table[j].writeHashCache(hashByElm);
         }
-        b._table[j].ptr = element;
+        b._table[j].value = element;
       }
       return old;
     }
 
     // add a new element to the associative array and linked list (in pos 2):
-    b._table[j].ptr = element;
+    b._table[j].value = element;
     b._table[j].next = b._table[i].next;
     b._table[j].prev = i;
     if (useHashCache) {
@@ -692,7 +693,7 @@ class AssocMulti {
     b._nrUsed++;
     b._nrCollisions++;
 
-    return nullptr;
+    return Element();
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -701,7 +702,7 @@ class AssocMulti {
   /// is already known. This is for example the case when resizing.
   //////////////////////////////////////////////////////////////////////////////
 
-  IndexType insertFirst(UserData* userData, Bucket& b, Element* element,
+  IndexType insertFirst(UserData* userData, Bucket& b, Element const& element,
                         uint64_t hashByKey) {
 #ifdef TRI_CHECK_MULTI_POINTER_HASH
     check(userData, true, true);
@@ -716,8 +717,8 @@ class AssocMulti {
     IndexType i = hashIndex % b._nrAlloc;
 
     // If this slot is free, just use it:
-    if (nullptr == b._table[i].ptr) {
-      b._table[i].ptr = element;
+    if (!b._table[i].value) {
+      b._table[i].value = element;
       b._table[i].next = INVALID_INDEX;
       b._table[i].prev = INVALID_INDEX;
       if (useHashCache) {
@@ -733,7 +734,7 @@ class AssocMulti {
 
     // Now find the first slot with an entry with the same key
     // that is the start of a linked list, or a free slot:
-    while (b._table[i].ptr != nullptr) {
+    while (b._table[i].value) {
       i = incr(b, i);
 #ifdef TRI_INTERNAL_STATS
       // update statistics
@@ -742,7 +743,7 @@ class AssocMulti {
     }
 
     // We are the first with this key:
-    b._table[i].ptr = element;
+    b._table[i].value = element;
     b._table[i].next = INVALID_INDEX;
     b._table[i].prev = INVALID_INDEX;
     if (useHashCache) {
@@ -763,7 +764,7 @@ class AssocMulti {
   /// example the case when resizing.
   //////////////////////////////////////////////////////////////////////////////
 
-  void insertFurther(UserData* userData, Bucket& b, Element* element,
+  void insertFurther(UserData* userData, Bucket& b, Element const& element,
                      uint64_t hashByKey, uint64_t hashByElm,
                      IndexType firstPosition) {
 #ifdef TRI_CHECK_MULTI_POINTER_HASH
@@ -781,7 +782,7 @@ class AssocMulti {
     IndexType hashIndex = hashToIndex(hashByElm);
     IndexType j = hashIndex % b._nrAlloc;
 
-    while (b._table[j].ptr != nullptr) {
+    while (b._table[j].value) {
       j = incr(b, j);
 #ifdef TRI_INTERNAL_STATS
       _nrProbes++;
@@ -789,7 +790,7 @@ class AssocMulti {
     }
 
     // add the element to the hash and linked list (in pos 2):
-    b._table[j].ptr = element;
+    b._table[j].value = element;
     b._table[j].next = b._table[firstPosition].next;
     b._table[j].prev = firstPosition;
     if (useHashCache) {
@@ -813,7 +814,7 @@ class AssocMulti {
   //////////////////////////////////////////////////////////////////////////////
 
  public:
-  Element* lookup(UserData* userData, Element const* element) const {
+  Element lookup(UserData* userData, Element const& element) const {
     IndexType i;
 
 #ifdef TRI_INTERNAL_STATS
@@ -823,16 +824,16 @@ class AssocMulti {
 
     Bucket* b;
     i = lookupByElement(userData, element, b);
-    return b->_table[i].ptr;
+    return b->_table[i].value;
   }
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief lookups an element given a key
   //////////////////////////////////////////////////////////////////////////////
 
-  std::vector<Element*>* lookupByKey(UserData* userData, Key const* key,
+  std::vector<Element>* lookupByKey(UserData* userData, Key const* key,
                                      size_t limit = 0) const {
-    auto result = std::make_unique<std::vector<Element*>>();
+    auto result = std::make_unique<std::vector<Element>>();
     lookupByKey(userData, key, *result, limit);
     return result.release();
   }
@@ -848,7 +849,7 @@ class AssocMulti {
   //////////////////////////////////////////////////////////////////////////////
 
   void lookupByKey(UserData* userData, Key const* key,
-                   std::vector<Element*>& result, size_t limit = 0) const {
+                   std::vector<Element>& result, size_t limit = 0) const {
     if (limit > 0 && result.size() >= limit) {
       return;
     }
@@ -865,21 +866,21 @@ class AssocMulti {
 #endif
 
     // search the table
-    while (b._table[i].ptr != nullptr &&
+    while (b._table[i].value &&
            (b._table[i].prev != INVALID_INDEX ||
             (useHashCache && b._table[i].readHashCache() != hashByKey) ||
-            !_isEqualKeyElement(userData, key, b._table[i].ptr))) {
+            !_isEqualKeyElement(userData, key, b._table[i].value))) {
       i = incr(b, i);
 #ifdef TRI_INTERNAL_STATS
       _nrProbesF++;
 #endif
     }
 
-    if (b._table[i].ptr != nullptr) {
+    if (b._table[i].value) {
       // We found the beginning of the linked list:
 
       do {
-        result.push_back(b._table[i].ptr);
+        result.push_back(b._table[i].value);
         i = b._table[i].next;
       } while (i != INVALID_INDEX && (limit == 0 || result.size() < limit));
     }
@@ -891,15 +892,13 @@ class AssocMulti {
   /// @brief looks up all elements with the same key as a given element
   //////////////////////////////////////////////////////////////////////////////
 
-  std::vector<Element*>* lookupWithElementByKey(UserData* userData,
-                                                Element const* element,
-                                                size_t limit = 0) const {
-    auto result = std::make_unique<std::vector<Element*>>();
+  std::vector<Element>* lookupWithElementByKey(UserData* userData,
+                                               Element const& element,
+                                               size_t limit = 0) const {
+    auto result = std::make_unique<std::vector<Element>>();
     lookupWithElementByKey(userData, element, *result, limit);
     return result.release();
   }
-
-
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief looks up all elements with the same key as a given element
@@ -910,8 +909,8 @@ class AssocMulti {
   ///        have been in the result before.
   //////////////////////////////////////////////////////////////////////////////
 
-  void lookupWithElementByKey(UserData* userData, Element const* element,
-                              std::vector<Element*>& result,
+  void lookupWithElementByKey(UserData* userData, Element const& element,
+                              std::vector<Element>& result,
                               size_t limit = 0) const {
     if (limit > 0 && result.size() >= limit) {
       // The vector is full, nothing to do.
@@ -930,21 +929,21 @@ class AssocMulti {
 #endif
 
     // search the table
-    while (b._table[i].ptr != nullptr &&
+    while (b._table[i].value &&
            (b._table[i].prev != INVALID_INDEX ||
             (useHashCache && b._table[i].readHashCache() != hashByKey) ||
-            !_isEqualElementElementByKey(userData, element, b._table[i].ptr))) {
+            !_isEqualElementElementByKey(userData, element, b._table[i].value))) {
       i = incr(b, i);
 #ifdef TRI_INTERNAL_STATS
       _nrProbesF++;
 #endif
     }
 
-    if (b._table[i].ptr != nullptr) {
+    if (b._table[i].value) {
       // We found the beginning of the linked list:
 
       do {
-        result.push_back(b._table[i].ptr);
+        result.push_back(b._table[i].value);
         i = b._table[i].next;
       } while (i != INVALID_INDEX && (limit == 0 || result.size() < limit));
     }
@@ -956,9 +955,9 @@ class AssocMulti {
   /// continuation
   //////////////////////////////////////////////////////////////////////////////
 
-  std::vector<Element*>* lookupWithElementByKeyContinue(
-      UserData* userData, Element const* element, size_t limit = 0) const {
-    auto result = std::make_unique<std::vector<Element*>>();
+  std::vector<Element>* lookupWithElementByKeyContinue(
+      UserData* userData, Element const& element, size_t limit = 0) const {
+    auto result = std::make_unique<std::vector<Element>>();
     lookupWithElementByKeyContinue(userData, element, *result.get(), limit);
     return result.release();
   }
@@ -974,8 +973,8 @@ class AssocMulti {
   //////////////////////////////////////////////////////////////////////////////
 
   void lookupWithElementByKeyContinue(UserData* userData,
-                                      Element const* element,
-                                      std::vector<Element*>& result,
+                                      Element const& element,
+                                      std::vector<Element>& result,
                                       size_t limit = 0) const {
     if (limit > 0 && result.size() >= limit) {
       // The vector is full, nothing to do.
@@ -986,7 +985,7 @@ class AssocMulti {
     Bucket const& b = _buckets[hashByKey & _bucketsMask];
     uint64_t hashByElm;
     IndexType i = findElementPlace(userData, b, element, true, hashByElm);
-    if (b._table[i].ptr == nullptr) {
+    if (!b._table[i].value) {
       // This can only happen if the element was the first in its doubly
       // linked list (after all, the caller guaranteed that element was
       // the last of a previous lookup). To cover this case, we have to
@@ -996,17 +995,17 @@ class AssocMulti {
       // Now find the first slot with an entry with the same key
       // that is the start of a linked list, or a free slot:
       while (
-          b._table[i].ptr != nullptr &&
+          b._table[i].value &&
           (b._table[i].prev != INVALID_INDEX ||
            (useHashCache && b._table[i].readHashCache() != hashByKey) ||
-           !_isEqualElementElementByKey(userData, element, b._table[i].ptr))) {
+           !_isEqualElementElementByKey(userData, element, b._table[i].value))) {
         i = incr(b, i);
 #ifdef TRI_INTERNAL_STATS
         _nrProbes++;
 #endif
       }
 
-      if (b._table[i].ptr == nullptr) {
+      if (!b._table[i].value) {
         // This cannot really happen, but we handle it gracefully anyway
         return;
       }
@@ -1018,7 +1017,7 @@ class AssocMulti {
       if (i == INVALID_INDEX || (limit != 0 && result.size() >= limit)) {
         break;
       }
-      result.push_back(b._table[i].ptr);
+      result.push_back(b._table[i].value);
     }
 
     // return whatever we found
@@ -1030,9 +1029,9 @@ class AssocMulti {
   /// continuation
   //////////////////////////////////////////////////////////////////////////////
 
-  std::vector<Element*>* lookupByKeyContinue(UserData* userData,
-                                             Element const* element,
-                                             size_t limit = 0) const {
+  std::vector<Element>* lookupByKeyContinue(UserData* userData,
+                                            Element const& element,
+                                            size_t limit = 0) const {
     return lookupWithElementByKeyContinue(userData, element, limit);
   }
 
@@ -1046,18 +1045,17 @@ class AssocMulti {
   ///        have been in the result before.
   //////////////////////////////////////////////////////////////////////////////
 
-  void lookupByKeyContinue(UserData* userData, Element const* element,
-                           std::vector<Element*>& result,
+  void lookupByKeyContinue(UserData* userData, Element const& element,
+                           std::vector<Element>& result,
                            size_t limit = 0) const {
     lookupWithElementByKeyContinue(userData, element, result, limit);
   }
-
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief removes an element from the array, caller is responsible to free it
   //////////////////////////////////////////////////////////////////////////////
 
-  Element* remove(UserData* userData, Element const* element) {
+  Element remove(UserData* userData, Element const& element) {
     IndexType j = 0;
 
 #ifdef TRI_INTERNAL_STATS
@@ -1070,11 +1068,11 @@ class AssocMulti {
 #endif
     Bucket* b;
     IndexType i = lookupByElement(userData, element, b);
-    if (b->_table[i].ptr == nullptr) {
-      return nullptr;
+    if (!b->_table[i].value) {
+      return Element();
     }
 
-    Element* old = b->_table[i].ptr;
+    Element old = b->_table[i].value;
     // We have to delete entry i
     if (b->_table[i].prev == INVALID_INDEX) {
       // This is the first in its linked list.
@@ -1095,7 +1093,7 @@ class AssocMulti {
         if (useHashCache) {
           // We need to exchange the hashCache value by that of the key:
           b->_table[i].writeHashCache(
-              _hashElement(userData, b->_table[i].ptr, true));
+              _hashElement(userData, b->_table[i].value, true));
         }
 #ifdef TRI_CHECK_MULTI_POINTER_HASH
         check(userData, false, false);
@@ -1169,14 +1167,14 @@ class AssocMulti {
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief iteration over all pointers in the hash array, the callback
-  /// function is called on the Element* for each thingy stored in the hash
+  /// function is called on the Element for each thingy stored in the hash
   //////////////////////////////////////////////////////////////////////////////
 
-  void iterate(UserData* userData, std::function<void(Element*)> callback) {
+  void iterate(UserData* userData, std::function<void(Element&)> callback) {
     for (auto& b : _buckets) {
       for (IndexType i = 0; i < b._nrAlloc; i++) {
-        if (b._table[i].ptr != nullptr) {
-          callback(userData, b._table[i].ptr);
+        if (b._table[i].value) {
+          callback(userData, b._table[i].value);
         }
       }
     }
@@ -1213,7 +1211,7 @@ class AssocMulti {
         static_cast<IndexType>(TRI_NearPrime(static_cast<uint64_t>(size)));
 
     try {
-      b._table = new EntryType[b._nrAlloc];
+      b._table = new EntryType[b._nrAlloc]();
 #ifdef __linux__
       if (b._nrAlloc > 1000000) {
         uintptr_t mem = reinterpret_cast<uintptr_t>(b._table);
@@ -1224,11 +1222,6 @@ class AssocMulti {
                          TRI_MADVISE_RANDOM);
       }
 #endif
-
-      IndexType i;
-      for (i = 0; i < b._nrAlloc; i++) {
-        invalidateEntry(b, i);
-      }
     } catch (...) {
       b._nrAlloc = oldAlloc;
       b._table = oldTable;
@@ -1244,16 +1237,16 @@ class AssocMulti {
     // table is already clear by allocate, copy old data
     IndexType j;
     for (j = 0; j < oldAlloc; j++) {
-      if (oldTable[j].ptr != nullptr && oldTable[j].prev == INVALID_INDEX) {
+      if (oldTable[j].value && oldTable[j].prev == INVALID_INDEX) {
         // This is a "first" one in its doubly linked list:
         uint64_t hashByKey;
         if (useHashCache) {
           hashByKey = oldTable[j].readHashCache();
         } else {
-          hashByKey = _hashElement(userData, oldTable[j].ptr, true);
+          hashByKey = _hashElement(userData, oldTable[j].value, true);
         }
         IndexType insertPosition =
-            insertFirst(userData, b, oldTable[j].ptr, hashByKey);
+            insertFirst(userData, b, oldTable[j].value, hashByKey);
         // Now walk to the end of the list:
         IndexType k = j;
         while (oldTable[k].next != INVALID_INDEX) {
@@ -1265,9 +1258,9 @@ class AssocMulti {
           if (useHashCache) {
             hashByElm = oldTable[k].readHashCache();
           } else {
-            hashByElm = _hashElement(userData, oldTable[k].ptr, false);
+            hashByElm = _hashElement(userData, oldTable[k].value, false);
           }
-          insertFurther(userData, b, oldTable[k].ptr, hashByKey, hashByElm,
+          insertFurther(userData, b, oldTable[k].value, hashByKey, hashByElm,
                         insertPosition);
           k = oldTable[k].prev;
         }
@@ -1297,7 +1290,7 @@ class AssocMulti {
       IndexType count = 0;
 
       for (i = 0; i < b._nrAlloc; i++) {
-        if (b._table[i].ptr != nullptr) {
+        if (b._table[i].value) {
           count++;
           if (b._table[i].prev != INVALID_INDEX) {
             if (b._table[b._table[i].prev].next != i) {
@@ -1332,22 +1325,22 @@ class AssocMulti {
       }
       if (checkPositions) {
         for (i = 0; i < b._nrAlloc; i++) {
-          if (b._table[i].ptr != nullptr) {
+          if (b._table[i].value) {
             IndexType hashIndex;
             if (b._table[i].prev == INVALID_INDEX) {
               // We are the first in a linked list.
               uint64_t hashByKey =
-                  _hashElement(userData, b._table[i].ptr, true);
+                  _hashElement(userData, b._table[i].value, true);
               hashIndex = hashToIndex(hashByKey);
               j = hashIndex % b._nrAlloc;
               if (useHashCache && b._table[i].readHashCache() != hashByKey) {
                 std::cout << "Alarm hashCache wrong " << i << std::endl;
               }
               for (k = j; k != i;) {
-                if (b._table[k].ptr == nullptr ||
+                if (!b._table[k].value ||
                     (b._table[k].prev == INVALID_INDEX &&
-                     _isEqualElementElementByKey(userData, b._table[i].ptr,
-                                                 b._table[k].ptr))) {
+                     _isEqualElementElementByKey(userData, b._table[i].value,
+                                                 b._table[k].value))) {
                   ok = false;
                   std::cout << "Alarm pos bykey: " << i << std::endl;
                 }
@@ -1356,16 +1349,16 @@ class AssocMulti {
             } else {
               // We are not the first in a linked list.
               uint64_t hashByElm =
-                  _hashElement(userData, b._table[i].ptr, false);
+                  _hashElement(userData, b._table[i].value, false);
               hashIndex = hashToIndex(hashByElm);
               j = hashIndex % b._nrAlloc;
               if (useHashCache && b._table[i].readHashCache() != hashByElm) {
                 std::cout << "Alarm hashCache wrong " << i << std::endl;
               }
               for (k = j; k != i;) {
-                if (b._table[k].ptr == nullptr ||
-                    _isEqualElementElement(userData, b._table[i].ptr,
-                                           b._table[k].ptr)) {
+                if (!b._table[k].value ||
+                    _isEqualElementElement(userData, b._table[i].value,
+                                           b._table[k].value)) {
                   ok = false;
                   std::cout << "Alarm unique: " << k << ", " << i << std::endl;
                 }
@@ -1389,7 +1382,7 @@ class AssocMulti {
   //////////////////////////////////////////////////////////////////////////////
 
   inline IndexType findElementPlace(UserData* userData, Bucket const& b,
-                                    Element const* element, bool checkEquality,
+                                    Element const& element, bool checkEquality,
                                     uint64_t& hashByElm) const {
     // This either finds a place to store element or an entry in
     // the table that is equal to element. If checkEquality is
@@ -1403,10 +1396,10 @@ class AssocMulti {
     IndexType hashindex = hashToIndex(hashByElm);
     IndexType i = hashindex % b._nrAlloc;
 
-    while (b._table[i].ptr != nullptr &&
+    while (b._table[i].value &&
            (!checkEquality ||
             (useHashCache && b._table[i].readHashCache() != hashByElm) ||
-            !_isEqualElementElement(userData, element, b._table[i].ptr))) {
+            !_isEqualElementElement(userData, element, b._table[i].value))) {
       i = incr(b, i);
 #ifdef TRI_INTERNAL_STATS
       _nrProbes++;
@@ -1419,7 +1412,7 @@ class AssocMulti {
   /// @brief find an element or its place by key or element identity
   //////////////////////////////////////////////////////////////////////////////
 
-  IndexType lookupByElement(UserData* userData, Element const* element,
+  IndexType lookupByElement(UserData* userData, Element const& element,
                             Bucket*& buck) const {
     // This performs a complete lookup for an element. It returns a slot
     // number. This slot is either empty or contains an element that
@@ -1432,19 +1425,19 @@ class AssocMulti {
 
     // Now find the first slot with an entry with the same key
     // that is the start of a linked list, or a free slot:
-    while (b._table[i].ptr != nullptr &&
+    while (b._table[i].value &&
            (b._table[i].prev != INVALID_INDEX ||
             (useHashCache && b._table[i].readHashCache() != hashByKey) ||
-            !_isEqualElementElementByKey(userData, element, b._table[i].ptr))) {
+            !_isEqualElementElementByKey(userData, element, b._table[i].value))) {
       i = incr(b, i);
 #ifdef TRI_INTERNAL_STATS
       _nrProbes++;
 #endif
     }
 
-    if (b._table[i].ptr != nullptr) {
+    if (b._table[i].value) {
       // It might be right here!
-      if (_isEqualElementElement(userData, element, b._table[i].ptr)) {
+      if (_isEqualElementElement(userData, element, b._table[i].value)) {
         return i;
       }
 
@@ -1478,7 +1471,7 @@ class AssocMulti {
   //////////////////////////////////////////////////////////////////////////////
 
   inline void invalidateEntry(Bucket& b, IndexType i) {
-    b._table[i].ptr = nullptr;
+    b._table[i].value = Element();
     b._table[i].next = INVALID_INDEX;
     b._table[i].prev = INVALID_INDEX;
     if (useHashCache) {
@@ -1511,11 +1504,11 @@ class AssocMulti {
   void healHole(UserData* userData, Bucket& b, IndexType i) {
     IndexType j = incr(b, i);
 
-    while (b._table[j].ptr != nullptr) {
+    while (b._table[j].value) {
       // Find out where this element ought to be:
       // If it is the start of one of the linked lists, we need to hash
       // by key, otherwise, we hash by the full identity of the element:
-      uint64_t hash = _hashElement(userData, b._table[j].ptr,
+      uint64_t hash = _hashElement(userData, b._table[j].value,
                                    b._table[j].prev == INVALID_INDEX);
       IndexType hashIndex = hashToIndex(hash);
       IndexType k = hashIndex % b._nrAlloc;

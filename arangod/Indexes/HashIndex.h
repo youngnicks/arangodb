@@ -315,7 +315,7 @@ class HashIndex final : public PathBasedIndex {
   //////////////////////////////////////////////////////////////////////////////
 
   typedef arangodb::basics::AssocUnique<arangodb::velocypack::Slice,
-                                        IndexElement> TRI_HashArray_t;
+                                        IndexElement*> TRI_HashArray_t;
 
   struct UniqueArray {
     UniqueArray() = delete;
@@ -335,7 +335,7 @@ class HashIndex final : public PathBasedIndex {
   //////////////////////////////////////////////////////////////////////////////
 
   typedef arangodb::basics::AssocMulti<arangodb::velocypack::Slice,
-                                       IndexElement, uint32_t,
+                                       IndexElement*, uint32_t,
                                        true> TRI_HashArrayMulti_t;
 
   struct MultiArray {

@@ -40,7 +40,7 @@ namespace arangodb {
 class PrimaryIndex;
 class Transaction;
   
-typedef arangodb::basics::AssocUnique<uint8_t, IndexElement> PrimaryIndexImpl;
+typedef arangodb::basics::AssocUnique<uint8_t, IndexElement*> PrimaryIndexImpl;
 
 class PrimaryIndexIterator final : public IndexIterator {
  public:
