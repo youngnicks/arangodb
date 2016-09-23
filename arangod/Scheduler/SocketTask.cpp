@@ -117,8 +117,9 @@ void SocketTask::addWriteBuffer(std::unique_ptr<StringBuffer> buffer,
 void SocketTask::addWriteBuffer(StringBuffer* buffer,
                                 TRI_request_statistics_t* stat) {
   if (_closedSend) {
-    LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-        << "dropping output, send stream already closed";
+    LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "SocketTask::addWriteBuffer - "
+                                               "dropping output, send stream "
+                                               "already closed";
 
     delete buffer;
 
@@ -164,7 +165,7 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
 
     if (err != boost::system::errc::success) {
       LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-          << "SocketTask::addWriteBuffer (write_some)- write on stream "
+          << "SocketTask::addWriteBuffer (write_some) - write on stream "
           << _peer->_socket.native_handle() << " failed with " << err.message();
       closeStream();
       return;
@@ -172,10 +173,10 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
 
     auto self = shared_from_this();
     auto handler = [self, this](const boost::system::error_code& ec,
-                          std::size_t transferred) {
+                                std::size_t transferred) {
       if (ec) {
         LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-            << "SocketTask::addWriterBuffer(handler) - write on stream "
+            << "SocketTask::addWriterBuffer(async_write) - write on stream "
             << _peer->_socket.native_handle() << " failed with "
             << ec.message();
         closeStream();
@@ -185,7 +186,7 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
     };
 
     if (!_peer->_encrypted) {
-      boost::asio::async_write(  // is ok
+      boost::asio::async_write(
           _peer->_socket,
           boost::asio::buffer(_writeBuffer->begin() + written, total - written),
           handler);
@@ -210,8 +211,9 @@ void SocketTask::completedWriteBuffer() {
 
   if (_writeBuffers.empty()) {
     if (_closeRequested) {
-      LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-          << "close requested, closing stream";
+      LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "SocketTask::"
+                                                 "completedWriteBuffer - close "
+                                                 "requested, closing stream";
 
       closeStream();
     }
@@ -361,8 +363,9 @@ void SocketTask::asyncReadSome() {
       }
     }
   } catch (boost::system::system_error err) {
-    LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "i/o stream " << info
-                                            << " failed with " << err.what();
+    LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+        << "SocketTask::asyncReadSome - i/o stream " << info << " failed with "
+        << err.what();
 
     closeStream();
     return;
@@ -385,8 +388,9 @@ void SocketTask::asyncReadSome() {
   auto handler = [self, this, info](const boost::system::error_code& ec,
                                     std::size_t transferred) {
     if (ec) {
-      LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "read on stream " << info
-                                              << " failed with " << ec;
+      LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+          << "SocketTask::asyncReadSome (async_read_some) - read on stream "
+          << info << " failed with " << ec.message();
       closeStream();
     } else {
       JobGuard guard(_loop);
