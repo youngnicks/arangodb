@@ -383,10 +383,10 @@ static void JS_ChecksumCollection(
     uint8_t const* vpack = collection->lookupRevisionVPack(element->revisionId());
     VPackSlice const slice(vpack);
 
-    uint64_t localHash = Transaction::extractKeyFromDocument(slice).hash(); 
+    uint64_t localHash = Transaction::extractKeyFromDocument(slice).hashString(); 
 
     if (withRevisions) {
-      localHash += slice.get(StaticStrings::RevString).hash();
+      localHash += Transaction::extractRevSliceFromDocument(slice).hash();
     }
 
     if (withData) {

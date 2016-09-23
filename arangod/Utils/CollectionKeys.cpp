@@ -115,14 +115,13 @@ void CollectionKeys::create(TRI_voc_tick_t maxTick) {
           _collection->readRevision(&trx, _result, element->revisionId(), maxTick, true);
           return true;
         });
-
     trx.finish(res);
   }
 
   // now sort all markers without the read-lock
   std::sort(_result.begin(), _result.end(),
             [](uint8_t const* lhs, uint8_t const* rhs) -> bool {
-    return (StringRef(VPackSlice(lhs)) < StringRef(VPackSlice(rhs)));
+    return (StringRef(Transaction::extractKeyFromDocument(VPackSlice(lhs))) < StringRef(Transaction::extractKeyFromDocument(VPackSlice(rhs))));
   });
 }
 
