@@ -193,16 +193,17 @@ RestStatus RestBatchHandler::executeHttp() {
                          authorization.c_str(), authorization.size());
     }
 
-    RestHandler* handler = nullptr;
+    std::shared_ptr<RestHandler> handler = nullptr;
 
     {
       std::unique_ptr<HttpResponse> response(
           new HttpResponse(rest::ResponseCode::SERVER_ERROR));
 
-      handler = GeneralServerFeature::HANDLER_FACTORY->createHandler(
-          std::move(request), std::move(response));
+      handler = std::shared_ptr<RestHandler>(
+          GeneralServerFeature::HANDLER_FACTORY->createHandler(
+              std::move(request), std::move(response)));
 
-      if (handler == nullptr) {
+      if (!handler) {
         generateError(rest::ResponseCode::BAD, TRI_ERROR_INTERNAL,
                       "could not create handler for batch part processing");
 
