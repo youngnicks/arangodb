@@ -85,13 +85,15 @@ int RestHandler::prepareEngine() {
     return TRI_ERROR_NO_ERROR;
   } catch (Exception const& ex) {
     requestStatisticsAgentSetExecuteError();
-    LOG(ERR) << "caught exception: " << DIAGNOSTIC_INFORMATION(ex);
+    handleError(ex);
   } catch (std::exception const& ex) {
     requestStatisticsAgentSetExecuteError();
-    LOG(ERR) << "caught exception: " << ex.what();
+    Exception err(TRI_ERROR_INTERNAL, ex.what(), __FILE__, __LINE__);
+    handleError(err);
   } catch (...) {
     requestStatisticsAgentSetExecuteError();
-    LOG(ERR) << "caught exception";
+    Exception err(TRI_ERROR_INTERNAL, __FILE__, __LINE__);
+    handleError(err);
   }
 
   _engine.setState(RestEngine::State::FAILED);
@@ -106,31 +108,33 @@ int RestHandler::finalizeEngine() {
     finalizeExecute();
   } catch (Exception const& ex) {
     requestStatisticsAgentSetExecuteError();
-    LOG(ERR) << "caught exception: " << DIAGNOSTIC_INFORMATION(ex);
+    handleError(ex);
     res = TRI_ERROR_INTERNAL;
   } catch (std::exception const& ex) {
     requestStatisticsAgentSetExecuteError();
-    LOG(ERR) << "caught exception: " << ex.what();
+    Exception err(TRI_ERROR_INTERNAL, ex.what(), __FILE__, __LINE__);
+    handleError(err);
     res = TRI_ERROR_INTERNAL;
   } catch (...) {
     requestStatisticsAgentSetExecuteError();
-    LOG(ERR) << "caught exception";
+    Exception err(TRI_ERROR_INTERNAL, __FILE__, __LINE__);
+    handleError(err);
     res = TRI_ERROR_INTERNAL;
   }
+
+  requestStatisticsAgentSetRequestEnd();
 
   if (res == TRI_ERROR_NO_ERROR) {
     _engine.setState(RestEngine::State::DONE);
   } else {
     _engine.setState(RestEngine::State::FAILED);
+    _storeResult(this);
   }
-
-  requestStatisticsAgentSetRequestEnd();
 
 #ifdef USE_DEV_TIMERS
   TRI_request_statistics_t::STATS = nullptr;
 #endif
 
-  _storeResult(this);
   return res;
 }
 
