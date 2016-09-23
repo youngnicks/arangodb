@@ -397,7 +397,6 @@ OperationID ClusterComm::asyncRequest(
   
   TRI_ASSERT(request != nullptr);
   CONDITION_LOCKER(locker, somethingReceived);
-  result->status = CL_COMM_SUBMITTED;
   auto ticketId = _communicator->addRequest(createCommunicatorDestination(result->endpoint, path),
                std::move(request), callbacks, opt);
   
@@ -682,15 +681,17 @@ ClusterCommResult const ClusterComm::wait(
   }
   
   {
-    CONDITION_LOCKER(locker, somethingReceived);
-    if (ticketId == 0) {
-      for (i = responses.begin(); i != responses.end(); i++) {
-        if (match(clientTransactionID, coordTransactionID, shardID, i->second.result.get())) {
-          break;
+    {
+      CONDITION_LOCKER(locker, somethingReceived);
+      if (ticketId == 0) {
+        for (i = responses.begin(); i != responses.end(); i++) {
+          if (match(clientTransactionID, coordTransactionID, shardID, i->second.result.get())) {
+            break;
+          }
         }
+      } else {
+        i = responses.find(ticketId);
       }
-    } else {
-      i = responses.find(ticketId);
     }
     if (i == responses.end()) {
       // Nothing known about this operation, return with failure:
