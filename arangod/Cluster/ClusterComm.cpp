@@ -372,6 +372,7 @@ OperationID ClusterComm::asyncRequest(
     };
   } else {
     callbacks._onError = [callback, result, doLogConnectionErrors, this](int errorCode, std::unique_ptr<GeneralResponse> response) {
+      CONDITION_LOCKER(locker, somethingReceived);
       result->fromError(errorCode, std::move(response));
       if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
         if (doLogConnectionErrors) {
@@ -384,14 +385,12 @@ OperationID ClusterComm::asyncRequest(
             << "' at endpoint '" << result->endpoint << "'";
         }
       }
-      CONDITION_LOCKER(locker, somethingReceived);
       somethingReceived.broadcast();
     };
     callbacks._onSuccess = [result, this](std::unique_ptr<GeneralResponse> response) {
       TRI_ASSERT(response.get() != nullptr);
-      result->fromResponse(std::move(response));
-       
       CONDITION_LOCKER(locker, somethingReceived);
+      result->fromResponse(std::move(response));
       somethingReceived.broadcast();
     };
   }
@@ -400,12 +399,10 @@ OperationID ClusterComm::asyncRequest(
   auto ticketId = _communicator->addRequest(createCommunicatorDestination(result->endpoint, path),
                std::move(request), callbacks, opt);
   
+  CONDITION_LOCKER(locker, somethingReceived);
   result->operationID = ticketId;
-  {
-    CONDITION_LOCKER(locker, somethingReceived);
-    responses.emplace(ticketId, AsyncResponse{TRI_microtime(), result});
-  }
   result->status = CL_COMM_SUBMITTED;
+  responses.emplace(ticketId, AsyncResponse{TRI_microtime(), result});
   return ticketId;
 
   /*
@@ -1358,7 +1355,7 @@ std::pair<ClusterCommResult*, HttpRequest*> ClusterComm::prepareRequest(std::str
 /// @brief ClusterComm main loop
 ////////////////////////////////////////////////////////////////////////////////
 
-void ClusterCommThread::stopRequestsToFailedServers() {
+void ClusterCommThread::abortRequestsToFailedServers() {
   ClusterInfo* ci = ClusterInfo::instance();
   auto failedServers = ci->getFailedServers();
   std::vector<std::string> failedServerEndpoints;
@@ -1381,7 +1378,7 @@ void ClusterCommThread::run() {
   LOG_TOPIC(DEBUG, Logger::CLUSTER) << "starting ClusterComm thread";
 
   while (!isStopping()) {
-    stopRequestsToFailedServers();
+    abortRequestsToFailedServers();
     _cc->communicator()->work_once();
     _cc->communicator()->wait();
   }

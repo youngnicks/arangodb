@@ -647,7 +647,7 @@ class ClusterCommThread : public Thread {
   bool isSystem() override final { return true; }
  
  private:
-  void stopRequestsToFailedServers();
+  void abortRequestsToFailedServers();
 
  protected:
   void run() override final;
