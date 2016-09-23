@@ -186,15 +186,21 @@ function SynchronousReplicationSuite () {
 
     if (healing.place === 1) { healFailure(healing); }
     if (failure.place === 2) { makeFailure(failure); }
+    
+    console.warn("POST FAIL");
 
     var doc = c.document(id._key);
+    console.warn("POST DOC");
     assertEqual(12, doc.Hallo);
 
     if (healing.place === 2) { healFailure(healing); }
     if (failure.place === 3) { makeFailure(failure); }
+    console.warn("POST FAIL 2");
 
     var ids = c.insert([{Hallo:13}, {Hallo:14}]);
+    console.warn("POST INSERT 2");
     assertEqual(3, c.count());
+    console.warn("POST COUNT 2 2");
     assertEqual(2, ids.length);
 
     if (healing.place === 3) { healFailure(healing); }
@@ -319,13 +325,14 @@ function SynchronousReplicationSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     setUp : function () {
+      console.warn("PRE SETUP");
       var systemCollServers = findCollectionServers("_system", "_graphs");
       console.info("System collections use servers:", systemCollServers);
       while (true) {
         db._drop(cn);
         c = db._create(cn, {numberOfShards: 1, replicationFactor: 2});
         var servers = findCollectionServers("_system", cn);
-        console.info("Test collections uses servers:", servers);
+        console.warn("Test collections uses servers:", servers);
         if (_.intersection(systemCollServers, servers).length === 0) {
           return;
         }
@@ -333,6 +340,7 @@ function SynchronousReplicationSuite () {
         waitForSynchronousReplication("_system");
         console.info("Synchronous replication has settled, now dropping again.");
       }
+      console.warn("POST SETUP");
     },
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -340,9 +348,14 @@ function SynchronousReplicationSuite () {
 ////////////////////////////////////////////////////////////////////////////////
 
     tearDown : function () {
+      console.warn("PRE TEARDOWN");
       db._drop(cn);
+      global.ArangoAgency.remove('Target/FailedServers');
       global.ArangoAgency.set('Target/FailedServers', {});
+      console.warn('Target/FailedServers', global.ArangoAgency.get('Target/FailedServers'));
+      console.warn("POST TEARDOWN");
     },
+    /*
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief check whether we have access to global.instanceInfo
@@ -593,6 +606,7 @@ function SynchronousReplicationSuite () {
                          {place:18, follower: false});
       assertTrue(waitForSynchronousReplication("_system"));
     },
+    */
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief fail leader in place 3
