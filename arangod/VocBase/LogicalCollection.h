@@ -25,7 +25,6 @@
 #define ARANGOD_VOCBASE_LOGICAL_COLLECTION_H 1
 
 #include "Basics/Common.h"
-#include "VocBase/DocumentPosition.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/voc-types.h"
 #include "VocBase/vocbase.h"
@@ -345,7 +344,6 @@ class LogicalCollection {
   void readRevision(arangodb::Transaction*, ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
   bool readRevision(arangodb::Transaction*, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal);
 
-  DocumentPosition lookupRevision(TRI_voc_rid_t revisionId) const;
   uint8_t const* lookupRevisionVPack(TRI_voc_rid_t revisionId) const;
   void insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
   void updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);

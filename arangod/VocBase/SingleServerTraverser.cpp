@@ -164,10 +164,10 @@ aql::AqlValue SingleServerTraverser::fetchVertexData(VPackSlice id) {
 
     uint8_t const* p = doc.vpack();
     _vertices.emplace(id, p);
-    return aql::AqlValue(p, aql::AqlValueFromMasterPointer());
+    return aql::AqlValue(p, aql::AqlValueFromManagedDocument());
   }
 
-  return aql::AqlValue((*it).second, aql::AqlValueFromMasterPointer());
+  return aql::AqlValue((*it).second, aql::AqlValueFromManagedDocument());
 }
 
 aql::AqlValue SingleServerTraverser::fetchEdgeData(VPackSlice edge) {

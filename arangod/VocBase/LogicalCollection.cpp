@@ -52,6 +52,7 @@
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/StandaloneTransactionContext.h"
 #include "VocBase/DatafileStatisticsContainer.h"
+#include "VocBase/DocumentPosition.h"
 #include "VocBase/IndexPoolFeature.h"
 #include "VocBase/KeyGenerator.h"
 #include "VocBase/ManagedDocumentResult.h"
@@ -3278,12 +3279,12 @@ void LogicalCollection::newObjectForRemove(
 }
 
 void LogicalCollection::readRevision(Transaction* trx, ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
-  DocumentPosition const old = lookupRevision(revisionId);
+  DocumentPosition const old = getPhysical()->lookupRevision(revisionId);
   result.set(static_cast<uint8_t const*>(old.dataptr()));
 }
 
 bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
-  DocumentPosition const old = lookupRevision(revisionId);
+  DocumentPosition const old = getPhysical()->lookupRevision(revisionId);
   if (excludeWal && old.pointsToWal()) {
     return false;
   }
@@ -3298,10 +3299,6 @@ bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResul
 
   result.push_back(vpack);
   return true;
-}
-
-DocumentPosition LogicalCollection::lookupRevision(TRI_voc_rid_t revisionId) const {
-  return getPhysical()->lookupRevision(revisionId);
 }
 
 uint8_t const* LogicalCollection::lookupRevisionVPack(TRI_voc_rid_t revisionId) const {

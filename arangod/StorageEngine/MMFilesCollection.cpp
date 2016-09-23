@@ -64,11 +64,12 @@ static DatafileStatisticsContainer* FindDatafileStats(
 int MMFilesCollection::OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* marker,
                                                         TRI_datafile_t* datafile,
                                                         MMFilesCollection::OpenIteratorState* state) {
-  auto const fid = datafile->fid();
   LogicalCollection* collection = state->_collection;
+  MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
   arangodb::Transaction* trx = state->_trx;
 
   VPackSlice const slice(reinterpret_cast<char const*>(marker) + DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT));
+
   VPackSlice keySlice;
   TRI_voc_rid_t revisionId;
 
@@ -81,6 +82,7 @@ int MMFilesCollection::OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* m
 
   ++state->_documents;
  
+  TRI_voc_fid_t const fid = datafile->fid();
   if (state->_fid != fid) {
     // update the state
     state->_fid = fid; // when we're here, we're looking at a datafile
@@ -96,13 +98,13 @@ int MMFilesCollection::OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* m
   // it is a new entry
   if (found == nullptr) {
     uint8_t const* vpack = reinterpret_cast<uint8_t const*>(marker) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT);
-    collection->insertRevision(revisionId, vpack, fid, false); 
+    c->insertRevision(revisionId, vpack, fid, false); 
 
     // insert into primary index
     int res = primaryIndex->insertKey(trx, revisionId, VPackSlice(vpack));
 
     if (res != TRI_ERROR_NO_ERROR) {
-      collection->removeRevision(revisionId, false);
+      c->removeRevision(revisionId, false);
       LOG(ERR) << "inserting document into primary index failed with error: " << TRI_errno_string(res);
 
       return res;
@@ -122,13 +124,13 @@ int MMFilesCollection::OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* m
     // update the revision id in primary index
     found->updateRevisionId(revisionId);
 
-    DocumentPosition const old = collection->lookupRevision(oldRevisionId);
+    DocumentPosition const old = c->lookupRevision(oldRevisionId);
 
     // remove old revision
-    collection->removeRevision(oldRevisionId, false);
+    c->removeRevision(oldRevisionId, false);
 
     // insert new revision
-    collection->insertRevision(revisionId, vpack, fid, false);
+    c->insertRevision(revisionId, vpack, fid, false);
 
     // update the datafile info
     DatafileStatisticsContainer* dfi;
@@ -160,6 +162,7 @@ int MMFilesCollection::OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* m
                                                         TRI_datafile_t* datafile,
                                                         MMFilesCollection::OpenIteratorState* state) {
   LogicalCollection* collection = state->_collection;
+  MMFilesCollection* c = static_cast<MMFilesCollection*>(collection->getPhysical());
   arangodb::Transaction* trx = state->_trx;
 
   VPackSlice const slice(reinterpret_cast<char const*>(marker) + DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_REMOVE));
@@ -197,7 +200,7 @@ int MMFilesCollection::OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* m
   else {
     TRI_voc_rid_t oldRevisionId = found->revisionId();
 
-    DocumentPosition const old = collection->lookupRevision(oldRevisionId);
+    DocumentPosition const old = c->lookupRevision(oldRevisionId);
     
     // update the datafile info
     DatafileStatisticsContainer* dfi;
@@ -222,7 +225,7 @@ int MMFilesCollection::OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* m
     collection->deletePrimaryIndex(trx, oldRevisionId, VPackSlice(vpack));
     collection->decNumberDocuments();
 
-    collection->removeRevision(oldRevisionId, true);
+    c->removeRevision(oldRevisionId, true);
   }
 
   return TRI_ERROR_NO_ERROR;

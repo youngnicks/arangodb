@@ -526,7 +526,7 @@ AqlItemBlock* IndexBlock::getSome(size_t atLeast, size_t atMost) {
         TRI_ASSERT(!doc.isExternal());
         // doc points directly into the data files
         res->setValue(j, static_cast<arangodb::aql::RegisterId>(curRegs), 
-                      AqlValue(doc.begin(), AqlValueFromMasterPointer()));
+                      AqlValue(doc.begin(), AqlValueFromManagedDocument()));
         // No harm done, if the setValue throws!
         
         if (j > 0) {

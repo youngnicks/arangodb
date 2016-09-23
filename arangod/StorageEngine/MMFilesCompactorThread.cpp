@@ -278,7 +278,7 @@ MMFilesCompactorThread::CompactionInitialContext MMFilesCompactorThread::getComp
         TRI_df_marker_t const* markerPtr = nullptr;
         IndexElement* element = primaryIndex->lookupKey(context._trx, keySlice);
         if (element != nullptr) {
-          DocumentPosition const old = collection->lookupRevision(element->revisionId());
+          DocumentPosition const old = static_cast<MMFilesCollection*>(collection->getPhysical())->lookupRevision(element->revisionId());
           markerPtr = reinterpret_cast<TRI_df_marker_t const*>(static_cast<uint8_t const*>(old.dataptr()) - arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT));
         }
 
@@ -367,7 +367,7 @@ void MMFilesCompactorThread::compactDatafiles(LogicalCollection* collection,
       TRI_df_marker_t const* markerPtr = nullptr;
       IndexElement* element = primaryIndex->lookupKey(context->_trx, keySlice);
       if (element != nullptr) {
-        DocumentPosition const old = collection->lookupRevision(element->revisionId());
+        DocumentPosition const old = static_cast<MMFilesCollection*>(collection->getPhysical())->lookupRevision(element->revisionId());
         markerPtr = reinterpret_cast<TRI_df_marker_t const*>(static_cast<uint8_t const*>(old.dataptr()) - arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT));
       }
         
