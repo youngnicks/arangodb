@@ -78,6 +78,10 @@ void ListenTask::start() {
 
   _handler = [this](boost::system::error_code const& ec) {
     if (ec) {
+      if (ec == boost::asio::error::operation_aborted) {
+	return;
+      }
+      
       ++_acceptFailures;
 
       if (_acceptFailures < MAX_ACCEPT_ERRORS) {
