@@ -103,11 +103,14 @@ class RestHandler : public RequestStatisticsAgent,
   void initEngine(EventLoop loop, RequestStatisticsAgent* agent,
                   std::function<void(RestHandler*)> storeResult) {
     _storeResult = storeResult;
-    _engine.init(loop, agent, storeResult);
+    _engine.init(loop, agent);
   }
 
   int asyncRunEngine() { return _engine.asyncRun(shared_from_this()); }
-  int syncRunEngine() { return _engine.syncRun(shared_from_this()); }
+  int syncRunEngine() {
+    _storeResult = [](RestHandler*) {};
+    return _engine.syncRun(shared_from_this());
+  }
 
   int prepareEngine();
   int executeEngine();

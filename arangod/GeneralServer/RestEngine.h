@@ -41,21 +41,18 @@ class RestEngine {
   enum class State { PREPARE, EXECUTE, RUN, FINALIZE, DONE, FAILED };
 
  public:
-  RestEngine();
+  RestEngine() {}
 
  public:
-  void init(EventLoop loop, rest::RequestStatisticsAgent* agent,
-            std::function<void(rest::RestHandler*)> processResult) {
+  void init(EventLoop loop, rest::RequestStatisticsAgent* agent) {
     _loop = loop;
     _agent = agent;
-    _processResult = processResult;
   }
 
   int asyncRun(std::shared_ptr<rest::RestHandler>);
   int syncRun(std::shared_ptr<rest::RestHandler>);
 
   void setState(State state) { _state = state; }
-  void processResult(rest::RestHandler* handler) { _processResult(handler); }
   void appendRestStatus(std::shared_ptr<RestStatusElement>);
 
   void queue(std::function<void()> callback) {
@@ -71,13 +68,14 @@ class RestEngine {
   }
 
  private:
+  int run(std::shared_ptr<rest::RestHandler>, bool synchron);
+
+ private:
   State _state = State::PREPARE;
   std::vector<std::shared_ptr<RestStatusElement>> _elements;
 
   EventLoop _loop;
   rest::RequestStatisticsAgent* _agent = nullptr;
-  std::function<void(rest::RestHandler*)> _processResult;
-  int run(std::shared_ptr<rest::RestHandler>, bool synchron);
 };
 }
 

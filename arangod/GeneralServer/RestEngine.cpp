@@ -30,14 +30,33 @@ using namespace arangodb;
 using namespace arangodb::rest;
 
 // -----------------------------------------------------------------------------
-// --SECTION--                                      constructors and destructors
-// -----------------------------------------------------------------------------
-
-RestEngine::RestEngine() {}
-
-// -----------------------------------------------------------------------------
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
+
+int RestEngine::asyncRun(std::shared_ptr<rest::RestHandler> handler) {
+  return run(handler, false);
+}
+
+int RestEngine::syncRun(std::shared_ptr<rest::RestHandler> handler) {
+  _agent = nullptr;
+
+  _loop._ioService = nullptr;
+  _loop._scheduler = nullptr;
+
+  return run(handler, true);
+}
+
+void RestEngine::appendRestStatus(std::shared_ptr<RestStatusElement> element) {
+  while (element.get() != nullptr) {
+    _elements.emplace_back(element);
+    element = element->previous();
+  }
+}
+
+// -----------------------------------------------------------------------------
+// --SECTION--                                                   private methods
+// -----------------------------------------------------------------------------
+
 int RestEngine::run(std::shared_ptr<rest::RestHandler> handler, bool synchron) {
   while (true) {
     int res = TRI_ERROR_NO_ERROR;
@@ -67,20 +86,5 @@ int RestEngine::run(std::shared_ptr<rest::RestHandler> handler, bool synchron) {
     if (res != TRI_ERROR_NO_ERROR) {
       return res;
     }
-  }
-}
-
-int RestEngine::asyncRun(std::shared_ptr<rest::RestHandler> handler) {
-  return run(handler, false);
-}
-
-int RestEngine::syncRun(std::shared_ptr<rest::RestHandler> handler) {
-  return run(handler, true);
-}
-
-void RestEngine::appendRestStatus(std::shared_ptr<RestStatusElement> element) {
-  while (element.get() != nullptr) {
-    _elements.emplace_back(element);
-    element = element->previous();
   }
 }

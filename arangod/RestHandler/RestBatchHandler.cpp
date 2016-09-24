@@ -199,8 +199,7 @@ RestStatus RestBatchHandler::executeHttp() {
       std::unique_ptr<HttpResponse> response(
           new HttpResponse(rest::ResponseCode::SERVER_ERROR));
 
-      handler = std::shared_ptr<RestHandler>(
-          GeneralServerFeature::HANDLER_FACTORY->createHandler(
+      handler.reset(GeneralServerFeature::HANDLER_FACTORY->createHandler(
               std::move(request), std::move(response)));
 
       if (!handler) {
