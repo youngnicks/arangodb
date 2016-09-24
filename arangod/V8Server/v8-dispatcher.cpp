@@ -75,7 +75,7 @@ class V8Task : public std::enable_shared_from_this<V8Task> {
   void setOffset(double offset);
   void setPeriod(double offset, double period);
   void setParameter(
-      std::shared_ptr<arangodb::velocypack::Builder> const parameters);
+      std::shared_ptr<arangodb::velocypack::Builder> const& parameters);
 
   void start(boost::asio::io_service*);
   void cancel();
@@ -210,7 +210,7 @@ void V8Task::setPeriod(double offset, double period) {
 }
 
 void V8Task::setParameter(
-    std::shared_ptr<arangodb::velocypack::Builder> const parameters) {
+    std::shared_ptr<arangodb::velocypack::Builder> const& parameters) {
   _parameters = parameters;
 }
 

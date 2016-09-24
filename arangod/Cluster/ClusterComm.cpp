@@ -665,7 +665,6 @@ ClusterCommResult const ClusterComm::wait(
   IndexIterator i;
   QueueIterator q;
   double endtime;
-  double timeleft;
 
   if (0.0 == timeout) {
     endtime = TRI_microtime() +
@@ -716,7 +715,7 @@ ClusterCommResult const ClusterComm::wait(
           // It is in the receive queue but still waiting, now wait actually
         }
         // Here it could either be in the receive or the send queue, let's wait
-        timeleft = endtime - TRI_microtime();
+        double timeleft = endtime - TRI_microtime();
         if (timeleft <= 0) {
           break;
         }
@@ -771,7 +770,7 @@ ClusterCommResult const ClusterComm::wait(
           return res;
         }
         // Here it could either be in the receive or the send queue, let's wait
-        timeleft = endtime - TRI_microtime();
+        double timeleft = endtime - TRI_microtime();
         if (timeleft <= 0) {
           break;
         }

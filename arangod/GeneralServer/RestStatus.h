@@ -39,7 +39,7 @@ class RestStatusElement {
   enum class State { DONE, FAIL, ABANDONED, QUEUED, THEN };
 
  public:
-  RestStatusElement(State status) : _state(status), _previous(nullptr) {
+  explicit RestStatusElement(State status) : _state(status), _previous(nullptr) {
     TRI_ASSERT(_state != State::THEN);
   }
 
