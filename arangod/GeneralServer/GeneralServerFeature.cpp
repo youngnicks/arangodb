@@ -324,10 +324,6 @@ void GeneralServerFeature::stop() {
   for (auto& server : _servers) {
     server->stopListening();
   }
-
-  for (auto& server : _servers) {
-    server->stopListening();
-  }
 }
 
 void GeneralServerFeature::unprepare() {

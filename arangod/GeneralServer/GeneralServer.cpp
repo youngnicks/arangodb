@@ -64,6 +64,16 @@ int GeneralServer::sendChunk(uint64_t taskId, std::string const& data) {
 }
 
 // -----------------------------------------------------------------------------
+// --SECTION--                                      constructors and destructors
+// -----------------------------------------------------------------------------
+
+GeneralServer::~GeneralServer() {
+  for (auto& task : _listenTasks) {
+    delete task;
+  }
+}
+
+// -----------------------------------------------------------------------------
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
 
@@ -94,8 +104,6 @@ void GeneralServer::stopListening() {
   for (auto& task : _listenTasks) {
     task->stop();
   }
-
-  _listenTasks.clear();
 }
 
 // -----------------------------------------------------------------------------

@@ -50,7 +50,7 @@ class GeneralServer {
 
  public:
   GeneralServer() = default;
-  virtual ~GeneralServer() { stopListening(); }
+  virtual ~GeneralServer();
 
  public:
   void setEndpointList(const EndpointList* list);
