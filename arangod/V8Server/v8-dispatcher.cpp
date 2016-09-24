@@ -224,6 +224,10 @@ V8Task::callbackFunction() {
       return;
     }
 
+    if (SchedulerFeature::SCHEDULER->isStopping()) {
+      return;
+    }
+
     work();
 
     if (_periodic) {
@@ -571,8 +575,7 @@ static void JS_GetTask(v8::FunctionCallbackInfo<v8::Value> const& args) {
 }
 
 // -----------------------------------------------------------------------------
-// --SECTION--                                             module
-// initialization
+// --SECTION--                                             module initialization
 // -----------------------------------------------------------------------------
 
 void TRI_InitV8Dispatcher(v8::Isolate* isolate,
