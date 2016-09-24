@@ -62,6 +62,7 @@ class V8Task : public std::enable_shared_from_this<V8Task> {
 
   static std::shared_ptr<VPackBuilder> registeredTask(std::string const& id);
   static std::shared_ptr<VPackBuilder> registeredTasks();
+  static void shutdownTasks();
 
  private:
   static Mutex _tasksLock;
@@ -187,6 +188,16 @@ std::shared_ptr<VPackBuilder> V8Task::registeredTasks() {
   return builder;
 }
 
+void V8Task::shutdownTasks() {
+  MUTEX_LOCKER(guard, _tasksLock);
+
+  for (auto& it : _tasks) {
+    it.second->cancel();
+  }
+
+  _tasks.clear();
+}
+
 V8Task::V8Task(std::string const& id, std::string const& name,
                TRI_vocbase_t* vocbase, std::string const& command,
                bool allowUseDatabase)
@@ -225,6 +236,7 @@ V8Task::callbackFunction() {
     }
 
     if (SchedulerFeature::SCHEDULER->isStopping()) {
+      V8Task::unregisterTask(_id, false);
       return;
     }
 
@@ -593,4 +605,8 @@ void TRI_InitV8Dispatcher(v8::Isolate* isolate,
 
   TRI_AddGlobalFunctionVocbase(isolate, context,
                                TRI_V8_ASCII_STRING("SYS_GET_TASK"), JS_GetTask);
+}
+
+void TRI_ShutdownV8Dispatcher() {
+  V8Task::shutdownTasks();
 }

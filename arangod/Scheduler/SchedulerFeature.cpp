@@ -114,6 +114,10 @@ void SchedulerFeature::start() {
 void SchedulerFeature::stop() {
   static size_t const MAX_TRIES = 10;
 
+  // shutdown user jobs (needs scheduler)
+  TRI_ShutdownV8Dispatcher();
+
+  // shut-down scheduler
   _scheduler->beginShutdown();
 
   for (size_t count = 0; count < MAX_TRIES && _scheduler->isRunning();
@@ -124,6 +128,7 @@ void SchedulerFeature::stop() {
 
   _scheduler->shutdown();
 
+  // cancel signals
   _exitSignals->cancel();
   _exitSignals.reset();
 
