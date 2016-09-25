@@ -129,12 +129,16 @@ void SchedulerFeature::stop() {
   _scheduler->shutdown();
 
   // cancel signals
-  _exitSignals->cancel();
-  _exitSignals.reset();
+  if (_exitSignals != nullptr) {
+    _exitSignals->cancel();
+    _exitSignals.reset();
+  }
 
 #ifndef WIN32
-  _hangupSignals->cancel();
-  _hangupSignals.reset();
+  if (_hangupSignals != nullptr) {
+    _hangupSignals->cancel();
+    _hangupSignals.reset();
+  }
 #endif
 }
 
