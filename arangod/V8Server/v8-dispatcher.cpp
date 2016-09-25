@@ -95,8 +95,8 @@ class V8Task : public std::enable_shared_from_this<V8Task> {
 
   std::unique_ptr<boost::asio::steady_timer> _timer;
 
-  VocbaseGuard _vocbaseGuard;  // guard to make sure the database is not dropped
-                               // while used by us
+  // guard to make sure the database is not dropped while used by us
+  std::unique_ptr<VocbaseGuard> _vocbaseGuard;
 
   std::string const _command;
   std::shared_ptr<arangodb::velocypack::Builder> _parameters;
@@ -204,7 +204,7 @@ V8Task::V8Task(std::string const& id, std::string const& name,
     : _id(id),
       _name(name),
       _created(TRI_microtime()),
-      _vocbaseGuard(vocbase),
+      _vocbaseGuard(new VocbaseGuard(vocbase)),
       _command(command),
       _allowUseDatabase(allowUseDatabase) {}
 
@@ -265,6 +265,7 @@ void V8Task::start(boost::asio::io_service* ioService) {
 void V8Task::cancel() {
   boost::system::error_code ec;
   _timer->cancel(ec);
+  _vocbaseGuard.reset();
 }
 
 std::shared_ptr<VPackBuilder> V8Task::toVelocyPack() const {
@@ -295,11 +296,11 @@ void V8Task::toVelocyPack(VPackBuilder& builder) const {
   builder.add("offset", VPackValue(_offset.count() / 1000000.0));
 
   builder.add("command", VPackValue(_command));
-  builder.add("database", VPackValue(_vocbaseGuard.vocbase()->name()));
+  builder.add("database", VPackValue(_vocbaseGuard->vocbase()->name()));
 }
 
 void V8Task::work() {
-  auto context = V8DealerFeature::DEALER->enterContext(_vocbaseGuard.vocbase(),
+  auto context = V8DealerFeature::DEALER->enterContext(_vocbaseGuard->vocbase(),
                                                        _allowUseDatabase);
 
   // note: the context might be 0 in case of shut-down
