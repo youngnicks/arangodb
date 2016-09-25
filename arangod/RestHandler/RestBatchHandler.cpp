@@ -199,15 +199,17 @@ RestStatus RestBatchHandler::executeHttp() {
       std::unique_ptr<HttpResponse> response(
           new HttpResponse(rest::ResponseCode::SERVER_ERROR));
 
-      handler.reset(GeneralServerFeature::HANDLER_FACTORY->createHandler(
-              std::move(request), std::move(response)));
+      auto h = GeneralServerFeature::HANDLER_FACTORY->createHandler(
+              std::move(request), std::move(response));
 
-      if (!handler) {
+      if (h == nullptr) {
         generateError(rest::ResponseCode::BAD, TRI_ERROR_INTERNAL,
                       "could not create handler for batch part processing");
 
         return RestStatus::FAIL;
       }
+
+      handler.reset(h);
     }
 
     // start to work for this handler
