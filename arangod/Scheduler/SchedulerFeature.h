@@ -68,14 +68,14 @@ class SchedulerFeature final : public application_features::ApplicationFeature {
  private:
   std::unique_ptr<rest::Scheduler> _scheduler;
 
-#ifndef WIN32
+//#ifndef WIN32
   std::function<void(const boost::system::error_code&, int)> _signalHandler;
   std::function<void(const boost::system::error_code&, int)> _exitHandler;
   std::shared_ptr<boost::asio::signal_set> _exitSignals;
   
   std::function<void(const boost::system::error_code&, int)> _hangupHandler;
   std::shared_ptr<boost::asio::signal_set> _hangupSignals;
-#endif
+//#endif
 };
 }
 

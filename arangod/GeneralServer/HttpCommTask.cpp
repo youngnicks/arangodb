@@ -513,7 +513,7 @@ bool HttpCommTask::processRead() {
     // we should close the connection
     LOG(DEBUG) << "no keep-alive, connection close requested by client";
     _closeRequested = true;
-#warning TODO
+#pragma message("TODO")
 #if 0
   } else if (_keepAliveTimeout <= 0.0) {
     // if keepAliveTimeout was set to 0.0, we'll close even keep-alive

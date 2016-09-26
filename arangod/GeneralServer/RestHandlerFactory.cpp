@@ -108,7 +108,7 @@ RestHandler* RestHandlerFactory::createHandler(
   std::string const* modifiedPath = &path;
   std::string prefix;
 
-#warning TODO
+#pragma message ("TODO")
   if (strncmp(path.c_str(), "/_api/document/", 15) == 0) {
     prefix = "/_api/document";
 
