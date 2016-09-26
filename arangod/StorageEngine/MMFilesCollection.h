@@ -180,8 +180,10 @@ class MMFilesCollection final : public PhysicalCollection {
   bool iterateDatafilesVector(std::vector<TRI_datafile_t*> const& files,
                               std::function<bool(TRI_df_marker_t const*, TRI_datafile_t*)> const& cb);
 
-  DocumentPosition lookupRevision(TRI_voc_rid_t revisionId) const override;
+  MMFilesDocumentPosition lookupRevision(TRI_voc_rid_t revisionId) const;
+
   uint8_t const* lookupRevisionVPack(TRI_voc_rid_t revisionId) const override;
+  uint8_t const* lookupRevisionVPackConditional(TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) const override;
   void insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) override;
   void updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) override;
   bool updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) override;

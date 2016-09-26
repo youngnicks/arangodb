@@ -26,7 +26,6 @@
 
 #include "Basics/Common.h"
 #include "VocBase/DatafileStatisticsContainer.h"
-#include "VocBase/DocumentPosition.h"
 #include "VocBase/voc-types.h"
 
 #include <velocypack/Builder.h>
@@ -97,8 +96,8 @@ class PhysicalCollection {
   /// @brief iterate all markers of a collection on load
   virtual int iterateMarkersOnLoad(arangodb::Transaction* trx) = 0;
   
-  virtual DocumentPosition lookupRevision(TRI_voc_rid_t revisionId) const = 0;
   virtual uint8_t const* lookupRevisionVPack(TRI_voc_rid_t revisionId) const = 0;
+  virtual uint8_t const* lookupRevisionVPackConditional(TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) const = 0;
   virtual void insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) = 0;
   virtual void updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) = 0;
   virtual bool updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) = 0;

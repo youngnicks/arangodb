@@ -33,21 +33,21 @@ MMFilesRevisionsCache::MMFilesRevisionsCache() {}
 
 MMFilesRevisionsCache::~MMFilesRevisionsCache() {}
 
-DocumentPosition MMFilesRevisionsCache::lookup(TRI_voc_rid_t revisionId) const {
+MMFilesDocumentPosition MMFilesRevisionsCache::lookup(TRI_voc_rid_t revisionId) const {
   READ_LOCKER(locker, _lock);
   auto it = _positions.find(revisionId);
   
   if (it == _positions.end()) {
-    return DocumentPosition();
+    return MMFilesDocumentPosition();
   }
   return (*it).second;
 }
 
 void MMFilesRevisionsCache::insert(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
   WRITE_LOCKER(locker, _lock);
-  auto it = _positions.emplace(revisionId, DocumentPosition(dataptr, fid, isInWal));
+  auto it = _positions.emplace(revisionId, MMFilesDocumentPosition(dataptr, fid, isInWal));
   if (!it.second) {
-    DocumentPosition& old = _positions[revisionId];
+    MMFilesDocumentPosition& old = _positions[revisionId];
     old.dataptr(dataptr);
     old.fid(fid, isInWal);
   }
@@ -61,7 +61,7 @@ void MMFilesRevisionsCache::update(TRI_voc_rid_t revisionId, void const* dataptr
     return;
   }
      
-  DocumentPosition& old = (*it).second;
+  MMFilesDocumentPosition& old = (*it).second;
   old.dataptr(dataptr);
   old.fid(fid, isInWal); 
 }
@@ -74,7 +74,7 @@ bool MMFilesRevisionsCache::updateConditional(TRI_voc_rid_t revisionId, TRI_df_m
     return false;
   }
      
-  DocumentPosition& old = (*it).second;
+  MMFilesDocumentPosition& old = (*it).second;
   if (!old.valid()) {
     return false;
   }
@@ -100,14 +100,14 @@ void MMFilesRevisionsCache::remove(TRI_voc_rid_t revisionId) {
   _positions.erase(revisionId);
 }
 
-DocumentPosition MMFilesRevisionsCache::fetchAndRemove(TRI_voc_rid_t revisionId) {
+MMFilesDocumentPosition MMFilesRevisionsCache::fetchAndRemove(TRI_voc_rid_t revisionId) {
   WRITE_LOCKER(locker, _lock);
   auto it = _positions.find(revisionId);
   if (it != _positions.end()) {
-    DocumentPosition result((*it).second);
+    MMFilesDocumentPosition result((*it).second);
     _positions.erase(it);
     return result;
   }
-  return DocumentPosition();
+  return MMFilesDocumentPosition();
 }
 

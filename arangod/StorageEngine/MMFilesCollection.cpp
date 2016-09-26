@@ -32,7 +32,7 @@
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/StandaloneTransactionContext.h"
 #include "Utils/Transaction.h"
-#include "StorageEngine/EngineSelectorFeature.h"
+#include "StorageEngine/MMFilesDocumentPosition.h"
 #include "StorageEngine/StorageEngine.h"
 #include "VocBase/DatafileHelper.h"
 #include "VocBase/KeyGenerator.h"
@@ -124,7 +124,7 @@ int MMFilesCollection::OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* m
     // update the revision id in primary index
     found->updateRevisionId(revisionId);
 
-    DocumentPosition const old = c->lookupRevision(oldRevisionId);
+    MMFilesDocumentPosition const old = c->lookupRevision(oldRevisionId);
 
     // remove old revision
     c->removeRevision(oldRevisionId, false);
@@ -200,7 +200,7 @@ int MMFilesCollection::OpenIteratorHandleDeletionMarker(TRI_df_marker_t const* m
   else {
     TRI_voc_rid_t oldRevisionId = found->revisionId();
 
-    DocumentPosition const old = c->lookupRevision(oldRevisionId);
+    MMFilesDocumentPosition const old = c->lookupRevision(oldRevisionId);
     
     // update the datafile info
     DatafileStatisticsContainer* dfi;
@@ -1100,16 +1100,41 @@ int MMFilesCollection::iterateMarkersOnLoad(arangodb::Transaction* trx) {
   return TRI_ERROR_NO_ERROR;
 }
 
-DocumentPosition MMFilesCollection::lookupRevision(TRI_voc_rid_t revisionId) const {
-  return _revisionsCache.lookup(revisionId);
+MMFilesDocumentPosition MMFilesCollection::lookupRevision(TRI_voc_rid_t revisionId) const {
+  MMFilesDocumentPosition const old = _revisionsCache.lookup(revisionId);
+  if (old.valid()) {
+    return old;
+  }
+  THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "got invalid revision value on lookup");
 }
 
 uint8_t const* MMFilesCollection::lookupRevisionVPack(TRI_voc_rid_t revisionId) const {
-  DocumentPosition const old = _revisionsCache.lookup(revisionId);
+  MMFilesDocumentPosition const old = _revisionsCache.lookup(revisionId);
   if (old.valid()) {
     return static_cast<uint8_t const*>(old.dataptr());
   }
   THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "got invalid vpack value on lookup");
+}
+  
+uint8_t const* MMFilesCollection::lookupRevisionVPackConditional(TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) const {
+  MMFilesDocumentPosition const old = _revisionsCache.lookup(revisionId);
+  if (!old.valid()) {
+    return nullptr;
+  }
+  if (excludeWal && old.pointsToWal()) {
+    return nullptr;
+  }
+
+  uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());
+
+  if (maxTick > 0) {
+    TRI_df_marker_t const* marker = reinterpret_cast<TRI_df_marker_t const*>(vpack - arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT));
+    if (marker->getTick() > maxTick) {
+      return nullptr;
+    }
+  }
+
+  return vpack; 
 }
 
 void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
@@ -1126,7 +1151,7 @@ bool MMFilesCollection::updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_
 
 void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId, bool updateStats) {
   if (updateStats) {
-    DocumentPosition const old = _revisionsCache.fetchAndRemove(revisionId);
+    MMFilesDocumentPosition const old = _revisionsCache.fetchAndRemove(revisionId);
     if (old.valid() && !old.pointsToWal()) {
       TRI_ASSERT(old.dataptr() != nullptr);
       uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());

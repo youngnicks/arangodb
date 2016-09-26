@@ -52,7 +52,6 @@
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/StandaloneTransactionContext.h"
 #include "VocBase/DatafileStatisticsContainer.h"
-#include "VocBase/DocumentPosition.h"
 #include "VocBase/IndexPoolFeature.h"
 #include "VocBase/KeyGenerator.h"
 #include "VocBase/ManagedDocumentResult.h"
@@ -3279,24 +3278,15 @@ void LogicalCollection::newObjectForRemove(
 }
 
 void LogicalCollection::readRevision(Transaction* trx, ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
-  DocumentPosition const old = getPhysical()->lookupRevision(revisionId);
-  result.set(static_cast<uint8_t const*>(old.dataptr()));
+  uint8_t const* vpack = getPhysical()->lookupRevisionVPack(revisionId);
+  result.set(vpack);
 }
 
 bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
-  DocumentPosition const old = getPhysical()->lookupRevision(revisionId);
-  if (excludeWal && old.pointsToWal()) {
+  uint8_t const* vpack = getPhysical()->lookupRevisionVPackConditional(revisionId, maxTick, excludeWal);
+  if (vpack == nullptr) {
     return false;
   }
-  
-  uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());
-  if (maxTick > 0) {
-    TRI_df_marker_t const* marker = reinterpret_cast<TRI_df_marker_t const*>(vpack - arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT));
-    if (marker->getTick() > maxTick) {
-      return false;
-    }
-  }
-
   result.push_back(vpack);
   return true;
 }

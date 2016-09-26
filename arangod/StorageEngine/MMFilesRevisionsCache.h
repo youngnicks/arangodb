@@ -26,7 +26,7 @@
 
 #include "Basics/Common.h"
 #include "Basics/ReadWriteLock.h"
-#include "VocBase/DocumentPosition.h"
+#include "StorageEngine/MMFilesDocumentPosition.h"
 #include "VocBase/voc-types.h"
 
 struct TRI_df_marker_t;
@@ -39,16 +39,16 @@ class MMFilesRevisionsCache {
   ~MMFilesRevisionsCache();
   
  public:
-  DocumentPosition lookup(TRI_voc_rid_t revisionId) const;
+  MMFilesDocumentPosition lookup(TRI_voc_rid_t revisionId) const;
   void insert(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
   void update(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
   bool updateConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal);
   void remove(TRI_voc_rid_t revisionId);
-  DocumentPosition fetchAndRemove(TRI_voc_rid_t revisionId);
+  MMFilesDocumentPosition fetchAndRemove(TRI_voc_rid_t revisionId);
 
  private:
   mutable arangodb::basics::ReadWriteLock _lock; 
-  std::unordered_map<TRI_voc_rid_t, DocumentPosition> _positions;
+  std::unordered_map<TRI_voc_rid_t, MMFilesDocumentPosition> _positions;
 };
 
 } // namespace arangodb

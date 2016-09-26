@@ -21,8 +21,8 @@
 /// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_VOC_BASE_DOCUMENT_POSITION_H
-#define ARANGOD_VOC_BASE_DOCUMENT_POSITION_H 1
+#ifndef ARANGOD_STORAGE_ENGINE_MMFILES_DOCUMENT_POSITION_H
+#define ARANGOD_STORAGE_ENGINE_MMFILES_DOCUMENT_POSITION_H 1
 
 #include "Basics/Common.h"
 #include "VocBase/DatafileHelper.h"
@@ -30,37 +30,37 @@
 
 namespace arangodb {
 
-class DocumentPosition {
+class MMFilesDocumentPosition {
  public:
-  constexpr DocumentPosition() 
+  constexpr MMFilesDocumentPosition() 
           : _fid(0), _dataptr(nullptr) {}
 
-  DocumentPosition(void const* dataptr, TRI_voc_fid_t fid, bool isWal) noexcept
+  MMFilesDocumentPosition(void const* dataptr, TRI_voc_fid_t fid, bool isWal) noexcept
           : _fid(fid), _dataptr(dataptr) {
     if (isWal) {
       _fid |= arangodb::DatafileHelper::WalFileBitmask();
     }
   }
 
-  DocumentPosition(DocumentPosition const& other) noexcept
+  MMFilesDocumentPosition(MMFilesDocumentPosition const& other) noexcept
           : _fid(other._fid), _dataptr(other._dataptr) {}
   
-  DocumentPosition& operator=(DocumentPosition const& other) noexcept {
+  MMFilesDocumentPosition& operator=(MMFilesDocumentPosition const& other) noexcept {
     _fid = other._fid;
     _dataptr = other._dataptr; 
     return *this;
   }
   
-  DocumentPosition(DocumentPosition&& other) noexcept
+  MMFilesDocumentPosition(MMFilesDocumentPosition&& other) noexcept
           : _fid(other._fid), _dataptr(other._dataptr) {}
   
-  DocumentPosition& operator=(DocumentPosition&& other) noexcept {
+  MMFilesDocumentPosition& operator=(MMFilesDocumentPosition&& other) noexcept {
     _fid = other._fid;
     _dataptr = other._dataptr; 
     return *this;
   }
 
-  ~DocumentPosition() {}
+  ~MMFilesDocumentPosition() {}
   
   inline void clear() noexcept {
     _fid = 0;
