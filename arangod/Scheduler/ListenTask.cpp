@@ -79,9 +79,9 @@ void ListenTask::start() {
   _handler = [this](boost::system::error_code const& ec) {
     if (ec) {
       if (ec == boost::asio::error::operation_aborted) {
-	return;
+        return;
       }
-      
+
       ++_acceptFailures;
 
       if (_acceptFailures < MAX_ACCEPT_ERRORS) {
@@ -98,6 +98,10 @@ void ListenTask::start() {
       info.endpoint = _endpoint->specification();
       info.endpointType = _endpoint->domainType();
       info.encryptionType = _endpoint->encryption();
+      info.clientAddress = _peer->_peerEndpoint.address().to_string();
+      info.clientPort = _peer->_peerEndpoint.port();
+      info.serverAddress = _endpoint->host();
+      info.serverPort = _endpoint->port();
 
       handleConnected(std::move(_peer), std::move(info));
     }
@@ -131,6 +135,7 @@ void ListenTask::createPeer() {
   } else {
     _peer.reset(new Socket(
         *_ioService,
-        boost::asio::ssl::context(boost::asio::ssl::context::method::sslv23), false));
+        boost::asio::ssl::context(boost::asio::ssl::context::method::sslv23),
+        false));
   }
 }
