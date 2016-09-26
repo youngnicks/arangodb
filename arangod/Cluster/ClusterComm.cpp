@@ -598,16 +598,14 @@ ClusterCommResult const ClusterComm::wait(
     }
   }
   response = i->second;
-  ClusterCommOpStatus status;
   {
     CONDITION_LOCKER(locker, somethingReceived);
-    status = response.result->status;
-  }
+    ClusterCommOpStatus status = response.result->status;
   
-  while (status == CL_COMM_SUBMITTED) {
-    CONDITION_LOCKER(locker, somethingReceived);
-    somethingReceived.wait(60000000.0);
-    status = response.result->status;
+    while (status == CL_COMM_SUBMITTED) {
+      somethingReceived.wait(100000);
+      status = response.result->status;
+    }
   }
 
   {
