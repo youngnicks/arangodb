@@ -458,11 +458,12 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
 
   bool wasSignaled = false;
   communicator::Callbacks callbacks([&cv, &result, &wasSignaled](std::unique_ptr<GeneralResponse> response) {
-    result->fromResponse(std::move(response));
     CONDITION_LOCKER(isen, cv);
+    result->fromResponse(std::move(response));
     wasSignaled = true;
     cv.signal();
   }, [&cv, &result, &doLogConnectionErrors, &wasSignaled](int errorCode, std::unique_ptr<GeneralResponse> response) {
+      CONDITION_LOCKER(isen, cv);
       result->fromError(errorCode, std::move(response));
       if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
         if (doLogConnectionErrors) {
@@ -475,7 +476,6 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
             << "' at endpoint '" << result->endpoint << "'";
         }
       }
-      CONDITION_LOCKER(isen, cv);
       wasSignaled = true;
       cv.signal();
   });
@@ -484,10 +484,10 @@ std::unique_ptr<ClusterCommResult> ClusterComm::syncRequest(
   opt.requestTimeout = timeout;
   TRI_ASSERT(request != nullptr);
   result->status = CL_COMM_SENDING;
+  CONDITION_LOCKER(isen, cv);
   _communicator->addRequest(createCommunicatorDestination(result->endpoint, path),
                std::move(request), callbacks, opt);
   
-  CONDITION_LOCKER(isen, cv);
   while (!wasSignaled) {
     cv.wait(100000);
   }
