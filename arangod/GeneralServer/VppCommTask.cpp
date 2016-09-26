@@ -42,6 +42,7 @@
 #include "GeneralServer/VppNetwork.h"
 #include "Logger/LoggerFeature.h"
 #include "Meta/conversion.h"
+#include "RestServer/ServerFeature.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
 #include "VocBase/ticks.h"
@@ -97,7 +98,10 @@ void VppCommTask::addResponse(VppResponse* response) {
   }
   LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "response -- end";
 
-  std::size_t chunkSize = 1024 * 30;
+  static uint32_t const chunkSize =
+      arangodb::application_features::ApplicationServer::getFeature<
+          ServerFeature>("Server")
+          ->vppMaxSize();
   auto buffers = createChunkForNetwork(slices, id, chunkSize,
                                        false);  // set some sensible maxchunk
                                                 // size and compression
