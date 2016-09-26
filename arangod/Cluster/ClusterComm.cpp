@@ -349,6 +349,7 @@ OperationID ClusterComm::asyncRequest(
   bool doLogConnectionErrors = logConnectionErrors();
   if (callback) {
     callbacks._onError = [callback, result, doLogConnectionErrors](int errorCode, std::unique_ptr<GeneralResponse> response) {
+      CONDITION_LOCKER(locker, somethingReceived);
       result->fromError(errorCode, std::move(response));
       if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
         if (doLogConnectionErrors) {
@@ -365,6 +366,7 @@ OperationID ClusterComm::asyncRequest(
       TRI_ASSERT(ret == true);
     };
     callbacks._onSuccess = [callback, result](std::unique_ptr<GeneralResponse> response) {
+      CONDITION_LOCKER(locker, somethingReceived);
       TRI_ASSERT(response.get() != nullptr);
       result->fromResponse(std::move(response));
       bool ret = ((*callback.get())(result.get()));
@@ -403,122 +405,6 @@ OperationID ClusterComm::asyncRequest(
   result->operationID = ticketId;
   responses.emplace(ticketId, AsyncResponse{TRI_microtime(), result});
   return ticketId;
-
-  /*
-  TRI_ASSERT(headerFields.get() != nullptr);
-
-  auto op = std::make_unique<ClusterCommOperation>();
-  op->result.clientTransactionID = clientTransactionID;
-  op->result.coordTransactionID = coordTransactionID;
-  OperationID opId = 0;
-  do {
-    opId = getOperationID();
-  } while (opId == 0);  // just to make sure
-  op->result.operationID = opId;
-  op->result.status = CL_COMM_SUBMITTED;
-  op->result.single = singleRequest;
-  op->reqtype = reqtype;
-  op->path = path;
-  op->body = body;
-  op->headerFields = std::move(headerFields);
-  op->callback = callback;
-  double now = TRI_microtime();
-  op->endTime = timeout == 0.0 ? now + 24 * 60 * 60.0 : now + timeout;
-  if (initTimeout <= 0.0) {
-    op->initEndTime = op->endTime;
-  } else {
-    op->initEndTime = now + initTimeout;
-  }
-
-  op->result.setDestination(destination, logConnectionErrors());
-  if (op->result.status == CL_COMM_BACKEND_UNAVAILABLE) {
-    // We put it into the received queue right away for error reporting:
-    ClusterCommResult const resCopy(op->result);
-    LOG_TOPIC(DEBUG, Logger::CLUSTER)
-      << "In asyncRequest, putting failed request " << resCopy.operationID
-      << " directly into received queue.";
-    CONDITION_LOCKER(locker, somethingReceived);
-    received.push_back(op.get());
-    op.release();
-    auto q = received.end();
-    receivedByOpID[opId] = --q;
-    if (nullptr != callback) {
-      op.reset(*q);
-      if ((*callback.get())(&(op->result))) {
-        auto i = receivedByOpID.find(opId);
-        receivedByOpID.erase(i);
-        received.erase(q);
-      } else {
-        op.release();
-      }
-    }
-    somethingReceived.broadcast();
-    return opId;
-  }
-
-  if (destination.substr(0, 6) == "shard:") {
-    if (arangodb::Transaction::_makeNolockHeaders != nullptr) {
-      // LOCKING-DEBUG
-      // std::cout << "Found Nolock header\n";
-      auto it =
-          arangodb::Transaction::_makeNolockHeaders->find(op->result.shardID);
-      if (it != arangodb::Transaction::_makeNolockHeaders->end()) {
-        // LOCKING-DEBUG
-        // std::cout << "Found our shard\n";
-        (*op->headerFields)["X-Arango-Nolock"] = op->result.shardID;
-      }
-    }
-  }
-
-  if (singleRequest == false) {
-    // Add the header fields for asynchronous mode:
-    (*op->headerFields)["X-Arango-Async"] = "store";
-    (*op->headerFields)["X-Arango-Coordinator"] =
-        ServerState::instance()->getId() + ":" +
-        basics::StringUtils::itoa(op->result.operationID) + ":" +
-        clientTransactionID + ":" +
-        basics::StringUtils::itoa(coordTransactionID);
-    (*op->headerFields)["Authorization"] =
-        ServerState::instance()->getAuthentication();
-  }
-  TRI_voc_tick_t timeStamp = TRI_HybridLogicalClock();
-  (*op->headerFields)[StaticStrings::HLCHeader] =
-      arangodb::basics::HybridLogicalClock::encodeTimeStamp(timeStamp);
-
-#ifdef DEBUG_CLUSTER_COMM
-#ifdef ARANGODB_ENABLE_MAINTAINER_MODE
-#if ARANGODB_ENABLE_BACKTRACE
-  std::string bt;
-  TRI_GetBacktrace(bt);
-  std::replace(bt.begin(), bt.end(), '\n', ';');  // replace all '\n' to ';'
-  (*op->headerFields)["X-Arango-BT-A-SYNC"] = bt;
-#endif
-#endif
-#endif
-
-  // LOCKING-DEBUG
-  // std::cout << "asyncRequest: sending " <<
-  // arangodb::rest::HttpRequest::translateMethod(reqtype, Logger::CLUSTER) << " request to DB
-  // server '" << op->serverID << ":" << path << "\n" << *(body.get(), Logger::CLUSTER) << "\n";
-  // for (auto& h : *(op->headerFields)) {
-  //   std::cout << h.first << ":" << h.second << std::endl;
-  // }
-  // std::cout << std::endl;
-
-  {
-    CONDITION_LOCKER(locker, somethingToSend);
-    toSend.push_back(op.get());
-    TRI_ASSERT(nullptr != op.get());
-    op.release();
-    std::list<ClusterCommOperation*>::iterator i = toSend.end();
-    toSendByOpID[opId] = --i;
-  }
-  LOG_TOPIC(DEBUG, Logger::CLUSTER)
-    << "In asyncRequest, put into queue " << opId;
-  somethingToSend.signal();
-
-  return opId;
-  */
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -706,10 +592,12 @@ ClusterCommResult const ClusterComm::wait(
     }
   }
   response = i->second;
+  ClusterCommOpStatus status = response.result->status;
   
-  while (response.result->status == CL_COMM_SUBMITTED) {
+  while (status == CL_COMM_SUBMITTED) {
     CONDITION_LOCKER(locker, somethingReceived);
     somethingReceived.wait(60000000.0);
+    status = response.result->status;
   }
 
   {
