@@ -348,8 +348,11 @@ OperationID ClusterComm::asyncRequest(
   Callbacks callbacks;
   bool doLogConnectionErrors = logConnectionErrors();
   if (callback) {
-    callbacks._onError = [callback, result, doLogConnectionErrors](int errorCode, std::unique_ptr<GeneralResponse> response) {
-      CONDITION_LOCKER(locker, somethingReceived);
+    callbacks._onError = [callback, result, doLogConnectionErrors, this](int errorCode, std::unique_ptr<GeneralResponse> response) {
+      {
+        CONDITION_LOCKER(locker, somethingReceived);
+        responses.erase(result->operationID);
+      }
       result->fromError(errorCode, std::move(response));
       if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
         if (doLogConnectionErrors) {
@@ -365,8 +368,11 @@ OperationID ClusterComm::asyncRequest(
       bool ret = ((*callback.get())(result.get()));
       TRI_ASSERT(ret == true);
     };
-    callbacks._onSuccess = [callback, result](std::unique_ptr<GeneralResponse> response) {
-      CONDITION_LOCKER(locker, somethingReceived);
+    callbacks._onSuccess = [callback, result, this](std::unique_ptr<GeneralResponse> response) {
+      {
+        CONDITION_LOCKER(locker, somethingReceived);
+        responses.erase(result->operationID);
+      }
       TRI_ASSERT(response.get() != nullptr);
       result->fromResponse(std::move(response));
       bool ret = ((*callback.get())(result.get()));
