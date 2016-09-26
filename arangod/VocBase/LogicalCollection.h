@@ -136,6 +136,7 @@ class LogicalCollection {
   std::string name() const;
   std::string dbName() const;
   std::string const& path() const;
+  std::string const& distributeShardsLike() const;
 
   TRI_vocbase_col_status_e status();
   TRI_vocbase_col_status_e getStatusLocked();
@@ -215,6 +216,7 @@ class LogicalCollection {
   bool usesDefaultShardKeys() const;
   std::vector<std::string> const& shardKeys() const;
   std::shared_ptr<ShardMap> shardIds() const;
+  void setShardMap(std::shared_ptr<ShardMap>& map);
   
   // SECTION: Modification Functions
   int rename(std::string const&);
@@ -224,6 +226,7 @@ class LogicalCollection {
 
   // SECTION: Serialisation
   void toVelocyPack(arangodb::velocypack::Builder&, bool withPath) const;
+  void toVelocyPackForAgency(arangodb::velocypack::Builder&);
 
   /// @brief transform the information for this collection to velocypack
   ///        The builder has to be an opened Type::Object
@@ -239,7 +242,6 @@ class LogicalCollection {
 
   /// @brief return the figures for a collection
   std::shared_ptr<arangodb::velocypack::Builder> figures();
-  
   
   /// @brief opens an existing collection
   void open(bool ignoreErrors);
@@ -465,6 +467,9 @@ class LogicalCollection {
   // @brief Collection Name
   std::string _name;
 
+  // @brief Name of other collection this shards should be distributed like
+  std::string _distributeShardsLike;
+
   // the following contains in the cluster/DBserver case the information
   // which other servers are in sync with this shard. It is unset in all
   // other cases.
@@ -498,7 +503,7 @@ class LogicalCollection {
   int const _replicationFactor;
 
   // SECTION: Sharding
-  int const _numberOfShards;
+  size_t const _numberOfShards;
   bool const _allowUserKeys;
   std::vector<std::string> _shardKeys;
   // This is shared_ptr because it is thread-safe
