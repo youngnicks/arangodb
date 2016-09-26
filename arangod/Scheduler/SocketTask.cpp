@@ -45,7 +45,10 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
     : Task(loop, "SocketTask"),
       _connectionInfo(connectionInfo),
       _readBuffer(TRI_UNKNOWN_MEM_ZONE, READ_BLOCK_SIZE + 1, false),
-      _peer(std::move(socket)) {
+      _peer(std::move(socket)),
+      _useAliveTimeout(keepAliveTimeout),
+      _keepAliveTimeout(keepAliveTimeout),
+      _keepAliveTimer(_peer->_socket.get_io_service(), _keepAliveTimeout) {
   ConnectionStatisticsAgent::acquire();
   connectionStatisticsAgentSetStart();
 
@@ -68,6 +71,7 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
       _peer->_sslSocket.handshake(
           boost::asio::ssl::stream_base::handshake_type::server, ec);
     } while (ec.value() == boost::asio::error::would_block);
+    _keepAliveTimer.expires_from_now(_keepAliveTimeout, ec);
 
     if (ec) {
       LOG_TOPIC(ERR, Logger::COMMUNICATION)
@@ -84,6 +88,17 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
 // -----------------------------------------------------------------------------
 
 void SocketTask::start() {
+  if (_useAliveTimeout) {
+    auto self = shared_from_this();
+    _keepAliveTimer.async_wait(
+        [this, self](const boost::system::error_code& error) {
+          if (!error) {
+            // timeout
+            closeStream();
+          }
+        });
+  }
+
   if (_closedSend || _closedReceive) {
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "cannot start, channel closed";
     return;
@@ -200,6 +215,11 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
 }
 
 void SocketTask::completedWriteBuffer() {
+  boost::system::error_code ec;
+  _keepAliveTimer.expires_from_now(_keepAliveTimeout,ec);
+  if(ec){
+    closeStream();
+  }
   delete _writeBuffer;
   _writeBuffer = nullptr;
 
@@ -306,6 +326,7 @@ bool SocketTask::trySyncRead() {
     return false;  // should not happen
   }
 
+  _keepAliveTimer.expires_from_now(_keepAliveTimeout, err);
   _readBuffer.increaseLength(bytesRead);
   if (err) {
     if (err == boost::asio::error::would_block) {
@@ -410,6 +431,11 @@ void SocketTask::asyncReadSome() {
 
         closeReceiveStream();
       } else {
+        boost::system::error_code err;
+        _keepAliveTimer.expires_from_now(_keepAliveTimeout, err);
+        if(err){
+          closeReceiveStream();
+        }
         asyncReadSome();
       }
     }

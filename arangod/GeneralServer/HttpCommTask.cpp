@@ -513,6 +513,7 @@ bool HttpCommTask::processRead() {
     // we should close the connection
     LOG(DEBUG) << "no keep-alive, connection close requested by client";
     _closeRequested = true;
+
 #pragma message("TODO")
 #if 0
   } else if (_keepAliveTimeout <= 0.0) {
@@ -521,6 +522,7 @@ bool HttpCommTask::processRead() {
     LOG(DEBUG) << "keep-alive disabled by admin";
     _closeRequested = true;
 #endif
+
   }
 
   // we keep the connection open in all other cases (HTTP 1.1 or Keep-Alive

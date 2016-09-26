@@ -78,6 +78,9 @@ class SocketTask : virtual public Task, public ConnectionStatisticsAgent {
   std::deque<TRI_request_statistics_t*> _writeBuffersStats;
 
   std::unique_ptr<Socket> _peer;
+  bool _useAliveTimeout;
+  boost::posix_time::seconds _keepAliveTimeout;
+  boost::asio::deadline_timer _keepAliveTimer;
 
  protected:
   bool _closeRequested = false;
