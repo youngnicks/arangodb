@@ -348,11 +348,10 @@ OperationID ClusterComm::asyncRequest(
   Callbacks callbacks;
   bool doLogConnectionErrors = logConnectionErrors();
   
-  ConditionVariable* cv = &somethingReceived;
   if (callback) {
-    callbacks._onError = [callback, result, doLogConnectionErrors, cv, this](int errorCode, std::unique_ptr<GeneralResponse> response) {
+    callbacks._onError = [callback, result, doLogConnectionErrors, this](int errorCode, std::unique_ptr<GeneralResponse> response) {
       {
-        CONDITION_LOCKER(locker, *cv);
+        CONDITION_LOCKER(locker, somethingReceived);
         responses.erase(result->operationID);
       }
       result->fromError(errorCode, std::move(response));
@@ -370,9 +369,9 @@ OperationID ClusterComm::asyncRequest(
       bool ret = ((*callback.get())(result.get()));
       TRI_ASSERT(ret == true);
     };
-    callbacks._onSuccess = [callback, result, cv, this](std::unique_ptr<GeneralResponse> response) {
+    callbacks._onSuccess = [callback, result, this](std::unique_ptr<GeneralResponse> response) {
       {
-        CONDITION_LOCKER(locker, *cv);
+        CONDITION_LOCKER(locker, somethingReceived);
         responses.erase(result->operationID);
       }
       TRI_ASSERT(response.get() != nullptr);
@@ -381,8 +380,8 @@ OperationID ClusterComm::asyncRequest(
       TRI_ASSERT(ret == true);
     };
   } else {
-    callbacks._onError = [callback, result, doLogConnectionErrors, cv](int errorCode, std::unique_ptr<GeneralResponse> response) {
-      CONDITION_LOCKER(locker, *cv);
+    callbacks._onError = [callback, result, doLogConnectionErrors, this](int errorCode, std::unique_ptr<GeneralResponse> response) {
+      CONDITION_LOCKER(locker, somethingReceived);
       result->fromError(errorCode, std::move(response));
       if (result->status == CL_COMM_BACKEND_UNAVAILABLE) {
         if (doLogConnectionErrors) {
@@ -395,13 +394,13 @@ OperationID ClusterComm::asyncRequest(
             << "' at endpoint '" << result->endpoint << "'";
         }
       }
-      cv->broadcast();
+      somethingReceived.broadcast();
     };
-    callbacks._onSuccess = [result, cv](std::unique_ptr<GeneralResponse> response) {
+    callbacks._onSuccess = [result, this](std::unique_ptr<GeneralResponse> response) {
       TRI_ASSERT(response.get() != nullptr);
-      CONDITION_LOCKER(locker, *cv);
+      CONDITION_LOCKER(locker, somethingReceived);
       result->fromResponse(std::move(response));
-      cv->broadcast();
+      somethingReceived.broadcast();
     };
   }
   
