@@ -25,6 +25,7 @@
 #define ARANGOD_VOCBASE_LOGICAL_COLLECTION_H 1
 
 #include "Basics/Common.h"
+#include "VocBase/CollectionRevisionsCache.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/voc-types.h"
 #include "VocBase/vocbase.h"
@@ -351,10 +352,6 @@ class LogicalCollection {
   void removeRevision(TRI_voc_rid_t revisionId, bool updateStats);
 
  private:
-  // SECTION: Private functions
-
-  PhysicalCollection* createPhysical();
-
   // SECTION: Index creation
 
   /// @brief creates the initial indexes for the collection
@@ -515,9 +512,10 @@ class LogicalCollection {
   size_t _cleanupIndexes;
   size_t _persistentIndexes;
   std::string _path;
-  PhysicalCollection* _physical;
 
- private:
+  PhysicalCollection* _physical;
+  CollectionRevisionsCache _revisionsCache;
+
   // whether or not secondary indexes should be filled
   bool _useSecondaryIndexes;
 

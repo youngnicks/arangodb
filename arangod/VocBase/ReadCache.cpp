@@ -21,38 +21,14 @@
 /// @author Jan Steemann
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "RevisionCacheChunk.h"
-#include "Basics/MutexLocker.h"
+#include "VocBase/ReadCache.h"
 
 using namespace arangodb;
 
-RevisionCacheChunk::RevisionCacheChunk(uint32_t size)
-    : _data(nullptr), _writeOffset(0), _size(size), _refCount(0), _version(0) {
-  _data = new uint8_t[size];
-}
-
-RevisionCacheChunk::~RevisionCacheChunk() {
-  delete[] _data;
-}
-
-uint32_t RevisionCacheChunk::advanceWritePosition(uint32_t size) {
-  uint32_t offset;
-  {
-    MUTEX_LOCKER(locker, _writeMutex);
-
-    if (_writeOffset + size > _size) {
-      // chunk would be full
-      return UINT32_MAX; // means: chunk is full
-    }
-    offset = _writeOffset;
-    _writeOffset += size;
-  }
-
-  return offset;
-}
-
-bool RevisionCacheChunk::garbageCollect() {
-  // TODO
-  return false;
+ReadCache::ReadCache(RevisionCacheChunkAllocator* allocator) : _allocator(allocator) {}
+ReadCache::~ReadCache() {}
+  
+ReadCachePosition ReadCache::insertAndLease(TRI_voc_rid_t revisionId, uint8_t const* vpack) {
+  return ReadCachePosition(nullptr, 0, 0); // TODO
 }
 

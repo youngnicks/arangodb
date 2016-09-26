@@ -46,12 +46,15 @@ class RevisionCacheChunk {
 
   uint32_t advanceWritePosition(uint32_t size);
   
+  // prepare garbage collection by increasing the chunk's version number
+  // this will make all future reads ignore data in the chunk
+
+  void prepareGarbageCollection() { ++_version; }
   bool garbageCollect();
 
-  bool isSealed() const;
-  
-  inline uint8_t* begin() const noexcept { return _memory; }
-  inline uint8_t* end() const noexcept { return _memory + _size; }
+  inline uint8_t* data() const noexcept { return _data; }
+  inline uint8_t* begin() const noexcept { return _data; }
+  inline uint8_t* end() const noexcept { return _data + _size; }
  
  private:
   
@@ -61,16 +64,23 @@ class RevisionCacheChunk {
   }
 
  private:
+  // lock protecting _offset
   mutable arangodb::Mutex _writeMutex;
 
   // pointer to the chunk's raw memory
-  uint8_t* _memory;
+  uint8_t* _data;
 
   // pointer to the current write position
-  uint32_t _offset;
+  uint32_t _writeOffset;
 
   // size of the chunk's memory
   uint32_t const _size;
+
+  // reference counter
+  std::atomic<uint64_t> _refCount;
+
+  // chunk version
+  std::atomic<uint32_t> _version;
 };
 
 } // namespace

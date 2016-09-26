@@ -221,10 +221,6 @@ add_executable(${BIN_ARANGOD}
   Indexes/SimpleAttributeEqualityMatcher.cpp
   Indexes/SkiplistIndex.cpp
   InternalRestHandler/InternalRestTraverserHandler.cpp
-  ReadCache/CollectionRevisionCache.cpp
-  ReadCache/GlobalRevisionCache.cpp
-  ReadCache/GlobalRevisionCacheChunk.cpp
-  ReadCache/RevisionReader.cpp
   Replication/ContinuousSyncer.cpp
   Replication/InitialSyncer.cpp
   Replication/Syncer.cpp
@@ -332,6 +328,7 @@ add_executable(${BIN_ARANGOD}
   V8Server/v8-voccursor.cpp
   V8Server/v8-vocindex.cpp
   VocBase/AuthInfo.cpp
+  VocBase/CollectionRevisionsCache.cpp
   VocBase/DatafileStatisticsContainer.cpp
   VocBase/Ditch.cpp
   VocBase/EdgeCollectionInfo.cpp
@@ -340,6 +337,7 @@ add_executable(${BIN_ARANGOD}
   VocBase/KeyGenerator.cpp
   VocBase/LogicalCollection.cpp
   VocBase/PathEnumerator.cpp
+  VocBase/ReadCache.cpp
   VocBase/RevisionCacheChunk.cpp
   VocBase/RevisionCacheChunkAllocator.cpp
   VocBase/SingleServerTraverser.cpp

@@ -332,7 +332,8 @@ LogicalCollection::LogicalCollection(
       _vocbase(other->vocbase()),
       _cleanupIndexes(0),
       _persistentIndexes(0),
-      _physical(nullptr),
+      _physical(EngineSelectorFeature::ENGINE->createPhysicalCollection(this)),
+      _revisionsCache(_physical, RevisionCacheFeature::ALLOCATOR),
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
@@ -344,8 +345,6 @@ LogicalCollection::LogicalCollection(
         
   _keyGenerator.reset(KeyGenerator::factory(other->keyOptions()));
   
-  createPhysical();
-
   // TODO Only DBServer? Is this correct?
   if (ServerState::instance()->isDBServer()) {
     _followers.reset(new FollowerInfo(this));
@@ -395,7 +394,8 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase, VPackSlice const& i
       _cleanupIndexes(0),
       _persistentIndexes(0),
       _path(ReadStringValue(info, "path", "")),
-      _physical(nullptr),
+      _physical(EngineSelectorFeature::ENGINE->createPhysicalCollection(this)),
+      _revisionsCache(_physical, RevisionCacheFeature::ALLOCATOR),
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
@@ -489,8 +489,6 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase, VPackSlice const& i
 
   _keyGenerator.reset(KeyGenerator::factory(info.get("keyOptions")));
 
-  createPhysical();
-  
   int64_t count = ReadNumericValue<int64_t>(info, "count", -1);
   if (count != -1) {
     _physical->updateCount(count);
@@ -707,7 +705,6 @@ std::string LogicalCollection::statusString() {
 // SECTION: Properties
 TRI_voc_rid_t LogicalCollection::revision() const {
   // TODO CoordinatorCase
-  TRI_ASSERT(_physical != nullptr);
   return _physical->revision();
 }
 
@@ -901,8 +898,6 @@ int LogicalCollection::rename(std::string const& newName) {
 }
 
 int LogicalCollection::close() {
-  TRI_ASSERT(_physical != nullptr);
-
   // This was unload
   auto primIdx = primaryIndex();
   auto idxSize = primIdx->size();
@@ -951,9 +946,7 @@ void LogicalCollection::toVelocyPack(VPackBuilder& result, bool withPath) const 
   result.add("waitForSync", VPackValue(_waitForSync));
   result.add("journalSize", VPackValue(_journalSize));
   result.add("version", VPackValue(_version)); 
-  if (_physical != nullptr) {
-    result.add("count", VPackValue(_physical->initialCount()));
-  }
+  result.add("count", VPackValue(_physical->initialCount()));
   
   if (_keyOptions != nullptr) {
     result.add("keyOptions", VPackSlice(_keyOptions->data()));
@@ -1058,7 +1051,6 @@ int LogicalCollection::update(VPackSlice const& slice, bool doSync) {
         _vocbase->name(), cid_as_string(), this);
   }
 
-  TRI_ASSERT(_physical != nullptr);
   int64_t count = arangodb::basics::VelocyPackHelper::getNumericValue<int64_t>(
       slice, "count", _physical->initialCount());
   if (count != _physical->initialCount()) {
@@ -1133,15 +1125,6 @@ std::shared_ptr<arangodb::velocypack::Builder> LogicalCollection::figures() {
   }
 
   return builder;
-}
-
-PhysicalCollection* LogicalCollection::createPhysical() {
-  TRI_ASSERT(_physical == nullptr);
-  
-  StorageEngine* engine = EngineSelectorFeature::ENGINE;
-  _physical = engine->createPhysicalCollection(this);
-
-  return _physical;
 }
 
 /// @brief opens an existing collection
