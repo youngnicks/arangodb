@@ -977,12 +977,6 @@ size_t ClusterComm::performRequests(std::vector<ClusterCommRequest>& requests,
     return 0;
   }
 
-#if 0
-  commented out as it break resilience tests
-  if (requests.size() == 1) {
-    return performSingleRequest(requests, timeout, nrDone, logTopic);
-  }
-#endif
   CoordTransactionID coordinatorTransactionID = TRI_NewTickServer();
 
   ClusterCommTimeout startTime = TRI_microtime();

@@ -368,6 +368,7 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
       break;
     }
     case CURLE_COULDNT_CONNECT:
+    case CURLE_SSL_CONNECT_ERROR:
     case CURLE_COULDNT_RESOLVE_HOST:
     case CURLE_URL_MALFORMAT:
     case CURLE_SEND_ERROR:
@@ -375,6 +376,7 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
       break;
     case CURLE_OPERATION_TIMEDOUT:
     case CURLE_RECV_ERROR:
+    case CURLE_GOT_NOTHING:
       rip->_callbacks._onError(TRI_ERROR_CLUSTER_TIMEOUT, {nullptr});
       break;
     default:
