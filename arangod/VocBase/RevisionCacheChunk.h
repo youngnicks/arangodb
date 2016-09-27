@@ -29,6 +29,27 @@
 #include "VocBase/voc-types.h"
 
 namespace arangodb {
+class CollectionRevisionsCache;
+class RevisionCacheChunk;
+
+class ChunkUsageStatus {
+ public:
+  ChunkUsageStatus();
+  ChunkUsageStatus(RevisionCacheChunk* chunk, uint32_t offset, uint32_t expectedVersion);
+  ~ChunkUsageStatus();
+  
+  ChunkUsageStatus(ChunkUsageStatus const& other) = delete;
+  ChunkUsageStatus(ChunkUsageStatus&& other);
+  ChunkUsageStatus& operator=(ChunkUsageStatus const& other) = delete;
+  ChunkUsageStatus& operator=(ChunkUsageStatus&& other);
+
+  uint8_t const* vpack() const;
+
+ private:
+  RevisionCacheChunk* _chunk;
+  uint32_t _offset;
+};
+
 
 class RevisionCacheChunk {
  public:
@@ -39,28 +60,56 @@ class RevisionCacheChunk {
   ~RevisionCacheChunk();
 
  public:
-  // return the effective size for a piece of data
-  static uint32_t pieceSize(uint32_t dataSize) noexcept { return alignSize(dataSize + 16); } // TODO
-
   inline uint32_t size() const noexcept { return _size; }
 
   uint32_t advanceWritePosition(uint32_t size);
   
-  // prepare garbage collection by increasing the chunk's version number
-  // this will make all future reads ignore data in the chunk
+  void findRevisions(std::vector<TRI_voc_rid_t>& foundRevisions);
 
-  void prepareGarbageCollection() { ++_version; }
-  bool garbageCollect();
+  void invalidate();
 
-  inline uint8_t* data() const noexcept { return _data; }
-  inline uint8_t* begin() const noexcept { return _data; }
-  inline uint8_t* end() const noexcept { return _data + _size; }
- 
- private:
+  inline uint8_t const* data() const noexcept { return _data; }
+  inline uint8_t* data() noexcept { return _data; }
+
+  /// @brief increases the refcount value if the chunk's version matches
+  /// the specified version. returns true then, false otherwise
+  bool use(uint32_t expectedVersion) noexcept;
+
+  /// @brief decrease the refcount value originally increased by increase()
+  void release() noexcept;
+  
+  bool isUsed() noexcept;
   
   // align the length value to a multiple of 8
   static constexpr inline uint32_t alignSize(uint32_t value) {
     return (value + 7) - ((value + 7) & 7);
+  }
+
+ private:
+
+  static inline uint32_t versionPart(uint64_t value) {
+    return static_cast<uint32_t>((value & 0xffffffff00000000ULL) >> 32);
+  }
+  
+  static inline uint32_t refCountPart(uint64_t value) {
+    return static_cast<uint32_t>(value & 0x00000000ffffffffULL);
+  }
+  
+  static inline uint64_t buildVersion(uint32_t value) {
+    return static_cast<uint64_t>(value) << 32;
+  }
+      
+  static inline uint64_t increaseVersion(uint64_t value) {
+    uint32_t version = versionPart(value);
+
+    do {
+      // we must never reach a value of UINT32_MAX because this will mean "not found"
+      // additionally we must not reach the value 0 because this will cause confusion
+      // with any WAL entries in the collection's hash table
+      ++version;
+    } while (version != UINT32_MAX && version != 0);
+
+    return (static_cast<uint64_t>(version) << 32) + refCountPart(value);
   }
 
  private:
@@ -76,11 +125,9 @@ class RevisionCacheChunk {
   // size of the chunk's memory
   uint32_t const _size;
 
-  // reference counter
-  std::atomic<uint64_t> _refCount;
-
-  // chunk version
-  std::atomic<uint32_t> _version;
+  // version and reference counter
+  // the higher 32 bits contain the version number, the lower 32 bits contain the refcount
+  std::atomic<uint64_t> _versionAndRefCount;
 };
 
 } // namespace

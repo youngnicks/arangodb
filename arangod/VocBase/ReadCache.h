@@ -25,9 +25,13 @@
 #define ARANGOD_VOCBASE_READ_CACHE_H 1
 
 #include "Basics/Common.h"
+#include "Basics/Mutex.h"
+#include "VocBase/RevisionCacheChunk.h"
 #include "VocBase/RevisionCacheChunkAllocator.h"
 #include "VocBase/voc-types.h"
 #include "Wal/Logfile.h"
+
+#include <list>
 
 namespace arangodb {
 
@@ -53,9 +57,8 @@ struct ReadCachePosition {
     return *this;
   } 
   
-  inline uint8_t const* vpack() const noexcept {
-    return reinterpret_cast<uint8_t const*>(chunk->data() + offset);
-  }
+  uint8_t const* vpack() const noexcept;
+  uint8_t* vpack() noexcept;
   
   RevisionCacheChunk* chunk;
   uint32_t offset;
@@ -165,10 +168,27 @@ class ReadCache {
   explicit ReadCache(RevisionCacheChunkAllocator* allocator);
   ~ReadCache();
 
+  // clear all chunks currently in use. this is a fast-path deletion without checks
+  void clear();
+
+  bool prepareGarbageCollection(CollectionRevisionsCache* cache);
+  bool garbageCollect(size_t maxChunks);
+
+  ChunkUsageStatus readAndLease(RevisionCacheEntry const&);
   ReadCachePosition insertAndLease(TRI_voc_rid_t revisionId, uint8_t const* vpack);
 
  private:
   RevisionCacheChunkAllocator* _allocator;
+
+  arangodb::Mutex _mutex;
+  RevisionCacheChunk* _writeChunk;
+  size_t _totalAllocated;
+
+  std::list<RevisionCacheChunk*> _fullChunks;
+  
+  arangodb::Mutex _gcMutex;
+  RevisionCacheChunk* _toClear;
+  std::list<RevisionCacheChunk*> _freeList;
 };
 
 } // namespace arangodb

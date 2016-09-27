@@ -337,7 +337,7 @@ LogicalCollection::LogicalCollection(
       _cleanupIndexes(0),
       _persistentIndexes(0),
       _physical(EngineSelectorFeature::ENGINE->createPhysicalCollection(this)),
-      _revisionsCache(_physical, RevisionCacheFeature::ALLOCATOR),
+      _revisionsCache(_physical.get(), RevisionCacheFeature::ALLOCATOR),
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
@@ -401,7 +401,7 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase,
       _persistentIndexes(0),
       _path(ReadStringValue(info, "path", "")),
       _physical(EngineSelectorFeature::ENGINE->createPhysicalCollection(this)),
-      _revisionsCache(_physical, RevisionCacheFeature::ALLOCATOR),
+      _revisionsCache(_physical.get(), RevisionCacheFeature::ALLOCATOR),
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
@@ -566,9 +566,7 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase,
   setCompactionStatus("compaction not yet started");
 }
 
-LogicalCollection::~LogicalCollection() {
-  delete _physical;
-}
+LogicalCollection::~LogicalCollection() {}
 
 bool LogicalCollection::IsAllowedName(VPackSlice parameters) {
   bool allowSystem = ReadBooleanValue(parameters, "isSystem", false);
@@ -1869,6 +1867,16 @@ int LogicalCollection::read(Transaction* trx, StringRef const& key,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief processes a truncate operation (note: currently this only clears
+/// the read-cache
+////////////////////////////////////////////////////////////////////////////////
+
+int LogicalCollection::truncate(Transaction* trx) {
+  _revisionsCache.clear();
+  return TRI_ERROR_NO_ERROR;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief inserts a document or edge into the collection
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -1958,7 +1966,7 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
   VPackSlice doc(reinterpret_cast<uint8_t const*>(marker->vpack()));
 
   operation.setRevisions(DocumentDescriptor(), DocumentDescriptor(revisionId, doc.begin()));
-  
+ 
   insertRevision(revisionId, marker->vpack(), 0, true);
 
   // insert into indexes
@@ -2368,6 +2376,87 @@ int LogicalCollection::remove(arangodb::Transaction* trx,
 
   // delete from indexes
   res = deleteSecondaryIndexes(trx, oldRevisionId, oldDoc, false);
+
+  if (res != TRI_ERROR_NO_ERROR) {
+    insertSecondaryIndexes(trx, oldRevisionId, oldDoc, true);
+    return res;
+  }
+
+  res = deletePrimaryIndex(trx, oldRevisionId, oldDoc);
+
+  if (res != TRI_ERROR_NO_ERROR) {
+    insertSecondaryIndexes(trx, oldRevisionId, oldDoc, true);
+    return res;
+  }
+
+  operation.indexed();
+  TRI_ASSERT(_numberDocuments > 0);
+  _numberDocuments--;
+
+  TRI_IF_FAILURE("RemoveDocumentNoOperation") { return TRI_ERROR_DEBUG; }
+
+  TRI_IF_FAILURE("RemoveDocumentNoOperationExcept") {
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
+  }
+
+  res = TRI_AddOperationTransaction(trx->getInternals(), revisionId, operation, marker, options.waitForSync);
+
+  if (res != TRI_ERROR_NO_ERROR) {
+    operation.revert();
+  } else {
+    // store the tick that was used for removing the document        
+    resultMarkerTick = operation.tick();
+  }
+
+  return res;
+}
+
+/// @brief removes a document or edge, fast path function for database documents
+int LogicalCollection::remove(arangodb::Transaction* trx,
+                              TRI_voc_rid_t oldRevisionId, VPackSlice const oldDoc, 
+                              OperationOptions& options,
+                              TRI_voc_tick_t& resultMarkerTick, bool lock) {
+  resultMarkerTick = 0;
+      
+  TRI_voc_rid_t revisionId = TRI_HybridLogicalClock();
+
+  // create remove marker
+  TransactionBuilderLeaser builder(trx);
+  newObjectForRemove(
+      trx, oldDoc, TRI_RidToString(revisionId), *builder.get());
+
+  TRI_IF_FAILURE("RemoveDocumentNoMarker") {
+    // test what happens when no marker can be created
+    return TRI_ERROR_DEBUG;
+  }
+
+  TRI_IF_FAILURE("RemoveDocumentNoMarkerExcept") {
+    // test what happens if no marker can be created
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
+  }
+  
+  // create marker
+  arangodb::wal::CrudMarker removeMarker(TRI_DF_MARKER_VPACK_REMOVE, TRI_MarkerIdTransaction(trx->getInternals()), builder->slice());
+  
+  arangodb::wal::Marker const* marker = &removeMarker;
+
+  TRI_IF_FAILURE("RemoveDocumentNoLock") {
+    // test what happens if no lock can be acquired
+    return TRI_ERROR_DEBUG;
+  }
+
+  VPackSlice key = Transaction::extractKeyFromDocument(oldDoc);
+  TRI_ASSERT(!key.isNone());
+  
+  arangodb::wal::DocumentOperation operation(trx, this, TRI_VOC_DOCUMENT_OPERATION_REMOVE);
+  
+  bool const useDeadlockDetector = (lock && !trx->isSingleOperationTransaction());
+  arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
+  
+  operation.setRevisions(DocumentDescriptor(oldRevisionId, oldDoc.begin()), DocumentDescriptor());
+
+  // delete from indexes
+  int res = deleteSecondaryIndexes(trx, oldRevisionId, oldDoc, false);
 
   if (res != TRI_ERROR_NO_ERROR) {
     insertSecondaryIndexes(trx, oldRevisionId, oldDoc, true);
@@ -3387,8 +3476,11 @@ void LogicalCollection::newObjectForRemove(
 }
 
 void LogicalCollection::readRevision(Transaction* trx, ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
-  uint8_t const* vpack = getPhysical()->lookupRevisionVPack(revisionId);
-  result.set(vpack);
+  _revisionsCache.lookupRevision(result, revisionId);
+}
+
+void LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId) {
+  _revisionsCache.lookupRevision(result, revisionId);
 }
 
 bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
@@ -3400,8 +3492,12 @@ bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResul
   return true;
 }
 
-uint8_t const* LogicalCollection::lookupRevisionVPack(TRI_voc_rid_t revisionId) const {
-  return getPhysical()->lookupRevisionVPack(revisionId);
+uint8_t const* LogicalCollection::lookupRevisionVPack(TRI_voc_rid_t revisionId) {
+  ManagedDocumentResult result;
+  if (!_revisionsCache.lookupRevision(result, revisionId)) {
+    return nullptr;
+  }
+  return result.vpack();
 }
 
 void LogicalCollection::insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
@@ -3409,6 +3505,7 @@ void LogicalCollection::insertRevision(TRI_voc_rid_t revisionId, void const* dat
 }
 
 void LogicalCollection::updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+  // note: there is no need to modify the cache entry here as insertRevision has not inserted the document into the cache
   getPhysical()->updateRevision(revisionId, dataptr, fid, isInWal);
 }
   
@@ -3417,6 +3514,10 @@ bool LogicalCollection::updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_
 }
 
 void LogicalCollection::removeRevision(TRI_voc_rid_t revisionId, bool updateStats) {
+  // clean up cache entry
+  _revisionsCache.removeRevision(revisionId); 
+
+  // and remove from storage engine
   getPhysical()->removeRevision(revisionId, updateStats);
 }
 

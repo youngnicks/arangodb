@@ -2668,17 +2668,15 @@ OperationResult Transaction::truncateLocal(std::string const& collectionName,
   auto primaryIndex = collection->primaryIndex();
 
   options.ignoreRevs = true;
-
+ 
   TRI_voc_tick_t resultMarkerTick = 0;
 
   auto callback = [&](IndexElement const* element) {
-    TRI_voc_rid_t actualRevision = 0;
-    ManagedDocumentResult previous;
     TRI_voc_rid_t revisionId = element->revisionId();
     uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
     int res =
-        collection->remove(this, VPackSlice(vpack), options,
-                           resultMarkerTick, false, actualRevision, previous);
+        collection->remove(this, revisionId, VPackSlice(vpack), options,
+                           resultMarkerTick, false);
 
     if (res != TRI_ERROR_NO_ERROR) {
       THROW_ARANGO_EXCEPTION(res);
@@ -2748,11 +2746,7 @@ OperationResult Transaction::truncateLocal(std::string const& collectionName,
 
   res = unlock(trxCollection(cid), TRI_TRANSACTION_WRITE);
 
-  if (res != TRI_ERROR_NO_ERROR) {
-    return OperationResult(res);
-  }
-
-  return OperationResult(TRI_ERROR_NO_ERROR);
+  return OperationResult(res);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

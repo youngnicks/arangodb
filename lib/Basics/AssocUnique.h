@@ -873,6 +873,9 @@ class AssocUnique {
   /// can NOT be used for deleting elements
   bool invokeOnAllElements(CallbackElementFuncType const& callback, Bucket& b) {
     for (size_t i = 0; i < b._nrAlloc; ++i) {
+      if (!b._table[i] || b._nrUsed == 0) {
+        continue;
+      }
       if (!b._table[i]) {
         continue;
       }
@@ -890,7 +893,7 @@ class AssocUnique {
 
   void invokeOnAllElementsForRemoval(CallbackElementFuncType callback) {
     for (auto& b : _buckets) {
-      if (b._table == nullptr) {
+      if (b._table == nullptr || b._nrUsed == 0) {
         continue;
       }
       for (size_t i = 0; i < b._nrAlloc; /* no hoisting */) {
@@ -900,6 +903,10 @@ class AssocUnique {
         }
         // intentionally don't increment i
         Element old = b._table[i];
+        if (!old) {
+          ++i;
+          continue;
+        }
         if (!callback(b._table[i])) {
           return;
         }

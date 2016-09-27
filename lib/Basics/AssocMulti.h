@@ -560,7 +560,7 @@ class AssocMulti {
   /// @brief a method to iterate over all elements in the hash
   void invokeOnAllElements(CallbackElementFuncType const& callback) {
     for (auto& b : _buckets) {
-      if (b._table == nullptr) {
+      if (b._table == nullptr || b._nrUsed == 0) {
         continue;
       }
 

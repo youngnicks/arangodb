@@ -194,6 +194,8 @@ class LogicalCollection {
   // Get a reference to this KeyGenerator.
   // Caller is not allowed to free it.
   arangodb::KeyGenerator* keyGenerator() const;
+  
+  PhysicalCollection* getPhysical() const { return _physical.get(); }
 
   // SECTION: Indexes
   uint32_t indexBuckets() const;
@@ -278,11 +280,6 @@ class LogicalCollection {
   void finishCompaction() { getPhysical()->finishCompaction(); }
 
 
-  PhysicalCollection* getPhysical() const {
-    TRI_ASSERT(_physical != nullptr);
-    return _physical;
-  }
-
   // SECTION: Indexes
 
   /// @brief Create a new Index based on VelocyPack description
@@ -318,6 +315,10 @@ class LogicalCollection {
   
   int read(arangodb::Transaction*, std::string const&, ManagedDocumentResult& result, bool);
   int read(arangodb::Transaction*, arangodb::StringRef const&, ManagedDocumentResult& result, bool);
+
+  /// @brief processes a truncate operation (note: currently this only clears
+  /// the read-cache
+  int truncate(Transaction* trx);
   int insert(arangodb::Transaction*, arangodb::velocypack::Slice const,
              ManagedDocumentResult& result, arangodb::OperationOptions&, TRI_voc_tick_t&, bool);
   int update(arangodb::Transaction*, arangodb::velocypack::Slice const,
@@ -329,6 +330,9 @@ class LogicalCollection {
   int remove(arangodb::Transaction*, arangodb::velocypack::Slice const,
              arangodb::OperationOptions&, TRI_voc_tick_t&, bool, 
              TRI_voc_rid_t& prevRev, ManagedDocumentResult& previous);
+  /// @brief removes a document or edge, fast path function for database documents
+  int remove(arangodb::Transaction*, TRI_voc_rid_t oldRevisionId, arangodb::velocypack::Slice const,
+             arangodb::OperationOptions&, TRI_voc_tick_t&, bool);
 
   int rollbackOperation(arangodb::Transaction*, TRI_voc_document_operation_e, 
                         TRI_voc_rid_t oldRevisionId, arangodb::velocypack::Slice const& oldDoc,
@@ -345,9 +349,10 @@ class LogicalCollection {
   int endWrite(bool useDeadlockDetector);
   
   void readRevision(arangodb::Transaction*, ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
+  void readRevision(arangodb::Transaction*, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId);
   bool readRevision(arangodb::Transaction*, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal);
 
-  uint8_t const* lookupRevisionVPack(TRI_voc_rid_t revisionId) const;
+  uint8_t const* lookupRevisionVPack(TRI_voc_rid_t revisionId);
   void insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
   void updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
   bool updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal);
@@ -518,7 +523,7 @@ class LogicalCollection {
   size_t _persistentIndexes;
   std::string _path;
 
-  PhysicalCollection* _physical;
+  std::unique_ptr<PhysicalCollection> _physical;
   CollectionRevisionsCache _revisionsCache;
 
   // whether or not secondary indexes should be filled

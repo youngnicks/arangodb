@@ -44,8 +44,12 @@ class CollectionRevisionsCache {
   ~CollectionRevisionsCache();
   
  public:
+  void clear();
+
   // look up a revision
   bool lookupRevision(ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
+  
+  bool lookupRevision(ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId);
 
   // insert from chunk
   void insertRevision(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset, uint32_t version);
@@ -55,6 +59,9 @@ class CollectionRevisionsCache {
 
   // remove a revision
   void removeRevision(TRI_voc_rid_t revisionId);
+
+  // remove multiple revisions
+  void removeRevisions(std::vector<TRI_voc_rid_t> const& revisions);
 
  private:
   uint8_t const* readFromEngine(TRI_voc_rid_t revisionId);

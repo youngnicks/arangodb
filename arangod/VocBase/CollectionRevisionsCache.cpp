@@ -26,18 +26,26 @@
 #include "Basics/WriteLocker.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/RevisionCacheChunk.h"
-//#include "VocBase/RevisionCacheChunkAllocator.h"
 #include "Wal/LogfileManager.h"
-
-//#include <velocypack/Slice.h>
-//#include <velocypack/velocypack-aliases.h>
 
 using namespace arangodb;
 
 CollectionRevisionsCache::CollectionRevisionsCache(PhysicalCollection* physical, RevisionCacheChunkAllocator* allocator) 
     : _physical(physical), _readCache(allocator) {}
 
-CollectionRevisionsCache::~CollectionRevisionsCache() {}
+CollectionRevisionsCache::~CollectionRevisionsCache() {
+  try {
+    clear();
+  } catch (...) {
+    // ignore errors here because of destructor
+  }
+}
+
+void CollectionRevisionsCache::clear() {
+  // TODO: use something like shrink_to_fit here
+  _revisions.clear();
+  _readCache.clear();
+}
 
 // look up a revision
 bool CollectionRevisionsCache::lookupRevision(ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
@@ -55,49 +63,103 @@ bool CollectionRevisionsCache::lookupRevision(ManagedDocumentResult& result, TRI
       wal::Logfile* logfile = found.logfile();
       // now move it into read cache
       locker.unlock();
+
       ReadCachePosition rcp = _readCache.insertAndLease(revisionId, reinterpret_cast<uint8_t const*>(logfile->data() + found.offset()));
       // must have succeeded (otherwise an exception was thrown)
       uint8_t const* vpack = rcp.vpack();
       TRI_ASSERT(vpack != nullptr);
+      // and insert result into the hash
+      insertRevision(revisionId, rcp.chunk, rcp.offset, rcp.version);
       // TODO: handle WAL reference counters
       result.set(vpack);
       return true;
     } 
 
     // document is not in WAL but already in read cache
-    RevisionCacheChunk* chunk = found.chunk();
-    uint32_t offset = found.offset();
-    uint8_t const* vpack = nullptr; // TODO chunk->readAndLease(offset);
+    ChunkUsageStatus status = _readCache.readAndLease(found);
+    uint8_t const* vpack = status.vpack();
     if (vpack != nullptr) {
       // found in read cache, and still valid
       result.set(vpack);
       return true;
     }
+  }
 
-    // fetch document from engine
-    vpack = readFromEngine(revisionId);
-    if (vpack == nullptr) {
-      // engine could not provide the revision
-      return false;
-    }
-    // insert found revision into our hash
-    ReadCachePosition rcp = _readCache.insertAndLease(revisionId, vpack);
-    vpack = rcp.vpack();
-    TRI_ASSERT(vpack != nullptr);
-    result.set(vpack);
-    return true;
-  } 
-  
-  // revision not found in cache
+  // either revision was not in hash or it was in hash but outdated
+  // return the lock as we are going to modify the hash soon 
+  locker.unlock();
+
+  // fetch document from engine
   uint8_t const* vpack = readFromEngine(revisionId);
   if (vpack == nullptr) {
     // engine could not provide the revision
     return false;
   }
+  // insert found revision into our hash
   ReadCachePosition rcp = _readCache.insertAndLease(revisionId, vpack);
   vpack = rcp.vpack();
   TRI_ASSERT(vpack != nullptr);
+  // insert result into the hash
+  insertRevision(revisionId, rcp.chunk, rcp.offset, rcp.version);
   result.set(vpack);
+  return true;
+}
+
+// look up a revision
+bool CollectionRevisionsCache::lookupRevision(ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId) {
+  READ_LOCKER(locker, _lock);
+  
+  auto it = _revisions.find(revisionId);
+
+  if (it != _revisions.end()) {
+    // revision found in hash table
+    RevisionCacheEntry const& found = (*it).second;
+    
+    if (found.isWal()) {
+      // document is still in WAL
+      // TODO: handle WAL reference counters
+      wal::Logfile* logfile = found.logfile();
+      // now move it into read cache
+      locker.unlock();
+
+      ReadCachePosition rcp = _readCache.insertAndLease(revisionId, reinterpret_cast<uint8_t const*>(logfile->data() + found.offset()));
+      // must have succeeded (otherwise an exception was thrown)
+      uint8_t const* vpack = rcp.vpack();
+      TRI_ASSERT(vpack != nullptr);
+      // and insert result into the hash
+      insertRevision(revisionId, rcp.chunk, rcp.offset, rcp.version);
+      // TODO: handle WAL reference counters
+      result.push_back(vpack);
+      return true;
+    } 
+
+    // document is not in WAL but already in read cache
+    ChunkUsageStatus status = _readCache.readAndLease(found);
+    uint8_t const* vpack = status.vpack();
+    if (vpack != nullptr) {
+      // found in read cache, and still valid
+      result.push_back(vpack);
+      return true;
+    }
+  }
+
+  // either revision was not in hash or it was in hash but outdated
+  // return the lock as we are going to modify the hash soon 
+  locker.unlock();
+
+  // fetch document from engine
+  uint8_t const* vpack = readFromEngine(revisionId);
+  if (vpack == nullptr) {
+    // engine could not provide the revision
+    return false;
+  }
+  // insert found revision into our hash
+  ReadCachePosition rcp = _readCache.insertAndLease(revisionId, vpack);
+  vpack = rcp.vpack();
+  TRI_ASSERT(vpack != nullptr);
+  // insert result into the hash
+  insertRevision(revisionId, rcp.chunk, rcp.offset, rcp.version);
+  result.push_back(vpack);
   return true;
 }
 
@@ -114,7 +176,6 @@ void CollectionRevisionsCache::insertRevision(TRI_voc_rid_t revisionId, Revision
 // insert from WAL
 void CollectionRevisionsCache::insertRevision(TRI_voc_rid_t revisionId, wal::Logfile* logfile, uint32_t offset) {
   WRITE_LOCKER(locker, _lock);
-  // TODO: increase reference counter
   auto it = _revisions.emplace(revisionId, RevisionCacheEntry(logfile, offset));
   if (!it.second) {
     _revisions.erase(it.first);
@@ -126,6 +187,13 @@ void CollectionRevisionsCache::insertRevision(TRI_voc_rid_t revisionId, wal::Log
 void CollectionRevisionsCache::removeRevision(TRI_voc_rid_t revisionId) {
   WRITE_LOCKER(locker, _lock);
   _revisions.erase(revisionId);
+}
+
+void CollectionRevisionsCache::removeRevisions(std::vector<TRI_voc_rid_t> const& revisions) {
+  WRITE_LOCKER(locker, _lock);
+  for (auto const& it : revisions) {
+    _revisions.erase(it);
+  }
 }
   
 uint8_t const* CollectionRevisionsCache::readFromEngine(TRI_voc_rid_t revisionId) {

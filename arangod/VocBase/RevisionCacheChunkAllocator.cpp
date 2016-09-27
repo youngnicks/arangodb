@@ -112,5 +112,5 @@ void RevisionCacheChunkAllocator::returnChunk(RevisionCacheChunk* chunk) {
 
 /// @brief calculate the effective size for a new chunk
 uint32_t RevisionCacheChunkAllocator::newChunkSize(uint32_t dataLength) const noexcept {
-  return (std::max)(_defaultChunkSize, RevisionCacheChunk::pieceSize(dataLength));
+  return (std::max)(_defaultChunkSize, RevisionCacheChunk::alignSize(dataLength));
 }
