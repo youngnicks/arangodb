@@ -143,7 +143,7 @@ int RestHandler::executeEngine() {
     RestStatus result = execute();
 
     if (result.isLeaf()) {
-      if (!result.isAbandoned() && _response == nullptr) {
+      if (_response == nullptr) {
         Exception err(TRI_ERROR_INTERNAL, "no response received from handler",
                       __FILE__, __LINE__);
 
@@ -201,9 +201,20 @@ int RestHandler::runEngine(bool synchron) {
           _storeResult(this);
           return TRI_ERROR_NO_ERROR;
 
-        case RestStatusElement::State::ABANDONED:
-          // do nothing
-          break;
+        case RestStatusElement::State::WAIT_FOR:
+          if (!synchron) {
+            _engine.setState(RestEngine::State::WAITING);
+
+            std::shared_ptr<RestHandler> self = shared_from_this();
+            result->callWaitFor([self, this]() {
+              _engine.setState(RestEngine::State::RUN);
+              _engine.asyncRun(self);
+            });
+
+            return TRI_ERROR_NO_ERROR;
+          }
+
+          return TRI_ERROR_INTERNAL;
 
         case RestStatusElement::State::QUEUED:
           if (!synchron) {

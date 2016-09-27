@@ -38,7 +38,7 @@ class RestHandler;
 
 class RestEngine {
  public:
-  enum class State { PREPARE, EXECUTE, RUN, FINALIZE, DONE, FAILED };
+  enum class State { PREPARE, EXECUTE, RUN, FINALIZE, WAITING, DONE, FAILED };
 
  public:
   RestEngine() {}

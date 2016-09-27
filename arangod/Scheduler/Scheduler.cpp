@@ -358,7 +358,7 @@ void Scheduler::shutdown() {
   deleteOldThreads();
 }
 
-void Scheduler::signalTask2(std::unique_ptr<TaskData> data) {
+void Scheduler::signalTask(std::unique_ptr<TaskData> data) {
   TaskData* td = data.release();
   _ioService->dispatch([td]() {
     std::unique_ptr<TaskData> data(td);

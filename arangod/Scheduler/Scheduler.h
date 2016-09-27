@@ -76,7 +76,7 @@ class Scheduler {
   void shutdown();
 
  public:
-  void signalTask2(std::unique_ptr<TaskData>);
+  void signalTask(std::unique_ptr<TaskData>);
 
  private:
   static void initializeSignalHandlers();

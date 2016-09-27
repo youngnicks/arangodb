@@ -51,7 +51,8 @@ boost::lockfree::queue<WorkDescription*> WorkMonitor::_emptyWorkDescription(
 boost::lockfree::queue<WorkDescription*> WorkMonitor::_freeableWorkDescription(
     128);
 
-boost::lockfree::queue<std::shared_ptr<rest::RestHandler>*>
+boost::lockfree::queue<
+    std::pair<std::shared_ptr<rest::RestHandler>, std::function<void()>>*>
     WorkMonitor::_workOverview(128);
 
 Mutex WorkMonitor::_cancelLock;
@@ -252,8 +253,10 @@ void WorkMonitor::popHandler() {
 }
 
 void WorkMonitor::requestWorkOverview(
-    std::shared_ptr<rest::RestHandler> handler) {
-  _workOverview.push(new std::shared_ptr<rest::RestHandler>(handler));
+    std::shared_ptr<rest::RestHandler> handler, std::function<void()> next) {
+  _workOverview.push(
+      new std::pair<std::shared_ptr<rest::RestHandler>, std::function<void()>>(
+          handler, next));
 }
 
 void WorkMonitor::cancelWork(uint64_t id) {

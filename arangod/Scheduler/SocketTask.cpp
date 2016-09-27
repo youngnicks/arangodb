@@ -274,7 +274,6 @@ void SocketTask::closeStream() {
 
   _peer->_socket.close(err);
   if (err && err != boost::asio::error::not_connected) {
-#pragma message("review (fc)")
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
         << "SocketTask::CloseStream - shutdown send stream "
         << _peer->_socket.native_handle() << " failed with " << err.message();
@@ -371,7 +370,6 @@ void SocketTask::asyncReadSome() {
 
       if (!trySyncRead()) {
         if (n < MAX_DIRECT_TRIES) {
-#pragma message("review fc")
 #ifdef TRI_HAVE_SCHED_H
           sched_yield();
 #endif

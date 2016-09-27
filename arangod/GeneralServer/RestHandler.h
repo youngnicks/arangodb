@@ -52,10 +52,6 @@ class RestHandler : public RequestStatisticsAgent,
 
  public:
   uint64_t handlerId() const { return _handlerId; }
-
-  uint64_t taskId() const { return _taskId; }
-  void setTaskId(uint64_t taskId) { _taskId = taskId; }
-
   uint64_t messageId() const;
 
   bool needsOwnThread() const { return _needsOwnThread; }
@@ -82,14 +78,12 @@ class RestHandler : public RequestStatisticsAgent,
   }
 
   virtual void handleError(basics::Exception const&) = 0;
-  virtual void addResponse(RestHandler*) {}
 
  protected:
   void resetResponse(rest::ResponseCode);
 
  protected:
   uint64_t const _handlerId;
-  uint64_t _taskId = 0;
 
   std::atomic<bool> _canceled;
 

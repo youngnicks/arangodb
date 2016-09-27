@@ -30,9 +30,6 @@ using namespace arangodb;
 // --SECTION--                                                    static members
 // -----------------------------------------------------------------------------
 
-RestStatus const RestStatus::ABANDON(
-    new RestStatusElement(RestStatusElement::State::ABANDONED));
-
 RestStatus const RestStatus::DONE(
     new RestStatusElement(RestStatusElement::State::DONE));
 
@@ -63,8 +60,8 @@ void RestStatusElement::printTree() const {
         s += "FAILED";
         break;
 
-      case State::ABANDONED:
-        s += "ABANDONED";
+      case State::WAIT_FOR:
+        s += "WAIT_FOR";
         break;
 
       case State::QUEUED:

@@ -36,16 +36,24 @@ class RestStatusElement {
   friend class RestStatus;
 
  public:
-  enum class State { DONE, FAIL, ABANDONED, QUEUED, THEN };
+  enum class State { DONE, FAIL, QUEUED, THEN, WAIT_FOR };
 
  public:
-  explicit RestStatusElement(State status) : _state(status), _previous(nullptr) {
+  explicit RestStatusElement(State status)
+      : _state(status), _previous(nullptr) {
     TRI_ASSERT(_state != State::THEN);
   }
 
   RestStatusElement(State status, std::shared_ptr<RestStatusElement> previous,
                     std::function<std::shared_ptr<RestStatus>()> callback)
-      : _state(status), _previous(previous), _callback(callback) {}
+      : _state(status), _previous(previous), _callThen(callback) {}
+
+  RestStatusElement(State status, std::shared_ptr<RestStatusElement> previous)
+      : _state(status), _previous(previous) {}
+
+  RestStatusElement(State status,
+                    std::function<void(std::function<void()>)> callback)
+      : _state(status), _previous(nullptr), _callWaitFor(callback) {}
 
  public:
   std::shared_ptr<RestStatusElement> previous() const { return _previous; }
@@ -53,13 +61,15 @@ class RestStatusElement {
   State state() const { return _state; }
 
  public:
-  std::shared_ptr<RestStatus> callThen() { return _callback(); }
+  std::shared_ptr<RestStatus> callThen() { return _callThen(); }
+  void callWaitFor(std::function<void()> next) { _callWaitFor(next); }
   void printTree() const;
 
  private:
   State _state;
   std::shared_ptr<RestStatusElement> _previous;
-  std::function<std::shared_ptr<RestStatus>()> _callback;
+  std::function<std::shared_ptr<RestStatus>()> _callThen;
+  std::function<void(std::function<void()>)> _callWaitFor;
 };
 
 // -----------------------------------------------------------------------------
@@ -68,10 +78,15 @@ class RestStatusElement {
 
 class RestStatus {
  public:
-  static RestStatus const ABANDON;
   static RestStatus const DONE;
   static RestStatus const FAIL;
   static RestStatus const QUEUE;
+
+  static RestStatus WAIT_FOR(
+      std::function<void(std::function<void()>)> callback) {
+    return RestStatus(
+        new RestStatusElement(RestStatusElement::State::WAIT_FOR, callback));
+  }
 
  public:
   explicit RestStatus(RestStatusElement* element) : _element(element) {}
@@ -103,6 +118,11 @@ class RestStatus {
         }));
   }
 
+  RestStatus done() {
+    return RestStatus(
+        new RestStatusElement(RestStatusElement::State::DONE, _element));
+  }
+
  public:
   std::shared_ptr<RestStatusElement> element() { return _element; }
 
@@ -110,10 +130,6 @@ class RestStatus {
 
   bool isFailed() const {
     return _element->_state == RestStatusElement::State::FAIL;
-  }
-
-  bool isAbandoned() const {
-    return _element->_state == RestStatusElement::State::ABANDONED;
   }
 
  public:

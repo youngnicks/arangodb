@@ -54,9 +54,6 @@ class GeneralListenTask : public ListenTask {
   GeneralServer* _server;
   ProtocolType _connectionType;
   double _keepAliveTimeout = 300.0;
-  SSL_CTX* _sslContext = nullptr;
-  int _verificationMode = SSL_VERIFY_NONE;
-  int (*_verificationCallback)(int, X509_STORE_CTX*) = nullptr;
 };
 }
 }

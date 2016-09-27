@@ -40,7 +40,7 @@ void WorkMonitor::vpackHandler(arangodb::velocypack::Builder*,
   TRI_ASSERT(false);
 }
 
-void WorkMonitor::sendWorkOverview(std::shared_ptr<rest::RestHandler>,
-                                   std::shared_ptr<Buffer<uint8_t>>) {
+void WorkMonitor::addWorkOverview(std::shared_ptr<rest::RestHandler>,
+                                  std::shared_ptr<Buffer<uint8_t>>) {
   TRI_ASSERT(false);
 }

@@ -74,6 +74,9 @@ int RestEngine::run(std::shared_ptr<rest::RestHandler> handler, bool synchron) {
         res = handler->runEngine(synchron);
         break;
 
+      case State::WAITING:
+        return synchron ? TRI_ERROR_INTERNAL : TRI_ERROR_NO_ERROR;
+
       case State::FINALIZE:
         res = handler->finalizeEngine();
         break;

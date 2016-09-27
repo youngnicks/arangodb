@@ -54,8 +54,11 @@ RestStatus WorkMonitorHandler::execute() {
       return RestStatus::DONE;
     }
 
-    WorkMonitor::requestWorkOverview(shared_from_this());
-    return RestStatus::ABANDON;
+    std::shared_ptr<RestHandler> self = shared_from_this();
+
+    return RestStatus::WAIT_FOR([self](std::function<void()> next) {
+        WorkMonitor::requestWorkOverview(self, next);
+      }).done();
   }
 
   if (type == rest::RequestType::DELETE_REQ) {

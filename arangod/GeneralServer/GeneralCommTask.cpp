@@ -92,8 +92,6 @@ void GeneralCommTask::executeRequest(
     return;
   }
 
-  handler->setTaskId(_taskId);
-
   // asynchronous request
   bool ok = false;
 
@@ -262,12 +260,12 @@ bool GeneralCommTask::handleRequestAsync(std::shared_ptr<RestHandler> handler,
 
   std::unique_ptr<Job> job(
               new Job(_server, std::move(handler),
-		      [self, this](std::shared_ptr<RestHandler> h) {
-			JobGuard guard(_loop);
-			guard.block();
+                      [self, this](std::shared_ptr<RestHandler> h) {
+                        JobGuard guard(_loop);
+                        guard.block();
 
-			h->asyncRunEngine();
-		      }));
+                        h->asyncRunEngine();
+                      }));
 
   return SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, std::move(job));
 }

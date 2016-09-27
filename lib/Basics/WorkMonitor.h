@@ -59,7 +59,8 @@ class WorkMonitor : public Thread {
   static void popCustom();
   static void pushHandler(std::shared_ptr<rest::RestHandler>);
   static void popHandler();
-  static void requestWorkOverview(std::shared_ptr<rest::RestHandler>);
+  static void requestWorkOverview(std::shared_ptr<rest::RestHandler>,
+                                  std::function<void()> next);
   static void cancelWork(uint64_t id);
 
  public:
@@ -75,8 +76,8 @@ class WorkMonitor : public Thread {
   static void cancelWorkDescriptions(Thread* thread);
 
   // implemented in WorkMonitorArangod.cpp
-  static void sendWorkOverview(std::shared_ptr<rest::RestHandler>,
-                               std::shared_ptr<velocypack::Buffer<uint8_t>>);
+  static void addWorkOverview(std::shared_ptr<rest::RestHandler>,
+                              std::shared_ptr<velocypack::Buffer<uint8_t>>);
   static bool cancelAql(WorkDescription*);
   static void deleteHandler(WorkDescription* desc);
   static void vpackHandler(velocypack::Builder*, WorkDescription* desc);
@@ -86,7 +87,8 @@ class WorkMonitor : public Thread {
 
   static boost::lockfree::queue<WorkDescription*> _emptyWorkDescription;
   static boost::lockfree::queue<WorkDescription*> _freeableWorkDescription;
-  static boost::lockfree::queue<std::shared_ptr<rest::RestHandler>*>
+  static boost::lockfree::queue<
+      std::pair<std::shared_ptr<rest::RestHandler>, std::function<void()>>*>
       _workOverview;
 
   static Mutex _cancelLock;
@@ -133,7 +135,7 @@ class HandlerWorkStack {
 
  public:
   rest::RestHandler* handler() const { return _handler.get(); }
-  rest::RestHandler* operator->() { return _handler.get();  }
+  rest::RestHandler* operator->() { return _handler.get(); }
 
  private:
   std::shared_ptr<rest::RestHandler> _handler;

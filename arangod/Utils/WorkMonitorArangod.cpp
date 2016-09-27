@@ -85,9 +85,9 @@ void WorkMonitor::run() {
       }
 
       // handle work descriptions requests
-      std::shared_ptr<rest::RestHandler>* handler;
+      std::pair<std::shared_ptr<rest::RestHandler>, std::function<void()>>* hac;
 
-      while (_workOverview.pop(handler)) {
+      while (_workOverview.pop(hac)) {
         VPackBuilder builder;
 
         builder.add(VPackValue(VPackValueType::Object));
@@ -112,8 +112,9 @@ void WorkMonitor::run() {
         builder.close();
         builder.close();
 
-        sendWorkOverview(*handler, builder.steal());
-        delete handler;
+        addWorkOverview(hac->first, builder.steal());
+        hac->second();
+        delete hac;
       }
     } catch (...) {
       // must prevent propagation of exceptions from here
@@ -220,7 +221,7 @@ void WorkMonitor::vpackHandler(VPackBuilder* b, WorkDescription* desc) {
   b->close();
 }
 
-void WorkMonitor::sendWorkOverview(
+void WorkMonitor::addWorkOverview(
     std::shared_ptr<RestHandler> handler,
     std::shared_ptr<velocypack::Buffer<uint8_t>> buffer) {
   auto response = handler->response();
@@ -228,15 +229,6 @@ void WorkMonitor::sendWorkOverview(
   velocypack::Slice slice(buffer->data());
   response->setResponseCode(rest::ResponseCode::OK);
   response->setPayload(slice, true, VPackOptions::Defaults);
-
-  auto data = std::make_unique<TaskData>();
-
-  data->_taskId = handler->taskId();
-  data->_type = TaskData::TASK_DATA_RESPONSE;
-  data->_response = handler->stealResponse();
-
-#pragma message("TODO")
-  // SchedulerFeature::SCHEDULER->signalTask(data);
 }
 
 // -----------------------------------------------------------------------------
