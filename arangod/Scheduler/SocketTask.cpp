@@ -46,8 +46,8 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
       _connectionInfo(connectionInfo),
       _readBuffer(TRI_UNKNOWN_MEM_ZONE, READ_BLOCK_SIZE + 1, false),
       _peer(std::move(socket)),
-      _useAliveTimeout(keepAliveTimeout),
-      _keepAliveTimeout(keepAliveTimeout),
+      _useAliveTimeout(keepAliveTimeout > 0),
+      _keepAliveTimeout(keepAliveTimeout * 1000),
       _keepAliveTimer(_peer->_socket.get_io_service(), _keepAliveTimeout) {
   ConnectionStatisticsAgent::acquire();
   connectionStatisticsAgentSetStart();
@@ -216,8 +216,8 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
 
 void SocketTask::completedWriteBuffer() {
   boost::system::error_code ec;
-  _keepAliveTimer.expires_from_now(_keepAliveTimeout,ec);
-  if(ec){
+  _keepAliveTimer.expires_from_now(_keepAliveTimeout, ec);
+  if (ec) {
     closeStream();
   }
   delete _writeBuffer;
@@ -433,7 +433,7 @@ void SocketTask::asyncReadSome() {
       } else {
         boost::system::error_code err;
         _keepAliveTimer.expires_from_now(_keepAliveTimeout, err);
-        if(err){
+        if (err) {
           closeReceiveStream();
         }
         asyncReadSome();

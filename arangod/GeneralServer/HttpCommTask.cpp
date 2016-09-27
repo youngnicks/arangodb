@@ -442,20 +442,25 @@ bool HttpCommTask::processRead() {
     }
 
     bool handled = false;
-    std::string const& encoding = _incompleteRequest->header(StaticStrings::ContentEncoding);
+    std::string const& encoding =
+        _incompleteRequest->header(StaticStrings::ContentEncoding);
     if (!encoding.empty()) {
       if (encoding == "gzip") {
         std::string uncompressed;
-        if (!StringUtils::gzipUncompress(_readBuffer.c_str() + _bodyPosition, _bodyLength, uncompressed)) {
-          handleSimpleError(rest::ResponseCode::BAD, TRI_ERROR_BAD_PARAMETER, "gzip decoding error", 1);
+        if (!StringUtils::gzipUncompress(_readBuffer.c_str() + _bodyPosition,
+                                         _bodyLength, uncompressed)) {
+          handleSimpleError(rest::ResponseCode::BAD, TRI_ERROR_BAD_PARAMETER,
+                            "gzip decoding error", 1);
           return false;
         }
         _incompleteRequest->setBody(uncompressed.c_str(), uncompressed.size());
         handled = true;
       } else if (encoding == "deflate") {
         std::string uncompressed;
-        if (!StringUtils::gzipDeflate(_readBuffer.c_str() + _bodyPosition, _bodyLength, uncompressed)) {
-          handleSimpleError(rest::ResponseCode::BAD, TRI_ERROR_BAD_PARAMETER, "gzip deflate error", 1);
+        if (!StringUtils::gzipDeflate(_readBuffer.c_str() + _bodyPosition,
+                                      _bodyLength, uncompressed)) {
+          handleSimpleError(rest::ResponseCode::BAD, TRI_ERROR_BAD_PARAMETER,
+                            "gzip deflate error", 1);
           return false;
         }
         _incompleteRequest->setBody(uncompressed.c_str(), uncompressed.size());
@@ -522,7 +527,6 @@ bool HttpCommTask::processRead() {
     LOG(DEBUG) << "keep-alive disabled by admin";
     _closeRequested = true;
 #endif
-
   }
 
   // we keep the connection open in all other cases (HTTP 1.1 or Keep-Alive
