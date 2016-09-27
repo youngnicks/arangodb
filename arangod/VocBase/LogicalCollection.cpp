@@ -193,17 +193,6 @@ static std::shared_ptr<arangodb::velocypack::Buffer<uint8_t> const> CopySliceVal
   return VPackBuilder::clone(info).steal();
 }
 
-static int GetObjectLength(VPackSlice info, std::string const& name, int def) {
-  if (!info.isObject()) {
-    return def;
-  }
-  info = info.get(name);
-  if (!info.isObject()) {
-    return def;
-  }
-  return static_cast<int>(info.length());
-}
-
 // Creates an index object.
 // It does not modify anything and does not insert things into
 // the index.
@@ -358,7 +347,7 @@ LogicalCollection::LogicalCollection(
   for (auto const& idx : other->_indexes) {
     _indexes.emplace_back(idx);
   }
-  
+
   setCompactionStatus("compaction not yet started");
 }
 
@@ -410,6 +399,7 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase,
       _lastCompactionStatus(nullptr),
       _lastCompactionStamp(0.0),
       _uncollectedLogfileEntries(0) {
+
   if (!IsAllowedName(info)) {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_ARANGO_ILLEGAL_NAME);
   }
@@ -435,6 +425,50 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase,
                                    "<properties>.journalSize too small");
   }
 
+  VPackSlice shardKeysSlice = info.get("shardKeys");
+
+  bool const isCluster = ServerState::instance()->isRunningInCluster();
+
+  if (shardKeysSlice.isNone()) {
+    // Use default.
+    _shardKeys.emplace_back(StaticStrings::KeyString);
+  } else {
+    if (shardKeysSlice.isArray()) {
+      for (auto const& sk : VPackArrayIterator(shardKeysSlice)) {
+        if (sk.isString()) {
+          std::string key = sk.copyString();
+          // remove : char at the beginning or end (for enterprise)
+          std::string stripped;
+          if (!key.empty()) {
+            if (key.front() == ':') {
+              stripped = key.substr(1);
+            } else if (key.back() == ':') {
+              stripped = key.substr(0, key.size()-1);
+            } else {
+              stripped = key;
+            }
+          }
+          // system attributes are not allowed (except _key)
+          if (!stripped.empty() && stripped != StaticStrings::IdString &&
+              stripped != StaticStrings::RevString) {
+            _shardKeys.emplace_back(key);
+          }
+        }
+      }
+      if (_shardKeys.empty() && !isCluster) {
+        // Compatibility. Old configs might store empty shard-keys locally.
+        // This is translated to ["_key"]. In cluster-case this always was forbidden.
+        _shardKeys.emplace_back(StaticStrings::KeyString);
+      }
+    }
+  }
+
+  if (_shardKeys.empty() || _shardKeys.size() > 8) {
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_BAD_PARAMETER,
+                                   "invalid number of shard keys");
+  }
+
+
   // Cluster only tests
   if (ServerState::instance()->isCoordinator()) {
     if (_numberOfShards == 0 || _numberOfShards > 1000) {
@@ -456,102 +490,62 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase,
       }
     }
 
-    VPackSlice shardKeysSlice = info.get("shardKeys");
-
-    if (shardKeysSlice.isNone()) {
-      // Use default.
-      _shardKeys.emplace_back(StaticStrings::KeyString);
-    } else {
-      if (shardKeysSlice.isArray()) {
-        for (auto const& sk : VPackArrayIterator(shardKeysSlice)) {
-          if (sk.isString()) {
-            StringRef key(sk);
-            // remove : char at the beginning or end (for enterprise)
-            StringRef stripped;
-            if (!key.empty()) {
-              if (key.front() == ':') {
-                stripped = key.substr(1);
-              } else if (key.back() == ':') {
-                stripped = key.substr(0, key.size()-1);
-              } else {
-                stripped = key;
-              }
-            }
-            // system attributes are not allowed (except _key)
-            if (!stripped.empty() && stripped != StaticStrings::IdString &&
-                stripped != StaticStrings::RevString) {
-              _shardKeys.push_back(key.toString());
-            }
-          }
-        }
-      }
-    }
-
-    if (_shardKeys.empty() || _shardKeys.size() > 8) {
-      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_BAD_PARAMETER,
-                                     "invalid number of shard keys");
-    }
-
-    if (_replicationFactor == 0 ||_replicationFactor > 10) {
+    if (_replicationFactor == 0 || _replicationFactor > 10) {
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_BAD_PARAMETER,
                                      "invalid replicationFactor");
     }
   }
 
-  if (info.isObject()) {
-    auto shardsSlice = info.get("shards");
-    if (shardsSlice.isObject()) {
-      for (auto const& shardSlice : VPackObjectIterator(shardsSlice)) {
-        if (shardSlice.key.isString() && shardSlice.value.isArray()) {
-          ShardID shard = shardSlice.key.copyString();
+  _keyGenerator.reset(KeyGenerator::factory(info.get("keyOptions")));
 
-          std::vector<ServerID> servers;
-          for (auto const& serverSlice : VPackArrayIterator(shardSlice.value)) {
-            servers.push_back(serverSlice.copyString());
-          }
-          _shardIds->emplace(shard, servers);
+  auto shardsSlice = info.get("shards");
+  if (shardsSlice.isObject()) {
+    for (auto const& shardSlice : VPackObjectIterator(shardsSlice)) {
+      if (shardSlice.key.isString() && shardSlice.value.isArray()) {
+        ShardID shard = shardSlice.key.copyString();
+
+        std::vector<ServerID> servers;
+        for (auto const& serverSlice : VPackArrayIterator(shardSlice.value)) {
+          servers.push_back(serverSlice.copyString());
         }
-      }
-    }
-  
-    auto indexesSlice = info.get("indexes");
-    if (indexesSlice.isArray()) {
-      bool const isCluster = ServerState::instance()->isRunningInCluster();
-      for (auto const& v : VPackArrayIterator(indexesSlice)) {
-        if (arangodb::basics::VelocyPackHelper::getBooleanValue(
-                v, "error", false)) {
-          // We have an error here.
-          // Do not add index.
-          // TODO Handle Properly
-          continue;
-        }
-
-        auto idx = PrepareIndexFromSlice(v, false, this, true);
-
-        if (isCluster) {
-          addIndexCoordinator(idx, false);
-        } else {
-          addIndex(idx);
-        }
-      }
-    }
-
-    if (_indexes.empty()) {
-      createInitialIndexes();
-    }
-
-    if (!ServerState::instance()->isCoordinator() && isPhysical) {
-      // If we are not in the coordinator we need a path
-      // to the physical data.
-      StorageEngine* engine = EngineSelectorFeature::ENGINE;
-      if (_path.empty()) { 
-        _path = engine->createCollection(_vocbase, _cid, this);
+        _shardIds->emplace(shard, servers);
       }
     }
   }
 
+  auto indexesSlice = info.get("indexes");
+  if (indexesSlice.isArray()) {
+    for (auto const& v : VPackArrayIterator(indexesSlice)) {
+      if (arangodb::basics::VelocyPackHelper::getBooleanValue(v, "error",
+                                                              false)) {
+        // We have an error here.
+        // Do not add index.
+        // TODO Handle Properly
+        continue;
+      }
 
-  _keyGenerator.reset(KeyGenerator::factory(info.get("keyOptions")));
+      auto idx = PrepareIndexFromSlice(v, false, this, true);
+
+      if (isCluster) {
+        addIndexCoordinator(idx, false);
+      } else {
+        addIndex(idx);
+      }
+    }
+  }
+
+  if (_indexes.empty()) {
+    createInitialIndexes();
+  }
+
+  if (!ServerState::instance()->isCoordinator() && isPhysical) {
+    // If we are not in the coordinator we need a path
+    // to the physical data.
+    StorageEngine* engine = EngineSelectorFeature::ENGINE;
+    if (_path.empty()) {
+      _path = engine->createCollection(_vocbase, _cid, this);
+    }
+  }
 
   int64_t count = ReadNumericValue<int64_t>(info, "count", -1);
   if (count != -1) {
@@ -1002,72 +996,48 @@ void LogicalCollection::setStatus(TRI_vocbase_col_status_e status) {
   } 
 }
 
-// TODO Make this pretty. Copy of other with only one swith. Ambigous
 void LogicalCollection::toVelocyPackForAgency(VPackBuilder& result) {
   _status = TRI_VOC_COL_STATUS_LOADED;
   result.openObject();
-  result.add("id", VPackValue(std::to_string(_cid)));
-  result.add("name", VPackValue(_name));
-  result.add("type", VPackValue(static_cast<int>(_type)));
-  result.add("status", VPackValue(_status));
-  result.add("deleted", VPackValue(_isDeleted));
-  result.add("doCompact", VPackValue(_doCompact));
-  result.add("isSystem", VPackValue(_isSystem));
-  result.add("isVolatile", VPackValue(_isVolatile));
-  result.add("waitForSync", VPackValue(_waitForSync));
-  result.add("journalSize", VPackValue(_journalSize));
-  result.add("indexBuckets", VPackValue(_indexBuckets));
-  result.add("replicationFactor", VPackValue(_replicationFactor));
-  
-  if (_keyGenerator != nullptr) {
-    result.add(VPackValue("keyOptions"));
-    result.openObject();
-    _keyGenerator->toVelocyPack(result);
-    result.close();
-  }
-
-  result.add(VPackValue("shardKeys"));
-  result.openArray();
-  for (auto const& key : _shardKeys) {
-    result.add(VPackValue(key));
-  }
-  result.close(); // shardKeys
-
-  result.add(VPackValue("shards"));
-  result.openObject();
-  for (auto const& shards : *_shardIds) {
-    result.add(VPackValue(shards.first));
-    result.openArray();
-    for (auto const& servers : shards.second) {
-      result.add(VPackValue(servers));
-    }
-    result.close(); // server array
-  }
-  result.close(); // shards
-
-
-  result.add(VPackValue("indexes"));
-  getIndexesVPack(result, false);
+  toVelocyPackInObject(result);
 
   result.close(); // Base Object
 }
 
 void LogicalCollection::toVelocyPack(VPackBuilder& result, bool withPath) const {
   result.openObject();
-  result.add("id", VPackValue(std::to_string(_cid)));
+  toVelocyPackInObject(result);
   result.add("cid", VPackValue(std::to_string(_cid))); // export cid for compatibility, too
   result.add("planId", VPackValue(std::to_string(_planId))); // export planId for cluster
+  result.add("version", VPackValue(_version)); 
+  result.add("count", VPackValue(_physical->initialCount()));
+
+  if (withPath) {
+    result.add("path", VPackValue(_path));
+  }
+  result.add("allowUserKeys", VPackValue(_allowUserKeys));
+
+  result.close();
+}
+
+// Internal helper that inserts VPack info into an existing object and leaves the object open
+void LogicalCollection::toVelocyPackInObject(VPackBuilder& result) const {
+  result.add("id", VPackValue(std::to_string(_cid)));
   result.add("name", VPackValue(_name));
+  result.add("type", VPackValue(static_cast<int>(_type)));
   result.add("status", VPackValue(_status));
   result.add("deleted", VPackValue(_isDeleted));
-  result.add("type", VPackValue(static_cast<int>(_type)));
   result.add("doCompact", VPackValue(_doCompact));
   result.add("isSystem", VPackValue(_isSystem));
   result.add("isVolatile", VPackValue(_isVolatile));
   result.add("waitForSync", VPackValue(_waitForSync));
   result.add("journalSize", VPackValue(_journalSize));
-  result.add("version", VPackValue(_version)); 
-  result.add("count", VPackValue(_physical->initialCount()));
+  result.add("indexBuckets", VPackValue(_indexBuckets));
+  result.add("replicationFactor", VPackValue(_replicationFactor));
+  result.add("numberOfShards", VPackValue(_numberOfShards));
+  if (!_distributeShardsLike.empty()) {
+    result.add("distributeShardsLike", VPackValue(_distributeShardsLike));
+  }
   
   if (_keyGenerator != nullptr) {
     result.add(VPackValue("keyOptions"));
@@ -1076,14 +1046,13 @@ void LogicalCollection::toVelocyPack(VPackBuilder& result, bool withPath) const 
     result.close();
   }
 
-  if (withPath) {
-    result.add("path", VPackValue(_path));
+  result.add(VPackValue("shardKeys"));
+  result.openArray();
+  for (auto const& key : _shardKeys) {
+    result.add(VPackValue(key));
   }
+  result.close(); // shardKeys
 
-  result.add("indexBuckets", VPackValue(_indexBuckets));
-  result.add(VPackValue("indexes"));
-  getIndexesVPack(result, false);
-  result.add("replicationFactor", VPackValue(_replicationFactor));
   result.add(VPackValue("shards"));
   result.openObject();
   for (auto const& shards : *_shardIds) {
@@ -1095,14 +1064,9 @@ void LogicalCollection::toVelocyPack(VPackBuilder& result, bool withPath) const 
     result.close(); // server array
   }
   result.close(); // shards
-  result.add("allowUserKeys", VPackValue(_allowUserKeys));
-  result.add(VPackValue("shardKeys"));
-  result.openArray();
-  for (auto const& key : _shardKeys) {
-    result.add(VPackValue(key));
-  }
-  result.close(); // shardKeys
-  result.close(); // Base Object
+
+  result.add(VPackValue("indexes"));
+  getIndexesVPack(result, false);
 }
 
 void LogicalCollection::toVelocyPack(VPackBuilder& builder, bool includeIndexes,

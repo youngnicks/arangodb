@@ -140,6 +140,7 @@ GOLD=0
 SANITIZE=0
 VERBOSE=0
 MSVC=
+ENTERPRISE_GIT_URL=
 
 case "$1" in
     standard)
@@ -311,6 +312,13 @@ while [ $# -gt 0 ];  do
             CXGCC=1
             shift
             ;;
+
+        --enterprise)
+            shift
+            ENTERPRISE_GIT_URL=$1
+            shift
+            CONFIGURE_OPTIONS="${CONFIGURE_OPTIONS} -DUSE_ENTERPRISE=On"
+            ;;
         *)
             echo "Unknown option: $1"
             exit 1
@@ -452,6 +460,27 @@ if test ${CLEAN_IT} -eq 1; then
 fi
 
 SRC=`pwd`
+
+if test -n "${ENTERPRISE_GIT_URL}" ; then
+    GITSHA=`git log -n1 --pretty='%h'`
+    if git describe --exact-match --tags ${GITSHA}; then
+        GITARGS=`git describe --exact-match --tags ${GITSHA}`
+        echo "I'm on tag: ${GITARGS}"
+    else
+        GITARGS=`git branch --no-color -q|sed "s;\* *;;"`        
+        echo "I'm on Branch: ${GITARGS}"
+    fi
+    # clean up if we're commanded to:
+    if test -d enterprise -a ${CLEAN_IT} -eq 1; then
+        rm -rf enterprise
+    fi
+    if test ! -d enterprise; then
+        git clone ${ENTERPRISE_GIT_URL} enterprise
+    fi
+    (cd enterprise; git checkout master; git pull --all; git checkout ${GITARGS} )
+fi
+
+
 
 test -d ${BUILD_DIR} || mkdir ${BUILD_DIR}
 cd ${BUILD_DIR}
