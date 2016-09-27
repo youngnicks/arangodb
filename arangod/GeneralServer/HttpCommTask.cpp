@@ -144,7 +144,7 @@ void HttpCommTask::addResponse(HttpResponse* response) {
 
   // write body
   if (_requestType != rest::RequestType::HEAD) {
-      buffer->appendText(response->body());
+    buffer->appendText(response->body());
   }
 
   buffer->ensureNullTerminated();
@@ -423,8 +423,6 @@ bool HttpCommTask::processRead() {
   // readRequestBody might have changed, so cannot use else
   if (_readRequestBody) {
     if (_readBuffer.length() - _bodyPosition < _bodyLength) {
-      // TODO armKeepAliveTimeout();
-
       // let client send more
       return false;
     }
@@ -507,14 +505,11 @@ bool HttpCommTask::processRead() {
     LOG(DEBUG) << "no keep-alive, connection close requested by client";
     _closeRequested = true;
 
-#pragma message("TODO")
-#if 0
-  } else if (_keepAliveTimeout <= 0.0) {
+  } else if (!_useKeepAliveTimeout) {
     // if keepAliveTimeout was set to 0.0, we'll close even keep-alive
     // connections immediately
     LOG(DEBUG) << "keep-alive disabled by admin";
     _closeRequested = true;
-#endif
   }
 
   // we keep the connection open in all other cases (HTTP 1.1 or Keep-Alive

@@ -84,6 +84,7 @@ void GeneralCommTask::executeRequest(
   std::shared_ptr<RestHandler> handler(
       GeneralServerFeature::HANDLER_FACTORY->createHandler(
           std::move(request), std::move(response)));
+  // TODO add statistics
 
   if (handler == nullptr) {
     LOG(TRACE) << "no handler is known, giving up";
@@ -172,9 +173,10 @@ bool GeneralCommTask::handleRequest(std::shared_ptr<RestHandler> handler) {
 
   auto self = shared_from_this();
   std::unique_ptr<Job> job(
-      new Job(_server, std::move(handler), [self, this](std::shared_ptr<RestHandler> h) {
-        handleRequestDirectly(h);
-      }));
+      new Job(_server, std::move(handler),
+              [self, this](std::shared_ptr<RestHandler> h) {
+                handleRequestDirectly(h);
+              }));
 
   bool ok =
       SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, std::move(job));
@@ -233,13 +235,13 @@ bool GeneralCommTask::handleRequestAsync(std::shared_ptr<RestHandler> handler,
   auto self = shared_from_this();
 
   std::unique_ptr<Job> job(
-              new Job(_server, std::move(handler),
-                      [self, this](std::shared_ptr<RestHandler> h) {
-                        JobGuard guard(_loop);
-                        guard.block();
+      new Job(_server, std::move(handler),
+              [self, this](std::shared_ptr<RestHandler> h) {
+                JobGuard guard(_loop);
+                guard.block();
 
-                        h->asyncRunEngine();
-                      }));
+                h->asyncRunEngine();
+              }));
 
   return SchedulerFeature::SCHEDULER->jobQueue()->queue(queue, std::move(job));
 }

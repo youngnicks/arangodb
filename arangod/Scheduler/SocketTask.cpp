@@ -46,7 +46,7 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
       _connectionInfo(connectionInfo),
       _readBuffer(TRI_UNKNOWN_MEM_ZONE, READ_BLOCK_SIZE + 1, false),
       _peer(std::move(socket)),
-      _useAliveTimeout(keepAliveTimeout > 0),
+      _useKeepAliveTimeout(keepAliveTimeout > 0),
       _keepAliveTimeout(static_cast<long>(keepAliveTimeout * 1000)),
       _keepAliveTimer(_peer->_socket.get_io_service(), _keepAliveTimeout) {
   ConnectionStatisticsAgent::acquire();
@@ -286,7 +286,7 @@ void SocketTask::closeStream() {
 // --SECTION--                                                   private methods
 // -----------------------------------------------------------------------------
 void SocketTask::resetKeepAlive(boost::system::error_code& err) {
-  if (_useAliveTimeout) {
+  if (_useKeepAliveTimeout) {
     _keepAliveTimer.expires_from_now(_keepAliveTimeout, err);
     auto self = shared_from_this();
     _keepAliveTimer.async_wait(
