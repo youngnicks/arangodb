@@ -102,8 +102,12 @@ void SocketTask::start() {
     return;
   }
 
-  LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "starting communication on "
-                                          << _peer->_socket.native_handle();
+  LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+      << "starting communication between server <-> client on SocketTask: "
+      << _peer->_socket.native_handle() << "\n"
+      << _connectionInfo.serverAddress << ":" << _connectionInfo.serverPort
+      << " <-> " << _connectionInfo.clientAddress << ":"
+      << _connectionInfo.clientPort;
 
   auto self = shared_from_this();
   _loop._ioService->post([self, this]() { asyncReadSome(); });
