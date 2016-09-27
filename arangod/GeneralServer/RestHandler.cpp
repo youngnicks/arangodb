@@ -193,6 +193,7 @@ int RestHandler::runEngine(bool synchron) {
 
       switch (result->state()) {
         case RestStatusElement::State::DONE:
+          _engine.setState(RestEngine::State::FINALIZE);
           _storeResult(this);
           break;
 
