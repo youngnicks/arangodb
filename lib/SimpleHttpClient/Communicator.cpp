@@ -389,7 +389,6 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
 void Communicator::transformResult(CURL* handle, HeadersInProgress&& responseHeaders, std::unique_ptr<StringBuffer> responseBody, HttpResponse* response) {
   response->body().swap(responseBody.get());
   response->setHeaders(std::move(responseHeaders));
-  responseBody.release();
 }
 
 size_t Communicator::readBody(void* data, size_t size, size_t nitems, void* userp) {
@@ -501,13 +500,8 @@ void Communicator::abortRequest(Ticket ticketId) {
   if (handle == _handlesInProgress.end()) {
     return;
   }
-  RequestInProgress* rip = nullptr;
-  curl_easy_getinfo(handle->second->_handle, CURLINFO_PRIVATE, &rip);
-  if (rip == nullptr) {
-    return;
-  }
-  rip->_callbacks._onError(TRI_COMMUNICATOR_REQUEST_ABORTED, {nullptr});
-  _handlesInProgress.erase(rip->_ticketId);
+  handle->second->_rip->_callbacks._onError(TRI_COMMUNICATOR_REQUEST_ABORTED, {nullptr});
+  _handlesInProgress.erase(ticketId);
 }
 
 void Communicator::abortRequests() {
