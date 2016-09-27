@@ -25,7 +25,9 @@
 #define ARANGOD_VOCBASE_REVISION_CACHE_CHUNK_ALLOCATOR_H 1
 
 #include "Basics/Common.h"
+#include "Basics/ConditionVariable.h"
 #include "Basics/ReadWriteLock.h"
+#include "Basics/Thread.h"
 #include "VocBase/RevisionCacheChunk.h"
 
 namespace arangodb {
@@ -45,10 +47,12 @@ class RevisionCacheChunkAllocator {
   uint64_t totalAllocated();
 
   /// @brief order a new chunk
-  RevisionCacheChunk* orderChunk(uint32_t targetSize);
+  RevisionCacheChunk* orderChunk(uint32_t targetSize, bool& hasMemoryPressure);
 
   /// @brief return an unused chunk
   void returnChunk(RevisionCacheChunk* chunk);
+
+  bool garbageCollect();
 
  private:
   /// @brief calculate the effective size for a new chunk
@@ -69,6 +73,21 @@ class RevisionCacheChunkAllocator {
 
   // total number of bytes allocated by chunks
   uint64_t _totalAllocated;
+};
+
+class RevisionCacheGCThread : public Thread {
+ public:
+  explicit RevisionCacheGCThread(RevisionCacheChunkAllocator*);
+  ~RevisionCacheGCThread() { shutdown(); }
+
+  void beginShutdown() override;
+ 
+ protected:
+  void run() override;
+
+ private:
+  RevisionCacheChunkAllocator* _allocator;
+  basics::ConditionVariable _condition;
 };
 
 } // namespace arangodb

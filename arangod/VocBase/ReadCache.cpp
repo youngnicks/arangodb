@@ -163,7 +163,8 @@ ReadCachePosition ReadCache::insertAndLease(TRI_voc_rid_t revisionId, uint8_t co
       MUTEX_LOCKER(locker, _mutex);
 
       if (_writeChunk == nullptr) {
-        _writeChunk = _allocator->orderChunk(size);
+        bool hasMemoryPressure = false;
+        _writeChunk = _allocator->orderChunk(size, hasMemoryPressure);
         TRI_ASSERT(_writeChunk != nullptr);
         _totalAllocated += _writeChunk->size();
       }

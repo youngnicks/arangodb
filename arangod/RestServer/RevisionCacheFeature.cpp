@@ -57,7 +57,7 @@ void RevisionCacheFeature::validateOptions(std::shared_ptr<ProgramOptions> optio
     LOG(FATAL) << "value for '--database.revision-cache-chunk-size' is too low";
     FATAL_ERROR_EXIT();
   }
-  if (_chunkSize > 64 * 1024 * 1024) {
+  if (_chunkSize > 128 * 1024 * 1024) {
     LOG(FATAL) << "value for '--database.revision-cache-chunk-size' is too high";
     FATAL_ERROR_EXIT();
   }
@@ -75,6 +75,25 @@ void RevisionCacheFeature::validateOptions(std::shared_ptr<ProgramOptions> optio
 void RevisionCacheFeature::prepare() {
   _allocator.reset(new RevisionCacheChunkAllocator(_chunkSize, _targetSize));
   ALLOCATOR = _allocator.get();
+}
+
+void RevisionCacheFeature::beginShutdown() {
+  _gcThread->beginShutdown();
+}
+
+void RevisionCacheFeature::start() {
+  _gcThread.reset(new RevisionCacheGCThread(_allocator.get()));
+  if (!_gcThread->start()) {
+    LOG(FATAL) << "could not start garbage collection thread";
+    FATAL_ERROR_EXIT();
+  }
+}
+
+void RevisionCacheFeature::stop() {
+  while (_gcThread->isRunning()) {
+    usleep(10000);
+  }
+  _gcThread.reset();
 }
 
 void RevisionCacheFeature::unprepare() {

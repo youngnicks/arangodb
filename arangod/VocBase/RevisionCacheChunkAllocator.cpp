@@ -22,8 +22,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "RevisionCacheChunkAllocator.h"
-#include "Basics/WriteLocker.h"
+#include "Basics/ConditionLocker.h"
 #include "Basics/ReadLocker.h"
+#include "Basics/WriteLocker.h"
 
 using namespace arangodb;
 
@@ -52,7 +53,9 @@ uint64_t RevisionCacheChunkAllocator::totalAllocated() {
   return _totalAllocated;
 }
 
-RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(uint32_t targetSize) {
+RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(uint32_t targetSize, bool& hasMemoryPressure) {
+  hasMemoryPressure = false;
+
   {
     // first check if there's a chunk ready on the freelist
     READ_LOCKER(locker, _chunksLock);
@@ -68,17 +71,21 @@ RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(uint32_t targetSize)
   uint32_t const size = newChunkSize(targetSize);
   auto c = std::make_unique<RevisionCacheChunk>(size);
 
-  WRITE_LOCKER(locker, _chunksLock);
-  // check freelist again
-  if (!_freeList.empty()) {
-    // a free chunk arrived on the freelist
-    RevisionCacheChunk* chunk = _freeList.back();
-    _freeList.pop_back();
-    return chunk;
+  {
+    WRITE_LOCKER(locker, _chunksLock);
+    // check freelist again
+    if (!_freeList.empty()) {
+      // a free chunk arrived on the freelist
+      RevisionCacheChunk* chunk = _freeList.back();
+      _freeList.pop_back();
+      return chunk;
+    }
+
+    // no chunk arrived on the freelist, no return what we created
+    _totalAllocated += size;
+    hasMemoryPressure = (_totalAllocated > _totalTargetSize);
   }
 
-  // no chunk arrived on the freelist, no return what we created
-  _totalAllocated += size;
   return c.release();
 }
 
@@ -90,7 +97,7 @@ void RevisionCacheChunkAllocator::returnChunk(RevisionCacheChunk* chunk) {
     WRITE_LOCKER(locker, _chunksLock);
 
     try {
-      if (_freeList.size() < 16 && _totalAllocated < _totalTargetSize) {
+      if (_totalAllocated < _totalTargetSize) {
         // put chunk back onto the freelist
         _freeList.push_back(chunk);
         freeChunk = false;
@@ -110,7 +117,42 @@ void RevisionCacheChunkAllocator::returnChunk(RevisionCacheChunk* chunk) {
   }
 }
 
+bool RevisionCacheChunkAllocator::garbageCollect() {
+  RevisionCacheChunk* chunk = nullptr;
+
+  {
+    WRITE_LOCKER(locker, _chunksLock);
+    if (!_freeList.empty() && _totalAllocated > _totalTargetSize) {
+      chunk = _freeList.back();
+      _freeList.pop_back();
+    }
+  }
+
+  delete chunk;
+  return (chunk != nullptr);
+}
+
 /// @brief calculate the effective size for a new chunk
 uint32_t RevisionCacheChunkAllocator::newChunkSize(uint32_t dataLength) const noexcept {
   return (std::max)(_defaultChunkSize, RevisionCacheChunk::alignSize(dataLength));
 }
+
+RevisionCacheGCThread::RevisionCacheGCThread(RevisionCacheChunkAllocator* allocator)
+        : Thread("ReadCacheCleaner"), _allocator(allocator) {}
+
+void RevisionCacheGCThread::beginShutdown() {
+  Thread::beginShutdown();
+
+  CONDITION_LOCKER(guard, _condition);
+  _condition.signal();
+}
+
+void RevisionCacheGCThread::run() {
+  while (!isStopping()) {
+    if (!_allocator->garbageCollect()) {
+      CONDITION_LOCKER(guard, _condition);
+      guard.wait(1000000);
+    }
+  }
+}
+
