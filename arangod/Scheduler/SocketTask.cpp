@@ -47,7 +47,7 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
       _readBuffer(TRI_UNKNOWN_MEM_ZONE, READ_BLOCK_SIZE + 1, false),
       _peer(std::move(socket)),
       _useAliveTimeout(keepAliveTimeout > 0),
-      _keepAliveTimeout(keepAliveTimeout * 1000),
+      _keepAliveTimeout(static_cast<long>(keepAliveTimeout * 1000)),
       _keepAliveTimer(_peer->_socket.get_io_service(), _keepAliveTimeout) {
   ConnectionStatisticsAgent::acquire();
   connectionStatisticsAgentSetStart();
@@ -71,7 +71,7 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
       _peer->_sslSocket.handshake(
           boost::asio::ssl::stream_base::handshake_type::server, ec);
     } while (ec.value() == boost::asio::error::would_block);
-    _keepAliveTimer.expires_from_now(_keepAliveTimeout, ec);
+    resetKeepAlive(ec);
 
     if (ec) {
       LOG_TOPIC(ERR, Logger::COMMUNICATION)
@@ -88,16 +88,8 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
 // -----------------------------------------------------------------------------
 
 void SocketTask::start() {
-  if (_useAliveTimeout) {
-    auto self = shared_from_this();
-    _keepAliveTimer.async_wait(
-        [this, self](const boost::system::error_code& error) {
-          if (!error) {
-            // timeout
-            closeStream();
-          }
-        });
-  }
+  boost::system::error_code err;
+  resetKeepAlive(err);
 
   if (_closedSend || _closedReceive) {
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "cannot start, channel closed";
@@ -216,7 +208,7 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
 
 void SocketTask::completedWriteBuffer() {
   boost::system::error_code ec;
-  _keepAliveTimer.expires_from_now(_keepAliveTimeout, ec);
+  resetKeepAlive(ec);
   if (ec) {
     closeStream();
   }
@@ -290,6 +282,21 @@ void SocketTask::closeStream() {
 // -----------------------------------------------------------------------------
 // --SECTION--                                                   private methods
 // -----------------------------------------------------------------------------
+void SocketTask::resetKeepAlive(boost::system::error_code& err) {
+  if (_useAliveTimeout) {
+    _keepAliveTimer.expires_from_now(_keepAliveTimeout, err);
+    auto self = shared_from_this();
+    _keepAliveTimer.async_wait(
+        [this, self](const boost::system::error_code& error) {
+          LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "keepAliveTimeout "
+                                                  << error.message();
+          if (!error) {
+            // timeout
+            closeStream();
+          }
+        });
+  }
+}
 
 bool SocketTask::reserveMemory() {
   if (_readBuffer.reserve(READ_BLOCK_SIZE + 1) == TRI_ERROR_OUT_OF_MEMORY) {
@@ -326,7 +333,7 @@ bool SocketTask::trySyncRead() {
     return false;  // should not happen
   }
 
-  _keepAliveTimer.expires_from_now(_keepAliveTimeout, err);
+  resetKeepAlive(err);
   _readBuffer.increaseLength(bytesRead);
   if (err) {
     if (err == boost::asio::error::would_block) {
@@ -432,7 +439,7 @@ void SocketTask::asyncReadSome() {
         closeReceiveStream();
       } else {
         boost::system::error_code err;
-        _keepAliveTimer.expires_from_now(_keepAliveTimeout, err);
+        resetKeepAlive(err);
         if (err) {
           closeReceiveStream();
         }
