@@ -98,8 +98,6 @@ class GeneralCommTask : public SocketTask {
   }
 
  protected:
-  virtual void handleChunk(char const*, size_t) = 0;
-
   virtual std::unique_ptr<GeneralResponse> createResponse(
       rest::ResponseCode, uint64_t messageId) = 0;
 
@@ -127,8 +125,6 @@ class GeneralCommTask : public SocketTask {
  private:
   void handleTimeout() /* override final */ { /* _clientClosed = true; */
   }
-
-  void signalTask(std::unique_ptr<TaskData>) override;
 
   bool handleRequest(std::shared_ptr<RestHandler>);
   void handleRequestDirectly(std::shared_ptr<RestHandler>);

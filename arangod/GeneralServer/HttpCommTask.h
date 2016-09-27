@@ -37,8 +37,6 @@ class HttpCommTask : public GeneralCommTask {
  protected:
   bool processRead() override;
 
-  void handleChunk(char const*, size_t) override final;
-
   std::unique_ptr<GeneralResponse> createResponse(
       rest::ResponseCode, uint64_t messageId) override final;
 
@@ -57,10 +55,12 @@ class HttpCommTask : public GeneralCommTask {
 
   void addResponse(HttpResponse*);
 
-  void finishedChunked();
   // check the content-length header of a request and fail it is broken
   bool checkContentLength(HttpRequest*, bool expectContentLength);
-  std::string authenticationRealm() const;  // returns the authentication realm
+
+  // returns the authentication realm
+  std::string authenticationRealm() const;
+
   rest::ResponseCode authenticateRequest(HttpRequest*);
 
  private:
@@ -84,9 +84,6 @@ class HttpCommTask : public GeneralCommTask {
 
   // authentication real
   std::string const _authenticationRealm;
-
-  // true if within a chunked response
-  bool _isChunked = false;
 
   // true if request is complete but not handled
   bool _requestPending = false;

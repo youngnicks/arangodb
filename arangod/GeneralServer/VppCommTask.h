@@ -60,8 +60,6 @@ class VppCommTask : public GeneralCommTask {
   // if message is complete execute a request
   bool processRead() override;
 
-  void handleChunk(char const*, size_t) override final {}
-
   std::unique_ptr<GeneralResponse> createResponse(
       rest::ResponseCode, uint64_t messageId) override final;
 

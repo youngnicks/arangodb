@@ -35,7 +35,6 @@
 #include "Basics/socket-utils.h"
 #include "Logger/Logger.h"
 #include "Scheduler/EventLoop.h"
-#include "Scheduler/TaskData.h"
 
 namespace arangodb {
 class JobQueue;
@@ -74,9 +73,6 @@ class Scheduler {
   void beginShutdown();
   bool isStopping() { return _stopping; }
   void shutdown();
-
- public:
-  void signalTask(std::unique_ptr<TaskData>);
 
  private:
   static void initializeSignalHandlers();

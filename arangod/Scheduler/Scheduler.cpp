@@ -38,7 +38,6 @@
 #include "Rest/GeneralResponse.h"
 #include "Scheduler/JobQueue.h"
 #include "Scheduler/Task.h"
-#include "Scheduler/TaskData.h"
 
 using namespace arangodb;
 using namespace arangodb::basics;
@@ -356,14 +355,6 @@ void Scheduler::shutdown() {
   }
 
   deleteOldThreads();
-}
-
-void Scheduler::signalTask(std::unique_ptr<TaskData> data) {
-  TaskData* td = data.release();
-  _ioService->dispatch([td]() {
-    std::unique_ptr<TaskData> data(td);
-    data->_task->signalTask(std::move(data));
-  });
 }
 
 void Scheduler::initializeSignalHandlers() {

@@ -103,7 +103,6 @@ void HttpCommTask::handleSimpleError(rest::ResponseCode code, int errorNum,
 
 void HttpCommTask::addResponse(HttpResponse* response) {
   _requestPending = false;
-  _isChunked = false;
 
   // CORS response handling
   if (!_origin.empty()) {
@@ -140,23 +139,12 @@ void HttpCommTask::addResponse(HttpResponse* response) {
   auto buffer = std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE,
                                                responseBodyLength + 128, false);
 
-  // TODO: move this to HttpResponse
-
   // write header
   response->writeHeader(buffer.get());
 
   // write body
   if (_requestType != rest::RequestType::HEAD) {
-    if (_isChunked) {
-      if (0 != responseBodyLength) {
-        buffer->appendHex(response->body().length());
-        buffer->appendText(TRI_CHAR_LENGTH_PAIR("\r\n"));
-        buffer->appendText(response->body());
-        buffer->appendText(TRI_CHAR_LENGTH_PAIR("\r\n"));
-      }
-    } else {
       buffer->appendText(response->body());
-    }
   }
 
   buffer->ensureNullTerminated();
@@ -613,17 +601,6 @@ void HttpCommTask::processRequest(std::unique_ptr<HttpRequest> request) {
   executeRequest(std::move(request), std::move(response));
 }
 
-void HttpCommTask::finishedChunked() {
-  auto buffer = std::make_unique<StringBuffer>(TRI_UNKNOWN_MEM_ZONE, 6, true);
-  buffer->appendText(TRI_CHAR_LENGTH_PAIR("0\r\n\r\n"));
-  buffer->ensureNullTerminated();
-
-  _isChunked = false;
-  _requestPending = false;
-
-  addWriteBuffer(std::move(buffer));
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 /// check the content-length header of a request and fail it is broken
 ////////////////////////////////////////////////////////////////////////////////
@@ -704,26 +681,6 @@ void HttpCommTask::processCorsOptions(std::unique_ptr<HttpRequest> request) {
   }
 
   processResponse(&response);
-}
-
-void HttpCommTask::handleChunk(char const* data, size_t len) {
-  if (!_isChunked) {
-    return;
-  }
-
-  if (0 == len) {
-    finishedChunked();
-  } else {
-    std::unique_ptr<StringBuffer> buffer(
-        new StringBuffer(TRI_UNKNOWN_MEM_ZONE, len));
-
-    buffer->appendHex(len);
-    buffer->appendText(TRI_CHAR_LENGTH_PAIR("\r\n"));
-    buffer->appendText(data, len);
-    buffer->appendText(TRI_CHAR_LENGTH_PAIR("\r\n"));
-
-    addWriteBuffer(std::move(buffer));
-  }
 }
 
 std::unique_ptr<GeneralResponse> HttpCommTask::createResponse(

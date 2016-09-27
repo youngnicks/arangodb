@@ -514,7 +514,6 @@ void GeneralServerFeature::defineHandlers() {
       "/_api/version", RestHandlerCreator<RestVersionHandler>::createNoData);
 
 #ifdef ARANGODB_ENABLE_MAINTAINER_MODE
-#warning TODO
   _handlerFactory->addHandler(
       "/_admin/demo-engine", RestHandlerCreator<RestDemoHandler>::createNoData);
 #endif

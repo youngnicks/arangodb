@@ -41,7 +41,6 @@
 #include "Scheduler/JobQueue.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
-#include "Scheduler/TaskData.h"
 
 using namespace arangodb;
 using namespace arangodb::basics;
@@ -147,31 +146,6 @@ void GeneralCommTask::processResponse(GeneralResponse* response) {
 // -----------------------------------------------------------------------------
 // --SECTION--                                                   private methods
 // -----------------------------------------------------------------------------
-
-void GeneralCommTask::signalTask(std::unique_ptr<TaskData> data) {
-  // data response
-  if (data->_type == TaskData::TASK_DATA_RESPONSE) {
-    data->RequestStatisticsAgent::transferTo(
-        getAgent(data->_response->messageId()));
-    processResponse(data->_response.get());
-  }
-
-  // data chunk
-  else if (data->_type == TaskData::TASK_DATA_CHUNK) {
-    handleChunk(data->_data.c_str(), data->_data.size());
-  }
-
-  // do not know, what to do - give up
-  else {
-    closeStream();
-  }
-
-  while (processRead()) {
-    if (_closeRequested) {
-      break;
-    }
-  }
-}
 
 bool GeneralCommTask::handleRequest(std::shared_ptr<RestHandler> handler) {
   if (handler->isDirect()) {

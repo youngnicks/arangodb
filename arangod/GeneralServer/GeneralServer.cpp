@@ -37,31 +37,10 @@
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
 #include "Scheduler/Task.h"
-#include "Scheduler/TaskData.h"
 
 using namespace arangodb;
 using namespace arangodb::basics;
 using namespace arangodb::rest;
-
-// -----------------------------------------------------------------------------
-// --SECTION--                                             static public methods
-// -----------------------------------------------------------------------------
-
-int GeneralServer::sendChunk(uint64_t taskId, std::string const& data) {
-#pragma message("TODO")
-#if 0
-  auto taskData = std::make_unique<TaskData>();
-
-  taskData->_taskId = taskId;
-  taskData->_loop = SchedulerFeature::SCHEDULER->lookupLoopById(taskId);
-  taskData->_type = TaskData::TASK_DATA_CHUNK;
-  taskData->_data = data;
-
-  SchedulerFeature::SCHEDULER->signalTask(taskData);
-#endif
-
-  return TRI_ERROR_NO_ERROR;
-}
 
 // -----------------------------------------------------------------------------
 // --SECTION--                                      constructors and destructors

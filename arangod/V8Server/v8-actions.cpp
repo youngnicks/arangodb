@@ -1305,34 +1305,6 @@ static void JS_GetCurrentResponse(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief sendChunk
-////////////////////////////////////////////////////////////////////////////////
-
-static void JS_SendChunk(v8::FunctionCallbackInfo<v8::Value> const& args) {
-  TRI_V8_TRY_CATCH_BEGIN(isolate);
-  v8::HandleScope scope(isolate);
-
-  if (args.Length() != 2) {
-    TRI_V8_THROW_EXCEPTION_USAGE("sendChunk(<id>, <value>)");
-  }
-
-  TRI_Utf8ValueNFC idStr(TRI_UNKNOWN_MEM_ZONE, args[0]);
-  uint64_t id = StringUtils::uint64(*idStr);
-
-  TRI_Utf8ValueNFC data(TRI_UNKNOWN_MEM_ZONE, args[1]);
-
-  int res = GeneralServer::sendChunk(id, *data);
-
-  if (res != TRI_ERROR_NO_ERROR && res != TRI_ERROR_TASK_NOT_FOUND) {
-    TRI_V8_THROW_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "cannot send chunk");
-  }
-
-  TRI_V8_RETURN(res == TRI_ERROR_NO_ERROR ? v8::True(isolate)
-                                          : v8::False(isolate));
-  TRI_V8_TRY_CATCH_END
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// @brief stores the V8 actions function inside the global variable
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -1362,8 +1334,6 @@ void TRI_InitV8Actions(v8::Isolate* isolate, v8::Handle<v8::Context> context) {
   TRI_AddGlobalFunctionVocbase(isolate, context,
                                TRI_V8_ASCII_STRING("SYS_REQUEST_PARTS"),
                                JS_RequestParts, true);
-  TRI_AddGlobalFunctionVocbase(
-      isolate, context, TRI_V8_ASCII_STRING("SYS_SEND_CHUNK"), JS_SendChunk);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

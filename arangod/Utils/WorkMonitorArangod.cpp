@@ -33,7 +33,6 @@
 #include "Logger/Logger.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
-#include "Scheduler/TaskData.h"
 #include "VocBase/vocbase.h"
 
 using namespace arangodb;

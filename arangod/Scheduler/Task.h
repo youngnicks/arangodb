@@ -54,9 +54,6 @@ class Task : public std::enable_shared_from_this<Task> {
   std::shared_ptr<arangodb::velocypack::Builder> toVelocyPack() const;
   void toVelocyPack(arangodb::velocypack::Builder&) const;
 
- public:
-  virtual void signalTask(std::unique_ptr<TaskData>) = 0;
-
  protected:
   EventLoop _loop;
   uint64_t const _taskId;

@@ -48,7 +48,6 @@ class GeneralListenTask : public ListenTask {
  protected:
   void handleConnected(std::unique_ptr<Socket>,
                        ConnectionInfo&&) override;
-  void signalTask(std::unique_ptr<TaskData>) override {}
 
  private:
   GeneralServer* _server;

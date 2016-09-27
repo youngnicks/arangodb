@@ -46,9 +46,6 @@ class GeneralServer {
   GeneralServer const& operator=(GeneralServer const&) = delete;
 
  public:
-  static int sendChunk(uint64_t, std::string const&);
-
- public:
   GeneralServer() = default;
   virtual ~GeneralServer();
 
