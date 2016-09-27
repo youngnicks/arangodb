@@ -221,7 +221,7 @@ actions.defineHttp({
     } catch (e) {}
 
     // Now get to work, first get the write lock on the Plan in the Agency:
-    var success = ArangoAgency.lockRead('Supervision', timeout);
+//    var success = ArangoAgency.lockRead('Supervision', timeout);
     if (!success) {
       actions.resultError(req, res, actions.HTTP_REQUEST_TIMEOUT, 0,
         'could not get a read lock on Plan in Agency');
@@ -240,7 +240,7 @@ actions.defineHttp({
 
       actions.resultOk(req, res, actions.HTTP_OK, {Health});
     } finally {
-      ArangoAgency.unlockRead('Supervision', timeout);
+      //ArangoAgency.unlockRead('Supervision', timeout);
     }
   }
 });
@@ -401,7 +401,7 @@ actions.defineHttp({
     } catch (e) {}
 
     // Now get to work, first get the write lock on the Plan in the Agency:
-    var success = ArangoAgency.lockRead('Plan', timeout);
+//    var success = ArangoAgency.lockRead('Plan', timeout);
     if (!success) {
       actions.resultError(req, res, actions.HTTP_REQUEST_TIMEOUT, 0,
         'could not get a read lock on Plan in Agency');
@@ -424,7 +424,7 @@ actions.defineHttp({
       actions.resultOk(req, res, actions.HTTP_OK, { primary: primary,
       secondary: oldValue });
     } finally {
-      ArangoAgency.unlockRead('Plan', timeout);
+      //ArangoAgency.unlockRead('Plan', timeout);
     }
   }
 });
@@ -516,7 +516,7 @@ actions.defineHttp({
     }
 
     // Now get to work, first get the write lock on the Plan in the Agency:
-    var success = ArangoAgency.lockWrite('Plan', ttl, timeout);
+//    var success = ArangoAgency.lockWrite('Plan', ttl, timeout);
     if (!success) {
       actions.resultError(req, res, actions.HTTP_REQUEST_TIMEOUT, 0,
         'could not get a write lock on Plan in Agency');
@@ -559,7 +559,7 @@ actions.defineHttp({
 
       actions.resultOk(req, res, actions.HTTP_OK, body);
     } finally {
-      ArangoAgency.unlockWrite('Plan', timeout);
+      //ArangoAgency.unlockWrite('Plan', timeout);
     }
   }
 });
@@ -692,7 +692,7 @@ actions.defineHttp({
     }
 
     // Now get to work, first get the write lock on the Plan in the Agency:
-    var success = ArangoAgency.lockWrite('Plan', ttl, timeout);
+ //   var success = ArangoAgency.lockWrite('Plan', ttl, timeout);
     if (!success) {
       actions.resultError(req, res, actions.HTTP_REQUEST_TIMEOUT, 0,
         'could not get a write lock on Plan in Agency');
@@ -773,7 +773,7 @@ actions.defineHttp({
       actions.resultOk(req, res, actions.HTTP_OK, {primary: body.secondary,
       secondary: body.primary});
     } finally {
-      ArangoAgency.unlockWrite('Plan', timeout);
+     // ArangoAgency.unlockWrite('Plan', timeout);
     }
   }
 });

@@ -30,11 +30,15 @@
 
 using namespace arangodb::consensus;
 
-FailedServer::FailedServer(Node const& snapshot, Agent* agent,
-                           std::string const& jobId, std::string const& creator,
+FailedServer::FailedServer(Node const& snapshot,
+                           Agent* agent,
+                           std::string const& jobId,
+                           std::string const& creator,
                            std::string const& agencyPrefix,
                            std::string const& server)
-    : Job(snapshot, agent, jobId, creator, agencyPrefix), _server(server) {
+  : Job(snapshot, agent, jobId, creator, agencyPrefix),
+    _server(server) {
+
   try {
     JOB_STATUS js = status();
     if (js == TODO) {
@@ -48,6 +52,7 @@ FailedServer::FailedServer(Node const& snapshot, Agent* agent,
     LOG_TOPIC(WARN, Logger::AGENCY) << e.what() << " " << __FILE__ << __LINE__;
     finish("DBServers/" + _server, false, e.what());
   }
+  
 }
 
 FailedServer::~FailedServer() {}
@@ -129,15 +134,24 @@ bool FailedServer::start() {
       auto cdatabase = current.at(database.first)->children();
 
       for (auto const& collptr : database.second->children()) {
+
         Node const& collection = *(collptr.second);
+        bool unconstrained = false;
+        try {
+          unconstrained =
+            collection("distributeShardsLike").slice().copyString().empty();
+        } catch (...) {}
 
         if (!cdatabase.find(collptr.first)->second->children().empty()) {
           Node const& collection = *(collptr.second);
           Node const& replicationFactor = collection("replicationFactor");
-          if (replicationFactor.slice().getUInt() > 1) {
+          
+          // Only if replicated and unconstrained
+          if (replicationFactor.slice().getUInt() > 1 && unconstrained) {
+            
             for (auto const& shard : collection("shards").children()) {
               VPackArrayIterator dbsit(shard.second->slice());
-
+              
               // Only proceed if leader and create job
               if ((*dbsit.begin()).copyString() != _server) {
                 continue;
@@ -151,12 +165,16 @@ bool FailedServer::start() {
           }
 
         } else {
+          
           for (auto const& shard : collection("shards").children()) {
-            UnassumedLeadership(_snapshot, _agent,
-                                _jobId + "-" + std::to_string(sub++), _jobId,
-                                _agencyPrefix, database.first, collptr.first,
-                                shard.first, _server);
+            if (unconstrained) {
+              UnassumedLeadership(_snapshot, _agent,
+                                  _jobId + "-" + std::to_string(sub++), _jobId,
+                                  _agencyPrefix, database.first, collptr.first,
+                                  shard.first, _server);
+            }
           }
+          
         }
       }
     }

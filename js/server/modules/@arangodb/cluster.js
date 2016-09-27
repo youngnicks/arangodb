@@ -1600,7 +1600,7 @@ var handlePlanChange = function (plan, current) {
   if (!isCluster() || isCoordinator() || !global.ArangoServerState.initialized()) {
     return true;
   }
-
+  
   let versions = {
     plan: plan.Version,
     current: current.Version
@@ -1609,13 +1609,13 @@ var handlePlanChange = function (plan, current) {
   // ////////////////////////////////////////////////////////////////////////////
   // / @brief execute an action under a write-lock
   // ////////////////////////////////////////////////////////////////////////////
-
+  
   function writeLocked (lockInfo, cb, args) {
     var timeout = lockInfo.timeout;
     if (timeout === undefined) {
       timeout = 60;
     }
-
+    
     var ttl = lockInfo.ttl;
     if (ttl === undefined) {
       ttl = 120;
@@ -1624,26 +1624,26 @@ var handlePlanChange = function (plan, current) {
       ttl *= 10;
       timeout *= 10;
     }
-
-    global.ArangoAgency.lockWrite(lockInfo.part, ttl, timeout);
-
+    
+    //global.ArangoAgency.lockWrite(lockInfo.part, ttl, timeout);
+    
     try {
       cb.apply(null, args);
       global.ArangoAgency.increaseVersion(lockInfo.part + '/Version');
-
+      
       let version = global.ArangoAgency.get(lockInfo.part + '/Version');
       versions[lockInfo.part.toLowerCase()] = version.arango[lockInfo.part].Version;
-
-      global.ArangoAgency.unlockWrite(lockInfo.part, timeout);
+      
+      //global.ArangoAgency.unlockWrite(lockInfo.part, timeout);
     } catch (err) {
-      global.ArangoAgency.unlockWrite(lockInfo.part, timeout);
+      //global.ArangoAgency.unlockWrite(lockInfo.part, timeout);
       throw err;
     }
   }
-
+  
   try {
     versions.success = handleChanges(plan, current, writeLocked);
-
+    
     console.debug('plan change handling successful');
   } catch (err) {
     console.error('error details: %s', JSON.stringify(err));

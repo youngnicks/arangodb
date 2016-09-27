@@ -110,14 +110,13 @@ bool FailedLeader::start() {
       planColPrefix + _database + "/" + _collection + "/shards/" + _shard;
   std::string curPath =
       curColPrefix + _database + "/" + _collection + "/" + _shard + "/servers";
-
+  
   Node const& current = _snapshot(curPath);
-
+  
   if (current.slice().length() == 1) {
-    LOG_TOPIC(ERR, Logger::AGENCY) << "Failed to change leadership for shard " +
-                                          _shard + " from " + _from + " to " +
-                                          _to + ". No in-sync followers:" +
-                                          current.slice().toJson();
+    LOG_TOPIC(ERR, Logger::AGENCY)
+      << "Failed to change leadership for shard " + _shard + " from " + _from
+      + " to " + _to + ". No in-sync followers:" + current.slice().toJson();
     return false;
   }
 
@@ -130,8 +129,8 @@ bool FailedLeader::start() {
     try {
       _snapshot(toDoPrefix + _jobId).toBuilder(todo);
     } catch (std::exception const&) {
-      LOG_TOPIC(INFO, Logger::AGENCY) << "Failed to get key " + toDoPrefix +
-                                             _jobId + " from agency snapshot";
+      LOG_TOPIC(INFO, Logger::AGENCY)
+        << "Failed to get key " + toDoPrefix + _jobId + " from agency snapshot";
       return false;
     }
   } else {
@@ -215,7 +214,6 @@ JOB_STATUS FailedLeader::status() {
   auto status = exists();
 
   if (status != NOTFOUND) {  // Get job details from agency
-
     try {
       _database = _snapshot(pos[status] + _jobId + "/database").getString();
       _collection = _snapshot(pos[status] + _jobId + "/collection").getString();
