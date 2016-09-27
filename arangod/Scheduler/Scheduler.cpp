@@ -85,7 +85,7 @@ namespace {
 class SchedulerThread : public Thread {
  public:
   SchedulerThread(Scheduler* scheduler, boost::asio::io_service* service)
-      : Thread("Scheduler2"), _scheduler(scheduler), _service(service) {}
+      : Thread("Scheduler"), _scheduler(scheduler), _service(service) {}
 
   ~SchedulerThread() { shutdown(); }
 
