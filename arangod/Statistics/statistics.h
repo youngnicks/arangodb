@@ -28,6 +28,7 @@
 #include "Rest/HttpRequest.h"
 #include "Statistics/figures.h"
 
+#include <iomanip>
 #include <sstream>
 #include <string>
 
@@ -81,14 +82,21 @@ struct TRI_request_statistics_t {
 
   std::string to_string() {
     std::stringstream ss;
-    ss << "_readStart      " << _readStart << "_readEnd        " << _readEnd
-       << "_queueStart     " << _queueStart << "_queueEnd       " << _queueEnd
-       << "_requestStart   " << _requestStart << "_requestEnd     "
-       << _requestEnd << "_writeStart     " << _writeStart << "_writeEnd       "
-       << _writeEnd << "_receivedBytes  " << _receivedBytes
-       << "_sentBytes      " << _sentBytes << "_async          " << _async
-       << "_tooLarge       " << _tooLarge << "_executeError   " << _executeError
-       << "_ignore         " << _ignore;
+    ss << std::boolalpha << std::setprecision(10) << "statistics      "
+       << std::endl
+       << "_readStart      " << _readStart << std::endl
+       << "_queueStart     " << _queueStart << std::endl
+       << "_queueEnd       " << _queueEnd << std::endl
+       << "_requestStart   " << _requestStart << std::endl
+       << "_requestEnd     " << _requestEnd << std::endl
+       << "_writeStart     " << _writeStart << std::endl
+       << "_writeEnd       " << _writeEnd << std::endl
+       << "_receivedBytes  " << _receivedBytes << std::endl
+       << "_sentBytes      " << _sentBytes << std::endl
+       << "_async          " << _async << std::endl
+       << "_tooLarge       " << _tooLarge << std::endl
+       << "_executeError   " << _executeError << std::endl
+       << "_ignore         " << _ignore << std::endl;
 
     return ss.str();
   }
