@@ -134,9 +134,15 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
                                                "already closed";
 
     delete buffer;
-
     if (stat) {
+      LOG_TOPIC(TRACE, Logger::REQUESTS)
+          << "SocketTask::addWriteBuffer - Statistics release: "
+          << stat->to_string();
       TRI_ReleaseRequestStatistics(stat);
+    } else {
+      LOG_TOPIC(TRACE, Logger::REQUESTS) << "SocketTask::addWriteBuffer - "
+                                            "Statistics release: nullptr - "
+                                            "nothing to realease";
     }
 
     return;
@@ -222,9 +228,16 @@ void SocketTask::completedWriteBuffer() {
   _writeBuffer = nullptr;
 
   if (_writeBufferStatistics != nullptr) {
+    LOG_TOPIC(TRACE, Logger::REQUESTS)
+        << "SocketTask::addWriteBuffer - Statistics release: "
+        << _writeBufferStatistics->to_string();
     _writeBufferStatistics->_writeEnd = TRI_StatisticsTime();
     TRI_ReleaseRequestStatistics(_writeBufferStatistics);
     _writeBufferStatistics = nullptr;
+  } else {
+    LOG_TOPIC(TRACE, Logger::REQUESTS) << "SocketTask::addWriteBuffer - "
+                                          "Statistics release: nullptr - "
+                                          "nothing to realease";
   }
 
   if (_writeBuffers.empty()) {

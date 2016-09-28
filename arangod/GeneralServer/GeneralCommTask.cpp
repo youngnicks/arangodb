@@ -84,7 +84,9 @@ void GeneralCommTask::executeRequest(
   std::shared_ptr<RestHandler> handler(
       GeneralServerFeature::HANDLER_FACTORY->createHandler(
           std::move(request), std::move(response)));
-  // TODO add statistics
+
+  // transfer statistics into handler
+  getAgent(messageId)->transferTo(handler.get());
 
   if (handler == nullptr) {
     LOG(TRACE) << "no handler is known, giving up";
@@ -96,7 +98,8 @@ void GeneralCommTask::executeRequest(
   bool ok = false;
 
   if (found && (asyncExecution == "true" || asyncExecution == "store")) {
-    getAgent(messageId)->requestStatisticsAgentSetAsync();
+    // getAgent(messageId)->requestStatisticsAgentSetAsync();
+    handler->requestStatisticsAgentSetAsync();
     uint64_t jobId = 0;
 
     if (asyncExecution == "store") {
@@ -198,6 +201,7 @@ void GeneralCommTask::handleRequestDirectly(
 
   auto self = shared_from_this();
   handler->initEngine(_loop, agent, [self, this](RestHandler* h) {
+    h->transferTo(getAgent(h->messageId()));
     addResponse(h->response());
   });
 
@@ -223,7 +227,9 @@ bool GeneralCommTask::handleRequestAsync(std::shared_ptr<RestHandler> handler,
   }
 
   if (store) {
-    handler->initEngine(_loop, nullptr, [](RestHandler* handler) {
+    auto self = shared_from_this();
+    handler->initEngine(_loop, nullptr, [this, self](RestHandler* handler) {
+      handler->transferTo(getAgent(handler->messageId()));
       GeneralServerFeature::JOB_MANAGER->finishAsyncJob(handler);
     });
   } else {

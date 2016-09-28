@@ -83,7 +83,7 @@ void WorkMonitor::run() {
         }
       }
 
-      // handle work descriptions requests
+      // handle work descriptions requests -- hac - handler and callback
       std::pair<std::shared_ptr<rest::RestHandler>, std::function<void()>>* hac;
 
       while (_workOverview.pop(hac)) {
@@ -112,7 +112,7 @@ void WorkMonitor::run() {
         builder.close();
 
         addWorkOverview(hac->first, builder.steal());
-        hac->second();
+        hac->second();  // callback
         delete hac;
       }
     } catch (...) {
@@ -200,6 +200,9 @@ void WorkMonitor::vpackHandler(VPackBuilder* b, WorkDescription* desc) {
 
   if (handler->_statistics != nullptr) {
     b->add("startTime", VPackValue(handler->_statistics->_requestStart));
+  } else {
+    LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+        << "WorkMonitor::vpackHandler - missing statistics";
   }
 
   auto& info = request->connectionInfo();
@@ -235,7 +238,7 @@ void WorkMonitor::addWorkOverview(
 // -----------------------------------------------------------------------------
 
 HandlerWorkStack::HandlerWorkStack(std::shared_ptr<RestHandler> handler)
-  : _handler(handler) {
+    : _handler(handler) {
   WorkMonitor::pushHandler(_handler);
 }
 
