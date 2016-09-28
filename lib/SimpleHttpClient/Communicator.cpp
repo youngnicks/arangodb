@@ -377,6 +377,7 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
     case CURLE_OPERATION_TIMEDOUT:
     case CURLE_RECV_ERROR:
     case CURLE_GOT_NOTHING:
+      LOG(ERR) << "timeouted request " << rc << " Destination " << rip->_destination.url() << " Communicator(" << rip->_ticketId << ") // Total time " << (TRI_microtime() - rip->_startTime);
       rip->_callbacks._onError(TRI_ERROR_CLUSTER_TIMEOUT, {nullptr});
       break;
     default:
