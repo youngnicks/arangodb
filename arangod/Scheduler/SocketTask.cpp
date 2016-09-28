@@ -71,7 +71,6 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
       _peer->_sslSocket.handshake(
           boost::asio::ssl::stream_base::handshake_type::server, ec);
     } while (ec.value() == boost::asio::error::would_block);
-    resetKeepAlive(ec);
 
     if (ec) {
       LOG_TOPIC(ERR, Logger::COMMUNICATION)
