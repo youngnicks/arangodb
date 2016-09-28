@@ -244,6 +244,8 @@ else ()
   set(MAKE make)
 endif ()
 
+find_package(CURL REQUIRED)
+include_directories(${CURL_INCLUDE_DIRS})
 find_package(PythonInterp 2 EXACT REQUIRED)
 get_filename_component(PYTHON_EXECUTABLE "${PYTHON_EXECUTABLE}" REALPATH)
 
@@ -887,6 +889,7 @@ list(INSERT SYSTEM_LIBRARIES 0
   ${ICU_LIBS}
   ${OPENSSL_LIBRARIES}
   ${BASE_LIBS}
+  ${CURL_LIBRARIES}
   ${CMAKE_DL_LIBS}
   ${SYS_LIBS}
   ${CMAKE_THREAD_LIBS_INIT}
