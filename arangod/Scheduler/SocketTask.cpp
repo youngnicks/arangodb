@@ -103,8 +103,9 @@ void SocketTask::start() {
   }
 
   LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-      << "starting communication between server <-> client on SocketTask: "
-      << _peer->_socket.native_handle() << "\n"
+      << "starting communication between server <-> client on socket: "
+      << _peer->_socket.native_handle();
+  LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
       << _connectionInfo.serverAddress << ":" << _connectionInfo.serverPort
       << " <-> " << _connectionInfo.clientAddress << ":"
       << _connectionInfo.clientPort;
@@ -177,7 +178,8 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
     if (err != boost::system::errc::success) {
       LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
           << "SocketTask::addWriteBuffer (write_some) - write on stream "
-          << _peer->_socket.native_handle() << " failed with " << err.message();
+          << _peer->_socket.native_handle()
+          << " failed with: " << err.message();
       closeStream();
       return;
     }
@@ -188,8 +190,8 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
       if (ec) {
         LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
             << "SocketTask::addWriterBuffer(async_write) - write on stream "
-            << _peer->_socket.native_handle() << " failed with "
-            << ec.message();
+            << _peer->_socket.native_handle()
+            << " failed with: " << ec.message();
         closeStream();
       } else {
         completedWriteBuffer();
@@ -254,7 +256,8 @@ void SocketTask::closeStream() {
     if (err && err != boost::asio::error::not_connected) {
       LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
           << "SocketTask::closeStream - shutdown send stream "
-          << _peer->_socket.native_handle() << " failed with " << err.message();
+          << _peer->_socket.native_handle()
+          << " failed with: " << err.message();
     }
 
     _closedSend = true;
@@ -266,7 +269,8 @@ void SocketTask::closeStream() {
     if (err && err != boost::asio::error::not_connected) {
       LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
           << "SocketTask::CloseStream - shutdown send stream "
-          << _peer->_socket.native_handle() << " failed with " << err.message();
+          << _peer->_socket.native_handle()
+          << " failed with: " << err.message();
     }
 
     _closedReceive = true;
@@ -276,7 +280,7 @@ void SocketTask::closeStream() {
   if (err && err != boost::asio::error::not_connected) {
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
         << "SocketTask::CloseStream - shutdown send stream "
-        << _peer->_socket.native_handle() << " failed with " << err.message();
+        << _peer->_socket.native_handle() << " failed with: " << err.message();
   }
 
   _closeRequested = false;
@@ -291,8 +295,8 @@ void SocketTask::resetKeepAlive(boost::system::error_code& err) {
     auto self = shared_from_this();
     _keepAliveTimer.async_wait(
         [this, self](const boost::system::error_code& error) {
-          LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "keepAliveTimeout "
-                                                  << error.message();
+          LOG_TOPIC(TRACE, Logger::COMMUNICATION)
+              << "keepAliveTimerCallback - called with: " << error.message();
           if (!error) {
             // timeout
             closeStream();
@@ -342,9 +346,9 @@ bool SocketTask::trySyncRead() {
     if (err == boost::asio::error::would_block) {
       return false;
     } else {
-      LOG_TOPIC(DEBUG, Logger::COMMUNICATION) << "SocketTask::trySyncRead "
-                                              << "- failed with "
-                                              << err.message();
+      LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
+          << "SocketTask::trySyncRead "
+          << "- failed with: " << err.message();
       return false;
     }
   }
@@ -394,8 +398,8 @@ void SocketTask::asyncReadSome() {
     }
   } catch (boost::system::system_error& err) {
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
-        << "SocketTask::asyncReadSome - i/o stream " << info << " failed with "
-        << err.what();
+        << "SocketTask::asyncReadSome - i/o stream " << info
+        << " failed with: " << err.what();
 
     closeStream();
     return;
@@ -420,7 +424,7 @@ void SocketTask::asyncReadSome() {
     if (ec) {
       LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
           << "SocketTask::asyncReadSome (async_read_some) - read on stream "
-          << info << " failed with " << ec.message();
+          << info << " failed with: " << ec.message();
       closeStream();
     } else {
       JobGuard guard(_loop);
@@ -466,8 +470,8 @@ void SocketTask::closeReceiveStream() {
     try {
       _peer->_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_receive);
     } catch (boost::system::system_error& err) {
-      LOG(WARN) << "shutdown receive stream " << info << " failed with "
-                << err.what();
+      LOG(WARN) << "shutdown receive stream " << info
+                << " failed with: " << err.what();
     }
 
     _closedReceive = true;
