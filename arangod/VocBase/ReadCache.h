@@ -37,8 +37,12 @@ class CollectionRevisionsCache;
 class RevisionCacheChunk;
 
 struct ReadCachePosition {
+  ReadCachePosition() noexcept : chunk(nullptr), offset(0), version(UINT32_MAX) {}
+
   ReadCachePosition(RevisionCacheChunk* chunk, uint32_t offset, uint32_t version) noexcept 
-          : chunk(chunk), offset(offset), version(version) {}
+          : chunk(chunk), offset(offset), version(version) {
+    TRI_ASSERT(version != 0);
+  }
   ReadCachePosition(ReadCachePosition const& other) noexcept 
           : chunk(other.chunk), offset(other.offset), version(other.version) {}
   ReadCachePosition(ReadCachePosition && other) noexcept 
@@ -113,7 +117,7 @@ struct RevisionCacheEntry {
   RevisionCacheValue data; 
  
   // default ctor used for hash arrays 
-  RevisionCacheEntry() noexcept : revisionId(0), data(nullptr, 0, 0) {}
+  RevisionCacheEntry() noexcept : revisionId(0), data(nullptr, 0, UINT32_MAX) {}
 
   RevisionCacheEntry(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset, uint32_t version) noexcept : revisionId(revisionId), data(chunk, offset, version) {}
   RevisionCacheEntry(TRI_voc_rid_t revisionId, wal::Logfile* logfile, uint32_t offset) noexcept : revisionId(revisionId), data(logfile, offset) {}
@@ -164,12 +168,12 @@ struct RevisionCacheEntry {
     return data.wal.logfile;
   } 
 
-  inline bool isChunk() const noexcept { return data.chunk.version != 0; }
-  inline bool isWal() const noexcept { return !isChunk(); }
+  inline bool isChunk() const noexcept { return data.chunk.version != 0 && data.chunk.version != UINT32_MAX; }
+  inline bool isWal() const noexcept { return data.chunk.version == 0; }
 
-  inline operator bool() const { return revisionId != 0; }
+  inline operator bool() const noexcept { return revisionId != 0; }
 
-  inline bool operator==(RevisionCacheEntry const& other) const { 
+  inline bool operator==(RevisionCacheEntry const& other) const noexcept { 
     return memcmp(this, &other, sizeof(other)) == 0;
   }
 
@@ -186,7 +190,7 @@ class ReadCache {
   void closeWriteChunk();
 
   ChunkProtector readAndLease(RevisionCacheEntry const&);
-  ReadCachePosition insertAndLease(TRI_voc_rid_t revisionId, uint8_t const* vpack);
+  ChunkProtector insertAndLease(TRI_voc_rid_t revisionId, uint8_t const* vpack);
 
  private:
   RevisionCacheChunkAllocator* _allocator;

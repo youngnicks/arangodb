@@ -29,14 +29,17 @@
 using namespace arangodb;
 
 /// @brief create an empty usage object, pointing to nothing
-ChunkProtector::ChunkProtector() : _chunk(nullptr), _offset(0) {}
+ChunkProtector::ChunkProtector() : _chunk(nullptr), _offset(UINT32_MAX), _version(UINT32_MAX) {}
 
 /// @brief create a valid usage object, pointing to vpack in the read cache
 ChunkProtector::ChunkProtector(RevisionCacheChunk* chunk, uint32_t offset, uint32_t expectedVersion) 
-        : _chunk(chunk), _offset(offset) {
+        : _chunk(chunk), _offset(offset), _version(expectedVersion) {
   TRI_ASSERT(_chunk != nullptr);
-
-  if (!_chunk->use(expectedVersion)) {
+ 
+  if (offset == UINT32_MAX) {
+    // chunk was full
+    _chunk = nullptr;
+  } else if (!_chunk->use(expectedVersion)) {
     // invalid
     _chunk = nullptr;
   }
@@ -48,23 +51,34 @@ ChunkProtector::~ChunkProtector() {
   }
 }
 
-ChunkProtector::ChunkProtector(ChunkProtector&& other) : _chunk(other._chunk), _offset(other._offset) {
+ChunkProtector::ChunkProtector(ChunkProtector&& other) : _chunk(other._chunk), _offset(other._offset), _version(other._version) {
   other._chunk = nullptr;
 }
   
 ChunkProtector& ChunkProtector::operator=(ChunkProtector&& other) {
-  if (_chunk == nullptr || _chunk == other._chunk) {
-    _chunk = other._chunk;
-    other._chunk = nullptr;
-    _offset = other._offset;
-  } else {
+  if (_chunk != nullptr && _chunk != other._chunk) {
     _chunk->release();
-    _chunk = other._chunk;
-    _offset = other._offset;
+    _chunk = nullptr;
   }
+
+  _chunk = other._chunk;
+  _offset = other._offset;
+  _version = other._version;
+  other._chunk = nullptr;
   return *this;
 }
+
+void ChunkProtector::steal() {
+  _chunk = nullptr;
+}
   
+uint8_t* ChunkProtector::vpack() {
+  if (_chunk == nullptr) {
+    return nullptr;
+  }
+  return _chunk->data() + _offset;
+}
+
 uint8_t const* ChunkProtector::vpack() const {
   if (_chunk == nullptr) {
     return nullptr;
@@ -76,6 +90,7 @@ uint8_t const* ChunkProtector::vpack() const {
 RevisionCacheChunk::RevisionCacheChunk(CollectionRevisionsCache* collectionCache, uint32_t size)
         : _collectionCache(collectionCache), _data(nullptr), _writeOffset(0), 
           _size(size), _versionAndRefCount(buildVersion(1)) {
+  TRI_ASSERT(versionPart(_versionAndRefCount) == 1);
   _data = new uint8_t[size];
 }
 
@@ -151,6 +166,11 @@ bool RevisionCacheChunk::use(uint32_t expectedVersion) noexcept {
     return false;
   }
   // we have increased the reference counter here
+  return true;
+}
+
+bool RevisionCacheChunk::use() noexcept {
+  ++_versionAndRefCount;
   return true;
 }
 

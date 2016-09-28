@@ -51,6 +51,7 @@
 #include "Utils/CollectionWriteLocker.h"
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/StandaloneTransactionContext.h"
+#include "VocBase/CollectionRevisionsCache.h"
 #include "VocBase/DatafileStatisticsContainer.h"
 #include "VocBase/IndexPoolFeature.h"
 #include "VocBase/KeyGenerator.h"
@@ -327,7 +328,7 @@ LogicalCollection::LogicalCollection(
       _cleanupIndexes(0),
       _persistentIndexes(0),
       _physical(EngineSelectorFeature::ENGINE->createPhysicalCollection(this)),
-      _revisionsCache(this, RevisionCacheFeature::ALLOCATOR),
+      _revisionsCache(new CollectionRevisionsCache(this, RevisionCacheFeature::ALLOCATOR)),
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
@@ -392,7 +393,7 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase,
       _persistentIndexes(0),
       _path(ReadStringValue(info, "path", "")),
       _physical(EngineSelectorFeature::ENGINE->createPhysicalCollection(this)),
-      _revisionsCache(this, RevisionCacheFeature::ALLOCATOR),
+      _revisionsCache(new CollectionRevisionsCache(this, RevisionCacheFeature::ALLOCATOR)),
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
@@ -980,13 +981,13 @@ int LogicalCollection::close() {
 
   _numberDocuments = 0;
 
-  _revisionsCache.clear();
+  _revisionsCache->clear();
 
   return getPhysical()->close();
 }
 
 void LogicalCollection::unload() {
-  _revisionsCache.closeWriteChunk();
+  _revisionsCache->closeWriteChunk();
 }
 
 void LogicalCollection::drop() {
@@ -1844,7 +1845,7 @@ int LogicalCollection::read(Transaction* trx, StringRef const& key,
 ////////////////////////////////////////////////////////////////////////////////
 
 int LogicalCollection::truncate(Transaction* trx) {
-  _revisionsCache.clear();
+  _revisionsCache->clear();
   return TRI_ERROR_NO_ERROR;
 }
 
@@ -2602,6 +2603,8 @@ int LogicalCollection::fillIndexBatch(arangodb::Transaction* trx,
   }
 
   int res = TRI_ERROR_NO_ERROR;
+    
+  ManagedMultiDocumentResult result;
 
   std::vector<std::pair<TRI_voc_rid_t, VPackSlice>> documents;
   documents.reserve(blockSize);
@@ -2609,6 +2612,7 @@ int LogicalCollection::fillIndexBatch(arangodb::Transaction* trx,
   if (nrUsed > 0) {
     arangodb::basics::BucketPosition position;
     uint64_t total = 0;
+
     while (true) {
       IndexElement* element = primaryIndex->lookupSequential(trx, position, total);
 
@@ -2617,8 +2621,12 @@ int LogicalCollection::fillIndexBatch(arangodb::Transaction* trx,
       }
       
       TRI_voc_rid_t revisionId = element->revisionId();
-      uint8_t const* vpack = lookupRevisionVPack(revisionId);
-      documents.emplace_back(std::make_pair(revisionId, VPackSlice(vpack)));
+
+      if (readRevision(trx, result, revisionId)) {
+        uint8_t const* vpack = result.back();
+        TRI_ASSERT(vpack != nullptr);
+        documents.emplace_back(std::make_pair(revisionId, VPackSlice(vpack)));
+      }
 
       if (documents.size() == blockSize) {
         res = idx->batchInsert(trx, documents, indexPool->numThreads());
@@ -2674,6 +2682,7 @@ int LogicalCollection::fillIndexSequential(arangodb::Transaction* trx,
 
     arangodb::basics::BucketPosition position;
     uint64_t total = 0;
+    ManagedDocumentResult result;
 
     while (true) {
       IndexElement* element = primaryIndex->lookupSequential(trx, position, total);
@@ -2683,11 +2692,16 @@ int LogicalCollection::fillIndexSequential(arangodb::Transaction* trx,
       }
 
       TRI_voc_rid_t revisionId = element->revisionId();
-      uint8_t const* vpack = lookupRevisionVPack(revisionId);
-      int res = idx->insert(trx, revisionId, VPackSlice(vpack), false);
+      if (readRevision(trx, result, revisionId)) {
+        uint8_t const* vpack = result.vpack();
+        TRI_ASSERT(vpack != nullptr);
+        int res = idx->insert(trx, revisionId, VPackSlice(vpack), false);
 
-      if (res != TRI_ERROR_NO_ERROR) {
-        return res;
+        if (res != TRI_ERROR_NO_ERROR) {
+          return res;
+        }
+      } else {
+        return TRI_ERROR_ARANGO_DOCUMENT_NOT_FOUND; // oops
       }
 #ifdef ARANGODB_ENABLE_MAINTAINER_MODE
       if (++counter == LoopSize) {
@@ -3447,12 +3461,12 @@ void LogicalCollection::newObjectForRemove(
   builder.close();
 }
 
-void LogicalCollection::readRevision(Transaction* trx, ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
-  _revisionsCache.lookupRevision(result, revisionId);
+bool LogicalCollection::readRevision(Transaction* trx, ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
+  return _revisionsCache->lookupRevision(result, revisionId);
 }
 
-void LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId) {
-  _revisionsCache.lookupRevision(result, revisionId);
+bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId) {
+  return _revisionsCache->lookupRevision(result, revisionId);
 }
 
 bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
@@ -3460,13 +3474,13 @@ bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResul
   if (vpack == nullptr) {
     return false;
   }
-  result.push_back(vpack);
+  result.add(vpack);
   return true;
 }
 
 uint8_t const* LogicalCollection::lookupRevisionVPack(TRI_voc_rid_t revisionId) {
   ManagedDocumentResult result;
-  if (!_revisionsCache.lookupRevision(result, revisionId)) {
+  if (!_revisionsCache->lookupRevision(result, revisionId)) {
     return nullptr;
   }
   return result.vpack();
@@ -3487,7 +3501,7 @@ bool LogicalCollection::updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_
 
 void LogicalCollection::removeRevision(TRI_voc_rid_t revisionId, bool updateStats) {
   // clean up cache entry
-  _revisionsCache.removeRevision(revisionId); 
+  _revisionsCache->removeRevision(revisionId); 
 
   // and remove from storage engine
   getPhysical()->removeRevision(revisionId, updateStats);

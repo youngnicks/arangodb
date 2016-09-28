@@ -71,10 +71,13 @@ ChunkProtector ReadCache::readAndLease(RevisionCacheEntry const& entry) {
   return ChunkProtector(entry.chunk(), entry.offset(), entry.version());
 }
 
-ReadCachePosition ReadCache::insertAndLease(TRI_voc_rid_t revisionId, uint8_t const* vpack) {
+ChunkProtector ReadCache::insertAndLease(TRI_voc_rid_t revisionId, uint8_t const* vpack) {
+  TRI_ASSERT(revisionId != 0);
+  TRI_ASSERT(vpack != nullptr);
+
   uint32_t const size = static_cast<uint32_t>(VPackSlice(vpack).byteSize());
 
-  ReadCachePosition position(nullptr, UINT32_MAX, 1);
+  ChunkProtector result;
 
   while (true) { 
     RevisionCacheChunk* returnChunk = nullptr;
@@ -86,28 +89,31 @@ ReadCachePosition ReadCache::insertAndLease(TRI_voc_rid_t revisionId, uint8_t co
         _writeChunk = _allocator->orderChunk(_collectionCache, size, _collectionCache->chunkSize());
         TRI_ASSERT(_writeChunk != nullptr);
       }
+     
+      TRI_ASSERT(_writeChunk != nullptr); 
       
-      if (_writeChunk != nullptr) {
-        position.offset = _writeChunk->advanceWritePosition(size);
-        if (position.offset == UINT32_MAX) {
-          // chunk is full
-          returnChunk = _writeChunk; // save _writeChunk value
-          _writeChunk = nullptr; // reset _writeChunk and try again
-        } else {
-          position.chunk = _writeChunk;
-        }
-      }
+      uint32_t version = _writeChunk->version();
+      TRI_ASSERT(version != 0);
+      result = ChunkProtector(_writeChunk, _writeChunk->advanceWritePosition(size), version);
+
+      if (!result) {
+        // chunk was full
+        returnChunk = _writeChunk; // save _writeChunk value
+        _writeChunk = nullptr; // reset _writeChunk and try again
+      } else {
+        TRI_ASSERT(result.version() != 0);
+      } 
     }
+      
+    // check result without mutex
     
     if (returnChunk != nullptr) {
-      // return chunk without mutex
       _allocator->returnUsed(this, returnChunk);
-    } else if (position.chunk != nullptr) {
-    // check result without mutex
-      TRI_ASSERT(position.offset != UINT32_MAX);
+    } else if (result) {
       // we got a free slot in the chunk. copy data and return target position
-      memcpy(position.vpack(), vpack, size); 
-      return position;
+      TRI_ASSERT(result.version() != 0);
+      memcpy(result.vpack(), vpack, size); 
+      return result;
     }
     
     // try again

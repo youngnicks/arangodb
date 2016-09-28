@@ -25,6 +25,7 @@
 #define ARANGOD_STORAGE_ENGINE_MMFILES_REVISIONS_CACHE_H 1
 
 #include "Basics/Common.h"
+#include "Basics/AssocUnique.h"
 #include "Basics/ReadWriteLock.h"
 #include "StorageEngine/MMFilesDocumentPosition.h"
 #include "VocBase/voc-types.h"
@@ -48,7 +49,8 @@ class MMFilesRevisionsCache {
 
  private:
   mutable arangodb::basics::ReadWriteLock _lock; 
-  std::unordered_map<TRI_voc_rid_t, MMFilesDocumentPosition> _positions;
+  
+  arangodb::basics::AssocUnique<TRI_voc_rid_t, MMFilesDocumentPosition> _positions;
 };
 
 } // namespace arangodb

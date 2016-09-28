@@ -24,61 +24,83 @@
 #include "MMFilesRevisionsCache.h"
 #include "Basics/ReadLocker.h"
 #include "Basics/WriteLocker.h"
+#include "Basics/xxhash.h"
 #include "Logger/Logger.h"
 #include "VocBase/DatafileHelper.h"
 
 using namespace arangodb;
 
-MMFilesRevisionsCache::MMFilesRevisionsCache() {}
+namespace {
+static inline uint64_t HashKey(void*, TRI_voc_rid_t const* key) {
+  return XXH64(key, sizeof(TRI_voc_rid_t), 0x12345678);
+}
+
+static inline uint64_t HashElement(void*, MMFilesDocumentPosition const& element) {
+  TRI_voc_rid_t revisionId = element.revisionId();
+  return HashKey(nullptr, &revisionId);
+}
+
+static bool IsEqualKeyElement(void*, TRI_voc_rid_t const* key,
+                              uint64_t hash, MMFilesDocumentPosition const& element) {
+  return *key == element.revisionId();
+}
+
+static bool IsEqualElementElement(void*, MMFilesDocumentPosition const& left,
+                                  MMFilesDocumentPosition const& right) {
+  return left.revisionId() == right.revisionId();
+}
+
+} // namespace
+
+MMFilesRevisionsCache::MMFilesRevisionsCache() 
+    : _positions(HashKey, HashElement, IsEqualKeyElement, IsEqualElementElement, IsEqualElementElement, 8, []() -> std::string { return "revisions"; }) {}
 
 MMFilesRevisionsCache::~MMFilesRevisionsCache() {}
 
 MMFilesDocumentPosition MMFilesRevisionsCache::lookup(TRI_voc_rid_t revisionId) const {
+  TRI_ASSERT(revisionId != 0);
   READ_LOCKER(locker, _lock);
-  auto it = _positions.find(revisionId);
-  
-  if (it == _positions.end()) {
-    return MMFilesDocumentPosition();
-  }
-  return (*it).second;
+
+  return _positions.findByKey(nullptr, &revisionId);
 }
 
 void MMFilesRevisionsCache::insert(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+  TRI_ASSERT(revisionId != 0);
+  TRI_ASSERT(dataptr != nullptr);
+
   WRITE_LOCKER(locker, _lock);
-  auto it = _positions.emplace(revisionId, MMFilesDocumentPosition(dataptr, fid, isInWal));
-  if (!it.second) {
-    MMFilesDocumentPosition& old = _positions[revisionId];
-    old.dataptr(dataptr);
-    old.fid(fid, isInWal);
+  int res = _positions.insert(nullptr, MMFilesDocumentPosition(revisionId, dataptr, fid, isInWal));
+  if (res != TRI_ERROR_NO_ERROR) {
+    _positions.removeByKey(nullptr, &revisionId);
+    _positions.insert(nullptr, MMFilesDocumentPosition(revisionId, dataptr, fid, isInWal));
   }
 }
 
 void MMFilesRevisionsCache::update(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+  TRI_ASSERT(revisionId != 0);
+  TRI_ASSERT(dataptr != nullptr);
+
   WRITE_LOCKER(locker, _lock);
   
-  auto it = _positions.find(revisionId);
-  if (it == _positions.end()) {
+  MMFilesDocumentPosition old = _positions.removeByKey(nullptr, &revisionId);
+  if (!old) {
     return;
   }
      
-  MMFilesDocumentPosition& old = (*it).second;
   old.dataptr(dataptr);
   old.fid(fid, isInWal); 
+  
+  _positions.insert(nullptr, old);
 }
   
 bool MMFilesRevisionsCache::updateConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) {
   WRITE_LOCKER(locker, _lock);
 
-  auto it = _positions.find(revisionId);
-  if (it == _positions.end()) {
+  MMFilesDocumentPosition old = _positions.findByKey(nullptr, &revisionId);
+  if (!old) {
     return false;
   }
      
-  MMFilesDocumentPosition& old = (*it).second;
-  if (!old.valid()) {
-    return false;
-  }
-    
   uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());
   TRI_ASSERT(vpack != nullptr);
 
@@ -88,26 +110,28 @@ bool MMFilesRevisionsCache::updateConditional(TRI_voc_rid_t revisionId, TRI_df_m
     // element already outdated
     return false;
   }
+  
+  _positions.removeByKey(nullptr, &revisionId);
 
   old.dataptr(reinterpret_cast<char const*>(newPosition) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT));
   old.fid(newFid, isInWal); 
 
+  _positions.insert(nullptr, old);
+  
   return true;
 }
    
 void MMFilesRevisionsCache::remove(TRI_voc_rid_t revisionId) {
+  TRI_ASSERT(revisionId != 0);
+
   WRITE_LOCKER(locker, _lock);
-  _positions.erase(revisionId);
+  _positions.removeByKey(nullptr, &revisionId);
 }
 
 MMFilesDocumentPosition MMFilesRevisionsCache::fetchAndRemove(TRI_voc_rid_t revisionId) {
+  TRI_ASSERT(revisionId != 0);
+
   WRITE_LOCKER(locker, _lock);
-  auto it = _positions.find(revisionId);
-  if (it != _positions.end()) {
-    MMFilesDocumentPosition result((*it).second);
-    _positions.erase(it);
-    return result;
-  }
-  return MMFilesDocumentPosition();
+  return _positions.removeByKey(nullptr, &revisionId);
 }
 

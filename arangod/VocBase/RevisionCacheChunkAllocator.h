@@ -58,9 +58,6 @@ class RevisionCacheChunkAllocator {
   /// @brief order a new chunk
   RevisionCacheChunk* orderChunk(CollectionRevisionsCache* collectionCache, uint32_t valueSize, uint32_t chunkSize);
 
-  /// @brief return an unused chunk
-  void returnUnused(RevisionCacheChunk* chunk);
-  
   void returnUsed(ReadCache* cache, RevisionCacheChunk* chunk);
 
   void removeCollection(ReadCache* cache);

@@ -854,9 +854,11 @@ void EdgeIndex::handleValNode(VPackBuilder* keys,
 }
 
 IndexElement* EdgeIndex::buildFromElement(TRI_voc_rid_t revisionId, VPackSlice const& doc) const {
+  TRI_ASSERT(doc.isObject());
   return buildStringElement(revisionId, Transaction::extractFromFromDocument(doc));
 }
 
 IndexElement* EdgeIndex::buildToElement(TRI_voc_rid_t revisionId, VPackSlice const& doc) const {
+  TRI_ASSERT(doc.isObject());
   return buildStringElement(revisionId, Transaction::extractToFromDocument(doc));
 }

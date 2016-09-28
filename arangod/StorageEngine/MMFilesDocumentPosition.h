@@ -33,28 +33,30 @@ namespace arangodb {
 class MMFilesDocumentPosition {
  public:
   constexpr MMFilesDocumentPosition() 
-          : _fid(0), _dataptr(nullptr) {}
+          : _revisionId(0), _fid(0), _dataptr(nullptr) {}
 
-  MMFilesDocumentPosition(void const* dataptr, TRI_voc_fid_t fid, bool isWal) noexcept
-          : _fid(fid), _dataptr(dataptr) {
+  MMFilesDocumentPosition(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isWal) noexcept
+          : _revisionId(revisionId), _fid(fid), _dataptr(dataptr) {
     if (isWal) {
       _fid |= arangodb::DatafileHelper::WalFileBitmask();
     }
   }
 
   MMFilesDocumentPosition(MMFilesDocumentPosition const& other) noexcept
-          : _fid(other._fid), _dataptr(other._dataptr) {}
+          : _revisionId(other._revisionId), _fid(other._fid), _dataptr(other._dataptr) {}
   
   MMFilesDocumentPosition& operator=(MMFilesDocumentPosition const& other) noexcept {
+    _revisionId = other._revisionId;
     _fid = other._fid;
     _dataptr = other._dataptr; 
     return *this;
   }
   
   MMFilesDocumentPosition(MMFilesDocumentPosition&& other) noexcept
-          : _fid(other._fid), _dataptr(other._dataptr) {}
+          : _revisionId(other._revisionId), _fid(other._fid), _dataptr(other._dataptr) {}
   
   MMFilesDocumentPosition& operator=(MMFilesDocumentPosition&& other) noexcept {
+    _revisionId = other._revisionId;
     _fid = other._fid;
     _dataptr = other._dataptr; 
     return *this;
@@ -63,12 +65,13 @@ class MMFilesDocumentPosition {
   ~MMFilesDocumentPosition() {}
   
   inline void clear() noexcept {
+    _revisionId = 0;
     _fid = 0;
     _dataptr = nullptr;
   }
 
-  inline bool valid() const noexcept {
-    return _dataptr != nullptr;
+  inline TRI_voc_rid_t revisionId() const noexcept { 
+    return _revisionId;
   }
   
   // return the datafile id.
@@ -106,7 +109,16 @@ class MMFilesDocumentPosition {
     return ((_fid & arangodb::DatafileHelper::WalFileBitmask()) == 1);
   }
 
+  inline operator bool() const noexcept {
+    return (_revisionId != 0 && _dataptr != nullptr);
+  }
+  
+  inline bool operator==(MMFilesDocumentPosition const& other) const noexcept { 
+    return (_revisionId == other._revisionId && _fid == other._fid && _dataptr == other._dataptr);
+  }
+
  private:
+  TRI_voc_rid_t _revisionId;
   // this is the datafile identifier
   TRI_voc_fid_t _fid;   
   // this is the pointer to the beginning of the vpack

@@ -43,11 +43,20 @@ class ChunkProtector {
   ChunkProtector& operator=(ChunkProtector const& other) = delete;
   ChunkProtector& operator=(ChunkProtector&& other);
 
+  inline operator bool() const { return _chunk != nullptr; }
+  
+  void steal();
+
+  uint8_t* vpack();
   uint8_t const* vpack() const;
+  RevisionCacheChunk* chunk() const { return _chunk; }
+  uint32_t offset() const { return _offset; }
+  uint32_t version() const { return _version; }
 
  private:
   RevisionCacheChunk* _chunk;
   uint32_t _offset;
+  uint32_t _version;
 };
 
 
@@ -66,10 +75,13 @@ class RevisionCacheChunk {
   
   inline uint8_t const* data() const noexcept { return _data; }
   inline uint8_t* data() noexcept { return _data; }
+  
+  inline uint32_t version() { return versionPart(_versionAndRefCount); }
 
   /// @brief increases the refcount value if the chunk's version matches
   /// the specified version. returns true then, false otherwise
   bool use(uint32_t expectedVersion) noexcept;
+  bool use() noexcept;
 
   /// @brief decrease the refcount value originally increased by increase()
   void release() noexcept;
@@ -82,7 +94,7 @@ class RevisionCacheChunk {
   static constexpr inline uint32_t alignSize(uint32_t value) {
     return (value + 7) - ((value + 7) & 7);
   }
-
+  
  private:
   
   void findRevisions(std::vector<TRI_voc_rid_t>& revisions);

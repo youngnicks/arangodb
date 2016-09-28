@@ -336,6 +336,7 @@ add_executable(${BIN_ARANGOD}
   VocBase/IndexPoolFeature.cpp
   VocBase/KeyGenerator.cpp
   VocBase/LogicalCollection.cpp
+  VocBase/ManagedDocumentResult.cpp
   VocBase/PathEnumerator.cpp
   VocBase/ReadCache.cpp
   VocBase/RevisionCacheChunk.cpp

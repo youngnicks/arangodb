@@ -25,7 +25,6 @@
 #define ARANGOD_VOCBASE_LOGICAL_COLLECTION_H 1
 
 #include "Basics/Common.h"
-#include "VocBase/CollectionRevisionsCache.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/voc-types.h"
 #include "VocBase/vocbase.h"
@@ -349,8 +348,8 @@ class LogicalCollection {
   int endRead(bool useDeadlockDetector);
   int endWrite(bool useDeadlockDetector);
   
-  void readRevision(arangodb::Transaction*, ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
-  void readRevision(arangodb::Transaction*, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId);
+  bool readRevision(arangodb::Transaction*, ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
+  bool readRevision(arangodb::Transaction*, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId);
   bool readRevision(arangodb::Transaction*, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal);
 
   uint8_t const* lookupRevisionVPack(TRI_voc_rid_t revisionId);
@@ -530,7 +529,7 @@ class LogicalCollection {
   std::string _path;
 
   std::unique_ptr<PhysicalCollection> _physical;
-  CollectionRevisionsCache _revisionsCache;
+  std::unique_ptr<CollectionRevisionsCache> _revisionsCache;
 
   // whether or not secondary indexes should be filled
   bool _useSecondaryIndexes;

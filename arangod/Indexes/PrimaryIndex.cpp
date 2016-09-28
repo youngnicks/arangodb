@@ -559,5 +559,7 @@ void PrimaryIndex::handleValNode(IndexIteratorContext* context,
 }
 
 IndexElement* PrimaryIndex::buildKeyElement(TRI_voc_rid_t revisionId, uint8_t const* vpack) const {
+  TRI_ASSERT(vpack != nullptr);
+  TRI_ASSERT(VPackSlice(vpack).isObject());
   return buildStringElement(revisionId, Transaction::extractKeyFromDocument(VPackSlice(vpack)));
 }

@@ -26,40 +26,46 @@
 
 #include "Basics/Common.h"
 #include "Logger/Logger.h"
+#include "VocBase/RevisionCacheChunk.h"
 
 namespace arangodb {
 
 class ManagedDocumentResult {
  public:
-  ManagedDocumentResult() : _vpack(nullptr) {}
-  ManagedDocumentResult(ManagedDocumentResult const& other) : _vpack(other._vpack) {}
-  ManagedDocumentResult& operator=(ManagedDocumentResult const& other) {
-    _vpack = other._vpack;
-    return *this;
-  }
+  ManagedDocumentResult();
+  ManagedDocumentResult(ManagedDocumentResult const& other) = delete;
+  ManagedDocumentResult(ManagedDocumentResult&& other) = delete;
+  ManagedDocumentResult& operator=(ManagedDocumentResult const& other);
+  ManagedDocumentResult& operator=(ManagedDocumentResult&& other) = delete;
+  //ManagedDocumentResult(ManagedDocumentResult const& other) : _vpack(other._vpack) {}
+  //ManagedDocumentResult& operator=(ManagedDocumentResult const& other) {
+  //  _vpack = other._vpack;
+  //  return *this;
+  //}
   
-  ManagedDocumentResult(ManagedDocumentResult&& other) : _vpack(other._vpack) {
-    other.clear();
-  }
+  //ManagedDocumentResult(ManagedDocumentResult&& other) : _vpack(other._vpack) {
+  //  other.clear();
+  //}
 
-  ManagedDocumentResult& operator=(ManagedDocumentResult&& other) {
-    _vpack = other._vpack;
-    other.clear();
-    return *this;
-  }
+  //ManagedDocumentResult& operator=(ManagedDocumentResult&& other) {
+  //  _vpack = other._vpack;
+  //  other.clear();
+  //  return *this;
+  //}
 
-  ~ManagedDocumentResult() {}
+  ~ManagedDocumentResult();
 
   inline uint8_t const* vpack() const { 
     TRI_ASSERT(_vpack != nullptr); 
     return _vpack; 
   }
   
-  void set(uint8_t const* vpack) { _vpack = vpack; }
+  void add(ChunkProtector&& protector);
 
-  void clear() { _vpack = nullptr; }
+  void clear();
 
  private:
+  RevisionCacheChunk* _chunk;
   uint8_t const* _vpack;
 };
 
@@ -67,9 +73,11 @@ class ManagedMultiDocumentResult {
  public:
   ManagedMultiDocumentResult() {}
   ManagedMultiDocumentResult(ManagedMultiDocumentResult const& other) = delete;
+  ManagedMultiDocumentResult(ManagedMultiDocumentResult&& other) = delete;
   ManagedMultiDocumentResult& operator=(ManagedMultiDocumentResult const& other) = delete;
+  ManagedMultiDocumentResult& operator=(ManagedMultiDocumentResult&& other) = delete;
 
-  ~ManagedMultiDocumentResult() {}
+  ~ManagedMultiDocumentResult();
 
   inline uint8_t const* at(size_t position) const {
     return _results.at(position); 
@@ -83,19 +91,17 @@ class ManagedMultiDocumentResult {
   size_t size() const { return _results.size(); }
   void clear() { _results.clear(); }
   void reserve(size_t size) { _results.reserve(size); }
+  uint8_t const*& back() { return _results.back(); }
+  uint8_t const* const& back() const { return _results.back(); }
   
   std::vector<uint8_t const*>::iterator begin() { return _results.begin(); }
   std::vector<uint8_t const*>::iterator end() { return _results.end(); }
   
-  void emplace_back(uint8_t const* vpack) {
-    _results.push_back(vpack);
-  }
-
-  void push_back(uint8_t const* vpack) {
-    _results.push_back(vpack);
-  }
-
+  void add(ChunkProtector&& protector);
+  void add(uint8_t const*); // TODO: remove
+ 
  private:
+  std::unordered_set<RevisionCacheChunk*> _chunks;
   std::vector<uint8_t const*> _results;
 };
 

@@ -1101,24 +1101,31 @@ int MMFilesCollection::iterateMarkersOnLoad(arangodb::Transaction* trx) {
 }
 
 MMFilesDocumentPosition MMFilesCollection::lookupRevision(TRI_voc_rid_t revisionId) const {
+  TRI_ASSERT(revisionId != 0);
   MMFilesDocumentPosition const old = _revisionsCache.lookup(revisionId);
-  if (old.valid()) {
+  if (old) {
     return old;
   }
   THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "got invalid revision value on lookup");
 }
 
 uint8_t const* MMFilesCollection::lookupRevisionVPack(TRI_voc_rid_t revisionId) const {
+  TRI_ASSERT(revisionId != 0);
+
   MMFilesDocumentPosition const old = _revisionsCache.lookup(revisionId);
-  if (old.valid()) {
-    return static_cast<uint8_t const*>(old.dataptr());
+  if (old) {
+    uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());
+    TRI_ASSERT(VPackSlice(vpack).isObject());
+    return vpack;
   }
   THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "got invalid vpack value on lookup");
 }
   
 uint8_t const* MMFilesCollection::lookupRevisionVPackConditional(TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) const {
+  TRI_ASSERT(revisionId != 0);
+
   MMFilesDocumentPosition const old = _revisionsCache.lookup(revisionId);
-  if (!old.valid()) {
+  if (!old) {
     return nullptr;
   }
   if (excludeWal && old.pointsToWal()) {
@@ -1138,21 +1145,28 @@ uint8_t const* MMFilesCollection::lookupRevisionVPackConditional(TRI_voc_rid_t r
 }
 
 void MMFilesCollection::insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+  TRI_ASSERT(revisionId != 0);
+  TRI_ASSERT(dataptr != nullptr);
   _revisionsCache.insert(revisionId, dataptr, fid, isInWal);
 }
 
 void MMFilesCollection::updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+  TRI_ASSERT(revisionId != 0);
+  TRI_ASSERT(dataptr != nullptr);
   _revisionsCache.update(revisionId, dataptr, fid, isInWal);
 }
   
 bool MMFilesCollection::updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal) {
+  TRI_ASSERT(revisionId != 0);
+  TRI_ASSERT(newPosition != nullptr);
   return _revisionsCache.updateConditional(revisionId, oldPosition, newPosition, newFid, isInWal);
 }
 
 void MMFilesCollection::removeRevision(TRI_voc_rid_t revisionId, bool updateStats) {
+  TRI_ASSERT(revisionId != 0);
   if (updateStats) {
     MMFilesDocumentPosition const old = _revisionsCache.fetchAndRemove(revisionId);
-    if (old.valid() && !old.pointsToWal()) {
+    if (old && !old.pointsToWal()) {
       TRI_ASSERT(old.dataptr() != nullptr);
       uint8_t const* vpack = static_cast<uint8_t const*>(old.dataptr());
       int64_t size = DatafileHelper::AlignedSize<int64_t>(arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT) + VPackSlice(vpack).byteSize());

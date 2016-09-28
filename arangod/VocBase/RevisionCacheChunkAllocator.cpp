@@ -142,38 +142,6 @@ RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(CollectionRevisionsC
   return c.release();
 }
 
-void RevisionCacheChunkAllocator::returnUnused(RevisionCacheChunk* chunk) {
-  TRI_ASSERT(chunk != nullptr);
-
-  // LOG(ERR) << "RETURNING UNUSED CHUNK: " << chunk;
-  uint32_t const size = chunk->size();
-  bool freeChunk = true;
-
-  {
-    WRITE_LOCKER(locker, _chunksLock);
-
-    try {
-      if (_totalAllocated < _totalTargetSize) {
-        // put chunk back onto the freelist
-        _freeList.push_back(chunk);
-        freeChunk = false;
-      }
-    } catch (...) {
-    }
-
-    if (freeChunk) {
-      // when we free the chunk, we must adjust the total allocated size
-      TRI_ASSERT(_totalAllocated >= size);
-      _totalAllocated -= size;
-    }
-  }
-
-  if (freeChunk) {
-    // LOG(ERR) << "chunk is getting freed";
-    deleteChunk(chunk);
-  }
-}
-
 void RevisionCacheChunkAllocator::returnUsed(ReadCache* cache, RevisionCacheChunk* chunk) {
   TRI_ASSERT(chunk != nullptr);
 
