@@ -222,6 +222,7 @@ class LogicalCollection {
   
   // SECTION: Modification Functions
   int rename(std::string const&);
+  void unload();
   virtual void drop();
 
   virtual void setStatus(TRI_vocbase_col_status_e);

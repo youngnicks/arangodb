@@ -32,16 +32,16 @@ namespace arangodb {
 class CollectionRevisionsCache;
 class RevisionCacheChunk;
 
-class ChunkUsageStatus {
+class ChunkProtector {
  public:
-  ChunkUsageStatus();
-  ChunkUsageStatus(RevisionCacheChunk* chunk, uint32_t offset, uint32_t expectedVersion);
-  ~ChunkUsageStatus();
+  ChunkProtector();
+  ChunkProtector(RevisionCacheChunk* chunk, uint32_t offset, uint32_t expectedVersion);
+  ~ChunkProtector();
   
-  ChunkUsageStatus(ChunkUsageStatus const& other) = delete;
-  ChunkUsageStatus(ChunkUsageStatus&& other);
-  ChunkUsageStatus& operator=(ChunkUsageStatus const& other) = delete;
-  ChunkUsageStatus& operator=(ChunkUsageStatus&& other);
+  ChunkProtector(ChunkProtector const& other) = delete;
+  ChunkProtector(ChunkProtector&& other);
+  ChunkProtector& operator=(ChunkProtector const& other) = delete;
+  ChunkProtector& operator=(ChunkProtector&& other);
 
   uint8_t const* vpack() const;
 
@@ -56,7 +56,7 @@ class RevisionCacheChunk {
   RevisionCacheChunk(RevisionCacheChunk const&) = delete;
   RevisionCacheChunk& operator=(RevisionCacheChunk const&) = delete;
 
-  explicit RevisionCacheChunk(uint32_t size);
+  RevisionCacheChunk(CollectionRevisionsCache* collectionCache, uint32_t size);
   ~RevisionCacheChunk();
 
  public:
@@ -64,10 +64,6 @@ class RevisionCacheChunk {
 
   uint32_t advanceWritePosition(uint32_t size);
   
-  void findRevisions(std::vector<TRI_voc_rid_t>& foundRevisions);
-
-  void invalidate();
-
   inline uint8_t const* data() const noexcept { return _data; }
   inline uint8_t* data() noexcept { return _data; }
 
@@ -79,6 +75,8 @@ class RevisionCacheChunk {
   void release() noexcept;
   
   bool isUsed() noexcept;
+
+  void invalidate(std::vector<TRI_voc_rid_t>& revisions);
   
   // align the length value to a multiple of 8
   static constexpr inline uint32_t alignSize(uint32_t value) {
@@ -86,6 +84,9 @@ class RevisionCacheChunk {
   }
 
  private:
+  
+  void findRevisions(std::vector<TRI_voc_rid_t>& revisions);
+  void invalidate();
 
   static inline uint32_t versionPart(uint64_t value) {
     return static_cast<uint32_t>((value & 0xffffffff00000000ULL) >> 32);
@@ -115,6 +116,8 @@ class RevisionCacheChunk {
  private:
   // lock protecting _offset
   mutable arangodb::Mutex _writeMutex;
+
+  CollectionRevisionsCache* _collectionCache;
 
   // pointer to the chunk's raw memory
   uint8_t* _data;

@@ -35,6 +35,7 @@
 
 namespace arangodb {
 
+class CollectionRevisionsCache;
 class RevisionCacheChunk;
 
 struct ReadCachePosition {
@@ -165,30 +166,25 @@ struct RevisionCacheEntry {
 
 class ReadCache {
  public: 
-  explicit ReadCache(RevisionCacheChunkAllocator* allocator);
+  ReadCache(RevisionCacheChunkAllocator* allocator, CollectionRevisionsCache* collectionCache);
   ~ReadCache();
 
   // clear all chunks currently in use. this is a fast-path deletion without checks
   void clear();
 
-  bool prepareGarbageCollection(CollectionRevisionsCache* cache);
-  bool garbageCollect(size_t maxChunks);
+  void closeWriteChunk();
 
-  ChunkUsageStatus readAndLease(RevisionCacheEntry const&);
+  ChunkProtector readAndLease(RevisionCacheEntry const&);
   ReadCachePosition insertAndLease(TRI_voc_rid_t revisionId, uint8_t const* vpack);
 
  private:
   RevisionCacheChunkAllocator* _allocator;
+  CollectionRevisionsCache* _collectionCache; 
 
-  arangodb::Mutex _mutex;
+  /// @brief mutex for _writeChunk
+  arangodb::Mutex _writeMutex;
+  /// @brief chunk that we currently write into. may be a nullptr
   RevisionCacheChunk* _writeChunk;
-  size_t _totalAllocated;
-
-  std::list<RevisionCacheChunk*> _fullChunks;
-  
-  arangodb::Mutex _gcMutex;
-  RevisionCacheChunk* _toClear;
-  std::list<RevisionCacheChunk*> _freeList;
 };
 
 } // namespace arangodb

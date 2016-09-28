@@ -29,10 +29,10 @@
 using namespace arangodb;
 
 /// @brief create an empty usage object, pointing to nothing
-ChunkUsageStatus::ChunkUsageStatus() : _chunk(nullptr), _offset(0) {}
+ChunkProtector::ChunkProtector() : _chunk(nullptr), _offset(0) {}
 
 /// @brief create a valid usage object, pointing to vpack in the read cache
-ChunkUsageStatus::ChunkUsageStatus(RevisionCacheChunk* chunk, uint32_t offset, uint32_t expectedVersion) 
+ChunkProtector::ChunkProtector(RevisionCacheChunk* chunk, uint32_t offset, uint32_t expectedVersion) 
         : _chunk(chunk), _offset(offset) {
   TRI_ASSERT(_chunk != nullptr);
 
@@ -42,17 +42,17 @@ ChunkUsageStatus::ChunkUsageStatus(RevisionCacheChunk* chunk, uint32_t offset, u
   }
 }
 
-ChunkUsageStatus::~ChunkUsageStatus() {
+ChunkProtector::~ChunkProtector() {
   if (_chunk != nullptr) {
     _chunk->release();
   }
 }
 
-ChunkUsageStatus::ChunkUsageStatus(ChunkUsageStatus&& other) : _chunk(other._chunk), _offset(other._offset) {
+ChunkProtector::ChunkProtector(ChunkProtector&& other) : _chunk(other._chunk), _offset(other._offset) {
   other._chunk = nullptr;
 }
   
-ChunkUsageStatus& ChunkUsageStatus::operator=(ChunkUsageStatus&& other) {
+ChunkProtector& ChunkProtector::operator=(ChunkProtector&& other) {
   if (_chunk == nullptr || _chunk == other._chunk) {
     _chunk = other._chunk;
     other._chunk = nullptr;
@@ -65,7 +65,7 @@ ChunkUsageStatus& ChunkUsageStatus::operator=(ChunkUsageStatus&& other) {
   return *this;
 }
   
-uint8_t const* ChunkUsageStatus::vpack() const {
+uint8_t const* ChunkProtector::vpack() const {
   if (_chunk == nullptr) {
     return nullptr;
   }
@@ -73,8 +73,9 @@ uint8_t const* ChunkUsageStatus::vpack() const {
 }
 
 // note: version must be 1 or higher as version 0 means "WAL"
-RevisionCacheChunk::RevisionCacheChunk(uint32_t size)
-    : _data(nullptr), _writeOffset(0), _size(size), _versionAndRefCount(buildVersion(1)) {
+RevisionCacheChunk::RevisionCacheChunk(CollectionRevisionsCache* collectionCache, uint32_t size)
+        : _collectionCache(collectionCache), _data(nullptr), _writeOffset(0), 
+          _size(size), _versionAndRefCount(buildVersion(1)) {
   _data = new uint8_t[size];
 }
 
@@ -98,9 +99,22 @@ uint32_t RevisionCacheChunk::advanceWritePosition(uint32_t size) {
   return offset;
 }
 
-void RevisionCacheChunk::findRevisions(std::vector<TRI_voc_rid_t>& foundRevisions) {
-  foundRevisions.clear();
+void RevisionCacheChunk::invalidate(std::vector<TRI_voc_rid_t>& revisions) {
+  revisions.clear();
+  // LOG(ERR) << "invalidate called";
+  // double t1 = TRI_microtime();
+  findRevisions(revisions);
+  // LOG(ERR) << "findRevisions took: " << (TRI_microtime() - t1);
+  // LOG(ERR) << "number of revisions: " << revisions.size();
+  if (!revisions.empty()) {
+    // double t1 = TRI_microtime();
+    _collectionCache->removeRevisions(revisions);
+    // LOG(ERR) << "removeRevisions took: " << (TRI_microtime() - t1);
+  }
+  invalidate();
+}
 
+void RevisionCacheChunk::findRevisions(std::vector<TRI_voc_rid_t>& revisions) {
   // no need for write mutex here as the chunk is read-only once fully
   // written to
   uint8_t const* data = _data;
@@ -110,9 +124,10 @@ void RevisionCacheChunk::findRevisions(std::vector<TRI_voc_rid_t>& foundRevision
     // peek into document at the current position
     VPackSlice slice(data);
     TRI_ASSERT(slice.isObject());
-
+    data += slice.byteSize();
+    
     TRI_voc_rid_t rid = Transaction::extractRevFromDocument(slice);
-    foundRevisions.emplace_back(rid);
+    revisions.emplace_back(rid);
   }
 }
 

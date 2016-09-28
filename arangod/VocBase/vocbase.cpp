@@ -854,6 +854,8 @@ int TRI_vocbase_t::unloadCollection(arangodb::LogicalCollection* collection, boo
         __LINE__);
   } // release locks
 
+  collection->unload();
+
   // wake up the cleanup thread
   StorageEngine* engine = EngineSelectorFeature::ENGINE;
   engine->unloadCollection(this, cid);

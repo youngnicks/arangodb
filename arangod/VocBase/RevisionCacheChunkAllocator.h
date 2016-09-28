@@ -26,11 +26,18 @@
 
 #include "Basics/Common.h"
 #include "Basics/ConditionVariable.h"
+#include "Basics/Mutex.h"
 #include "Basics/ReadWriteLock.h"
 #include "Basics/Thread.h"
 #include "VocBase/RevisionCacheChunk.h"
 
+#include <list>
+
 namespace arangodb {
+
+class CollectionRevisionsCache;
+class ReadCache;
+class RevisionCacheGCThread;
 
 class RevisionCacheChunkAllocator {
  public:
@@ -42,21 +49,29 @@ class RevisionCacheChunkAllocator {
   ~RevisionCacheChunkAllocator();
   
  public:
+
+  void startGcThread();
+  void stopGcThread();
+  void beginShutdown(); 
   
   /// @brief total number of bytes allocated by the cache
   uint64_t totalAllocated();
 
   /// @brief order a new chunk
-  RevisionCacheChunk* orderChunk(uint32_t targetSize, bool& hasMemoryPressure);
+  RevisionCacheChunk* orderChunk(CollectionRevisionsCache* collectionCache, uint32_t valueSize, uint32_t chunkSize);
 
   /// @brief return an unused chunk
-  void returnChunk(RevisionCacheChunk* chunk);
+  void returnUnused(RevisionCacheChunk* chunk);
+  
+  void returnUsed(ReadCache* cache, RevisionCacheChunk* chunk);
+
+  void removeCollection(ReadCache* cache);
 
   bool garbageCollect();
 
  private:
-  /// @brief calculate the effective size for a new chunk
-  uint32_t newChunkSize(uint32_t dataSize) const noexcept;
+  /// @brief physically delete a chunk
+  void deleteChunk(RevisionCacheChunk* chunk) const;
 
  private:
   // lock for the lists of chunks
@@ -64,6 +79,10 @@ class RevisionCacheChunkAllocator {
 
   // completely (or partially unused) chunks that can still be written to
   std::vector<RevisionCacheChunk*> _freeList;
+
+  Mutex _gcLock;
+
+  std::unordered_map<ReadCache*, std::unordered_map<RevisionCacheChunk*, bool>> _fullChunks;
 
   // default size for new memory chunks
   uint32_t _defaultChunkSize;
@@ -73,6 +92,8 @@ class RevisionCacheChunkAllocator {
 
   // total number of bytes allocated by chunks
   uint64_t _totalAllocated;
+
+  std::unique_ptr<RevisionCacheGCThread> _gcThread;
 };
 
 class RevisionCacheGCThread : public Thread {
@@ -81,6 +102,7 @@ class RevisionCacheGCThread : public Thread {
   ~RevisionCacheGCThread() { shutdown(); }
 
   void beginShutdown() override;
+  void signal();
  
  protected:
   void run() override;

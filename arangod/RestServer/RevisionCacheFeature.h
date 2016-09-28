@@ -27,7 +27,6 @@
 
 namespace arangodb {
 class RevisionCacheChunkAllocator;
-class RevisionCacheGCThread;
 
 class RevisionCacheFeature final
     : public application_features::ApplicationFeature {
@@ -51,9 +50,6 @@ class RevisionCacheFeature final
   std::unique_ptr<RevisionCacheChunkAllocator> _allocator;
   uint32_t _chunkSize;
   uint64_t _targetSize;
-  
- private:
-  std::unique_ptr<RevisionCacheGCThread> _gcThread;
 };
 }
 

@@ -53,22 +53,26 @@ void RevisionCacheFeature::collectOptions(std::shared_ptr<ProgramOptions> option
 }
 
 void RevisionCacheFeature::validateOptions(std::shared_ptr<ProgramOptions> options) {
-  if (_chunkSize < 16 * 1024) {
+  // note: all the following are arbitrary limits
+  if (_chunkSize < 8 * 1024) {
     LOG(FATAL) << "value for '--database.revision-cache-chunk-size' is too low";
     FATAL_ERROR_EXIT();
   }
-  if (_chunkSize > 128 * 1024 * 1024) {
+  if (_chunkSize > 256 * 1024 * 1024) {
     LOG(FATAL) << "value for '--database.revision-cache-chunk-size' is too high";
     FATAL_ERROR_EXIT();
   }
 
-  if (_targetSize < 16 * 1024 * 1024) {
+  if (_targetSize < 512 * 1024) {
     LOG(FATAL) << "value for '--database.revision-cache-target-size' is too low";
     FATAL_ERROR_EXIT();
+  } else if (_targetSize < 32 * 1024 * 1024 || _targetSize / _chunkSize < 16) {
+    LOG(WARN) << "value for '--database.revision-cache-target-size' is very low";
   }
+
   if (_chunkSize >= _targetSize) {
-    LOG(FATAL) << "value for '--database.revision-cache-target-size' should be higher than value of '--database.revision-cache-chunk-size'";
-    FATAL_ERROR_EXIT();
+    LOG(WARN) << "value for '--database.revision-cache-target-size' should be higher than value of '--database.revision-cache-chunk-size'";
+    _chunkSize = _targetSize;
   }
 }
 
@@ -77,23 +81,16 @@ void RevisionCacheFeature::prepare() {
   ALLOCATOR = _allocator.get();
 }
 
-void RevisionCacheFeature::beginShutdown() {
-  _gcThread->beginShutdown();
+void RevisionCacheFeature::start() {
+  _allocator->startGcThread();
 }
 
-void RevisionCacheFeature::start() {
-  _gcThread.reset(new RevisionCacheGCThread(_allocator.get()));
-  if (!_gcThread->start()) {
-    LOG(FATAL) << "could not start garbage collection thread";
-    FATAL_ERROR_EXIT();
-  }
+void RevisionCacheFeature::beginShutdown() {
+  _allocator->beginShutdown();
 }
 
 void RevisionCacheFeature::stop() {
-  while (_gcThread->isRunning()) {
-    usleep(10000);
-  }
-  _gcThread.reset();
+  _allocator->stopGcThread();
 }
 
 void RevisionCacheFeature::unprepare() {

@@ -35,15 +35,19 @@ namespace wal {
 class Logfile;
 }
 
-class PhysicalCollection;
+class LogicalCollection;
 class RevisionCacheChunkAllocator;
 
 class CollectionRevisionsCache {
  public:
-  explicit CollectionRevisionsCache(PhysicalCollection*, RevisionCacheChunkAllocator*);
+  CollectionRevisionsCache(LogicalCollection*, RevisionCacheChunkAllocator*);
   ~CollectionRevisionsCache();
   
  public:
+  uint32_t chunkSize() const;
+  std::string name() const;
+
+  void closeWriteChunk();
   void clear();
 
   // look up a revision
@@ -71,7 +75,7 @@ class CollectionRevisionsCache {
 
   std::unordered_map<TRI_voc_rid_t, RevisionCacheEntry> _revisions;
 
-  PhysicalCollection* _physical;
+  LogicalCollection* _collection;
 
   ReadCache _readCache;
 };

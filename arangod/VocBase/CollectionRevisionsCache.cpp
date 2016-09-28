@@ -24,14 +24,15 @@
 #include "CollectionRevisionsCache.h"
 #include "Basics/ReadLocker.h"
 #include "Basics/WriteLocker.h"
+#include "VocBase/LogicalCollection.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/RevisionCacheChunk.h"
 #include "Wal/LogfileManager.h"
 
 using namespace arangodb;
 
-CollectionRevisionsCache::CollectionRevisionsCache(PhysicalCollection* physical, RevisionCacheChunkAllocator* allocator) 
-    : _physical(physical), _readCache(allocator) {}
+CollectionRevisionsCache::CollectionRevisionsCache(LogicalCollection* collection, RevisionCacheChunkAllocator* allocator) 
+    : _collection(collection), _readCache(allocator, this) {}
 
 CollectionRevisionsCache::~CollectionRevisionsCache() {
   try {
@@ -39,6 +40,21 @@ CollectionRevisionsCache::~CollectionRevisionsCache() {
   } catch (...) {
     // ignore errors here because of destructor
   }
+}
+
+std::string CollectionRevisionsCache::name() const {
+  return _collection->name();
+}
+
+uint32_t CollectionRevisionsCache::chunkSize() const {
+  if (_collection->isSystem()) {
+    return 512 * 1024; // use small chunks for system collections
+  }
+  return 0; // means: use system default 
+}
+
+void CollectionRevisionsCache::closeWriteChunk() {
+  _readCache.closeWriteChunk();
 }
 
 void CollectionRevisionsCache::clear() {
@@ -76,7 +92,7 @@ bool CollectionRevisionsCache::lookupRevision(ManagedDocumentResult& result, TRI
     } 
 
     // document is not in WAL but already in read cache
-    ChunkUsageStatus status = _readCache.readAndLease(found);
+    ChunkProtector status = _readCache.readAndLease(found);
     uint8_t const* vpack = status.vpack();
     if (vpack != nullptr) {
       // found in read cache, and still valid
@@ -134,7 +150,7 @@ bool CollectionRevisionsCache::lookupRevision(ManagedMultiDocumentResult& result
     } 
 
     // document is not in WAL but already in read cache
-    ChunkUsageStatus status = _readCache.readAndLease(found);
+    ChunkProtector status = _readCache.readAndLease(found);
     uint8_t const* vpack = status.vpack();
     if (vpack != nullptr) {
       // found in read cache, and still valid
@@ -197,5 +213,5 @@ void CollectionRevisionsCache::removeRevisions(std::vector<TRI_voc_rid_t> const&
 }
   
 uint8_t const* CollectionRevisionsCache::readFromEngine(TRI_voc_rid_t revisionId) {
-  return _physical->lookupRevisionVPack(revisionId);
+  return _collection->getPhysical()->lookupRevisionVPack(revisionId);
 }

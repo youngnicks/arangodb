@@ -327,7 +327,7 @@ LogicalCollection::LogicalCollection(
       _cleanupIndexes(0),
       _persistentIndexes(0),
       _physical(EngineSelectorFeature::ENGINE->createPhysicalCollection(this)),
-      _revisionsCache(_physical.get(), RevisionCacheFeature::ALLOCATOR),
+      _revisionsCache(this, RevisionCacheFeature::ALLOCATOR),
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
@@ -392,7 +392,7 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase,
       _persistentIndexes(0),
       _path(ReadStringValue(info, "path", "")),
       _physical(EngineSelectorFeature::ENGINE->createPhysicalCollection(this)),
-      _revisionsCache(_physical.get(), RevisionCacheFeature::ALLOCATOR),
+      _revisionsCache(this, RevisionCacheFeature::ALLOCATOR),
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
@@ -980,7 +980,13 @@ int LogicalCollection::close() {
 
   _numberDocuments = 0;
 
+  _revisionsCache.clear();
+
   return getPhysical()->close();
+}
+
+void LogicalCollection::unload() {
+  _revisionsCache.closeWriteChunk();
 }
 
 void LogicalCollection::drop() {
