@@ -9,14 +9,14 @@ add_definitions(-DARANGODB_BOOST_VERSION=\"${Boost_version}\")
 option(USE_BOOST_UNITTESTS "use boost unit-tests" ON)
 if(false) #for now we do not use the system's boost but our own instead!
     add_library(boost_boost INTERFACE)
-    target_include_directories(boost_boost PUBLIC ${Boost_INCLUDE_DIRS})
+    target_include_directories(boost_boost PUBLIC SYSTEM ${Boost_INCLUDE_DIRS})
     # we are good
     # create imported targets?!
 else()
     #create interface target for boost header only libraries
     message(STATUS "using 3rdParty BOOST")
     add_library(boost_boost INTERFACE)
-    target_include_directories(boost_boost INTERFACE "${boost_src}")
+    target_include_directories(boost_boost INTERFACE SYSTEM "${boost_src}")
 
     #build boost_system - there seems to be just one cpp file:)
     add_library(boost_system STATIC
