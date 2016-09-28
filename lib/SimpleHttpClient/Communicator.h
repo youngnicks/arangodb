@@ -42,8 +42,8 @@ namespace communicator {
   typedef uint64_t Ticket;
 
   struct RequestInProgress {
-    RequestInProgress(Destination destination, Callbacks callbacks, Ticket ticketId, std::string const& requestBody)
-      : _destination(destination), _callbacks(callbacks), _ticketId(ticketId), _requestBody(requestBody), _requestHeaders(nullptr), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)) {
+    RequestInProgress(Destination destination, Callbacks callbacks, Ticket ticketId, std::string const& requestBody, Options const& options)
+      : _destination(destination), _callbacks(callbacks), _ticketId(ticketId), _requestBody(requestBody), _requestHeaders(nullptr), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)), _options(options) {
     }
 
     ~RequestInProgress() {
@@ -65,6 +65,7 @@ namespace communicator {
     HeadersInProgress _responseHeaders;
     double _startTime;
     std::unique_ptr<StringBuffer> _responseBody;
+    Options _options;
   };
   
   struct CurlHandle {

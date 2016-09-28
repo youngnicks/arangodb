@@ -244,7 +244,7 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   TRI_ASSERT(request != nullptr);
 
   // mop: the curl handle will be managed safely via unique_ptr and hold ownership for rip
-  auto rip = new RequestInProgress(newRequest._destination, newRequest._callbacks, newRequest._ticketId, std::string(request->body().c_str(), request->body().length()));
+  auto rip = new RequestInProgress(newRequest._destination, newRequest._callbacks, newRequest._ticketId, std::string(request->body().c_str(), request->body().length()), newRequest._options);
 
   auto handleInProgress = std::make_unique<CurlHandle>(rip);
 
@@ -378,7 +378,15 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
     case CURLE_RECV_ERROR:
     case CURLE_GOT_NOTHING:
       {
-        LOG(ERR) << "timeouted request " << rc << " Destination " << rip->_destination.url() << " Communicator(" << rip->_ticketId << ") // Total time " << (TRI_microtime() - rip->_startTime);
+        LOG(ERR) << "timeouted request " << rc << " Destination " << rip->_destination.url() << " Communicator(" << rip->_ticketId << ") // Total time " << (TRI_microtime() - rip->_startTime) << " TIMEOUTS: connect: " << rip->_options.connectionTimeout << " overall: " << rip->_options.requestTimeout;
+      }
+      rip->_callbacks._onError(TRI_ERROR_CLUSTER_TIMEOUT, {nullptr});
+      break;
+    default:
+      LOG(ERR) << "Curl return " << rc;
+      rip->_callbacks._onError(TRI_ERROR_INTERNAL, {nullptr});
+      break;
+  }
         std::map<CURLINFO, std::string> times = {
           {CURLINFO_TOTAL_TIME, "TOTAL"},
           {CURLINFO_NAMELOOKUP_TIME, "NSLOOKUP"},
@@ -394,14 +402,6 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
             LOG(ERR) << it.second << " " << time;
           }
         }
-      }
-      rip->_callbacks._onError(TRI_ERROR_CLUSTER_TIMEOUT, {nullptr});
-      break;
-    default:
-      LOG(ERR) << "Curl return " << rc;
-      rip->_callbacks._onError(TRI_ERROR_INTERNAL, {nullptr});
-      break;
-  }
   LOG_TOPIC(TRACE, Logger::REQUESTS) << "Communicator(" << rip->_ticketId << ") // Total time " << (TRI_microtime() - rip->_startTime);
   _handlesInProgress.erase(rip->_ticketId);
 }
