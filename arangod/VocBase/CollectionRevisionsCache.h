@@ -25,6 +25,7 @@
 #define ARANGOD_VOCBASE_COLLECTION_REVISIONS_CACHE_H 1
 
 #include "Basics/Common.h"
+#include "Basics/AssocUnique.h"
 #include "Basics/ReadWriteLock.h"
 #include "VocBase/ManagedDocumentResult.h"
 #include "VocBase/ReadCache.h"
@@ -73,8 +74,8 @@ class CollectionRevisionsCache {
  private:
   arangodb::basics::ReadWriteLock _lock; 
 
-  std::unordered_map<TRI_voc_rid_t, RevisionCacheEntry> _revisions;
-
+  arangodb::basics::AssocUnique<TRI_voc_rid_t, RevisionCacheEntry> _revisions;
+  
   LogicalCollection* _collection;
 
   ReadCache _readCache;

@@ -31,8 +31,6 @@
 #include "VocBase/voc-types.h"
 #include "Wal/Logfile.h"
 
-#include <list>
-
 namespace arangodb {
 
 class CollectionRevisionsCache;
@@ -111,16 +109,21 @@ union RevisionCacheValue {
 };
   
 struct RevisionCacheEntry {
+  TRI_voc_rid_t revisionId;
   RevisionCacheValue data; 
+ 
+  // default ctor used for hash arrays 
+  RevisionCacheEntry() noexcept : revisionId(0), data(nullptr, 0, 0) {}
+
+  RevisionCacheEntry(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset, uint32_t version) noexcept : revisionId(revisionId), data(chunk, offset, version) {}
+  RevisionCacheEntry(TRI_voc_rid_t revisionId, wal::Logfile* logfile, uint32_t offset) noexcept : revisionId(revisionId), data(logfile, offset) {}
   
-  RevisionCacheEntry(RevisionCacheChunk* chunk, uint32_t offset, uint32_t version) noexcept : data(chunk, offset, version) {}
-  RevisionCacheEntry(wal::Logfile* logfile, uint32_t offset) noexcept : data(logfile, offset) {}
+  RevisionCacheEntry(RevisionCacheEntry const& other) noexcept : revisionId(other.revisionId), data(other.data) {}
   
-  RevisionCacheEntry(RevisionCacheEntry const& other) noexcept : data(other.data) {}
-  
-  RevisionCacheEntry(RevisionCacheEntry&& other) noexcept : data(std::move(other.data)) {}
+  RevisionCacheEntry(RevisionCacheEntry&& other) noexcept : revisionId(other.revisionId), data(std::move(other.data)) {}
   
   RevisionCacheEntry& operator=(RevisionCacheEntry const& other) noexcept {
+    revisionId = other.revisionId;
     if (other.isWal()) {
       data.wal = other.data.wal;
     } else {
@@ -130,6 +133,7 @@ struct RevisionCacheEntry {
   }
   
   RevisionCacheEntry& operator=(RevisionCacheEntry&& other) noexcept {
+    revisionId = other.revisionId;
     if (other.isWal()) {
       data.wal = other.data.wal;
     } else {
@@ -137,7 +141,7 @@ struct RevisionCacheEntry {
     }
     return *this;
   }
-
+  
   inline RevisionCacheChunk* chunk() const noexcept { 
     TRI_ASSERT(isChunk());
     return data.chunk.chunk; 
@@ -162,6 +166,13 @@ struct RevisionCacheEntry {
 
   inline bool isChunk() const noexcept { return data.chunk.version != 0; }
   inline bool isWal() const noexcept { return !isChunk(); }
+
+  inline operator bool() const { return revisionId != 0; }
+
+  inline bool operator==(RevisionCacheEntry const& other) const { 
+    return memcmp(this, &other, sizeof(other)) == 0;
+  }
+
 };
 
 class ReadCache {

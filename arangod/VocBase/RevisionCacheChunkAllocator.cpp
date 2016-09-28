@@ -228,6 +228,7 @@ void RevisionCacheChunkAllocator::removeCollection(ReadCache* cache) {
 }
 
 bool RevisionCacheChunkAllocator::garbageCollect() {
+  return false; // TODO
   RevisionCacheChunk* chunk = nullptr;
 
   {
@@ -363,7 +364,7 @@ void RevisionCacheGCThread::run() {
     if (!_allocator->garbageCollect()) {
       // LOG(ERR) << "gc thread going to sleep";
       CONDITION_LOCKER(guard, _condition);
-      guard.wait(1000000);
+      guard.wait(500000);
     } else {
       // LOG(ERR) << "gc going on...";
     }

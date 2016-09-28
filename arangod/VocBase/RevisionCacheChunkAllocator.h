@@ -31,8 +31,6 @@
 #include "Basics/Thread.h"
 #include "VocBase/RevisionCacheChunk.h"
 
-#include <list>
-
 namespace arangodb {
 
 class CollectionRevisionsCache;

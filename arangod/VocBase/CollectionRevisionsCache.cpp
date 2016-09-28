@@ -24,6 +24,7 @@
 #include "CollectionRevisionsCache.h"
 #include "Basics/ReadLocker.h"
 #include "Basics/WriteLocker.h"
+#include "Basics/xxhash.h"
 #include "VocBase/LogicalCollection.h"
 #include "VocBase/PhysicalCollection.h"
 #include "VocBase/RevisionCacheChunk.h"
@@ -31,8 +32,37 @@
 
 using namespace arangodb;
 
+namespace {
+static inline uint64_t HashKey(void*, TRI_voc_rid_t const* key) {
+  return XXH64(key, sizeof(TRI_voc_rid_t), 0x12345678);
+}
+
+static inline uint64_t HashElement(void*, RevisionCacheEntry const& element) {
+  return HashKey(nullptr, &element.revisionId);
+}
+
+static bool IsEqualKeyElement(void*, TRI_voc_rid_t const* key,
+                              uint64_t hash, RevisionCacheEntry const& element) {
+  if (hash != HashElement(nullptr, element)) {
+    return false;
+  }
+
+  return *key == element.revisionId;
+}
+
+static bool IsEqualElementElement(void*, RevisionCacheEntry const& left,
+                                  RevisionCacheEntry const& right) {
+  if (HashKey(nullptr, &left.revisionId) != HashKey(nullptr, &right.revisionId)) {
+    return false;
+  }
+
+  return left == right;
+}
+
+} // namespace
+
 CollectionRevisionsCache::CollectionRevisionsCache(LogicalCollection* collection, RevisionCacheChunkAllocator* allocator) 
-    : _collection(collection), _readCache(allocator, this) {}
+    : _revisions(HashKey, HashElement, IsEqualKeyElement, IsEqualElementElement, IsEqualElementElement, 8, []() -> std::string { return "revisions"; }), _collection(collection), _readCache(allocator, this) {}
 
 CollectionRevisionsCache::~CollectionRevisionsCache() {
   try {
@@ -59,7 +89,7 @@ void CollectionRevisionsCache::closeWriteChunk() {
 
 void CollectionRevisionsCache::clear() {
   // TODO: use something like shrink_to_fit here
-  _revisions.clear();
+  _revisions.truncate([](RevisionCacheEntry& entry) { return true; });
   _readCache.clear();
 }
 
@@ -67,12 +97,10 @@ void CollectionRevisionsCache::clear() {
 bool CollectionRevisionsCache::lookupRevision(ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
   READ_LOCKER(locker, _lock);
   
-  auto it = _revisions.find(revisionId);
+  RevisionCacheEntry found = _revisions.findByKey(nullptr, &revisionId);
 
-  if (it != _revisions.end()) {
+  if (found) {
     // revision found in hash table
-    RevisionCacheEntry const& found = (*it).second;
-    
     if (found.isWal()) {
       // document is still in WAL
       // TODO: handle WAL reference counters
@@ -125,12 +153,10 @@ bool CollectionRevisionsCache::lookupRevision(ManagedDocumentResult& result, TRI
 bool CollectionRevisionsCache::lookupRevision(ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId) {
   READ_LOCKER(locker, _lock);
   
-  auto it = _revisions.find(revisionId);
+  RevisionCacheEntry found = _revisions.findByKey(nullptr, &revisionId);
 
-  if (it != _revisions.end()) {
+  if (found) {
     // revision found in hash table
-    RevisionCacheEntry const& found = (*it).second;
-    
     if (found.isWal()) {
       // document is still in WAL
       // TODO: handle WAL reference counters
@@ -182,33 +208,34 @@ bool CollectionRevisionsCache::lookupRevision(ManagedMultiDocumentResult& result
 // insert from chunk
 void CollectionRevisionsCache::insertRevision(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset, uint32_t version) {
   WRITE_LOCKER(locker, _lock);
-  auto it = _revisions.emplace(revisionId, RevisionCacheEntry(chunk, offset, version));
-  if (!it.second) {
-    _revisions.erase(it.first);
-    _revisions.emplace(revisionId, RevisionCacheEntry(chunk, offset, version));
+  int res = _revisions.insert(nullptr, RevisionCacheEntry(revisionId, chunk, offset, version));
+  if (res != TRI_ERROR_NO_ERROR) {
+    _revisions.removeByKey(nullptr, &revisionId);
+    // try again
+    _revisions.insert(nullptr, RevisionCacheEntry(revisionId, chunk, offset, version));
   }
 }
   
 // insert from WAL
 void CollectionRevisionsCache::insertRevision(TRI_voc_rid_t revisionId, wal::Logfile* logfile, uint32_t offset) {
   WRITE_LOCKER(locker, _lock);
-  auto it = _revisions.emplace(revisionId, RevisionCacheEntry(logfile, offset));
-  if (!it.second) {
-    _revisions.erase(it.first);
-    _revisions.emplace(revisionId, RevisionCacheEntry(logfile, offset));
+  int res = _revisions.insert(nullptr, RevisionCacheEntry(revisionId, logfile, offset));
+  if (res != TRI_ERROR_NO_ERROR) {
+    _revisions.removeByKey(nullptr, &revisionId);
+    _revisions.insert(nullptr, RevisionCacheEntry(revisionId, logfile, offset));
   }
 }
 
 // remove a revision
 void CollectionRevisionsCache::removeRevision(TRI_voc_rid_t revisionId) {
   WRITE_LOCKER(locker, _lock);
-  _revisions.erase(revisionId);
+  _revisions.removeByKey(nullptr, &revisionId);
 }
 
 void CollectionRevisionsCache::removeRevisions(std::vector<TRI_voc_rid_t> const& revisions) {
   WRITE_LOCKER(locker, _lock);
   for (auto const& it : revisions) {
-    _revisions.erase(it);
+    _revisions.removeByKey(nullptr, &it);
   }
 }
   

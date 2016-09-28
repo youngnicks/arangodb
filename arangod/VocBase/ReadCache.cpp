@@ -61,9 +61,13 @@ void ReadCache::closeWriteChunk() {
   MUTEX_LOCKER(locker, _writeMutex);
 
   if (_writeChunk != nullptr) {
-    // unused here so the chunk gets freed immediately
-    // we don't care if the chunk is in use
-    _allocator->returnUnused(_writeChunk);
+    if (_writeChunk->isUsed()) {
+      // chunk still in use
+      _allocator->returnUsed(this, _writeChunk);
+    } else {
+      // unused here so the chunk gets freed immediately
+      _allocator->returnUnused(_writeChunk);
+    }
     _writeChunk = nullptr;
   }
 }
