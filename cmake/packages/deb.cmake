@@ -4,7 +4,7 @@
 ################################################################################
 FILE(READ "${PROJECT_SOURCE_DIR}/Installation/debian/packagedesc.txt" CPACK_DEBIAN_PACKAGE_DESCRIPTION)
 set(CPACK_DEBIAN_PACKAGE_SECTION "database")
-set(CPACK_DEBIAN_PACKAGE_CONFLICTS "arangodb, arangodb3-client")
+set(CPACK_DEBIAN_PACKAGE_CONFLICTS "arangodb, ${CPACKG_PACKAGE_CONFLICTS}, ${CPACKG_PACKAGE_CONFLICTS}-client, ${CPACK_PACKAGE_NAME}-client")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_COMPRESSION_TYPE "xz")
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE ${ARANGODB_URL_INFO_ABOUT})
@@ -63,4 +63,9 @@ add_custom_target(package-arongodb-client
   WORKING_DIRECTORY ${CLIENT_BUILD_DIR})
 
 
+
 list(APPEND PACKAGES_LIST package-arongodb-client)
+
+
+add_custom_target(copy_packages
+  COMMAND cp *.deb ${PACKAGE_TARGET_DIR})

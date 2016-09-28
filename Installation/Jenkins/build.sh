@@ -140,6 +140,7 @@ GOLD=0
 SANITIZE=0
 VERBOSE=0
 MSVC=
+ENTERPRISE_GIT_URL=
 
 case "$1" in
     standard)
@@ -293,6 +294,7 @@ while [ $# -gt 0 ];  do
         --targetDir)
             shift
             TARGET_DIR=$1
+            CONFIGURE_OPTIONS="${CONFIGURE_OPTIONS} -DPACKAGE_TARGET_DIR=$1"
             shift
             ;;
 
@@ -309,6 +311,13 @@ while [ $# -gt 0 ];  do
             ARMV7=1
             CXGCC=1
             shift
+            ;;
+
+        --enterprise)
+            shift
+            ENTERPRISE_GIT_URL=$1
+            shift
+            CONFIGURE_OPTIONS="${CONFIGURE_OPTIONS} -DUSE_ENTERPRISE=On"
             ;;
         *)
             echo "Unknown option: $1"
@@ -452,6 +461,27 @@ fi
 
 SRC=`pwd`
 
+if test -n "${ENTERPRISE_GIT_URL}" ; then
+    GITSHA=`git log -n1 --pretty='%h'`
+    if git describe --exact-match --tags ${GITSHA}; then
+        GITARGS=`git describe --exact-match --tags ${GITSHA}`
+        echo "I'm on tag: ${GITARGS}"
+    else
+        GITARGS=`git branch --no-color -q| grep '^\*' | sed "s;\* *;;"`
+        echo "I'm on Branch: ${GITARGS}"
+    fi
+    # clean up if we're commanded to:
+    if test -d enterprise -a ${CLEAN_IT} -eq 1; then
+        rm -rf enterprise
+    fi
+    if test ! -d enterprise; then
+        git clone ${ENTERPRISE_GIT_URL} enterprise
+    fi
+    (cd enterprise; git checkout master; git pull --all; git checkout ${GITARGS} )
+fi
+
+
+
 test -d ${BUILD_DIR} || mkdir ${BUILD_DIR}
 cd ${BUILD_DIR}
 
@@ -472,53 +502,58 @@ if [ -n "$CPACK"  -a -n "${TARGET_DIR}" ];  then
 fi
 # and install
 
+
 if test -n "${TARGET_DIR}";  then
     echo "building distribution tarball"
     mkdir -p "${TARGET_DIR}"
     dir="${TARGET_DIR}"
-    TARFILE=arangodb-`uname`${TAR_SUFFIX}.tar.gz
-    TARFILE_TMP=`pwd`/arangodb.tar.$$
+    if [ -n "$CPACK"  -a -n "${TARGET_DIR}" ];  then
+        ${PACKAGE_MAKE} copy_packages
+    else
+        TARFILE=arangodb-`uname`${TAR_SUFFIX}.tar.gz
+        TARFILE_TMP=`pwd`/arangodb.tar.$$
 
-    mkdir -p ${dir}
-    trap "rm -rf ${TARFILE_TMP}" EXIT
-
-    (cd ${SOURCE_DIR}
-
-     touch 3rdParty/.keepme
-     touch arangod/.keepme
-     touch arangosh/.keepme
-
-     tar -c -f ${TARFILE_TMP} \
-         VERSION utils scripts etc/relative UnitTests Documentation js \
-         lib/Basics/errors.dat \
-         3rdParty/.keepme \
-         arangod/.keepme \
-         arangosh/.keepme
-    )
-
-    tar -u -f ${TARFILE_TMP} \
-        bin etc tests
-
-    find . -name *.gcno > files.$$
-
-    if [ -s files.$$ ]; then
-        tar -u -f ${TARFILE_TMP} \
-            --files-from files.$$
+        mkdir -p ${dir}
+        trap "rm -rf ${TARFILE_TMP}" EXIT
 
         (cd ${SOURCE_DIR}
 
-         find . \
-              \( -name *.cpp -o -name *.h -o -name *.c -o -name *.hpp -o -name *.ll -o -name *.y \) > files.$$
+         touch 3rdParty/.keepme
+         touch arangod/.keepme
+         touch arangosh/.keepme
 
-         tar -u -f ${TARFILE_TMP} \
-             --files-from files.$$
-
-         rm files.$$
+         tar -c -f ${TARFILE_TMP} \
+             VERSION utils scripts etc/relative UnitTests Documentation js \
+             lib/Basics/errors.dat \
+             3rdParty/.keepme \
+             arangod/.keepme \
+             arangosh/.keepme
         )
 
-        rm files.$$
-    fi
+        tar -u -f ${TARFILE_TMP} \
+            bin etc tests
 
-    gzip < ${TARFILE_TMP} > ${dir}/${TARFILE}
-    ${MD5} < ${dir}/${TARFILE}  |sed "s; .*;;" > ${dir}/${TARFILE}.md5
+        find . -name *.gcno > files.$$
+
+        if [ -s files.$$ ]; then
+            tar -u -f ${TARFILE_TMP} \
+                --files-from files.$$
+
+            (cd ${SOURCE_DIR}
+
+             find . \
+                  \( -name *.cpp -o -name *.h -o -name *.c -o -name *.hpp -o -name *.ll -o -name *.y \) > files.$$
+
+             tar -u -f ${TARFILE_TMP} \
+                 --files-from files.$$
+
+             rm files.$$
+            )
+
+            rm files.$$
+        fi
+
+        gzip < ${TARFILE_TMP} > ${dir}/${TARFILE}
+        ${MD5} < ${dir}/${TARFILE}  |sed "s; .*;;" > ${dir}/${TARFILE}.md5
+    fi
 fi

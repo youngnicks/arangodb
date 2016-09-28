@@ -1696,8 +1696,9 @@ int RestReplicationHandler::processRestoreCollectionCoordinator(
 
   // shards
   std::vector<std::string> dbServers;  // will be filled
-  std::map<std::string, std::vector<std::string>> shardDistribution =
-      arangodb::distributeShards(numberOfShards, replicationFactor, dbServers);
+  std::unordered_map<std::string, std::vector<std::string>> shardDistribution =
+      arangodb::distributeShards(numberOfShards, replicationFactor,
+                                  dbServers);
   if (shardDistribution.empty()) {
     errorMsg = "no database servers found in cluster";
     return TRI_ERROR_INTERNAL;

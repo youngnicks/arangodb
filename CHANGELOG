@@ -16,6 +16,8 @@ devel
 
     hidden --server.thread-affinity has been removed
 
+* fixed issue #2079
+
 * fixed issue #2071
 
   make the AQL query optimizer inject filter condition expressions referred to by variables during filter condition aggregation.
@@ -146,6 +148,7 @@ devel
 
 * all lambdas in ClusterInfo might have been left with dangling references.
 
+* Agency bug fix for handling of empty json objects as values.
 
 v3.0.10 (XXXX-XX-XX)
 --------------------
