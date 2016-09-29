@@ -34,17 +34,17 @@ using namespace arangodb::options;
 
 // smaller default cache value for ARM-based platforms
 #ifdef __arm__
-static constexpr uint64_t TargetSize = 64 * 1024 * 1024;
+static constexpr uint64_t DefaultTargetSize = 64 * 1024 * 1024;
 #else
-static constexpr uint64_t TargetSize = 512 * 1024 * 1024;
+static constexpr uint64_t DefaultTargetSize = 512 * 1024 * 1024;
 #endif
 
 RevisionCacheChunkAllocator* RevisionCacheFeature::ALLOCATOR = nullptr;
 
 RevisionCacheFeature::RevisionCacheFeature(ApplicationServer* server)
     : ApplicationFeature(server, "RevisionCache"),
-      _chunkSize(1 * 1024 * 1024),
-      _targetSize(TargetSize) { 
+      _chunkSize(1024 * 1024),
+      _targetSize(DefaultTargetSize) { 
   setOptional(false);
   requiresElevatedPrivileges(false);
   startsAfter("WorkMonitor");
