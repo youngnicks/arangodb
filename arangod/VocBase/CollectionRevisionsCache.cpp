@@ -84,7 +84,10 @@ void CollectionRevisionsCache::closeWriteChunk() {
 }
 
 void CollectionRevisionsCache::clear() {
-  _revisions.truncate([](RevisionCacheEntry& entry) { return true; });
+  {
+    WRITE_LOCKER(locker, _lock);
+    _revisions.truncate([](RevisionCacheEntry& entry) { return true; });
+  }
   _readCache.clear();
 }
 
