@@ -807,8 +807,7 @@ add_definitions("-DARANGODB_ZLIB_VERSION=\"${ZLIB_VERSION}\"")
 ## cURL
 ################################################################################
 
-include_directories(${CURL_INCLUDE_DIR})
-
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/curl/curl-7.50.3/include/)
 ################################################################################
 ## PATHS, installation, packages
 ################################################################################
