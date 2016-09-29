@@ -41,8 +41,8 @@ class MMFilesRevisionsCache {
   
  public:
   MMFilesDocumentPosition lookup(TRI_voc_rid_t revisionId) const;
-  void insert(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
-  void update(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal);
+  void insert(TRI_voc_rid_t revisionId, uint8_t const* dataptr, TRI_voc_fid_t fid, bool isInWal);
+  void update(TRI_voc_rid_t revisionId, uint8_t const* dataptr, TRI_voc_fid_t fid, bool isInWal);
   bool updateConditional(TRI_voc_rid_t revisionId, TRI_df_marker_t const* oldPosition, TRI_df_marker_t const* newPosition, TRI_voc_fid_t newFid, bool isInWal);
   void remove(TRI_voc_rid_t revisionId);
   MMFilesDocumentPosition fetchAndRemove(TRI_voc_rid_t revisionId);

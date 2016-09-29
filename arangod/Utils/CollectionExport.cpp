@@ -110,7 +110,7 @@ void CollectionExport::run(uint64_t maxWaitTime, size_t limit) {
       if (limit == 0) {
         return false;
       }
-      if (_collection->readRevision(&trx, _result, element->revisionId(), 0, true)) {
+      if (_collection->readRevisionConditional(&trx, _result, element->revisionId(), 0, true)) {
         --limit;
       }
       return true;

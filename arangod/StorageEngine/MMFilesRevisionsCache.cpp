@@ -64,7 +64,7 @@ MMFilesDocumentPosition MMFilesRevisionsCache::lookup(TRI_voc_rid_t revisionId) 
   return _positions.findByKey(nullptr, &revisionId);
 }
 
-void MMFilesRevisionsCache::insert(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+void MMFilesRevisionsCache::insert(TRI_voc_rid_t revisionId, uint8_t const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
   TRI_ASSERT(revisionId != 0);
   TRI_ASSERT(dataptr != nullptr);
 
@@ -76,7 +76,7 @@ void MMFilesRevisionsCache::insert(TRI_voc_rid_t revisionId, void const* dataptr
   }
 }
 
-void MMFilesRevisionsCache::update(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+void MMFilesRevisionsCache::update(TRI_voc_rid_t revisionId, uint8_t const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
   TRI_ASSERT(revisionId != 0);
   TRI_ASSERT(dataptr != nullptr);
 

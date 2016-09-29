@@ -1937,7 +1937,7 @@ int LogicalCollection::insert(Transaction* trx, VPackSlice const slice,
   arangodb::CollectionWriteLocker collectionLocker(this, useDeadlockDetector, lock);
 
   TRI_voc_rid_t revisionId = Transaction::extractRevFromDocument(newSlice); 
-  VPackSlice doc(reinterpret_cast<uint8_t const*>(marker->vpack()));
+  VPackSlice doc(marker->vpack());
 
   operation.setRevisions(DocumentDescriptor(), DocumentDescriptor(revisionId, doc.begin()));
  
@@ -2073,7 +2073,7 @@ int LogicalCollection::update(Transaction* trx, VPackSlice const newSlice,
     marker = options.recoveryMarker;
   }
   
-  VPackSlice const newDoc(reinterpret_cast<uint8_t const*>(marker->vpack()));
+  VPackSlice const newDoc(marker->vpack());
   
   arangodb::wal::DocumentOperation operation(
       trx, this, TRI_VOC_DOCUMENT_OPERATION_UPDATE);
@@ -2221,7 +2221,7 @@ int LogicalCollection::replace(Transaction* trx, VPackSlice const newSlice,
     marker = options.recoveryMarker;
   }
 
-  VPackSlice const newDoc(reinterpret_cast<uint8_t const*>(marker->vpack()));
+  VPackSlice const newDoc(marker->vpack());
   
   arangodb::wal::DocumentOperation operation(trx, this, TRI_VOC_DOCUMENT_OPERATION_REPLACE);
   
@@ -3470,7 +3470,7 @@ bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResul
   return _revisionsCache->lookupRevision(result, revisionId);
 }
 
-bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
+bool LogicalCollection::readRevisionConditional(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
   uint8_t const* vpack = getPhysical()->lookupRevisionVPackConditional(revisionId, maxTick, excludeWal);
   if (vpack == nullptr) {
     return false;
@@ -3479,11 +3479,11 @@ bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResul
   return true;
 }
 
-void LogicalCollection::insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+void LogicalCollection::insertRevision(TRI_voc_rid_t revisionId, uint8_t const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
   getPhysical()->insertRevision(revisionId, dataptr, fid, isInWal);
 }
 
-void LogicalCollection::updateRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+void LogicalCollection::updateRevision(TRI_voc_rid_t revisionId, uint8_t const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
   // note: there is no need to modify the cache entry here as insertRevision has not inserted the document into the cache
   getPhysical()->updateRevision(revisionId, dataptr, fid, isInWal);
 }

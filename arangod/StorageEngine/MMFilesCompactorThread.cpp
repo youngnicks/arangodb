@@ -394,7 +394,7 @@ void MMFilesCompactorThread::compactDatafiles(LogicalCollection* collection,
       }
 
       // let marker point to the new position
-      void const* dataptr = reinterpret_cast<char const*>(result) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT);
+      uint8_t const* dataptr = reinterpret_cast<uint8_t const*>(result) + arangodb::DatafileHelper::VPackOffset(TRI_DF_MARKER_VPACK_DOCUMENT);
       collection->updateRevision(element->revisionId(), dataptr, targetFid, false);
 
       context->_dfi.numberAlive++;
