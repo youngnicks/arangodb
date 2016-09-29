@@ -42,6 +42,7 @@ class PathEnumerator;
 
 class SingleServerEdgeCursor : public EdgeCursor {
  private:
+  arangodb::Transaction* _trx;
   std::vector<std::vector<OperationCursor*>> _cursors;
   size_t _currentCursor;
   size_t _currentSubCursor;
@@ -49,7 +50,7 @@ class SingleServerEdgeCursor : public EdgeCursor {
   size_t _cachePos;
 
  public:
-  explicit SingleServerEdgeCursor(size_t);
+  SingleServerEdgeCursor(arangodb::Transaction* trx, size_t);
 
   ~SingleServerEdgeCursor() {
     for (auto& it : _cursors) {

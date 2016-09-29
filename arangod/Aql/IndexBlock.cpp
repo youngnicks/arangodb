@@ -33,6 +33,7 @@
 #include "Utils/OperationCursor.h"
 #include "V8/v8-globals.h"
 #include "VocBase/LogicalCollection.h"
+#include "VocBase/ManagedDocumentResult.h"
 #include "VocBase/vocbase.h"
 
 #include <velocypack/Iterator.h>
@@ -391,29 +392,35 @@ bool IndexBlock::readIndex(size_t atMost) {
     TRI_IF_FAILURE("IndexBlock::readIndex") {
       THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
     }
+      
+    ManagedMultiDocumentResult mmdr; // TODO
 
     if (hasMultipleIndexes) {
       for (auto const& mptr : _result) {
         TRI_voc_rid_t revisionId = mptr->revisionId();
-        uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-        // uniqueness checks
-        if (!isLastIndex) {
-          // insert & check for duplicates in one go
-          if (_alreadyReturned.emplace(revisionId).second) {
-            _documents.emplace_back(vpack);
-          }
-        } else {
-          // only check for duplicates
-          if (_alreadyReturned.find(revisionId) == _alreadyReturned.end()) {
-            _documents.emplace_back(vpack);
+        if (collection->readRevision(_trx, mmdr, revisionId)) {
+          uint8_t const* vpack = mmdr.back();
+          // uniqueness checks
+          if (!isLastIndex) {
+            // insert & check for duplicates in one go
+            if (_alreadyReturned.emplace(revisionId).second) {
+              _documents.emplace_back(vpack);
+            }
+          } else {
+            // only check for duplicates
+            if (_alreadyReturned.find(revisionId) == _alreadyReturned.end()) {
+              _documents.emplace_back(vpack);
+            }
           }
         }
       }
     } else {
       for (auto const& mptr : _result) {
         TRI_voc_rid_t revisionId = mptr->revisionId();
-        uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-        _documents.emplace_back(vpack);
+        if (collection->readRevision(_trx, mmdr, revisionId)) {
+          uint8_t const* vpack = mmdr.back();
+          _documents.emplace_back(vpack);
+        }
       } 
     }
     // Leave the loop here, we can only exhaust one cursor at a time, otherwise slices are lost

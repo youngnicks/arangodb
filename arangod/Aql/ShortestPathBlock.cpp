@@ -30,6 +30,7 @@
 #include "Utils/Transaction.h"
 #include "VocBase/EdgeCollectionInfo.h"
 #include "VocBase/LogicalCollection.h"
+#include "VocBase/ManagedDocumentResult.h"
 
 #include <velocypack/Iterator.h>
 #include <velocypack/velocypack-aliases.h>
@@ -93,23 +94,26 @@ struct ConstDistanceExpanderLocal {
       // has to stay intact.
       _cursor.clear();
       LogicalCollection* collection = edgeCursor->collection();
+      ManagedMultiDocumentResult mmdr; // TODO
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(_cursor, UINT64_MAX);
         for (auto const& mptr : _cursor) {
           TRI_voc_rid_t revisionId = mptr->revisionId();
-          uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-          VPackSlice edge(vpack);
-          VPackSlice from =
-              arangodb::Transaction::extractFromFromDocument(edge);
-          if (from == v) {
-            VPackSlice to = arangodb::Transaction::extractToFromDocument(edge);
-            if (to != v) {
+          if (collection->readRevision(_block->transaction(), mmdr, revisionId)) {
+            uint8_t const* vpack = mmdr.back();
+            VPackSlice edge(vpack);
+            VPackSlice from =
+                arangodb::Transaction::extractFromFromDocument(edge);
+            if (from == v) {
+              VPackSlice to = arangodb::Transaction::extractToFromDocument(edge);
+              if (to != v) {
+                resEdges.emplace_back(edge);
+                neighbors.emplace_back(to);
+              }
+            } else {
               resEdges.emplace_back(edge);
-              neighbors.emplace_back(to);
+              neighbors.emplace_back(from);
             }
-          } else {
-            resEdges.emplace_back(edge);
-            neighbors.emplace_back(from);
           }
         }
       }
@@ -233,22 +237,25 @@ struct EdgeWeightExpanderLocal {
       // next edge cursor.
       // While iterating over the edge cursor, _cursor
       // has to stay intact.
+      ManagedMultiDocumentResult mmdr; // TODO
       cursor.clear();
       LogicalCollection* collection = edgeCursor->collection();
       while (edgeCursor->hasMore()) {
         edgeCursor->getMoreMptr(cursor, UINT64_MAX);
         for (auto const& mptr : cursor) {
           TRI_voc_rid_t revisionId = mptr->revisionId();
-          uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-          VPackSlice edge(vpack);
-          VPackSlice from =
-              arangodb::Transaction::extractFromFromDocument(edge);
-          VPackSlice to = arangodb::Transaction::extractToFromDocument(edge);
-          double currentWeight = edgeCollection->weightEdge(edge);
-          if (from == source) {
-            inserter(candidates, result, from, to, currentWeight, edge);
-          } else {
-            inserter(candidates, result, to, from, currentWeight, edge);
+          if (collection->readRevision(_block->transaction(), mmdr, revisionId)) {
+            uint8_t const* vpack = mmdr.back();
+            VPackSlice edge(vpack);
+            VPackSlice from =
+                arangodb::Transaction::extractFromFromDocument(edge);
+            VPackSlice to = arangodb::Transaction::extractToFromDocument(edge);
+            double currentWeight = edgeCollection->weightEdge(edge);
+            if (from == source) {
+              inserter(candidates, result, from, to, currentWeight, edge);
+            } else {
+              inserter(candidates, result, to, from, currentWeight, edge);
+            }
           }
         }
       }

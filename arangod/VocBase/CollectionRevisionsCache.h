@@ -52,10 +52,9 @@ class CollectionRevisionsCache {
   void clear();
 
   // look up a revision
-  bool lookupRevision(ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
+  template<typename T>
+  bool lookupRevision(T& result, TRI_voc_rid_t revisionId);
   
-  bool lookupRevision(ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId);
-
   // insert from chunk
   void insertRevision(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset, uint32_t version);
   

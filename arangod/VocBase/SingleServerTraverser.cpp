@@ -55,8 +55,8 @@ static int FetchDocumentById(arangodb::Transaction* trx,
   return res;
 }
 
-SingleServerEdgeCursor::SingleServerEdgeCursor(size_t nrCursors)
-    : _cursors(), _currentCursor(0), _currentSubCursor(0), _cachePos(0) {
+SingleServerEdgeCursor::SingleServerEdgeCursor(Transaction* trx, size_t nrCursors)
+    : _trx(trx), _cursors(), _currentCursor(0), _currentSubCursor(0), _cachePos(0) {
   _cursors.reserve(nrCursors);
   _cache.reserve(1000);
 };
@@ -69,9 +69,12 @@ bool SingleServerEdgeCursor::next(std::vector<VPackSlice>& result,
   _cachePos++;
   if (_cachePos < _cache.size()) {
     LogicalCollection* collection = _cursors[_currentCursor][_currentSubCursor]->collection();
+    ManagedMultiDocumentResult mmdr;
     TRI_voc_rid_t revisionId = _cache[_cachePos]->revisionId();
-    uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-    result.emplace_back(vpack);
+    if (collection->readRevision(_trx, mmdr, revisionId)) {
+      uint8_t const* vpack = mmdr.back();
+      result.emplace_back(vpack);
+    }
     cursorId = _currentCursor;
     return true;
   }
@@ -110,11 +113,15 @@ bool SingleServerEdgeCursor::next(std::vector<VPackSlice>& result,
       cursor->getMoreMptr(_cache);
     }
   } while (_cache.empty());
+
+  ManagedMultiDocumentResult mmdr;
   TRI_ASSERT(_cachePos < _cache.size());
   LogicalCollection* collection = cursor->collection();
   TRI_voc_rid_t revisionId = _cache[_cachePos]->revisionId();
-  uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-  result.emplace_back(vpack);
+  if (collection->readRevision(_trx, mmdr, revisionId)) {
+    uint8_t const* vpack = mmdr.back();
+    result.emplace_back(vpack);
+  }
   cursorId = _currentCursor;
   return true;
 }
@@ -124,6 +131,9 @@ bool SingleServerEdgeCursor::readAll(std::unordered_set<VPackSlice>& result,
   if (_currentCursor >= _cursors.size()) {
     return false;
   }
+  
+  ManagedMultiDocumentResult mmdr; // TODO
+
   cursorId = _currentCursor;
   auto& cursorSet = _cursors[_currentCursor];
   for (auto& cursor : cursorSet) {
@@ -134,8 +144,10 @@ bool SingleServerEdgeCursor::readAll(std::unordered_set<VPackSlice>& result,
       cursor->getMoreMptr(_cache);
       for (auto const& mptr : _cache) {
         TRI_voc_rid_t revisionId = mptr->revisionId();
-        uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-        result.emplace(vpack);
+        if (collection->readRevision(_trx, mmdr, revisionId)) {
+          uint8_t const* vpack = mmdr.back();
+          result.emplace(vpack);
+        }
       }
     }
   }

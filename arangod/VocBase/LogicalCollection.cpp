@@ -3479,14 +3479,6 @@ bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResul
   return true;
 }
 
-uint8_t const* LogicalCollection::lookupRevisionVPack(TRI_voc_rid_t revisionId) {
-  ManagedDocumentResult result;
-  if (!_revisionsCache->lookupRevision(result, revisionId)) {
-    return nullptr;
-  }
-  return result.vpack();
-}
-
 void LogicalCollection::insertRevision(TRI_voc_rid_t revisionId, void const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
   getPhysical()->insertRevision(revisionId, dataptr, fid, isInWal);
 }

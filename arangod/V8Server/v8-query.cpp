@@ -38,6 +38,7 @@
 #include "V8Server/v8-vocbase.h"
 #include "V8Server/v8-vocindex.h"
 #include "VocBase/LogicalCollection.h"
+#include "VocBase/ManagedDocumentResult.h"
 #include "VocBase/vocbase.h"
 
 #include <velocypack/Builder.h>
@@ -379,8 +380,10 @@ static void JS_ChecksumCollection(
   std::string const revisionId = std::to_string(physical->revision());
   uint64_t hash = 0;
         
-  trx.invokeOnAllElements(col->name(), [&hash, &withData, &withRevisions, &collection](IndexElement const* element) {
-    uint8_t const* vpack = collection->lookupRevisionVPack(element->revisionId());
+  ManagedMultiDocumentResult mmdr;
+  trx.invokeOnAllElements(col->name(), [&hash, &withData, &withRevisions, &trx, &collection, &mmdr](IndexElement const* element) {
+    collection->readRevision(&trx, mmdr, element->revisionId());
+    uint8_t const* vpack = mmdr.back();
     VPackSlice const slice(vpack);
 
     uint64_t localHash = Transaction::extractKeyFromDocument(slice).hashString(); 

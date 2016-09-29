@@ -78,6 +78,7 @@ class IndexIterator {
   virtual char const* typeName() const = 0;
 
   LogicalCollection* collection() const { return _collection; }
+  arangodb::Transaction* transaction() const { return _trx; }
 
   virtual IndexElement* next();
 

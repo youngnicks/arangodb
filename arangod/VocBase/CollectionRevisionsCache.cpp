@@ -89,7 +89,8 @@ void CollectionRevisionsCache::clear() {
 }
 
 // look up a revision
-bool CollectionRevisionsCache::lookupRevision(ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
+template<typename T>
+bool CollectionRevisionsCache::lookupRevision(T& result, TRI_voc_rid_t revisionId) {
   TRI_ASSERT(revisionId != 0);
 
   READ_LOCKER(locker, _lock);
@@ -101,61 +102,6 @@ bool CollectionRevisionsCache::lookupRevision(ManagedDocumentResult& result, TRI
     TRI_ASSERT(found.revisionId != 0);
     // revision found in hash table
     if (found.isWal()) {
-      LOG(ERR) << "SHOULD NEVER GET HERE " << revisionId;
-      TRI_ASSERT(false);
-      // document is still in WAL
-      // TODO: handle WAL reference counters
-      wal::Logfile* logfile = found.logfile();
-      // now move it into read cache
-      ChunkProtector status = _readCache.insertAndLease(revisionId, reinterpret_cast<uint8_t const*>(logfile->data() + found.offset()));
-      // must have succeeded (otherwise an exception was thrown)
-      // and insert result into the hash
-      insertRevision(revisionId, status.chunk(), status.offset(), status.version());
-      // TODO: handle WAL reference counters
-      result.add(std::move(status));
-      return true;
-    } 
-
-    // document is not in WAL but already in read cache
-    ChunkProtector status = _readCache.readAndLease(found);
-    if (status) {
-      // found in read cache, and still valid
-      result.add(std::move(status));
-      return true;
-    }
-  }
-
-  // either revision was not in hash or it was in hash but outdated
-
-  // fetch document from engine
-  uint8_t const* vpack = readFromEngine(revisionId);
-  if (vpack == nullptr) {
-    // engine could not provide the revision
-    return false;
-  }
-  // insert found revision into our hash
-  ChunkProtector status = _readCache.insertAndLease(revisionId, vpack);
-  // insert result into the hash
-  insertRevision(revisionId, status.chunk(), status.offset(), status.version());
-  result.add(std::move(status));
-  return true;
-}
-
-// look up a revision
-bool CollectionRevisionsCache::lookupRevision(ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId) {
-  TRI_ASSERT(revisionId != 0);
-
-  READ_LOCKER(locker, _lock);
-  
-  RevisionCacheEntry found = _revisions.findByKey(nullptr, &revisionId);
-  locker.unlock();
-
-  if (found) {
-    TRI_ASSERT(found.revisionId != 0);
-    // revision found in hash table
-    if (found.isWal()) {
-      LOG(ERR) << "SHOULD NEVER GET HERE2 " << revisionId;
-      TRI_ASSERT(false);
       // document is still in WAL
       // TODO: handle WAL reference counters
       wal::Logfile* logfile = found.logfile();
@@ -209,6 +155,13 @@ void CollectionRevisionsCache::insertRevision(TRI_voc_rid_t revisionId, Revision
     _revisions.insert(nullptr, RevisionCacheEntry(revisionId, chunk, offset, version));
   }
 }
+
+// template instanciations for lookupRevision
+template
+bool CollectionRevisionsCache::lookupRevision<ManagedDocumentResult>(ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
+
+template
+bool CollectionRevisionsCache::lookupRevision<ManagedMultiDocumentResult>(ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId);
   
 // insert from WAL
 void CollectionRevisionsCache::insertRevision(TRI_voc_rid_t revisionId, wal::Logfile* logfile, uint32_t offset) {
@@ -236,5 +189,7 @@ void CollectionRevisionsCache::removeRevisions(std::vector<TRI_voc_rid_t> const&
   
 uint8_t const* CollectionRevisionsCache::readFromEngine(TRI_voc_rid_t revisionId) {
   TRI_ASSERT(revisionId != 0);
+  // TODO: add proper protection for this call
   return _collection->getPhysical()->lookupRevisionVPack(revisionId);
 }
+

@@ -49,6 +49,7 @@
 #include "Utils/CollectionNameResolver.h"
 #include "Utils/TransactionContext.h"
 #include "VocBase/LogicalCollection.h"
+#include "VocBase/ManagedDocumentResult.h"
 
 using namespace arangodb;
 using namespace arangodb::aql;
@@ -773,6 +774,7 @@ static AqlValue buildGeoResult(arangodb::Transaction* trx,
             });
 
   try {
+    ManagedMultiDocumentResult mmdr; // TODO
     TransactionBuilderLeaser builder(trx);
     builder->openArray();
     if (!attributeName.empty()) {
@@ -781,18 +783,23 @@ static AqlValue buildGeoResult(arangodb::Transaction* trx,
         VPackObjectBuilder docGuard(builder.get());
         builder->add(attributeName, VPackValue(it._distance));
         TRI_voc_rid_t revisionId = it._revisionId;
-        VPackSlice doc(collection->lookupRevisionVPack(revisionId));
-        for (auto const& entry : VPackObjectIterator(doc)) {
-          std::string key = entry.key.copyString();
-          if (key != attributeName) {
-            builder->add(key, entry.value);
+        if (collection->readRevision(trx, mmdr, revisionId)) {
+          VPackSlice doc(mmdr.back());
+          for (auto const& entry : VPackObjectIterator(doc)) {
+            std::string key = entry.key.copyString();
+            if (key != attributeName) {
+              builder->add(key, entry.value);
+            }
           }
         }
       }
 
     } else {
       for (auto& it : distances) {
-        builder->addExternal(collection->lookupRevisionVPack(it._revisionId));
+        if (collection->readRevision(trx, mmdr, it._revisionId)) {
+          uint8_t const* vpack = mmdr.back();
+          builder->addExternal(vpack);
+        }
       }
     }
     builder->close();
@@ -3869,10 +3876,14 @@ AqlValue Functions::Fulltext(arangodb::aql::Query* query,
   try {
     builder->openArray();
 
+    ManagedMultiDocumentResult mmdr; // TODO
     size_t const numResults = queryResult->_numDocuments;
     for (size_t i = 0; i < numResults; ++i) {
       TRI_voc_rid_t revisionId = FulltextIndex::toRevision(queryResult->_documents[i]);
-      builder->addExternal(collection->lookupRevisionVPack(revisionId));
+      if (collection->readRevision(trx, mmdr, revisionId)) {
+        uint8_t const* vpack = mmdr.back();
+        builder->addExternal(vpack);
+      }
     }
     builder->close();
     TRI_FreeResultFulltextIndex(queryResult);

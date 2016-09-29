@@ -1271,13 +1271,16 @@ OperationResult Transaction::anyLocal(std::string const& collectionName,
 
   LogicalCollection* collection = cursor->collection();
   std::vector<IndexElement*> result;
+  ManagedMultiDocumentResult mmdr; // TODO
   while (cursor->hasMore()) {
     result.clear();
     cursor->getMoreMptr(result);
     for (auto const& mptr : result) {
       TRI_voc_rid_t revisionId = mptr->revisionId();
-      uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-      resultBuilder.add(VPackSlice(vpack));
+      if (collection->readRevision(this, mmdr, revisionId)) {
+        uint8_t const* vpack = mmdr.back();
+        resultBuilder.add(VPackSlice(vpack));
+      }
     }
   }
 
@@ -2607,12 +2610,15 @@ OperationResult Transaction::allLocal(std::string const& collectionName,
   LogicalCollection* collection = cursor->collection();
   std::vector<IndexElement*> result;
   result.reserve(1000);
+  ManagedMultiDocumentResult mmdr; // TODO
   while (cursor->hasMore()) {
     cursor->getMoreMptr(result, 1000);
     for (auto const& mptr : result) {
       TRI_voc_rid_t revisionId = mptr->revisionId();
-      uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-      resultBuilder.addExternal(vpack);
+      if (collection->readRevision(this, mmdr, revisionId)) {
+        uint8_t const* vpack = mmdr.back();
+        resultBuilder.addExternal(vpack);
+      }
     }
   }
 
@@ -2681,16 +2687,19 @@ OperationResult Transaction::truncateLocal(std::string const& collectionName,
   options.ignoreRevs = true;
  
   TRI_voc_tick_t resultMarkerTick = 0;
+  ManagedMultiDocumentResult mmdr; // TODO
 
   auto callback = [&](IndexElement const* element) {
     TRI_voc_rid_t revisionId = element->revisionId();
-    uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-    int res =
-        collection->remove(this, revisionId, VPackSlice(vpack), options,
-                           resultMarkerTick, false);
+    if (collection->readRevision(this, mmdr, revisionId)) {
+      uint8_t const* vpack = mmdr.back();
+      int res =
+          collection->remove(this, revisionId, VPackSlice(vpack), options,
+                             resultMarkerTick, false);
 
-    if (res != TRI_ERROR_NO_ERROR) {
-      THROW_ARANGO_EXCEPTION(res);
+      if (res != TRI_ERROR_NO_ERROR) {
+        THROW_ARANGO_EXCEPTION(res);
+      }
     }
 
     return true;

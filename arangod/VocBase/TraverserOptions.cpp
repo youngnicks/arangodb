@@ -598,7 +598,7 @@ arangodb::traverser::TraverserOptions::nextCursor(VPackSlice vertex,
 arangodb::traverser::EdgeCursor*
 arangodb::traverser::TraverserOptions::nextCursorLocal(
     VPackSlice vertex, size_t depth, std::vector<LookupInfo>& list) const {
-  auto allCursor = std::make_unique<SingleServerEdgeCursor>(list.size());
+  auto allCursor = std::make_unique<SingleServerEdgeCursor>(_trx, list.size());
   auto& opCursors = allCursor->getCursors();
   VPackValueLength vidLength;
   char const* vid = vertex.getString(vidLength);

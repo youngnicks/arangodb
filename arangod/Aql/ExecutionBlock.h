@@ -189,6 +189,8 @@ class ExecutionBlock {
   virtual int64_t remaining();
 
   ExecutionNode const* getPlanNode() const { return _exeNode; }
+  
+  arangodb::Transaction* transaction() const { return _trx; }
 
  protected:
   /// @brief generic method to get or skip some

@@ -26,6 +26,7 @@
 #include "Basics/Exceptions.h"
 #include "Logger/Logger.h"
 #include "VocBase/LogicalCollection.h"
+#include "VocBase/ManagedDocumentResult.h"
 
 using namespace arangodb;
 
@@ -73,6 +74,8 @@ void OperationCursor::getMore(std::shared_ptr<OperationResult>& opRes,
   }
  
   LogicalCollection* collection = _indexIterator->collection(); 
+  Transaction* trx = _indexIterator->transaction();
+  ManagedMultiDocumentResult mmdr; // TODO 
   VPackBuilder builder(opRes->buffer);
   builder.clear();
   try {
@@ -83,12 +86,13 @@ void OperationCursor::getMore(std::shared_ptr<OperationResult>& opRes,
       --batchSize;
       --_limit;
       TRI_voc_rid_t revisionId = element->revisionId();
-      uint8_t const* vpack = collection->lookupRevisionVPack(revisionId);
-      
-      if (useExternals) {
-        builder.addExternal(vpack);
-      } else {
-        builder.add(VPackSlice(vpack));
+      if (collection->readRevision(trx, mmdr, revisionId)) {
+        uint8_t const* vpack = mmdr.back(); 
+        if (useExternals) {
+          builder.addExternal(vpack);
+        } else {
+          builder.add(VPackSlice(vpack));
+        }
       }
     }
     if (batchSize > 0 || _limit == 0) {

@@ -38,6 +38,7 @@
 #include "VocBase/DatafileHelper.h"
 #include "VocBase/Ditch.h"
 #include "VocBase/LogicalCollection.h"
+#include "VocBase/ManagedDocumentResult.h"
 #include "VocBase/vocbase.h"
 #include "VocBase/voc-types.h"
 
@@ -1072,13 +1073,16 @@ int InitialSyncer::handleSyncKeys(arangodb::LogicalCollection* col,
     markers.reserve(idx->size());
 
     uint64_t iterations = 0;
-    trx.invokeOnAllElements(trx.name(), [this, &markers, &iterations, &idx](IndexElement const* element) {
-      uint8_t const* vpack = idx->collection()->lookupRevisionVPack(element->revisionId());
-      markers.emplace_back(vpack);
-      
-      if (++iterations % 10000 == 0) {
-        if (checkAborted()) {
-          return false;
+    ManagedMultiDocumentResult mmdr; // TODO
+    trx.invokeOnAllElements(trx.name(), [this, &trx, &mmdr, &markers, &iterations, &idx](IndexElement const* element) {
+      if (idx->collection()->readRevision(&trx, mmdr, element->revisionId())) {
+        uint8_t const* vpack = mmdr.back();
+        markers.emplace_back(vpack);
+        
+        if (++iterations % 10000 == 0) {
+          if (checkAborted()) {
+            return false;
+          }
         }
       }
       return true;
