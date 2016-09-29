@@ -35,42 +35,44 @@
     },
 
     render: function (navi) {
-      var self = this;
+      if (window.location.hash === '#shards') {
+        var self = this;
 
-      $.ajax({
-        type: 'GET',
-        cache: false,
-        url: arangoHelper.databaseUrl('/_admin/cluster/shardDistribution'),
-        contentType: 'application/json',
-        processData: false,
-        async: true,
-        success: function (data) {
-          var collsAvailable = false;
-          var collName;
-          self.shardDistribution = data.results;
+        $.ajax({
+          type: 'GET',
+          cache: false,
+          url: arangoHelper.databaseUrl('/_admin/cluster/shardDistribution'),
+          contentType: 'application/json',
+          processData: false,
+          async: true,
+          success: function (data) {
+            var collsAvailable = false;
+            var collName;
+            self.shardDistribution = data.results;
 
-          _.each(data.results, function (ignore, name) {
-            collName = name.substring(0, 1);
-            if (collName !== '_' && name !== 'error' && name !== 'code') {
-              collsAvailable = true;
+            _.each(data.results, function (ignore, name) {
+              collName = name.substring(0, 1);
+              if (collName !== '_' && name !== 'error' && name !== 'code') {
+                collsAvailable = true;
+              }
+            });
+
+            if (collsAvailable) {
+              self.continueRender(data.results);
+            } else {
+              arangoHelper.renderEmpty('No collections and no shards available');
             }
-          });
+          },
+          error: function (data) {
+            if (data.readyState !== 0) {
+              arangoHelper.arangoError('Cluster', 'Could not fetch sharding information.');
+            }
+          }
+        });
 
-          if (collsAvailable) {
-            self.continueRender(data.results);
-          } else {
-            arangoHelper.renderEmpty('No collections and no shards available');
-          }
-        },
-        error: function (data) {
-          if (data.readyState !== 0) {
-            arangoHelper.arangoError('Cluster', 'Could not fetch sharding information.');
-          }
+        if (navi !== false) {
+          arangoHelper.buildNodesSubNav('Shards');
         }
-      });
-
-      if (navi !== false) {
-        arangoHelper.buildNodesSubNav('Shards');
       }
     },
 
@@ -179,11 +181,11 @@
         data: JSON.stringify(data),
         async: true,
         success: function (data) {
-          if (data === true) {
-            window.setTimeout(function () {
-              self.render(false);
-            }, 1500);
+          if (data.id) {
             arangoHelper.arangoNotification('Shard ' + shardName + ' will be moved to ' + toServer + '.');
+            window.setTimeout(function () {
+              window.App.shardsView.render();
+            }, 2000);
           }
         },
         error: function () {
@@ -222,12 +224,24 @@
     },
 
     continueRender: function (collections) {
+      var self = this;
+
       delete collections.code;
       delete collections.error;
 
       this.$el.html(this.template.render({
         collections: collections
       }));
+
+      _.each(collections, function (shard) {
+        _.each(shard.Plan, function (val, key) {
+          if (val.progress) {
+            window.setTimeout(function () {
+              self.render();
+            }, 1500);
+          }
+        });
+      });
     },
 
     updateServerTime: function () {
