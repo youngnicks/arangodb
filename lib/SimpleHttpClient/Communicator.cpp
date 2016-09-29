@@ -296,7 +296,6 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
     connectTimeout = 1;
   }
 
-  LOG(ERR) << "Timeouts Connect: " << static_cast<long>(newRequest._options.connectionTimeout * 1000) << " total: " << static_cast<long>(newRequest._options.requestTimeout * 1000);
   curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, static_cast<long>(newRequest._options.requestTimeout * 1000));
   curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT, connectTimeout);
 
