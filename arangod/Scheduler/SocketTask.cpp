@@ -154,7 +154,9 @@ void SocketTask::addWriteBuffer(StringBuffer* buffer,
   }
 
   _writeBuffer = buffer;
-  _writeBufferStatistics = stat;
+  _writeBufferStatistics = stat;  // threadsafe? why not pass to
+                                  // completedWriteBuffer does this work with
+                                  // async?
 
   if (_writeBuffer != nullptr) {
     boost::system::error_code ec;
