@@ -90,9 +90,10 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/zlib/zlib-1.2.8)
 ################################################################################
 
 set(ENABLE_MANUAL OFF)
-set(CURL_STATIC 1)
+set(CURL_STATICLIB 1)
 set(HTTP_ONLY ON)
 set(CMAKE_USE_LIBSSH2 OFF)
+set(CMAKE_USE_OPENSSL ON)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/curl/curl-7.50.3)
 
 ################################################################################
