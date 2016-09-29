@@ -292,7 +292,6 @@ add_executable(${BIN_ARANGOD}
   StorageEngine/MMFilesDatafileStatistics.cpp
   StorageEngine/MMFilesEngine.cpp
   StorageEngine/MMFilesRevisionsCache.cpp
-  StorageEngine/OtherEngine.cpp
   Utils/AqlTransaction.cpp
   Utils/CollectionExport.cpp
   Utils/CollectionKeys.cpp

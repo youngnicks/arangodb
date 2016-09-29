@@ -76,7 +76,6 @@
 #include "Statistics/StatisticsFeature.h"
 #include "StorageEngine/EngineSelectorFeature.h"
 #include "StorageEngine/MMFilesEngine.h"
-#include "StorageEngine/OtherEngine.h"
 #include "V8Server/FoxxQueuesFeature.h"
 #include "V8Server/V8DealerFeature.h"
 #include "VocBase/IndexPoolFeature.h"
@@ -178,8 +177,6 @@ static int runServer(int argc, char** argv) {
 
   // storage engines
   server.addFeature(new MMFilesEngine(&server));
-  server.addFeature(
-      new OtherEngine(&server));  // TODO: just for testing - remove this!
 
   try {
     server.run(argc, argv);
