@@ -43,9 +43,9 @@ EngineSelectorFeature::EngineSelectorFeature(
 void EngineSelectorFeature::collectOptions(std::shared_ptr<ProgramOptions> options) {
   options->addSection("server", "Server features");
 
-  options->addOption("--server.storage-engine", 
-                     "storage engine type",
-                     new DiscreteValuesParameter<StringParameter>(&_engine, availableEngines()));
+  options->addHiddenOption("--server.storage-engine", 
+                           "storage engine type",
+                           new DiscreteValuesParameter<StringParameter>(&_engine, availableEngines()));
 }
 
 void EngineSelectorFeature::prepare() {
