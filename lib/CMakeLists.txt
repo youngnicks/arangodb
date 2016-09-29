@@ -203,6 +203,7 @@ add_library(${LIB_ARANGO} STATIC
   Rest/InitializeRest.cpp
   Rest/Version.cpp
   SimpleHttpClient/ClientConnection.cpp
+  SimpleHttpClient/Communicator.cpp
   SimpleHttpClient/ConnectionManager.cpp
   SimpleHttpClient/GeneralClientConnection.cpp
   SimpleHttpClient/SimpleHttpClient.cpp
