@@ -269,7 +269,7 @@ elseif (${CMAKE_GENERATOR} MATCHES "Ninja")
 ## WINDOWS with msbuild
 ################################################################################
 
-elseif (WIN32)
+elseif (WIN32 AND LINUX)
   MESSAGE("Building V8 for Windows with MSBUILD")
   set(GYP_MAIN ${V8_DIR}/build/gyp_v8)
 
@@ -283,11 +283,7 @@ elseif (WIN32)
     list(APPEND V8_GYP_ARGS "-G msvs_version=2015")
   endif()
 
-  if ("${BITS}" STREQUAL "64")
-    set(MS_TARGET_PLATFORM x64)
-  else ()
-    set(MS_TARGET_PLATFORM Win32)
-  endif ()
+
 
   list(APPEND V8_GYP_ARGS -Dtarget_arch=${V8_PROC_ARCH} -Dhost_arch=${V8_PROC_ARCH})
   list(APPEND V8_GYP_ARGS ${V8_DIR}/build/all.gyp)
@@ -298,6 +294,7 @@ elseif (WIN32)
   list(APPEND V8_GYP_ARGS
     -Dcomponent=static_library
     -Dlibrary=static_library
+    -DPYTHON_EXECUTABLE=${PYTHON_EXECUTABLE}
     #--depth=2
     #-Dv8_use_external_startup_data=1
     #-Dicu_gyp_path=../third_party/icu/icu.gyp
@@ -306,97 +303,21 @@ elseif (WIN32)
     #-Dclang=0
     #-Dwant_separate_host_toolset=0
   )
+  message(STATUS "${PYTHON_EXECUTABLE} ${GYP_MAIN} ${V8_GYP_ARGS}")
 
-  add_custom_target(v8_build)
-
-  foreach (MS_TARGET_CONF ${V8_TARGET_ARCHS})
-    string(TOLOWER ${MS_TARGET_CONF} MS_TARGET_CONF_LOWER)
-
-    ExternalProject_Add(v8_build_${MS_TARGET_CONF_LOWER}
-      BUILD_IN_SOURCE
-        TRUE
-      WORKING_DIRECTORY
-        ${V8_DIR}/build
-      SOURCE_DIR
-        "${V8_DIR}"
-      CONFIGURE_COMMAND
-        ${PYTHON_EXECUTABLE} ${GYP_MAIN} ${V8_GYP_ARGS} -Dmode=${MS_TARGET_CONF_LOWER}
-      BUILD_COMMAND
-        ""
-      INSTALL_COMMAND
-        ""
-    )
-
-    add_dependencies(v8_build v8_build_${MS_TARGET_CONF_LOWER})
-
-    # and now ICU...
-    ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} icu_build_icudata
-      WORKING_DIRECTORY
-        ${V8_DIR}/third_party/icu
-      COMMAND
-        msbuild icu.sln /t:icudata /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
-      DEPENDEES
-        configure
-      DEPENDERS
-        build
-    )
-
-    ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} icu_build_icui18n
-      WORKING_DIRECTORY
-        ${V8_DIR}/third_party/icu
-      COMMAND
-        msbuild icu.sln /t:icui18n /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
-      DEPENDEES
-        configure
-      DEPENDERS
-        build
-    )
-
-    ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} icu_build_icuuc
-      WORKING_DIRECTORY
-        ${V8_DIR}/third_party/icu
-      COMMAND
-        msbuild icu.sln /t:icuuc /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
-      DEPENDEES
-        configure
-      DEPENDERS
-        build
-    )
-
-    # cmake eats semicolons or quotes them or, or, or so we can't use /t:a;b;c
-    ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} v8_build_v8
-      WORKING_DIRECTORY
-        ${V8_DIR}/build
-      COMMAND
-        msbuild all.sln /t:v8 /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
-      DEPENDEES
-        configure
-      DEPENDERS
-        build
-    )
-
-    ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} v8_build_v8_libbase
-      WORKING_DIRECTORY
-        ${V8_DIR}/build
-      COMMAND
-        msbuild all.sln /t:v8_libbase /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
-      DEPENDEES
-        configure
-      DEPENDERS
-        build
-    )
-
-    ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} v8_build_v8_libplatform
-      WORKING_DIRECTORY
-        ${V8_DIR}/build
-      COMMAND
-        msbuild all.sln /t:v8_libplatform /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
-      DEPENDEES
-        configure
-      DEPENDERS
-        build
-    )
-  endforeach ()
+    ExternalProject_Add(v8_build
+    BUILD_IN_SOURCE
+      TRUE
+    SOURCE_DIR
+      "${V8_DIR}"
+    CONFIGURE_COMMAND
+      ${PYTHON_EXECUTABLE} ${GYP_MAIN} ${V8_GYP_ARGS}
+    BUILD_COMMAND
+      "c:\\Program Files (x86)\\Microsoft Visual Studio 9.0\\Common7\\IDE\\devenv.com" "/build" "Release" "build\\All.sln"
+    STEP_TARGETS
+      v8_base v8_libbase v8_libplatform v8_nosnapshot icui18n icuuc icudata
+    INSTALL_COMMAND
+      "")
 
   set(ICU_LIBRARY_DEBUG "${V8_DIR}/build/Debug")
   set(ICU_LIBRARY_RELEASE "${V8_DIR}/build/Release")
@@ -449,7 +370,23 @@ else ()
 ################################################################################
 
   option(USE_DEBUG_V8 "compile V8 in DEBUG mode" OFF)
+  if (WIN32)
+    # try to find 2013 in 'Visual Studio 12 2013 Win64'
+    if (${CMAKE_GENERATOR} MATCHES "2013") 
+      list(APPEND V8_GYP_ARGS "-G msvs_version=2013")
+    endif()
 
+    # try to find 2015 in 'Visual Studio 14 2015 Win64'
+    if (${CMAKE_GENERATOR} MATCHES "2015") 
+      list(APPEND V8_GYP_ARGS "-G msvs_version=2015")
+    endif()
+
+    if ("${BITS}" STREQUAL "64")
+      set(MS_TARGET_PLATFORM x64)
+    else ()
+      set(MS_TARGET_PLATFORM Win32)
+    endif ()
+  endif()
   set(V8_CFLAGS   "$ENV{V8_CFLAGS}")
   set(V8_CXXFLAGS "$ENV{V8_CXXFLAGS}")
   set(V8_LDFLAGS  "$ENV{V8_LDFLAGS}")
@@ -515,21 +452,25 @@ else ()
     set(V8_BUILDTYPE Release)
   endif ()
 
-  set(V8_COMPILE_ARGS
-    -C ${V8_TARGET_DIR}
-    -f Makefile.${V8_TARGET_ARCH}
-    BUILDTYPE=${V8_BUILDTYPE}
-    builddir=${V8_TARGET_DIR}/${V8_TARGET_ARCH}
-    CC=${CMAKE_C_COMPILER}
-    CXX=${CMAKE_CXX_COMPILER}
-    CFLAGS=${V8_CFLAGS}
-    CXXFLAGS=${V8_CXXFLAGS}
-    LDFLAGS=${V8_LDFLAGS}
-    PYTHON_EXECUTABLE=${PYTHON_EXECUTABLE}
-  )
-
-  list(APPEND V8_COMPILE_ARGS icui18n icuuc icudata)
-  list(APPEND V8_COMPILE_ARGS v8)
+  if (WIN32)
+    SET(V8_BUILD_COMMAND "msbuild" "${V8_TARGET_DIR}\\..\\V8.sln")
+  else ()
+    set(V8_COMPILE_ARGS
+      -C ${V8_TARGET_DIR}
+      -f Makefile.${V8_TARGET_ARCH}
+      BUILDTYPE=${V8_BUILDTYPE}
+      builddir=${V8_TARGET_DIR}/${V8_TARGET_ARCH}
+      CC=${CMAKE_C_COMPILER}
+      CXX=${CMAKE_CXX_COMPILER}
+      CFLAGS=${V8_CFLAGS}
+      CXXFLAGS=${V8_CXXFLAGS}
+      LDFLAGS=${V8_LDFLAGS}
+      PYTHON_EXECUTABLE=${PYTHON_EXECUTABLE}
+    )
+    list(APPEND V8_COMPILE_ARGS icui18n icuuc icudata)
+    list(APPEND V8_COMPILE_ARGS v8)
+    SET(V8_BUILD_COMMAND "$(MAKE) ${V8_COMPILE_ARGS}")
+  endif()
 
   ExternalProject_Add(v8_build
     BUILD_IN_SOURCE
@@ -539,7 +480,7 @@ else ()
     CONFIGURE_COMMAND
       ${PYTHON_EXECUTABLE} ${GYP_MAIN} ${V8_GYP_ARGS}
     BUILD_COMMAND
-      $(MAKE) ${V8_COMPILE_ARGS}
+      ${V8_BUILD_COMMAND}
     STEP_TARGETS
       v8_base v8_libbase v8_libplatform v8_nosnapshot icui18n icuuc icudata
     INSTALL_COMMAND
