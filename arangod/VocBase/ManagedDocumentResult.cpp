@@ -22,49 +22,66 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "ManagedDocumentResult.h"
+#include "Utils/Transaction.h"
 
 using namespace arangodb;
   
-ManagedDocumentResult::ManagedDocumentResult() : _chunk(nullptr), _vpack(nullptr) {}
+ManagedDocumentResult::ManagedDocumentResult() 
+        : _chunk(nullptr), _vpack(nullptr) {}
 
 ManagedDocumentResult::~ManagedDocumentResult() {
-  clear();
+//  clear();
 }
 
-void ManagedDocumentResult::add(ChunkProtector&& protector) {
+void ManagedDocumentResult::add(ChunkProtector&& protector, Transaction* trx) {
+  /*
   if (protector.chunk() != _chunk) {
     clear();
   }
   
   _vpack = protector.vpack();
   _chunk = protector.chunk();
+  */
+  uint8_t const* vpack = protector.vpack();
+  TRI_ASSERT(vpack != nullptr);
+
+  trx->addChunk(protector.chunk());
   protector.steal();
+
+  _vpack = vpack;
 }
 
+/*
 void ManagedDocumentResult::clear() {
   if (_chunk != nullptr) {
     _chunk->release();
     _chunk = nullptr;
   }
 }
+*/
   
 ManagedDocumentResult& ManagedDocumentResult::operator=(ManagedDocumentResult const& other) {
   if (this != &other) {
-    clear();
+  //  clear();
     _vpack = other._vpack;
     _chunk = other._chunk;
-    _chunk->use();
+  //  _chunk->use();
   }
   return *this;
 }
 
+ManagedMultiDocumentResult::ManagedMultiDocumentResult() {} 
+
 ManagedMultiDocumentResult::~ManagedMultiDocumentResult() {
+  /*
   for (auto& chunk : _chunks) {
     chunk->release();
   }
+  */
 }
   
-void ManagedMultiDocumentResult::add(ChunkProtector&& protector) {
+void ManagedMultiDocumentResult::add(ChunkProtector&& protector, Transaction* trx) {
+  /*
   RevisionCacheChunk* chunk = protector.chunk();
   uint8_t const* vpack = protector.vpack();
 
@@ -73,11 +90,11 @@ void ManagedMultiDocumentResult::add(ChunkProtector&& protector) {
     _chunks.emplace(chunk);
     protector.steal();
   }
+  */
+  uint8_t const* vpack = protector.vpack();
+  trx->addChunk(protector.chunk());
+  protector.steal();
 
-  _results.push_back(vpack);
-}
-
-void ManagedMultiDocumentResult::add(uint8_t const* vpack) {
   _results.push_back(vpack);
 }
 

@@ -3287,6 +3287,11 @@ int Transaction::unlock(TRI_transaction_collection_t* trxCollection,
 
   return TRI_UnlockCollectionTransaction(trxCollection, type, _nestingLevel);
 }
+  
+void Transaction::addChunk(RevisionCacheChunk* chunk) {
+  TRI_ASSERT(chunk != nullptr);
+  _transactionContextPtr->addChunk(chunk);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief get list of indexes for a collection

@@ -991,6 +991,8 @@ void LogicalCollection::unload() {
 }
 
 void LogicalCollection::drop() {
+  _revisionsCache->clear();
+
   TRI_ASSERT(!ServerState::instance()->isCoordinator());
   StorageEngine* engine = EngineSelectorFeature::ENGINE;
   engine->dropCollection(_vocbase, this);
@@ -2966,7 +2968,6 @@ int LogicalCollection::lookupDocument(
     IndexElement*& element) {
 
   element = nullptr; 
-  result.clear(); 
   
   if (!key.isString()) {
     return TRI_ERROR_ARANGO_DOCUMENT_KEY_BAD;
@@ -3463,23 +3464,19 @@ void LogicalCollection::newObjectForRemove(
 }
 
 bool LogicalCollection::readRevision(Transaction* trx, ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
-  return _revisionsCache->lookupRevision(result, revisionId);
+  return _revisionsCache->lookupRevision(trx, result, revisionId);
 }
 
 bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId) {
-  return _revisionsCache->lookupRevision(result, revisionId);
+  return _revisionsCache->lookupRevision(trx, result, revisionId);
 }
 
 bool LogicalCollection::readRevisionConditional(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
-  uint8_t const* vpack = getPhysical()->lookupRevisionVPackConditional(revisionId, maxTick, excludeWal);
-  if (vpack == nullptr) {
-    return false;
-  }
-  result.add(vpack);
-  return true;
+  return _revisionsCache->lookupRevisionConditional(trx, result, revisionId, maxTick, excludeWal);
 }
 
 void LogicalCollection::insertRevision(TRI_voc_rid_t revisionId, uint8_t const* dataptr, TRI_voc_fid_t fid, bool isInWal) {
+  // note: there is no need to insert into the cache here as the data points to temporary storage
   getPhysical()->insertRevision(revisionId, dataptr, fid, isInWal);
 }
 

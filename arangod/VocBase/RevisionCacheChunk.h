@@ -70,13 +70,19 @@ class RevisionCacheChunk {
 
  public:
   inline uint32_t size() const noexcept { return _size; }
-
-  uint32_t advanceWritePosition(uint32_t size);
+  
+  void reset(CollectionRevisionsCache* collectionCache) { 
+    _collectionCache = collectionCache; 
+    _writeOffset = 0;
+    _versionAndRefCount.store(buildVersion(1));
+  }
   
   inline uint8_t const* data() const noexcept { return _data; }
   inline uint8_t* data() noexcept { return _data; }
   
   inline uint32_t version() { return versionPart(_versionAndRefCount); }
+  
+  uint32_t advanceWritePosition(uint32_t size);
 
   /// @brief increases the refcount value if the chunk's version matches
   /// the specified version. returns true then, false otherwise
@@ -120,7 +126,7 @@ class RevisionCacheChunk {
       // additionally we must not reach the value 0 because this will cause confusion
       // with any WAL entries in the collection's hash table
       ++version;
-    } while (version != UINT32_MAX && version != 0);
+    } while (version == UINT32_MAX || version == 0);
 
     return (static_cast<uint64_t>(version) << 32) + refCountPart(value);
   }

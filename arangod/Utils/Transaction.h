@@ -56,6 +56,7 @@ class Builder;
 
 class Index;
 class ManagedDocumentResult;
+class RevisionCacheChunk;
 
 namespace aql {
 class Ast;
@@ -657,13 +658,13 @@ class Transaction {
   std::vector<std::shared_ptr<arangodb::Index>> indexesForCollection(
       std::string const&);
 
-/// @brief Lock all collections. Only works for selected sub-classes
+  /// @brief Lock all collections. Only works for selected sub-classes
+  virtual int lockCollections();
 
-   virtual int lockCollections();
-
-/// @brief Clone this transaction. Only works for selected sub-classes
-
-   virtual Transaction* clone() const;
+  /// @brief Clone this transaction. Only works for selected sub-classes
+  virtual Transaction* clone() const;
+  
+  void addChunk(RevisionCacheChunk* chunk);
 
  private:
   

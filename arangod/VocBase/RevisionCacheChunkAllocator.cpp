@@ -34,7 +34,7 @@ using namespace arangodb;
 RevisionCacheChunkAllocator::RevisionCacheChunkAllocator(uint32_t defaultChunkSize, uint64_t totalTargetSize)
     : _defaultChunkSize(defaultChunkSize), 
       _totalTargetSize(totalTargetSize), 
-      _totalAllocated(0) { 
+      _totalAllocated(0) {
 
   TRI_ASSERT(defaultChunkSize >= 1024);
 
@@ -104,6 +104,7 @@ RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(CollectionRevisionsC
       if (chunk->size() >= targetSize) {
         // chunk must be big enough...
         _freeList.pop_back();
+        chunk->reset(collectionCache);
         return chunk;
       }
     }
@@ -129,7 +130,6 @@ RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(CollectionRevisionsC
 
     // no chunk arrived on the freelist, now return what we created
     _totalAllocated += targetSize;
-    
     hasMemoryPressure = (_totalAllocated > _totalTargetSize);
   }
   
@@ -168,7 +168,6 @@ void RevisionCacheChunkAllocator::returnUsed(ReadCache* cache, RevisionCacheChun
 }
 
 void RevisionCacheChunkAllocator::removeCollection(ReadCache* cache) {
-  uint64_t totalDeleted = 0;
   {
     MUTEX_LOCKER(locker, _gcLock);
     
@@ -179,24 +178,22 @@ void RevisionCacheChunkAllocator::removeCollection(ReadCache* cache) {
     }
 
     for (auto& chunkInfo : (*it).second) {
-      RevisionCacheChunk* chunk = chunkInfo.first;
-      totalDeleted += chunk->size();
-      // LOG(ERR) << "DELETING COLLECTION CHUNK: " << chunk;
-      deleteChunk(chunk);
+      chunkInfo.second = true; // set to already invalidated
     }
-
-    _fullChunks.erase(it);
   }
-    
-  if (totalDeleted > 0) {
+  
+  bool hasMemoryPressure;
+  {
     WRITE_LOCKER(locker, _chunksLock);
-    TRI_ASSERT(_totalAllocated >= totalDeleted);
-    _totalAllocated -= totalDeleted;
+    hasMemoryPressure = (_totalAllocated > _totalTargetSize);
+  }
+
+  if (hasMemoryPressure) {
+    _gcThread->signal();
   }
 }
 
 bool RevisionCacheChunkAllocator::garbageCollect() {
-  return false; // TODO
   RevisionCacheChunk* chunk = nullptr;
 
   {
@@ -227,11 +224,6 @@ bool RevisionCacheChunkAllocator::garbageCollect() {
   }
 
   // nothing found. now check chunks in use
-  std::vector<TRI_voc_rid_t> revisions;
-  revisions.reserve(8192);
-
-  bool worked = false;
-
   struct ChunkInfo {
     ReadCache* cache;
     RevisionCacheChunk* chunk;
@@ -240,10 +232,12 @@ bool RevisionCacheChunkAllocator::garbageCollect() {
   
   std::vector<ChunkInfo> toCheck;
   toCheck.reserve(128);
-
+  
   {
     // copy list of chunks to check under the mutex into local variable
     MUTEX_LOCKER(locker, _gcLock);
+  
+    // LOG(ERR) << "CHECKING THE CHUNKS OF " << _fullChunks.size() << " COLLECTIONS";
 
     for (auto const& it : _fullChunks) {
       for (auto const& chunkInfo : it.second) {
@@ -253,7 +247,9 @@ bool RevisionCacheChunkAllocator::garbageCollect() {
   }
 
   // iterate through collections while only briefly acquiring the mutex
-
+  bool worked = false;
+  std::vector<TRI_voc_rid_t> revisions;
+ 
   for (auto& chunkInfo : toCheck) {
     RevisionCacheChunk* chunk = chunkInfo.chunk;
     bool alreadyInvalidated = chunkInfo.alreadyInvalidated;
@@ -262,29 +258,38 @@ bool RevisionCacheChunkAllocator::garbageCollect() {
     if (alreadyInvalidated) {
       // already invalidated
       if (!chunk->isUsed()) {
-        // remove chunk from list
+        // remove chunk from full list
         {
           MUTEX_LOCKER(locker, _gcLock);
           
           auto it = _fullChunks.find(chunkInfo.cache);
           if (it != _fullChunks.end()) {
-            (*it).second.erase(chunk);
+            if ((*it).second.empty()) {
+              _fullChunks.erase(chunkInfo.cache);
+            } else {
+              (*it).second.erase(chunk);
+            }
           }
         }
 
+        // now move chunk into freelist
         {
           WRITE_LOCKER(locker, _chunksLock);
-          // fix statistics
-          TRI_ASSERT(_totalAllocated >= chunk->size());
-          _totalAllocated -= chunk->size();
+          try {
+            _freeList.push_back(chunk);
+          } catch (...) {
+            // if movement fails then we simply throw away the chunk
+            TRI_ASSERT(_totalAllocated >= chunk->size());
+            _totalAllocated -= chunk->size();
+            deleteChunk(chunk);
+            throw;
+          }
         }
-        // LOG(ERR) << "deleting chunk from full list";
-        // delete chunk outside of lock section
-        deleteChunk(chunk);
         return true;
       }
     } else {
       // LOG(ERR) << "gc: invalidating chunk " << chunk;
+      revisions.reserve(8192);
       chunk->invalidate(revisions);
       // LOG(ERR) << "gc: invalidating chunk " << chunk << " done";
       MUTEX_LOCKER(locker, _gcLock);
@@ -301,7 +306,7 @@ bool RevisionCacheChunkAllocator::garbageCollect() {
       }
     }
   }
-
+ 
   // LOG(ERR) << "gc: over. worked: " << worked;
   return worked;
 }
@@ -330,12 +335,9 @@ void RevisionCacheGCThread::beginShutdown() {
 void RevisionCacheGCThread::run() {
   while (!isStopping()) {
     if (!_allocator->garbageCollect()) {
-      // LOG(ERR) << "gc thread going to sleep";
       CONDITION_LOCKER(guard, _condition);
-      guard.wait(500000);
-    } else {
-      // LOG(ERR) << "gc going on...";
-    }
+      guard.wait(1000000);
+    } // otherwise directly continue the garbage collection
   }
 }
 

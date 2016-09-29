@@ -152,6 +152,7 @@ void RevisionCacheChunk::invalidate() {
   while (true) {
     uint64_t old = _versionAndRefCount.load();
     uint64_t desired = increaseVersion(old);
+    // LOG(ERR) << "OLD: " << old << ", VERSIONPART(OLD): " << versionPart(old) << ", REFPART(OLD): " << refCountPart(old) << ", DESIRED: " << desired;
     if (_versionAndRefCount.compare_exchange_strong(old, desired)) {
       break;
     }

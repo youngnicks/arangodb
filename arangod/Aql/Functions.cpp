@@ -47,6 +47,7 @@
 #include "Random/UniformCharacter.h"
 #include "Ssl/SslInterface.h"
 #include "Utils/CollectionNameResolver.h"
+#include "Utils/Transaction.h"
 #include "Utils/TransactionContext.h"
 #include "VocBase/LogicalCollection.h"
 #include "VocBase/ManagedDocumentResult.h"
@@ -774,7 +775,7 @@ static AqlValue buildGeoResult(arangodb::Transaction* trx,
             });
 
   try {
-    ManagedMultiDocumentResult mmdr; // TODO
+    ManagedMultiDocumentResult mmdr;
     TransactionBuilderLeaser builder(trx);
     builder->openArray();
     if (!attributeName.empty()) {
@@ -3876,7 +3877,7 @@ AqlValue Functions::Fulltext(arangodb::aql::Query* query,
   try {
     builder->openArray();
 
-    ManagedMultiDocumentResult mmdr; // TODO
+    ManagedMultiDocumentResult mmdr;
     size_t const numResults = queryResult->_numDocuments;
     for (size_t i = 0; i < numResults; ++i) {
       TRI_voc_rid_t revisionId = FulltextIndex::toRevision(queryResult->_documents[i]);

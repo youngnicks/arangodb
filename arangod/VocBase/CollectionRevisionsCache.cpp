@@ -90,7 +90,7 @@ void CollectionRevisionsCache::clear() {
 
 // look up a revision
 template<typename T>
-bool CollectionRevisionsCache::lookupRevision(T& result, TRI_voc_rid_t revisionId) {
+bool CollectionRevisionsCache::lookupRevision(Transaction* trx, T& result, TRI_voc_rid_t revisionId) {
   TRI_ASSERT(revisionId != 0);
 
   READ_LOCKER(locker, _lock);
@@ -111,7 +111,7 @@ bool CollectionRevisionsCache::lookupRevision(T& result, TRI_voc_rid_t revisionI
       // and insert result into the hash
       insertRevision(revisionId, status.chunk(), status.offset(), status.version());
       // TODO: handle WAL reference counters
-      result.add(std::move(status));
+      result.add(std::move(status), trx);
       return true;
     } 
 
@@ -119,7 +119,7 @@ bool CollectionRevisionsCache::lookupRevision(T& result, TRI_voc_rid_t revisionI
     ChunkProtector status = _readCache.readAndLease(found);
     if (status) {
       // found in read cache, and still valid
-      result.add(std::move(status));
+      result.add(std::move(status), trx);
       return true;
     }
   }
@@ -136,10 +136,32 @@ bool CollectionRevisionsCache::lookupRevision(T& result, TRI_voc_rid_t revisionI
   ChunkProtector status = _readCache.insertAndLease(revisionId, vpack);
   // insert result into the hash
   insertRevision(revisionId, status.chunk(), status.offset(), status.version());
-  result.add(std::move(status));
+  result.add(std::move(status), trx);
   return true;
 }
 
+// template instanciations for lookupRevision
+template
+bool CollectionRevisionsCache::lookupRevision<ManagedDocumentResult>(Transaction*, ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
+
+template
+bool CollectionRevisionsCache::lookupRevision<ManagedMultiDocumentResult>(Transaction*, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId);
+  
+bool CollectionRevisionsCache::lookupRevisionConditional(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
+  // fetch document from engine
+  uint8_t const* vpack = readFromEngineConditional(revisionId, maxTick, excludeWal);
+  if (vpack == nullptr) {
+    // engine could not provide the revision
+    return false;
+  }
+  // insert found revision into our hash
+  ChunkProtector status = _readCache.insertAndLease(revisionId, vpack);
+  // insert result into the hash
+  insertRevision(revisionId, status.chunk(), status.offset(), status.version());
+  result.add(std::move(status), trx);
+  return true;
+}
+  
 // insert from chunk
 void CollectionRevisionsCache::insertRevision(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset, uint32_t version) {
   TRI_ASSERT(revisionId != 0);
@@ -156,13 +178,6 @@ void CollectionRevisionsCache::insertRevision(TRI_voc_rid_t revisionId, Revision
   }
 }
 
-// template instanciations for lookupRevision
-template
-bool CollectionRevisionsCache::lookupRevision<ManagedDocumentResult>(ManagedDocumentResult& result, TRI_voc_rid_t revisionId);
-
-template
-bool CollectionRevisionsCache::lookupRevision<ManagedMultiDocumentResult>(ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId);
-  
 // insert from WAL
 void CollectionRevisionsCache::insertRevision(TRI_voc_rid_t revisionId, wal::Logfile* logfile, uint32_t offset) {
   TRI_ASSERT(false);
@@ -193,3 +208,8 @@ uint8_t const* CollectionRevisionsCache::readFromEngine(TRI_voc_rid_t revisionId
   return _collection->getPhysical()->lookupRevisionVPack(revisionId);
 }
 
+uint8_t const* CollectionRevisionsCache::readFromEngineConditional(TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
+  TRI_ASSERT(revisionId != 0);
+  // TODO: add proper protection for this call
+  return _collection->getPhysical()->lookupRevisionVPackConditional(revisionId, maxTick, excludeWal);
+}

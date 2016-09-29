@@ -28,6 +28,7 @@
 #include "VocBase/DatafileHelper.h"
 #include "VocBase/Ditch.h"
 #include "VocBase/LogicalCollection.h"
+#include "VocBase/RevisionCacheChunk.h"
 #include "Wal/LogfileManager.h"
 
 #include <velocypack/Builder.h>
@@ -82,6 +83,10 @@ TransactionContext::TransactionContext(TRI_vocbase_t* vocbase)
 //////////////////////////////////////////////////////////////////////////////
 
 TransactionContext::~TransactionContext() {
+  for (auto& chunk : _chunks) {
+    chunk->release();
+  }
+
   // unregister the transaction from the logfile manager
   if (_transaction.id > 0) {
     arangodb::wal::LogfileManager::instance()->unregisterTransaction(_transaction.id, _transaction.hasFailedOperations);
@@ -162,6 +167,18 @@ DocumentDitch* TransactionContext::ditch(TRI_voc_cid_t cid) const {
     return nullptr;
   }
   return (*it).second;
+}
+
+void TransactionContext::addChunk(RevisionCacheChunk* chunk) {
+  TRI_ASSERT(chunk != nullptr);
+  auto it = _chunks.find(chunk);
+  if (it == _chunks.end()) {
+    // insert the chunk here
+    _chunks.emplace(chunk);
+  } else {
+    // already saw this chunk
+    chunk->release();
+  }
 }
 
 //////////////////////////////////////////////////////////////////////////////

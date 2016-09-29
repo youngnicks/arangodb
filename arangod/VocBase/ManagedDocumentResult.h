@@ -25,10 +25,10 @@
 #define ARANGOD_VOC_BASE_MANAGED_DOCUMENT_RESULT_H 1
 
 #include "Basics/Common.h"
-#include "Logger/Logger.h"
 #include "VocBase/RevisionCacheChunk.h"
 
 namespace arangodb {
+class Transaction;
 
 class ManagedDocumentResult {
  public:
@@ -37,21 +37,6 @@ class ManagedDocumentResult {
   ManagedDocumentResult(ManagedDocumentResult&& other) = delete;
   ManagedDocumentResult& operator=(ManagedDocumentResult const& other);
   ManagedDocumentResult& operator=(ManagedDocumentResult&& other) = delete;
-  //ManagedDocumentResult(ManagedDocumentResult const& other) : _vpack(other._vpack) {}
-  //ManagedDocumentResult& operator=(ManagedDocumentResult const& other) {
-  //  _vpack = other._vpack;
-  //  return *this;
-  //}
-  
-  //ManagedDocumentResult(ManagedDocumentResult&& other) : _vpack(other._vpack) {
-  //  other.clear();
-  //}
-
-  //ManagedDocumentResult& operator=(ManagedDocumentResult&& other) {
-  //  _vpack = other._vpack;
-  //  other.clear();
-  //  return *this;
-  //}
 
   ~ManagedDocumentResult();
 
@@ -60,9 +45,9 @@ class ManagedDocumentResult {
     return _vpack; 
   }
   
-  void add(ChunkProtector&& protector);
+  void add(ChunkProtector&& protector, arangodb::Transaction* trx);
 
-  void clear();
+  //void clear();
 
  private:
   RevisionCacheChunk* _chunk;
@@ -71,7 +56,7 @@ class ManagedDocumentResult {
 
 class ManagedMultiDocumentResult {
  public:
-  ManagedMultiDocumentResult() {}
+  ManagedMultiDocumentResult();
   ManagedMultiDocumentResult(ManagedMultiDocumentResult const& other) = delete;
   ManagedMultiDocumentResult(ManagedMultiDocumentResult&& other) = delete;
   ManagedMultiDocumentResult& operator=(ManagedMultiDocumentResult const& other) = delete;
@@ -97,8 +82,7 @@ class ManagedMultiDocumentResult {
   std::vector<uint8_t const*>::iterator begin() { return _results.begin(); }
   std::vector<uint8_t const*>::iterator end() { return _results.end(); }
   
-  void add(ChunkProtector&& protector);
-  void add(uint8_t const*); // TODO: remove
+  void add(ChunkProtector&& protector, arangodb::Transaction* trx);
  
  private:
   std::unordered_set<RevisionCacheChunk*> _chunks;

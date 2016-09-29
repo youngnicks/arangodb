@@ -29,12 +29,12 @@
 #include "Basics/ShortestPathFinder.h"
 #include "Aql/AqlValue.h"
 #include "Aql/AstNode.h"
-#include "Utils/CollectionNameResolver.h"
-#include "Utils/Transaction.h"
 #include "VocBase/PathEnumerator.h"
 #include "VocBase/voc-types.h"
 
 namespace arangodb {
+
+class Transaction;
 
 namespace velocypack {
 class Builder;

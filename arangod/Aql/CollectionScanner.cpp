@@ -23,6 +23,7 @@
 
 #include "CollectionScanner.h"
 #include "Basics/VelocyPackHelper.h"
+#include "Utils/Transaction.h"
 
 using namespace arangodb::aql;
 

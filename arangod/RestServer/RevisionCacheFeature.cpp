@@ -37,7 +37,7 @@ RevisionCacheChunkAllocator* RevisionCacheFeature::ALLOCATOR = nullptr;
 RevisionCacheFeature::RevisionCacheFeature(ApplicationServer* server)
     : ApplicationFeature(server, "RevisionCache"),
       _chunkSize(1 * 1024 * 1024),
-      _targetSize(256 * 1024 * 1024) {
+      _targetSize(512 * 1024 * 1024) {
   setOptional(false);
   requiresElevatedPrivileges(false);
   startsAfter("WorkMonitor");

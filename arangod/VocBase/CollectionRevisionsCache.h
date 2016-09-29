@@ -38,6 +38,7 @@ class Logfile;
 
 class LogicalCollection;
 class RevisionCacheChunkAllocator;
+class Transaction;
 
 class CollectionRevisionsCache {
  public:
@@ -53,7 +54,10 @@ class CollectionRevisionsCache {
 
   // look up a revision
   template<typename T>
-  bool lookupRevision(T& result, TRI_voc_rid_t revisionId);
+  bool lookupRevision(arangodb::Transaction* trx, T& result, TRI_voc_rid_t revisionId);
+  
+  // conditionally look up a revision
+  bool lookupRevisionConditional(arangodb::Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal);
   
   // insert from chunk
   void insertRevision(TRI_voc_rid_t revisionId, RevisionCacheChunk* chunk, uint32_t offset, uint32_t version);
@@ -69,6 +73,8 @@ class CollectionRevisionsCache {
 
  private:
   uint8_t const* readFromEngine(TRI_voc_rid_t revisionId);
+  
+  uint8_t const* readFromEngineConditional(TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal);
 
  private:
   arangodb::basics::ReadWriteLock _lock; 

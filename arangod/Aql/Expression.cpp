@@ -39,6 +39,7 @@
 #include "Basics/StringBuffer.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Basics/VPackStringBufferAdapter.h"
+#include "Utils/Transaction.h"
 
 #include <velocypack/Builder.h>
 #include <velocypack/Iterator.h>

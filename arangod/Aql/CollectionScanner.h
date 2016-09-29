@@ -26,9 +26,10 @@
 
 #include "Basics/Common.h"
 #include "Utils/OperationCursor.h"
-#include "Utils/Transaction.h"
 
 namespace arangodb {
+class Transaction;
+
 namespace aql {
 
 class CollectionScanner {
