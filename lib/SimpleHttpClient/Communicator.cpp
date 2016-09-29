@@ -287,9 +287,18 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   // mop: XXX :S CURLE 51 and 60...
   curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L);
   curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 0L);
+  
+  long connectTimeout = static_cast<long>(newRequest._options.connectionTimeout);
+  // mop: although curl is offering a MS scale connecttimeout this gets ignored in at least 7.50.3
+  // in doubt change the timeout to _MS below and hardcode it to 999 and see if the requests immediately fail
+  // if not this hack can go away
+  if(connectTimeout < 0) {
+    connectTimeout = 1;
+  }
 
+  LOG(ERR) << "Timeouts Connect: " << static_cast<long>(newRequest._options.connectionTimeout * 1000) << " total: " << static_cast<long>(newRequest._options.requestTimeout * 1000);
   curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, static_cast<long>(newRequest._options.requestTimeout * 1000));
-  curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT_MS, static_cast<long>(newRequest._options.connectionTimeout * 1000));
+  curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT, connectTimeout);
 
   switch(request->requestType()) {
     // mop: hmmm...why is this stuff in GeneralRequest? we are interested in HTTP only :S
@@ -344,7 +353,8 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
     return;
   }
   std::string prefix("Communicator("  + std::to_string(rip->_ticketId) + ") // ");
-  LOG_TOPIC(TRACE, Logger::REQUESTS) << prefix << "Curl rc is : " << rc;
+  LOG_TOPIC(TRACE, Logger::REQUESTS) << prefix << "Curl rc is : " << rc << " after " << std::fixed << (TRI_microtime() - rip->_startTime) << "s";
+;
 
   switch (rc) {
     case CURLE_OK: {
