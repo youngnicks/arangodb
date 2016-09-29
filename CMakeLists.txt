@@ -39,6 +39,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # where to find CMAKE modules
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 
+option(SKIP_PACKAGING OFF)
+
 # be verbose about flags used
 option(VERBOSE OFF)
 
@@ -244,8 +246,6 @@ else ()
   set(MAKE make)
 endif ()
 
-find_package(CURL REQUIRED)
-include_directories(${CURL_INCLUDE_DIRS})
 find_package(PythonInterp 2 EXACT REQUIRED)
 get_filename_component(PYTHON_EXECUTABLE "${PYTHON_EXECUTABLE}" REALPATH)
 
@@ -804,12 +804,26 @@ include_directories(${ZLIB_INCLUDE_DIR})
 add_definitions("-DARANGODB_ZLIB_VERSION=\"${ZLIB_VERSION}\"")
 
 ################################################################################
+## cURL
+################################################################################
+
+include_directories(${CURL_INCLUDE_DIRS})
+
+
+################################################################################
 ## PATHS, installation, packages
 ################################################################################
 
-include(ArangoDBInstall)
+if (MSVC)
+  # versioning
+  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/Installation/Windows/version")
+  include(generate_product_version)
+endif()
 
-include(packages/packages)
+include(ArangoDBInstall)
+if (NOT(SKIP_PACKAGING))
+  include(packages/packages)
+endif()
 ################################################################################
 ## ERRORS FILE
 ################################################################################
@@ -888,8 +902,8 @@ list(INSERT SYSTEM_LIBRARIES 0
   ${ZLIB_LIBS}
   ${ICU_LIBS}
   ${OPENSSL_LIBRARIES}
-  ${BASE_LIBS}
   ${CURL_LIBRARIES}
+  ${BASE_LIBS}
   ${CMAKE_DL_LIBS}
   ${SYS_LIBS}
   ${CMAKE_THREAD_LIBS_INIT}
