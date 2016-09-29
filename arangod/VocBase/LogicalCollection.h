@@ -97,6 +97,8 @@ class LogicalCollection {
   static bool IsAllowedName(arangodb::velocypack::Slice parameters);
   static bool IsAllowedName(bool isSystem, std::string const& name);
 
+  void ensureRevisionsCache();
+
   // TODO: MOVE TO PHYSICAL?  
   bool isFullyCollected();
   int64_t uncollectedLogfileEntries() const { return _uncollectedLogfileEntries.load(); }

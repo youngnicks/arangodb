@@ -40,6 +40,7 @@ class MMFilesRevisionsCache {
   ~MMFilesRevisionsCache();
   
  public:
+  void clear();
   MMFilesDocumentPosition lookup(TRI_voc_rid_t revisionId) const;
   void insert(TRI_voc_rid_t revisionId, uint8_t const* dataptr, TRI_voc_fid_t fid, bool isInWal);
   void update(TRI_voc_rid_t revisionId, uint8_t const* dataptr, TRI_voc_fid_t fid, bool isInWal);
@@ -56,3 +57,4 @@ class MMFilesRevisionsCache {
 } // namespace arangodb
 
 #endif
+

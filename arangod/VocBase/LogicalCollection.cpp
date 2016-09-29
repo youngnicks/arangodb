@@ -328,7 +328,7 @@ LogicalCollection::LogicalCollection(
       _cleanupIndexes(0),
       _persistentIndexes(0),
       _physical(EngineSelectorFeature::ENGINE->createPhysicalCollection(this)),
-      _revisionsCache(new CollectionRevisionsCache(this, RevisionCacheFeature::ALLOCATOR)),
+      _revisionsCache(nullptr),
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
@@ -393,7 +393,7 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase,
       _persistentIndexes(0),
       _path(ReadStringValue(info, "path", "")),
       _physical(EngineSelectorFeature::ENGINE->createPhysicalCollection(this)),
-      _revisionsCache(new CollectionRevisionsCache(this, RevisionCacheFeature::ALLOCATOR)),
+      _revisionsCache(nullptr),
       _useSecondaryIndexes(true),
       _numberDocuments(0),
       _maxTick(0),
@@ -604,6 +604,12 @@ bool LogicalCollection::IsAllowedName(VPackSlice parameters) {
   }
 
   return true;
+}
+
+void LogicalCollection::ensureRevisionsCache() {
+  if (!_revisionsCache) {
+    _revisionsCache.reset(new CollectionRevisionsCache(this, RevisionCacheFeature::ALLOCATOR));
+  }
 }
 
 /// @brief checks if a collection name is allowed
@@ -981,22 +987,29 @@ int LogicalCollection::close() {
 
   _numberDocuments = 0;
 
+  TRI_ASSERT(_revisionsCache);
   _revisionsCache->clear();
 
   return getPhysical()->close();
 }
 
 void LogicalCollection::unload() {
+  TRI_ASSERT(_revisionsCache);
   _revisionsCache->closeWriteChunk();
 }
 
 void LogicalCollection::drop() {
-  _revisionsCache->clear();
+  if (_revisionsCache) {
+    _revisionsCache->clear();
+  }
 
   TRI_ASSERT(!ServerState::instance()->isCoordinator());
   StorageEngine* engine = EngineSelectorFeature::ENGINE;
   engine->dropCollection(_vocbase, this);
   _isDeleted = true;
+
+  // save some memory by freeing the revisions cache
+  _revisionsCache.reset(); 
 }
 
 void LogicalCollection::setStatus(TRI_vocbase_col_status_e status) {
@@ -1228,6 +1241,8 @@ std::shared_ptr<arangodb::velocypack::Builder> LogicalCollection::figures() {
 
 /// @brief opens an existing collection
 void LogicalCollection::open(bool ignoreErrors) {
+  ensureRevisionsCache();
+  
   VPackBuilder builder;
   StorageEngine* engine = EngineSelectorFeature::ENGINE;
   engine->getCollectionInfo(_vocbase, cid(), builder, true, 0);
@@ -1847,6 +1862,7 @@ int LogicalCollection::read(Transaction* trx, StringRef const& key,
 ////////////////////////////////////////////////////////////////////////////////
 
 int LogicalCollection::truncate(Transaction* trx) {
+  TRI_ASSERT(_revisionsCache);
   _revisionsCache->clear();
   return TRI_ERROR_NO_ERROR;
 }
@@ -3463,14 +3479,17 @@ void LogicalCollection::newObjectForRemove(
 }
 
 bool LogicalCollection::readRevision(Transaction* trx, ManagedDocumentResult& result, TRI_voc_rid_t revisionId) {
+  TRI_ASSERT(_revisionsCache);
   return _revisionsCache->lookupRevision(trx, result, revisionId);
 }
 
 bool LogicalCollection::readRevision(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId) {
+  TRI_ASSERT(_revisionsCache);
   return _revisionsCache->lookupRevision(trx, result, revisionId);
 }
 
 bool LogicalCollection::readRevisionConditional(Transaction* trx, ManagedMultiDocumentResult& result, TRI_voc_rid_t revisionId, TRI_voc_tick_t maxTick, bool excludeWal) {
+  TRI_ASSERT(_revisionsCache);
   return _revisionsCache->lookupRevisionConditional(trx, result, revisionId, maxTick, excludeWal);
 }
 
@@ -3490,6 +3509,7 @@ bool LogicalCollection::updateRevisionConditional(TRI_voc_rid_t revisionId, TRI_
 
 void LogicalCollection::removeRevision(TRI_voc_rid_t revisionId, bool updateStats) {
   // clean up cache entry
+  TRI_ASSERT(_revisionsCache);
   _revisionsCache->removeRevision(revisionId); 
 
   // and remove from storage engine

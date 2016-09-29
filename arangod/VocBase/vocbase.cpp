@@ -750,6 +750,8 @@ arangodb::LogicalCollection* TRI_vocbase_t::createCollection(
 
   // note: cid may be modified by this function call
   arangodb::LogicalCollection* collection = createCollectionWorker(parameters, cid, writeMarker, builder);
+  
+  collection->ensureRevisionsCache();
 
   if (!writeMarker) {
     return collection;

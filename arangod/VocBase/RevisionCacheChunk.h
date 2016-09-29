@@ -96,9 +96,9 @@ class RevisionCacheChunk {
 
   void invalidate(std::vector<TRI_voc_rid_t>& revisions);
   
-  // align the length value to a multiple of 8
-  static constexpr inline uint32_t alignSize(uint32_t value) {
-    return (value + 7) - ((value + 7) & 7);
+  // align the length value to a multiple of blockSize
+  static constexpr inline uint32_t alignSize(uint32_t value, uint32_t blockSize) {
+    return (value + (blockSize - 1)) - ((value + (blockSize - 1)) & (blockSize - 1));
   }
   
  private:

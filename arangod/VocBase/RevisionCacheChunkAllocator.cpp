@@ -94,7 +94,7 @@ RevisionCacheChunk* RevisionCacheChunkAllocator::orderChunk(CollectionRevisionsC
     chunkSize = _defaultChunkSize;
   }
 
-  uint32_t const targetSize = RevisionCacheChunk::alignSize((std::max)(valueSize, chunkSize));
+  uint32_t const targetSize = RevisionCacheChunk::alignSize((std::max)(valueSize, chunkSize), blockSize());
   {
     // first check if there's a chunk ready on the freelist
     READ_LOCKER(locker, _chunksLock);

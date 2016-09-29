@@ -68,6 +68,8 @@ class RevisionCacheChunkAllocator {
   /// @brief physically delete a chunk
   void deleteChunk(RevisionCacheChunk* chunk) const;
 
+  static constexpr uint32_t blockSize() { return 2048; }
+
  private:
   // lock for the lists of chunks
   arangodb::basics::ReadWriteLock _chunksLock;

@@ -313,30 +313,35 @@ void MMFilesCollection::updateCount(int64_t count) {
 
 /// @brief closes an open collection
 int MMFilesCollection::close() {
-  WRITE_LOCKER(writeLocker, _filesLock);
+  {
+    WRITE_LOCKER(writeLocker, _filesLock);
 
-  // close compactor files
-  closeDatafiles(_compactors);
-  for (auto& it : _compactors) {
-    delete it;
-  }
-  _compactors.clear();
+    // close compactor files
+    closeDatafiles(_compactors);
+    for (auto& it : _compactors) {
+      delete it;
+    }
+    _compactors.clear();
 
-  // close journal files
-  closeDatafiles(_journals);
-  for (auto& it : _journals) {
-    delete it;
-  }
-  _journals.clear();
+    // close journal files
+    closeDatafiles(_journals);
+    for (auto& it : _journals) {
+      delete it;
+    }
+    _journals.clear();
 
-  // close datafiles
-  closeDatafiles(_datafiles);
-  for (auto& it : _datafiles) {
-    delete it;
+    // close datafiles
+    closeDatafiles(_datafiles);
+    for (auto& it : _datafiles) {
+      delete it;
+    }
+    _datafiles.clear();
   }
-  _datafiles.clear();
 
   _lastRevision = 0;
+
+  // clear revisions lookup table
+  _revisionsCache.clear();
 
   return TRI_ERROR_NO_ERROR;
 }
