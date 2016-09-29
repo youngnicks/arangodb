@@ -86,6 +86,16 @@ set(SKIP_INSTALL_ALL ON)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/zlib/zlib-1.2.8)
 
 ################################################################################
+## cURL
+################################################################################
+
+set(ENABLE_MANUAL OFF)
+set(CURL_STATIC 1)
+set(HTTP_ONLY ON)
+set(CMAKE_USE_LIBSSH2 OFF)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/curl/curl-7.50.3)
+
+################################################################################
 ## ROCKSDB
 ################################################################################
 

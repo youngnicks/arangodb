@@ -807,8 +807,7 @@ add_definitions("-DARANGODB_ZLIB_VERSION=\"${ZLIB_VERSION}\"")
 ## cURL
 ################################################################################
 
-include_directories(${CURL_INCLUDE_DIRS})
-
+include_directories(${CURL_INCLUDE_DIR})
 
 ################################################################################
 ## PATHS, installation, packages
