@@ -90,6 +90,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/zlib/zlib-1.2.8)
 ################################################################################
 
 set(ENABLE_MANUAL OFF)
+set(BUILD_TESTING OFF)
 set(CURL_STATICLIB 1)
 set(HTTP_ONLY ON)
 set(CMAKE_USE_LIBSSH2 OFF)
