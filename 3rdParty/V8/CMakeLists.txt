@@ -290,7 +290,7 @@ elseif (WIN32)
   endif ()
 
   list(APPEND V8_GYP_ARGS -Dtarget_arch=${V8_PROC_ARCH} -Dhost_arch=${V8_PROC_ARCH})
-  list(APPEND V8_GYP_ARGS ${V8_DIR}/build/all.gyp)
+  list(APPEND V8_GYP_ARGS build/all.gyp)
 
   if ("${V8_TARGET_ARCHS}" STREQUAL "")
     set(V8_TARGET_ARCHS "Debug;Release" CACHE string "V8 targets to build")
@@ -316,7 +316,7 @@ elseif (WIN32)
       BUILD_IN_SOURCE
         TRUE
       WORKING_DIRECTORY
-        ${V8_DIR}/build
+        ${V8_DIR}
       SOURCE_DIR
         "${V8_DIR}"
       CONFIGURE_COMMAND
@@ -332,7 +332,7 @@ elseif (WIN32)
     # and now ICU...
     ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} icu_build_icudata
       WORKING_DIRECTORY
-        ${V8_DIR}/third_party/icu
+        ${V8_TARGET_DIR}/third_party/icu
       COMMAND
         msbuild icu.sln /t:icudata /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
       DEPENDEES
@@ -343,7 +343,7 @@ elseif (WIN32)
 
     ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} icu_build_icui18n
       WORKING_DIRECTORY
-        ${V8_DIR}/third_party/icu
+        ${V8_TARGET_DIR}/third_party/icu
       COMMAND
         msbuild icu.sln /t:icui18n /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
       DEPENDEES
@@ -354,7 +354,7 @@ elseif (WIN32)
 
     ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} icu_build_icuuc
       WORKING_DIRECTORY
-        ${V8_DIR}/third_party/icu
+        ${V8_TARGET_DIR}/third_party/icu
       COMMAND
         msbuild icu.sln /t:icuuc /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
       DEPENDEES
@@ -366,7 +366,7 @@ elseif (WIN32)
     # cmake eats semicolons or quotes them or, or, or so we can't use /t:a;b;c
     ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} v8_build_v8
       WORKING_DIRECTORY
-        ${V8_DIR}/build
+        ${V8_TARGET_DIR}/build
       COMMAND
         msbuild all.sln /t:v8 /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
       DEPENDEES
@@ -377,7 +377,7 @@ elseif (WIN32)
 
     ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} v8_build_v8_libbase
       WORKING_DIRECTORY
-        ${V8_DIR}/build
+        ${V8_TARGET_DIR}/build
       COMMAND
         msbuild all.sln /t:v8_libbase /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
       DEPENDEES
@@ -388,7 +388,7 @@ elseif (WIN32)
 
     ExternalProject_Add_Step(v8_build_${MS_TARGET_CONF_LOWER} v8_build_v8_libplatform
       WORKING_DIRECTORY
-        ${V8_DIR}/build
+        ${V8_TARGET_DIR}/build
       COMMAND
         msbuild all.sln /t:v8_libplatform /p:Configuration=${MS_TARGET_CONF} /p:Platform=${MS_TARGET_PLATFORM}
       DEPENDEES
