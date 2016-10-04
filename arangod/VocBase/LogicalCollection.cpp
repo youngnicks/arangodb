@@ -1270,8 +1270,6 @@ void LogicalCollection::open(bool ignoreErrors) {
       cid(), TRI_TRANSACTION_WRITE);
 
   // build the primary index
-  res = TRI_ERROR_INTERNAL;
-
   double startIterate = TRI_microtime();
 
   LOG_TOPIC(TRACE, Logger::PERFORMANCE)
