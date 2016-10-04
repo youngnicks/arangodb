@@ -146,11 +146,11 @@ void SslFeature::prepare() {
   OpenSSL_add_all_algorithms();
   ERR_load_crypto_strings();
 
-  opensslSetup();
+  // opensslSetup();
 }
 
 void SslFeature::unprepare() {
-  opensslCleanup();
+  // opensslCleanup();
 
   ERR_free_strings();
   EVP_cleanup();
