@@ -715,7 +715,7 @@ SkiplistIndex::~SkiplistIndex() { delete _skiplistIndex; }
 
 size_t SkiplistIndex::memory() const {
   return _skiplistIndex->memoryUsage() +
-         static_cast<size_t>(_skiplistIndex->getNrUsed()) * elementSize() + _extraMemory;
+         static_cast<size_t>(_skiplistIndex->getNrUsed()) * elementSize();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -765,11 +765,9 @@ int SkiplistIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId,
 
   // insert into the index. the memory for the element will be owned or freed
   // by the index
-  size_t extraMemory = 0;
   size_t const count = elements.size();
 
   for (size_t i = 0; i < count; ++i) {
-    extraMemory += elements[i]->totalMemoryUsage(np);
     res = _skiplistIndex->insert(elements[i]);
 
     if (res != TRI_ERROR_NO_ERROR) {
@@ -788,10 +786,6 @@ int SkiplistIndex::insert(arangodb::Transaction*, TRI_voc_rid_t revisionId,
       }
       break;
     }
-  }
-
-  if (res == TRI_ERROR_NO_ERROR) {
-    _extraMemory += extraMemory;
   }
 
   return res;
@@ -823,7 +817,6 @@ int SkiplistIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId,
 
   // attempt the removal for skiplist indexes
   // ownership for the index element is transferred to the index
-  size_t extraMemory = 0;
   size_t const count = elements.size();
 
   for (size_t i = 0; i < count; ++i) {
@@ -835,13 +828,7 @@ int SkiplistIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId,
       res = result;
     }
     
-    extraMemory += elements[i]->totalMemoryUsage(np);
     elements[i]->free(np);
-  }
-
-  if (res == TRI_ERROR_NO_ERROR) {
-    TRI_ASSERT(_extraMemory >= extraMemory);
-    _extraMemory -= extraMemory;
   }
 
   return res;
@@ -849,7 +836,6 @@ int SkiplistIndex::remove(arangodb::Transaction*, TRI_voc_rid_t revisionId,
 
 int SkiplistIndex::unload() {
   _skiplistIndex->truncate(true);
-  _extraMemory = 0;
   return TRI_ERROR_NO_ERROR;
 }
 

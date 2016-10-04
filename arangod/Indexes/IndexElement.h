@@ -72,11 +72,6 @@ struct IndexElementValue {
     return arangodb::velocypack::Slice(value.managed.data);
   }
   
-  inline size_t managedSize() const noexcept {
-    TRI_ASSERT(isManaged());
-    return value.managed.size;
-  }
-  
   inline bool isManaged() const noexcept {
     return !isValue();
   }
@@ -164,18 +159,6 @@ struct IndexElement {
     return sizeof(TRI_voc_rid_t) + (sizeof(IndexElementValue) * numSubs);
   }
   
-  /// @brief total memory usage of an index element, including dynamic allocations
-  size_t totalMemoryUsage(size_t numSubs) {
-    size_t base = baseMemoryUsage(numSubs);
-    for (size_t i = 0; i < numSubs; ++i) {
-      IndexElementValue const* sub = subObject(i);
-      if (sub->isManaged()) {
-        base += sub->managedSize();
-      }
-    }
-    return base;
-  }
-
  private:
   static IndexElement* create(TRI_voc_rid_t revisionId, size_t numSubs);
 

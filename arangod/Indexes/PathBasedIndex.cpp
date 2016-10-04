@@ -55,8 +55,7 @@ PathBasedIndex::PathBasedIndex(TRI_idx_iid_t iid,
                                VPackSlice const& info, bool allowPartialIndex)
     : Index(iid, collection, info),
       _useExpansion(false),
-      _allowPartialIndex(allowPartialIndex),
-      _extraMemory(0) {
+      _allowPartialIndex(allowPartialIndex) {
   TRI_ASSERT(!_fields.empty());
 
   TRI_ASSERT(iid != 0);

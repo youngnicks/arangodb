@@ -539,7 +539,7 @@ size_t HashIndex::memory() const {
     base = static_cast<size_t>(elementSize() * _multiArray->_hashArray->size() +
                              _multiArray->_hashArray->memoryUsage());
   }
-  return base + _extraMemory;
+  return base;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -657,8 +657,6 @@ int HashIndex::remove(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
     return res;
   }
 
-  size_t extraMemory = 0;
-
   for (auto& hashElement : elements) {
     int result;
     if (_unique) {
@@ -672,14 +670,7 @@ int HashIndex::remove(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
     if (result != TRI_ERROR_NO_ERROR) {
       res = result;
     }
-    extraMemory += hashElement->totalMemoryUsage(np);
     hashElement->free(np);
-  }
-
-  if (res == TRI_ERROR_NO_ERROR && !isRollback) {
-    // on rollback, the _extraMemory value had not been increased
-    TRI_ASSERT(_extraMemory >= extraMemory);
-    _extraMemory -= extraMemory;
   }
 
   return res;
@@ -702,7 +693,6 @@ int HashIndex::unload() {
   } else {
     _multiArray->_hashArray->truncate([&n](IndexElement* element) -> bool { element->free(n); return true; });
   }
-  _extraMemory = 0;
   return TRI_ERROR_NO_ERROR;
 }
 
@@ -784,12 +774,10 @@ int HashIndex::insertUnique(arangodb::Transaction* trx, TRI_voc_rid_t revisionId
         return _uniqueArray->_hashArray->insert(trx, element);
       };
 
-  size_t extraMemory = 0;
   size_t const n = elements.size();
 
   for (size_t i = 0; i < n; ++i) {
     auto hashElement = elements[i];
-    extraMemory += hashElement->totalMemoryUsage(np);
     res = work(hashElement, isRollback);
 
     if (res != TRI_ERROR_NO_ERROR) {
@@ -802,9 +790,6 @@ int HashIndex::insertUnique(arangodb::Transaction* trx, TRI_voc_rid_t revisionId
     }
   }
 
-  if (res == TRI_ERROR_NO_ERROR) {
-    _extraMemory += extraMemory;
-  }
   return res;
 }
 
@@ -831,11 +816,6 @@ int HashIndex::batchInsertUnique(arangodb::Transaction* trx,
     return TRI_ERROR_NO_ERROR;
   }
   
-  size_t extraMemory = 0;
-  for (auto const& element : elements) {
-    extraMemory += element->totalMemoryUsage(np);
-  }
-
   int res = _uniqueArray->_hashArray->batchInsert(trx, &elements, numThreads);
 
   if (res != TRI_ERROR_NO_ERROR) {
@@ -843,9 +823,7 @@ int HashIndex::batchInsertUnique(arangodb::Transaction* trx,
       // free all elements to prevent leak
       it->free(np);
     }
-  } else {
-    _extraMemory += extraMemory;
-  }
+  } 
 
   return res;
 }
@@ -877,12 +855,10 @@ int HashIndex::insertMulti(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
     }
   };
 
-  size_t extraMemory = 0;
   size_t const n = elements.size();
 
   for (size_t i = 0; i < n; ++i) {
     auto hashElement = elements[i];
-    extraMemory += hashElement->totalMemoryUsage(np);
 
     try {
       work(hashElement, isRollback);
@@ -907,8 +883,6 @@ int HashIndex::insertMulti(arangodb::Transaction* trx, TRI_voc_rid_t revisionId,
       return res;
     }
   }
-
-  _extraMemory += extraMemory;
 
   return TRI_ERROR_NO_ERROR;
 }
@@ -937,18 +911,7 @@ int HashIndex::batchInsertMulti(arangodb::Transaction* trx,
     return TRI_ERROR_NO_ERROR;
   }
   
-  size_t extraMemory = 0;
-  for (auto const& element : elements) {
-    extraMemory += element->totalMemoryUsage(np);
-  }
-
-  int res = _multiArray->_hashArray->batchInsert(trx, &elements, numThreads);
-
-  if (res == TRI_ERROR_NO_ERROR) {
-    _extraMemory += extraMemory;
-  }
-
-  return res;
+  return _multiArray->_hashArray->batchInsert(trx, &elements, numThreads);
 }
 
 int HashIndex::removeUniqueElement(arangodb::Transaction* trx,

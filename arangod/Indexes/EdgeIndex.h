@@ -237,9 +237,6 @@ class EdgeIndex final : public Index {
 
   /// @brief number of buckets effectively used by the index
   size_t _numBuckets;
-
-  /// @brief amount of extra memory allocated by index elements
-  size_t _extraMemory;
 };
 }
 

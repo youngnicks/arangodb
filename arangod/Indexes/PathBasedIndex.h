@@ -142,9 +142,6 @@ class PathBasedIndex : public Index {
   //////////////////////////////////////////////////////////////////////////////
 
   bool _allowPartialIndex;
-  
-  /// @brief amount of extra memory allocated by index elements
-  size_t _extraMemory;
 };
 }
 

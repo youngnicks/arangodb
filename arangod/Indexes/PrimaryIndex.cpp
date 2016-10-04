@@ -152,8 +152,7 @@ PrimaryIndex::PrimaryIndex(arangodb::LogicalCollection* collection)
             std::vector<std::vector<arangodb::basics::AttributeName>>(
                 {{arangodb::basics::AttributeName(StaticStrings::KeyString, false)}}),
             true, false),
-      _primaryIndex(nullptr),
-      _extraMemory(0) {
+      _primaryIndex(nullptr) {
   uint32_t indexBuckets = 1;
 
   if (collection != nullptr) {
@@ -191,7 +190,7 @@ size_t PrimaryIndex::size() const { return _primaryIndex->size(); }
 ////////////////////////////////////////////////////////////////////////////////
 
 size_t PrimaryIndex::memory() const { 
-  return _primaryIndex->memoryUsage() + _extraMemory; 
+  return _primaryIndex->memoryUsage();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -233,7 +232,6 @@ int PrimaryIndex::unload() {
   };
 
   _primaryIndex->truncate(cb);
-  _extraMemory = 0;
 
   return TRI_ERROR_NO_ERROR;
 }
@@ -317,7 +315,6 @@ int PrimaryIndex::insertKey(arangodb::Transaction* trx, TRI_voc_rid_t revisionId
   
   if (res == TRI_ERROR_NO_ERROR) {
     // ownership transfer
-    _extraMemory += element->totalMemoryUsage(1);
     element.release();
   }
 
@@ -343,8 +340,6 @@ int PrimaryIndex::removeKey(arangodb::Transaction* trx,
     return TRI_ERROR_ARANGO_DOCUMENT_NOT_FOUND;
   }
     
-  _extraMemory -= found->totalMemoryUsage(1);
-
   return TRI_ERROR_NO_ERROR;
 }
 
