@@ -85,6 +85,10 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
 // -----------------------------------------------------------------------------
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
+SocketTask::~SocketTask() {
+  boost::system::error_code err;
+  _keepAliveTimer.cancel(err);
+}
 
 void SocketTask::start() {
   boost::system::error_code err;

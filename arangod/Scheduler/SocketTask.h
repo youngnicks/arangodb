@@ -46,6 +46,8 @@ class SocketTask : virtual public Task, public ConnectionStatisticsAgent {
   SocketTask(EventLoop, std::unique_ptr<Socket>, ConnectionInfo&&,
              double keepAliveTimeout);
 
+  virtual ~SocketTask();
+
  public:
   void start();
 
