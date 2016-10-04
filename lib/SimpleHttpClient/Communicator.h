@@ -54,7 +54,7 @@ namespace communicator {
 
     RequestInProgress(RequestInProgress const& other) = delete;
     RequestInProgress& operator=(RequestInProgress const& other) = delete;
-    
+
     // mop: i think we should just hold the full request here later
     Destination _destination;
     Callbacks _callbacks;
@@ -67,7 +67,7 @@ namespace communicator {
     std::unique_ptr<StringBuffer> _responseBody;
     Options _options;
   };
-  
+
   struct CurlHandle {
     explicit CurlHandle(RequestInProgress* rip) : _handle(nullptr), _rip(rip) {
       _handle = curl_easy_init();
@@ -84,7 +84,7 @@ namespace communicator {
 
     CurlHandle(CurlHandle& other) = delete;
     CurlHandle& operator=(CurlHandle& other) = delete;
-    
+
     CURL* _handle;
     std::unique_ptr<RequestInProgress> _rip;
   };
@@ -100,6 +100,7 @@ namespace communicator {
 class Communicator {
  public:
 	 Communicator();
+	 ~Communicator(){ ::curl_global_cleanup(); };
 
  public:
   Ticket addRequest(Destination, std::unique_ptr<GeneralRequest>, Callbacks,
@@ -147,7 +148,7 @@ class Communicator {
   /// @brief curl will strip standalone ".". ArangoDB allows using . as a key
   /// so this thing will analyse the url and urlencode any unsafe .'s
   std::string createSafeDottedCurlUrl(std::string const& originalUrl);
- 
+
  private:
   static size_t readBody(void*, size_t, size_t, void*);
   static size_t readHeaders(char* buffer, size_t size, size_t nitems, void* userdata);
