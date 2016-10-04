@@ -934,7 +934,7 @@ class AssocUnique {
     if (position.bucketId >= _buckets.size()) {
       // bucket id is out of bounds. now handle edge cases
       if (position.bucketId < SIZE_MAX - 1) {
-        return nullptr;
+        return Element();
       }
 
       if (position.bucketId == SIZE_MAX) {
