@@ -25,6 +25,7 @@ if (NOT (CMAKE_BUILD_TYPE STREQUAL "Debug"
       OR CMAKE_BUILD_TYPE STREQUAL "None"))
   message(FATAL_ERROR "expecting CMAKE_BUILD_TYPE: None Debug Release RelWithDebInfo MinSizeRel, got ${CMAKE_BUILD_TYPE}.")
 endif ()
+add_definitions(-DCURL_STATICLIB=1)
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.11" CACHE STRING "deployment target for MacOSX; adjust to your sysem")
 
