@@ -440,7 +440,16 @@ int TRI_vocbase_t::loadCollection(arangodb::LogicalCollection* collection,
 
     try {
       collection->open(ignoreDatafileErrors);
+    } catch (arangodb::basics::Exception const& ex) {
+      LOG(ERR) << "caught exception while opening collection '" << collection->name() << "': " << ex.what();
+      collection->setStatus(TRI_VOC_COL_STATUS_CORRUPTED);
+      return TRI_ERROR_ARANGO_CORRUPTED_COLLECTION;
+    } catch (std::exception const& ex) {
+      LOG(ERR) << "caught exception while opening collection '" << collection->name() << "': " << ex.what();
+      collection->setStatus(TRI_VOC_COL_STATUS_CORRUPTED);
+      return TRI_ERROR_ARANGO_CORRUPTED_COLLECTION;
     } catch (...) {
+      LOG(ERR) << "caught unknown exception while opening collection '" << collection->name() << "'";
       collection->setStatus(TRI_VOC_COL_STATUS_CORRUPTED);
       return TRI_ERROR_ARANGO_CORRUPTED_COLLECTION;
     }

@@ -381,7 +381,7 @@ LogicalCollection::LogicalCollection(TRI_vocbase_t* vocbase,
           ReadNumericValue<TRI_voc_size_t>(info, "journalSize",
                                            TRI_JOURNAL_DEFAULT_SIZE))),
       _keyOptions(CopySliceValue(info, "keyOptions")),
-      _version(ReadNumericValue<uint32_t>(info, "version", minimumVersion())),
+      _version(ReadNumericValue<uint32_t>(info, "version", currentVersion())),
       _indexBuckets(ReadNumericValue<uint32_t>(
           info, "indexBuckets", DatabaseFeature::defaultIndexBuckets())),
       _replicationFactor(ReadNumericValue<int>(info, "replicationFactor", 1)),
@@ -1266,24 +1266,16 @@ void LogicalCollection::open(bool ignoreErrors) {
   // build the primary index
   res = TRI_ERROR_INTERNAL;
 
-  try {
-    double start = TRI_microtime();
+  double startIterate = TRI_microtime();
 
-    LOG_TOPIC(TRACE, Logger::PERFORMANCE)
-        << "iterate-markers { collection: " << _vocbase->name() << "/"
-        << _name << " }";
+  LOG_TOPIC(TRACE, Logger::PERFORMANCE)
+      << "iterate-markers { collection: " << _vocbase->name() << "/"
+      << _name << " }";
 
-    // iterate over all markers of the collection
-    res = getPhysical()->iterateMarkersOnLoad(&trx);
+  // iterate over all markers of the collection
+  res = getPhysical()->iterateMarkersOnLoad(&trx);
 
-    LOG_TOPIC(TRACE, Logger::PERFORMANCE) << "[timer] " << Logger::FIXED(TRI_microtime() - start) << " s, iterate-markers { collection: " << _vocbase->name() << "/" << _name << " }";
-  } catch (arangodb::basics::Exception const& ex) {
-    res = ex.code();
-  } catch (std::bad_alloc const&) {
-    res = TRI_ERROR_OUT_OF_MEMORY;
-  } catch (...) {
-    res = TRI_ERROR_INTERNAL;
-  }
+  LOG_TOPIC(TRACE, Logger::PERFORMANCE) << "[timer] " << Logger::FIXED(TRI_microtime() - startIterate) << " s, iterate-markers { collection: " << _vocbase->name() << "/" << _name << " }";
 
   if (res != TRI_ERROR_NO_ERROR) {
     THROW_ARANGO_EXCEPTION_MESSAGE(res, std::string("cannot iterate data of document collection: ") + TRI_errno_string(res));
@@ -1321,6 +1313,17 @@ void LogicalCollection::open(bool ignoreErrors) {
       << "[timer] " << Logger::FIXED(TRI_microtime() - start)
       << " s, open-document-collection { collection: " << _vocbase->name() << "/"
       << _name << " }";
+
+  // successfully opened collection. now adjust version number
+  if (_version != VERSION_31) {
+    _version = VERSION_31;
+    bool const doSync =
+        application_features::ApplicationServer::getFeature<DatabaseFeature>(
+            "Database")
+            ->forceSyncProperties();
+    StorageEngine* engine = EngineSelectorFeature::ENGINE;
+    engine->changeCollection(_vocbase, _cid, this, doSync);
+  }
 }
 
 /// @brief opens an existing collection

@@ -73,6 +73,11 @@ class LogicalCollection {
   explicit LogicalCollection(LogicalCollection const&);
 
   virtual ~LogicalCollection();
+  
+  enum CollectionVersions {
+    VERSION_30 = 5,
+    VERSION_31 = 6
+  };
 
  private:
   LogicalCollection& operator=(LogicalCollection const&) = delete;
@@ -84,7 +89,9 @@ class LogicalCollection {
   }
 
   /// @brief hard-coded minimum version number for collections
-  static constexpr uint32_t minimumVersion() { return 5; } 
+  static constexpr uint32_t minimumVersion() { return VERSION_30; } 
+  /// @brief current version for collections
+  static constexpr uint32_t currentVersion() { return VERSION_31; } 
 
   /// @brief determine whether a collection name is a system collection name
   static inline bool IsSystemName(std::string const& name) {

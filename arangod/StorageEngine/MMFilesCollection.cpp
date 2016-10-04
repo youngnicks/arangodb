@@ -22,6 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "MMFilesCollection.h"
+#include "ApplicationFeatures/ApplicationServer.h"
 #include "Basics/FileUtils.h"
 #include "Basics/ReadLocker.h"
 #include "Basics/StaticStrings.h"
@@ -29,11 +30,12 @@
 #include "Basics/WriteLocker.h"
 #include "Indexes/PrimaryIndex.h"
 #include "Logger/Logger.h"
+#include "RestServer/DatabaseFeature.h"
+#include "StorageEngine/MMFilesDocumentPosition.h"
+#include "StorageEngine/StorageEngine.h"
 #include "Utils/SingleCollectionTransaction.h"
 #include "Utils/StandaloneTransactionContext.h"
 #include "Utils/Transaction.h"
-#include "StorageEngine/MMFilesDocumentPosition.h"
-#include "StorageEngine/StorageEngine.h"
 #include "VocBase/DatafileHelper.h"
 #include "VocBase/KeyGenerator.h"
 #include "VocBase/LogicalCollection.h"
@@ -74,7 +76,7 @@ int MMFilesCollection::OpenIteratorHandleDocumentMarker(TRI_df_marker_t const* m
   TRI_voc_rid_t revisionId;
 
   Transaction::extractKeyAndRevFromDocument(slice, keySlice, revisionId);
- 
+
   collection->setRevision(revisionId, false);
   VPackValueLength length;
   char const* p = keySlice.getString(length);
@@ -1090,6 +1092,14 @@ int MMFilesCollection::iterateMarkersOnLoad(arangodb::Transaction* trx) {
 
   LOG(TRACE) << "found " << openState._documents << " document markers, " 
              << openState._deletions << " deletion markers for collection '" << _logicalCollection->name() << "'";
+  
+  if (_logicalCollection->version() <= LogicalCollection::VERSION_30 && 
+      _lastRevision >= static_cast<TRI_voc_rid_t>(2016 - 1970) * 1000 * 60 * 60 * 24 * 365 &&
+      application_features::ApplicationServer::server->getFeature<DatabaseFeature>("Database")->check30Revisions()) {
+    // a collection from 3.0 or earlier with a _rev value that is higher than we can handle safely
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_ARANGO_CORRUPTED_COLLECTION, std::string("collection '") + _logicalCollection->name() + "' contains _rev values that are higher than expected for an ArangoDB 3.0 database. If this collection was created or used with a pre-release ArangoDB 3.1, please restart the server with option '--database.check-30-revisions false` to suppress this warning.");
+  }
+
   
   // update the real statistics for the collection
   try {
