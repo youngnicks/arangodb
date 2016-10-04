@@ -1,8 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 /// DISCLAIMER
 ///
-/// Copyright 2014-2016 ArangoDB GmbH, Cologne, Germany
-/// Copyright 2004-2014 triAGENS GmbH, Cologne, Germany
+/// Copyright 2016 ArangoDB GmbH, Cologne, Germany
 ///
 /// Licensed under the Apache License, Version 2.0 (the "License");
 /// you may not use this file except in compliance with the License.
@@ -18,42 +17,27 @@
 ///
 /// Copyright holder is ArangoDB GmbH, Cologne, Germany
 ///
-/// @author Andreas Streichardt
+/// @author Dr. Frank Celler
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGOD_REST_HANDLER_REST_AUTH_HANDLER_H
-#define ARANGOD_REST_HANDLER_REST_AUTH_HANDLER_H 1
+#ifndef ARANGOD_UTILS_EVENTS_H
+#define ARANGOD_UTILS_EVENTS_H 1
 
 #include "Basics/Common.h"
-#include "RestHandler/RestVocbaseBaseHandler.h"
 
-#include <chrono>
+#include "Rest/CommonDefines.h"
 
 namespace arangodb {
-class RestAuthHandler : public RestVocbaseBaseHandler {
- public:
-  RestAuthHandler(GeneralRequest*, GeneralResponse*,
-                  std::string const* jwtSecret);
+class GeneralRequest;
 
-  std::string generateJwt(std::string const&, std::string const&);
-
- public:
-  bool isDirect() const override;
-  RestStatus execute() override;
-
-#ifdef USE_ENTERPRISE
-  void finalizeExecute() override;
-#endif
-
- private:
-  RestStatus badRequest();
-
- private:
-  std::string _jwtSecret;
-  std::string _username;
-  bool _isValid = false;
-  std::chrono::seconds _validFor;
-};
+namespace events {
+void UnknownAuthenticationMethod(GeneralRequest const*);
+void CredentialsMissing(GeneralRequest const*);
+void CredentialsBad(GeneralRequest*, rest::AuthenticationMethod);
+void PasswordChangeRequired(GeneralRequest const*);
+void Authenticated(GeneralRequest*, rest::AuthenticationMethod);
+void NotAuthorized(GeneralRequest const*);
+}
 }
 
 #endif

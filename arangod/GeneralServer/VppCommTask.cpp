@@ -45,6 +45,7 @@
 #include "RestServer/ServerFeature.h"
 #include "Scheduler/Scheduler.h"
 #include "Scheduler/SchedulerFeature.h"
+#include "Utils/Events.h"
 #include "VocBase/ticks.h"
 
 #include <velocypack/Validator.h>
@@ -282,6 +283,7 @@ bool VppCommTask::processRead() {
       }
 
       if (level != AuthLevel::RW) {
+        events::NotAuthorized(request.get());
         handleSimpleError(rest::ResponseCode::UNAUTHORIZED, TRI_ERROR_FORBIDDEN,
                           "not authorized to execute this request",
                           chunkHeader._messageID);

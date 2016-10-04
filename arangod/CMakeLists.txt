@@ -70,9 +70,18 @@ else ()
   set(ROCKSDB_FILES "")
 endif ()
 
+if (USE_ENTERPRISE)
+  set(ENTERPRISE_FILES "")
+else ()
+  set(ENTERPRISE_FILES
+    Utils/Events.cpp
+  )
+endif ()
+
 add_executable(${BIN_ARANGOD}
   ${ProductVersionFiles}
   ${ROCKSDB_FILES}
+  ${ENTERPRISE_FILES}
   Actions/ActionFeature.cpp
   Actions/RestActionHandler.cpp
   Actions/actions.cpp

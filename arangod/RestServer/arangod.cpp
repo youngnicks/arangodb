@@ -22,14 +22,12 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "Basics/Common.h"
+
 #include "Basics/directories.h"
 #include "Basics/tri-strings.h"
 
 #include "Actions/ActionFeature.h"
 #include "Agency/AgencyFeature.h"
-#ifdef _WIN32
-#include "ApplicationFeatures/WindowsServiceFeature.h"
-#endif
 #include "ApplicationFeatures/ConfigFeature.h"
 #include "ApplicationFeatures/DaemonFeature.h"
 #include "ApplicationFeatures/GreetingsFeature.h"
@@ -84,6 +82,14 @@
 #include "Indexes/RocksDBFeature.h"
 #endif
 
+#ifdef USE_ENTERPRISE
+#include "Enterprise/Audit/AuditFeature.h"
+#endif
+
+#ifdef _WIN32
+#include "ApplicationFeatures/WindowsServiceFeature.h"
+#endif
+
 using namespace arangodb;
 using namespace arangodb::wal;
 
@@ -100,16 +106,13 @@ static int runServer(int argc, char** argv) {
   application_features::ApplicationServer server(options);
 
   std::vector<std::string> nonServerFeatures = {
-      "Action",        "Affinity",            "Agency",    "Cluster",
-      "Daemon",        "Endpoint",  "FoxxQueues",
-      "GeneralServer", "LoggerBufferFeature", "Server",    "Scheduler",
-      "SslServer",     "Statistics",          "Supervisor"};
+      "Action",     "Affinity",      "Agency",
+      "Cluster",    "Daemon",        "Dispatcher",
+      "FoxxQueues", "GeneralServer", "LoggerBufferFeature",
+      "Server",     "Scheduler",     "SslServer",
+      "Statistics", "Supervisor"};
 
   int ret = EXIT_FAILURE;
-
-#ifdef _WIN32
-  server.addFeature(new WindowsServiceFeature(&server));
-#endif
 
   server.addFeature(new ActionFeature(&server));
   server.addFeature(new AgencyFeature(&server));
@@ -168,6 +171,14 @@ static int runServer(int argc, char** argv) {
       std::make_unique<SupervisorFeature>(&server);
   supervisor->supervisorStart({"Logger"});
   server.addFeature(supervisor.release());
+#endif
+
+#ifdef USE_ENTERPRISE
+  server.addFeature(new AuditFeature(&server));
+#endif
+
+#ifdef _WIN32
+  server.addFeature(new WindowsServiceFeature(&server));
 #endif
 
   // storage engines
