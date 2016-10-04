@@ -73,7 +73,7 @@ while [[ ${1} ]]; do
       shift
       ;;
     -o|--xterm-options)
-      XTERM_OPTIONS=${2}
+      XTERMOPTIONS=${2}
       shift
       ;;
     -h|--help)
@@ -268,8 +268,8 @@ startDebugger() {
       --server.threads 5 \
       --javascript.startup-directory ./js \
       --javascript.app-path ./js/apps \
-      --server.authentication false &
         $SSLKEYFILE \
+      --server.authentication false &
       $XTERM $XTERMOPTIONS -e gdb build/bin/arangod -p $! &
 }
 

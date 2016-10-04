@@ -20,41 +20,24 @@
 /// @author Dr. Frank Celler
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ARANGODB_BASICS_ARANGO_GLOBAL_CONTEXT_H
-#define ARANGODB_BASICS_ARANGO_GLOBAL_CONTEXT_H 1
+#ifndef ARANGOD_UTILS_EVENTS_H
+#define ARANGOD_UTILS_EVENTS_H 1
 
 #include "Basics/Common.h"
 
+#include "Rest/CommonDefines.h"
+
 namespace arangodb {
-class ArangoGlobalContext {
- public:
-  static ArangoGlobalContext* CONTEXT;
+class GeneralRequest;
 
- public:
-  ArangoGlobalContext(int argc, char* argv[], const char* InstallDirectory);
-  ~ArangoGlobalContext();
-
- public:
-  std::string binaryName() { return _binaryName; }
-  std::string runRoot() { return _runRoot; }
-  void normalizePath(std::vector<std::string>& path, const char* whichPath,
-                     bool fatal);
-  void normalizePath(std::string& path, const char* whichPath, bool fatal);
-  int exit(int ret);
-  void installHup();
-  void installSegv();
-  void maskAllSignals();
-  void unmaskStandardSignals();
-  void runStartupChecks();
-  void createMiniDumpFilename();
-  bool useEventLog() { return _useEventLog; }
-
- private:
-  std::string _binaryName;
-  std::string _runRoot;
-  int _ret;
-  bool _useEventLog;
-};
+namespace events {
+void UnknownAuthenticationMethod(GeneralRequest const*);
+void CredentialsMissing(GeneralRequest const*);
+void CredentialsBad(GeneralRequest*, rest::AuthenticationMethod);
+void PasswordChangeRequired(GeneralRequest const*);
+void Authenticated(GeneralRequest*, rest::AuthenticationMethod);
+void NotAuthorized(GeneralRequest const*);
+}
 }
 
 #endif
