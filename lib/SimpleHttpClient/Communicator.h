@@ -38,57 +38,63 @@
 namespace arangodb {
 using namespace basics;
 namespace communicator {
-  typedef std::unordered_map<std::string, std::string> HeadersInProgress;
-  typedef uint64_t Ticket;
+typedef std::unordered_map<std::string, std::string> HeadersInProgress;
+typedef uint64_t Ticket;
 
-  struct RequestInProgress {
-    RequestInProgress(Destination destination, Callbacks callbacks, Ticket ticketId, std::string const& requestBody, Options const& options)
-      : _destination(destination), _callbacks(callbacks), _ticketId(ticketId), _requestBody(requestBody), _requestHeaders(nullptr), _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)), _options(options) {
+struct RequestInProgress {
+  RequestInProgress(Destination destination, Callbacks callbacks,
+                    Ticket ticketId, std::string const& requestBody,
+                    Options const& options)
+      : _destination(destination),
+        _callbacks(callbacks),
+        _ticketId(ticketId),
+        _requestBody(requestBody),
+        _requestHeaders(nullptr),
+        _responseBody(new StringBuffer(TRI_UNKNOWN_MEM_ZONE, false)),
+        _options(options) {}
+
+  ~RequestInProgress() {
+    if (_requestHeaders != nullptr) {
+      curl_slist_free_all(_requestHeaders);
     }
+  }
 
-    ~RequestInProgress() {
-      if (_requestHeaders != nullptr) {
-        curl_slist_free_all(_requestHeaders);
-      }
+  RequestInProgress(RequestInProgress const& other) = delete;
+  RequestInProgress& operator=(RequestInProgress const& other) = delete;
+
+  // mop: i think we should just hold the full request here later
+  Destination _destination;
+  Callbacks _callbacks;
+  Ticket _ticketId;
+  std::string _requestBody;
+  struct curl_slist* _requestHeaders;
+
+  HeadersInProgress _responseHeaders;
+  double _startTime;
+  std::unique_ptr<StringBuffer> _responseBody;
+  Options _options;
+};
+
+struct CurlHandle {
+  explicit CurlHandle(RequestInProgress* rip) : _handle(nullptr), _rip(rip) {
+    _handle = curl_easy_init();
+    if (_handle == nullptr) {
+      THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
     }
-
-    RequestInProgress(RequestInProgress const& other) = delete;
-    RequestInProgress& operator=(RequestInProgress const& other) = delete;
-
-    // mop: i think we should just hold the full request here later
-    Destination _destination;
-    Callbacks _callbacks;
-    Ticket _ticketId;
-    std::string _requestBody;
-    struct curl_slist* _requestHeaders;
-
-    HeadersInProgress _responseHeaders;
-    double _startTime;
-    std::unique_ptr<StringBuffer> _responseBody;
-    Options _options;
-  };
-
-  struct CurlHandle {
-    explicit CurlHandle(RequestInProgress* rip) : _handle(nullptr), _rip(rip) {
-      _handle = curl_easy_init();
-      if (_handle == nullptr) {
-        THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-      }
-      curl_easy_setopt(_handle, CURLOPT_PRIVATE, _rip.get());
+    curl_easy_setopt(_handle, CURLOPT_PRIVATE, _rip.get());
+  }
+  ~CurlHandle() {
+    if (_handle != nullptr) {
+      curl_easy_cleanup(_handle);
     }
-    ~CurlHandle() {
-      if (_handle != nullptr) {
-        curl_easy_cleanup(_handle);
-      }
-    }
+  }
 
-    CurlHandle(CurlHandle& other) = delete;
-    CurlHandle& operator=(CurlHandle& other) = delete;
+  CurlHandle(CurlHandle& other) = delete;
+  CurlHandle& operator=(CurlHandle& other) = delete;
 
-    CURL* _handle;
-    std::unique_ptr<RequestInProgress> _rip;
-  };
-
+  CURL* _handle;
+  std::unique_ptr<RequestInProgress> _rip;
+};
 }
 }
 
@@ -99,8 +105,8 @@ namespace communicator {
 
 class Communicator {
  public:
-	 Communicator();
-	 ~Communicator(){ ::curl_global_cleanup(); };
+  Communicator();
+  ~Communicator();
 
  public:
   Ticket addRequest(Destination, std::unique_ptr<GeneralRequest>, Callbacks,
@@ -121,14 +127,12 @@ class Communicator {
     Ticket _ticketId;
   };
 
-  struct CurlData {
-  };
+  struct CurlData {};
 
  private:
   Mutex _newRequestsLock;
   std::vector<NewRequest> _newRequests;
-  std::unordered_map<uint64_t, std::unique_ptr<CurlHandle>>
-      _handlesInProgress;
+  std::unordered_map<uint64_t, std::unique_ptr<CurlHandle>> _handlesInProgress;
   CURLM* _curl;
   CURLMcode _mc;
   curl_waitfd _wakeup;
@@ -144,14 +148,16 @@ class Communicator {
  private:
   void createRequestInProgress(NewRequest const& newRequest);
   void handleResult(CURL*, CURLcode);
-  void transformResult(CURL*, HeadersInProgress&&, std::unique_ptr<StringBuffer>, HttpResponse*);
+  void transformResult(CURL*, HeadersInProgress&&,
+                       std::unique_ptr<StringBuffer>, HttpResponse*);
   /// @brief curl will strip standalone ".". ArangoDB allows using . as a key
   /// so this thing will analyse the url and urlencode any unsafe .'s
   std::string createSafeDottedCurlUrl(std::string const& originalUrl);
 
  private:
   static size_t readBody(void*, size_t, size_t, void*);
-  static size_t readHeaders(char* buffer, size_t size, size_t nitems, void* userdata);
+  static size_t readHeaders(char* buffer, size_t size, size_t nitems,
+                            void* userdata);
   static int curlDebug(CURL*, curl_infotype, char*, size_t, void*);
   static void logHttpHeaders(std::string const&, std::string const&);
   static void logHttpBody(std::string const&, std::string const&);

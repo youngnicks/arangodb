@@ -53,72 +53,64 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-int dumb_socketpair(SOCKET socks[2], int make_overlapped)
-{
-	union {
-		struct sockaddr_in inaddr;
-		struct sockaddr addr;
-	} a;
-	SOCKET listener;
-	int e;
-	socklen_t addrlen = sizeof(a.inaddr);
-	DWORD flags = (make_overlapped ? WSA_FLAG_OVERLAPPED : 0);
-	int reuse = 1;
+int dumb_socketpair(SOCKET socks[2], int make_overlapped) {
+  union {
+    struct sockaddr_in inaddr;
+    struct sockaddr addr;
+  } a;
+  SOCKET listener;
+  int e;
+  socklen_t addrlen = sizeof(a.inaddr);
+  DWORD flags = (make_overlapped ? WSA_FLAG_OVERLAPPED : 0);
+  int reuse = 1;
 
-	if (socks == 0) {
-		WSASetLastError(WSAEINVAL);
-		return SOCKET_ERROR;
-	}
-	socks[0] = socks[1] = -1;
+  if (socks == 0) {
+    WSASetLastError(WSAEINVAL);
+    return SOCKET_ERROR;
+  }
+  socks[0] = socks[1] = -1;
 
-	listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (listener == -1)
-		return SOCKET_ERROR;
+  listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (listener == -1) return SOCKET_ERROR;
 
-	memset(&a, 0, sizeof(a));
-	a.inaddr.sin_family = AF_INET;
-	a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	a.inaddr.sin_port = 0;
+  memset(&a, 0, sizeof(a));
+  a.inaddr.sin_family = AF_INET;
+  a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  a.inaddr.sin_port = 0;
 
-	for (;;) {
-		if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR,
-			(char*)&reuse, (socklen_t) sizeof(reuse)) == -1)
-			break;
-		if (bind(listener, &a.addr, sizeof(a.inaddr)) == SOCKET_ERROR)
-			break;
+  for (;;) {
+    if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (char*)&reuse,
+                   (socklen_t)sizeof(reuse)) == -1)
+      break;
+    if (bind(listener, &a.addr, sizeof(a.inaddr)) == SOCKET_ERROR) break;
 
-		memset(&a, 0, sizeof(a));
-		if (getsockname(listener, &a.addr, &addrlen) == SOCKET_ERROR)
-			break;
-		// win32 getsockname may only set the port number, p=0.0005.
-		// ( http://msdn.microsoft.com/library/ms738543.aspx ):
-		a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-		a.inaddr.sin_family = AF_INET;
+    memset(&a, 0, sizeof(a));
+    if (getsockname(listener, &a.addr, &addrlen) == SOCKET_ERROR) break;
+    // win32 getsockname may only set the port number, p=0.0005.
+    // ( http://msdn.microsoft.com/library/ms738543.aspx ):
+    a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    a.inaddr.sin_family = AF_INET;
 
-		if (listen(listener, 1) == SOCKET_ERROR)
-			break;
+    if (listen(listener, 1) == SOCKET_ERROR) break;
 
-		socks[0] = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, flags);
-		if (socks[0] == -1)
-			break;
-		if (connect(socks[0], &a.addr, sizeof(a.inaddr)) == SOCKET_ERROR)
-			break;
+    socks[0] = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, flags);
+    if (socks[0] == -1) break;
+    if (connect(socks[0], &a.addr, sizeof(a.inaddr)) == SOCKET_ERROR) break;
 
-		socks[1] = accept(listener, NULL, NULL);
-		if (socks[1] == -1)
-			break;
+    socks[1] = accept(listener, NULL, NULL);
+    if (socks[1] == -1) break;
 
-		closesocket(listener);
-		return 0;
-	}
+    closesocket(listener);
+    return 0;
+  }
 
-	e = WSAGetLastError();
-	closesocket(listener);
-	closesocket(socks[0]);
-	closesocket(socks[1]);
-	WSASetLastError(e);
-	socks[0] = socks[1] = -1;
-	return SOCKET_ERROR;
+  e = WSAGetLastError();
+  closesocket(listener);
+  closesocket(socks[0]);
+  closesocket(socks[1]);
+  WSASetLastError(e);
+  socks[0] = socks[1] = -1;
+  return SOCKET_ERROR;
 }
 #endif
 
@@ -127,33 +119,39 @@ using namespace arangodb::communicator;
 
 namespace {
 std::atomic_uint_fast64_t NEXT_TICKET_ID(static_cast<uint64_t>(0));
-std::vector<char> urlDotSeparators {'/', '#', '?'};
+std::vector<char> urlDotSeparators{'/', '#', '?'};
 }
 
-Communicator::Communicator()
-    : _curl(nullptr) {
+Communicator::Communicator() : _curl(nullptr) {
   curl_global_init(CURL_GLOBAL_ALL);
   _curl = curl_multi_init();
 
 #ifdef _WIN32
-	int err = dumb_socketpair(socks, 0);
-	if (err != 0) {
-		throw std::runtime_error("Couldn't setup sockets. Error was: " + std::to_string(err));
-	}
-	_wakeup.fd = socks[0];
+  int err = dumb_socketpair(socks, 0);
+  if (err != 0) {
+    throw std::runtime_error("Couldn't setup sockets. Error was: " +
+                             std::to_string(err));
+  }
+  _wakeup.fd = socks[0];
 #else
   int result = pipe(_fds);
   if (result != 0) {
-    throw std::runtime_error("Couldn't setup pipe. Return code was: " + std::to_string(result));
+    throw std::runtime_error("Couldn't setup pipe. Return code was: " +
+                             std::to_string(result));
   }
 
   TRI_socket_t socket = {.fileDescriptor = _fds[0]};
   TRI_SetNonBlockingSocket(socket);
   _wakeup.fd = _fds[0];
 #endif
-  
+
   _wakeup.events = CURL_WAIT_POLLIN | CURL_WAIT_POLLPRI;
 }
+
+Communicator::~Communicator() {
+  ::curl_multi_cleanup(_curl);
+  ::curl_global_cleanup();
+};
 
 Ticket Communicator::addRequest(Destination destination,
                                 std::unique_ptr<GeneralRequest> request,
@@ -170,13 +168,15 @@ Ticket Communicator::addRequest(Destination destination,
   // mop: just send \0 terminated empty string to wake up worker thread
   ssize_t numBytes = send(socks[1], "", 1, 0);
   if (numBytes != 1) {
-	  LOG_TOPIC(WARN, Logger::REQUESTS) << "Couldn't wake up pipe. numBytes was " + std::to_string(numBytes);
+    LOG_TOPIC(WARN, Logger::REQUESTS)
+        << "Couldn't wake up pipe. numBytes was " + std::to_string(numBytes);
   }
 #else
   // mop: just send \0 terminated empty string to wake up worker thread
   ssize_t numBytes = write(_fds[1], "", 1);
   if (numBytes != 1) {
-    LOG_TOPIC(WARN, Logger::REQUESTS) << "Couldn't wake up pipe. numBytes was " + std::to_string(numBytes);
+    LOG_TOPIC(WARN, Logger::REQUESTS)
+        << "Couldn't wake up pipe. numBytes was " + std::to_string(numBytes);
   }
 #endif
 
@@ -194,11 +194,13 @@ int Communicator::work_once() {
   for (auto const& newRequest : newRequests) {
     createRequestInProgress(newRequest);
   }
-  
-  int stillRunning; 
+
+  int stillRunning;
   _mc = curl_multi_perform(_curl, &stillRunning);
   if (_mc != CURLM_OK) {
-    throw std::runtime_error("Invalid curl multi result while performing! Result was " + std::to_string(_mc));
+    throw std::runtime_error(
+        "Invalid curl multi result while performing! Result was " +
+        std::to_string(_mc));
   }
 
   // handle all messages received
@@ -217,10 +219,12 @@ int Communicator::work_once() {
 
 void Communicator::wait() {
   static int const MAX_WAIT_MSECS = 1000;  // wait max. 1 seconds
-  
+
   int res = curl_multi_wait(_curl, &_wakeup, 1, MAX_WAIT_MSECS, &_numFds);
   if (res != CURLM_OK) {
-    throw std::runtime_error("Invalid curl multi result while waiting! Result was " + std::to_string(res));
+    throw std::runtime_error(
+        "Invalid curl multi result while waiting! Result was " +
+        std::to_string(res));
   }
 
   // drain the pipe
@@ -232,7 +236,6 @@ void Communicator::wait() {
   while (0 < read(_fds[0], a, sizeof(a))) {
   }
 #endif
-
 }
 
 // -----------------------------------------------------------------------------
@@ -240,41 +243,48 @@ void Communicator::wait() {
 // -----------------------------------------------------------------------------
 
 void Communicator::createRequestInProgress(NewRequest const& newRequest) {
-  auto request = (HttpRequest*) newRequest._request.get();
+  auto request = (HttpRequest*)newRequest._request.get();
   TRI_ASSERT(request != nullptr);
 
-  // mop: the curl handle will be managed safely via unique_ptr and hold ownership for rip
-  auto rip = new RequestInProgress(newRequest._destination, newRequest._callbacks, newRequest._ticketId, std::string(request->body().c_str(), request->body().length()), newRequest._options);
+  // mop: the curl handle will be managed safely via unique_ptr and hold
+  // ownership for rip
+  auto rip = new RequestInProgress(
+      newRequest._destination, newRequest._callbacks, newRequest._ticketId,
+      std::string(request->body().c_str(), request->body().length()),
+      newRequest._options);
 
   auto handleInProgress = std::make_unique<CurlHandle>(rip);
 
   CURL* handle = handleInProgress->_handle;
   struct curl_slist* requestHeaders = nullptr;
-  
-  switch(request->contentType()) {
+
+  switch (request->contentType()) {
     case ContentType::UNSET:
     case ContentType::CUSTOM:
     case ContentType::VPACK:
     case ContentType::DUMP:
       break;
     case ContentType::JSON:
-      requestHeaders = curl_slist_append(requestHeaders, "Content-Type: application/json");
+      requestHeaders =
+          curl_slist_append(requestHeaders, "Content-Type: application/json");
       break;
     case ContentType::HTML:
-      requestHeaders = curl_slist_append(requestHeaders, "Content-Type: text/html");
+      requestHeaders =
+          curl_slist_append(requestHeaders, "Content-Type: text/html");
       break;
     case ContentType::TEXT:
-      requestHeaders = curl_slist_append(requestHeaders, "Content-Type: text/plain");
+      requestHeaders =
+          curl_slist_append(requestHeaders, "Content-Type: text/plain");
       break;
   }
-  for (auto const& header: request->headers()) {
+  for (auto const& header : request->headers()) {
     std::string thisHeader(header.first + ": " + header.second);
     requestHeaders = curl_slist_append(requestHeaders, thisHeader.c_str());
   }
-  
+
   std::string url = createSafeDottedCurlUrl(newRequest._destination.url());
   handleInProgress->_rip->_requestHeaders = requestHeaders;
-  curl_easy_setopt(handle, CURLOPT_HTTPHEADER, requestHeaders); 
+  curl_easy_setopt(handle, CURLOPT_HTTPHEADER, requestHeaders);
   curl_easy_setopt(handle, CURLOPT_HEADER, 0L);
   curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
   curl_easy_setopt(handle, CURLOPT_VERBOSE, 1L);
@@ -287,20 +297,26 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
   // mop: XXX :S CURLE 51 and 60...
   curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L);
   curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 0L);
-  
-  long connectTimeout = static_cast<long>(newRequest._options.connectionTimeout);
-  // mop: although curl is offering a MS scale connecttimeout this gets ignored in at least 7.50.3
-  // in doubt change the timeout to _MS below and hardcode it to 999 and see if the requests immediately fail
+
+  long connectTimeout =
+      static_cast<long>(newRequest._options.connectionTimeout);
+  // mop: although curl is offering a MS scale connecttimeout this gets ignored
+  // in at least 7.50.3
+  // in doubt change the timeout to _MS below and hardcode it to 999 and see if
+  // the requests immediately fail
   // if not this hack can go away
-  if(connectTimeout < 0) {
+  if (connectTimeout < 0) {
     connectTimeout = 1;
   }
 
-  curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, static_cast<long>(newRequest._options.requestTimeout * 1000));
+  curl_easy_setopt(
+      handle, CURLOPT_TIMEOUT_MS,
+      static_cast<long>(newRequest._options.requestTimeout * 1000));
   curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT, connectTimeout);
 
-  switch(request->requestType()) {
-    // mop: hmmm...why is this stuff in GeneralRequest? we are interested in HTTP only :S
+  switch (request->requestType()) {
+    // mop: hmmm...why is this stuff in GeneralRequest? we are interested in
+    // HTTP only :S
     case RequestType::POST:
       curl_easy_setopt(handle, CURLOPT_POST, 1);
       break;
@@ -328,15 +344,19 @@ void Communicator::createRequestInProgress(NewRequest const& newRequest) {
     case RequestType::VSTREAM_REGISTER:
     case RequestType::VSTREAM_STATUS:
     case RequestType::ILLEGAL:
-      throw std::runtime_error("Invalid request type " +  GeneralRequest::translateMethod(request->requestType()));
+      throw std::runtime_error(
+          "Invalid request type " +
+          GeneralRequest::translateMethod(request->requestType()));
       break;
   }
-  
+
   if (request->body().length() > 0) {
-    curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, handleInProgress->_rip->_requestBody.length());
-    curl_easy_setopt(handle, CURLOPT_POSTFIELDS, handleInProgress->_rip->_requestBody.c_str());
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE,
+                     handleInProgress->_rip->_requestBody.length());
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDS,
+                     handleInProgress->_rip->_requestBody.c_str());
   }
-  
+
   handleInProgress->_rip->_startTime = TRI_microtime();
   _handlesInProgress.emplace(newRequest._ticketId, std::move(handleInProgress));
   curl_multi_add_handle(_curl, handle);
@@ -351,19 +371,24 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
   if (rip == nullptr) {
     return;
   }
-  std::string prefix("Communicator("  + std::to_string(rip->_ticketId) + ") // ");
-  LOG_TOPIC(TRACE, Logger::REQUESTS) << prefix << "Curl rc is : " << rc << " after " << std::fixed << (TRI_microtime() - rip->_startTime) << "s";
-;
+  std::string prefix("Communicator(" + std::to_string(rip->_ticketId) +
+                     ") // ");
+  LOG_TOPIC(TRACE, Logger::REQUESTS)
+      << prefix << "Curl rc is : " << rc << " after " << std::fixed
+      << (TRI_microtime() - rip->_startTime) << "s";
+  ;
 
   switch (rc) {
     case CURLE_OK: {
       long httpStatusCode = 200;
       curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &httpStatusCode);
 
-      std::unique_ptr<GeneralResponse> response(new HttpResponse(
-          static_cast<ResponseCode>(httpStatusCode)));
-      
-      transformResult(handle, std::move(rip->_responseHeaders), std::move(rip->_responseBody), dynamic_cast<HttpResponse*>(response.get()));
+      std::unique_ptr<GeneralResponse> response(
+          new HttpResponse(static_cast<ResponseCode>(httpStatusCode)));
+
+      transformResult(handle, std::move(rip->_responseHeaders),
+                      std::move(rip->_responseBody),
+                      dynamic_cast<HttpResponse*>(response.get()));
 
       if (httpStatusCode < 400) {
         rip->_callbacks._onSuccess(std::move(response));
@@ -392,24 +417,29 @@ void Communicator::handleResult(CURL* handle, CURLcode rc) {
   _handlesInProgress.erase(rip->_ticketId);
 }
 
-void Communicator::transformResult(CURL* handle, HeadersInProgress&& responseHeaders, std::unique_ptr<StringBuffer> responseBody, HttpResponse* response) {
+void Communicator::transformResult(CURL* handle,
+                                   HeadersInProgress&& responseHeaders,
+                                   std::unique_ptr<StringBuffer> responseBody,
+                                   HttpResponse* response) {
   response->body().swap(responseBody.get());
   response->setHeaders(std::move(responseHeaders));
 }
 
-size_t Communicator::readBody(void* data, size_t size, size_t nitems, void* userp) {
+size_t Communicator::readBody(void* data, size_t size, size_t nitems,
+                              void* userp) {
   size_t realsize = size * nitems;
 
-  RequestInProgress* rip = (struct RequestInProgress*) userp;
+  RequestInProgress* rip = (struct RequestInProgress*)userp;
   try {
-    rip->_responseBody->appendText((char*) data, realsize);
+    rip->_responseBody->appendText((char*)data, realsize);
     return realsize;
   } catch (std::bad_alloc&) {
     return 0;
   }
 }
 
-void Communicator::logHttpBody(std::string const& prefix, std::string const& data) {
+void Communicator::logHttpBody(std::string const& prefix,
+                               std::string const& data) {
   std::string::size_type n = 0;
   while (n < data.length()) {
     LOG_TOPIC(DEBUG, Logger::REQUESTS) << prefix << " " << data.substr(n, 80);
@@ -417,7 +447,8 @@ void Communicator::logHttpBody(std::string const& prefix, std::string const& dat
   }
 }
 
-void Communicator::logHttpHeaders(std::string const& prefix, std::string const& headerData) {
+void Communicator::logHttpHeaders(std::string const& prefix,
+                                  std::string const& headerData) {
   std::string::size_type last = 0;
   std::string::size_type n;
   while (true) {
@@ -425,29 +456,32 @@ void Communicator::logHttpHeaders(std::string const& prefix, std::string const& 
     if (n == std::string::npos) {
       break;
     }
-    LOG_TOPIC(DEBUG, Logger::REQUESTS) << prefix << " " << headerData.substr(last, n - last);
+    LOG_TOPIC(DEBUG, Logger::REQUESTS) << prefix << " "
+                                       << headerData.substr(last, n - last);
     last = n + 2;
   }
 }
 
-int Communicator::curlDebug(CURL *handle, curl_infotype type, char *data, size_t size, void *userptr) {
+int Communicator::curlDebug(CURL* handle, curl_infotype type, char* data,
+                            size_t size, void* userptr) {
   arangodb::communicator::RequestInProgress* request = nullptr;
   curl_easy_getinfo(handle, CURLINFO_PRIVATE, &request);
   TRI_ASSERT(request != nullptr);
   TRI_ASSERT(data != nullptr);
-  
+
   std::string dataStr(data, size);
-  std::string prefix("Communicator("  + std::to_string(request->_ticketId) + ") // ");
-  
+  std::string prefix("Communicator(" + std::to_string(request->_ticketId) +
+                     ") // ");
+
   switch (type) {
     case CURLINFO_TEXT:
       LOG_TOPIC(TRACE, Logger::REQUESTS) << prefix << "Text: " << dataStr;
       break;
     case CURLINFO_HEADER_OUT:
-      logHttpHeaders(prefix + "Header >>", dataStr); 
+      logHttpHeaders(prefix + "Header >>", dataStr);
       break;
     case CURLINFO_HEADER_IN:
-      logHttpHeaders(prefix + "Header <<", dataStr); 
+      logHttpHeaders(prefix + "Header <<", dataStr);
       break;
     case CURLINFO_DATA_OUT:
     case CURLINFO_SSL_DATA_OUT:
@@ -463,36 +497,41 @@ int Communicator::curlDebug(CURL *handle, curl_infotype type, char *data, size_t
   return 0;
 }
 
-size_t Communicator::readHeaders(char* buffer, size_t size, size_t nitems, void* userptr) {
+size_t Communicator::readHeaders(char* buffer, size_t size, size_t nitems,
+                                 void* userptr) {
   size_t realsize = size * nitems;
-  RequestInProgress* rip = (struct RequestInProgress*) userptr;
-  
+  RequestInProgress* rip = (struct RequestInProgress*)userptr;
+
   std::string const header(buffer, realsize);
   size_t pivot = header.find_first_of(':');
   if (pivot != std::string::npos) {
     // mop: hmm response needs lowercased headers
-    std::string headerKey = basics::StringUtils::tolower(std::string(header.c_str(), pivot));
-    rip->_responseHeaders.emplace(headerKey, header.substr(pivot + 2, header.length() - pivot -4));
+    std::string headerKey =
+        basics::StringUtils::tolower(std::string(header.c_str(), pivot));
+    rip->_responseHeaders.emplace(
+        headerKey, header.substr(pivot + 2, header.length() - pivot - 4));
   }
   return realsize;
 }
 
-std::string Communicator::createSafeDottedCurlUrl(std::string const& originalUrl) {
+std::string Communicator::createSafeDottedCurlUrl(
+    std::string const& originalUrl) {
   std::string url;
   url.reserve(originalUrl.length());
-  
+
   size_t length = originalUrl.length();
   size_t currentFind = 0;
   std::size_t found;
-  std::vector<char> urlDotSeparators {'/', '#', '?'};
+  std::vector<char> urlDotSeparators{'/', '#', '?'};
 
   while ((found = originalUrl.find("/.", currentFind)) != std::string::npos) {
     if (found + 2 == length) {
-      url += originalUrl.substr(currentFind, found - currentFind)  + "/%2E";
-    } else if (std::find(urlDotSeparators.begin(), urlDotSeparators.end(), originalUrl.at(found + 2)) != urlDotSeparators.end()) {
-      url += originalUrl.substr(currentFind, found - currentFind)  + "/%2E";
+      url += originalUrl.substr(currentFind, found - currentFind) + "/%2E";
+    } else if (std::find(urlDotSeparators.begin(), urlDotSeparators.end(),
+                         originalUrl.at(found + 2)) != urlDotSeparators.end()) {
+      url += originalUrl.substr(currentFind, found - currentFind) + "/%2E";
     } else {
-      url += originalUrl.substr(currentFind, found - currentFind)  + "/.";
+      url += originalUrl.substr(currentFind, found - currentFind) + "/.";
     }
     currentFind = found + 2;
   }
@@ -506,12 +545,13 @@ void Communicator::abortRequest(Ticket ticketId) {
   if (handle == _handlesInProgress.end()) {
     return;
   }
-  handle->second->_rip->_callbacks._onError(TRI_COMMUNICATOR_REQUEST_ABORTED, {nullptr});
+  handle->second->_rip->_callbacks._onError(TRI_COMMUNICATOR_REQUEST_ABORTED,
+                                            {nullptr});
   _handlesInProgress.erase(ticketId);
 }
 
 void Communicator::abortRequests() {
-  for (auto &request: requestsInProgress()) {
+  for (auto& request : requestsInProgress()) {
     abortRequest(request->_ticketId);
   }
 }
@@ -520,7 +560,7 @@ std::vector<RequestInProgress const*> Communicator::requestsInProgress() {
   std::vector<RequestInProgress const*> vec;
   vec.reserve(_handlesInProgress.size());
 
-  for (auto &handle: _handlesInProgress) {
+  for (auto& handle : _handlesInProgress) {
     RequestInProgress* rip = nullptr;
     curl_easy_getinfo(handle.second->_handle, CURLINFO_PRIVATE, &rip);
     TRI_ASSERT(rip != nullptr);
