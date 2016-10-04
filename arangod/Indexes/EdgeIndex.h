@@ -50,7 +50,8 @@ class EdgeIndexIterator final : public IndexIterator {
         _keys(keys.get()),
         _iterator(_keys->slice()),
         _posInBuffer(0),
-        _batchSize(1000) {
+        _batchSize(1000),
+        _lastElement(nullptr) {
         
     keys.release(); // now we have ownership for _keys
   }
@@ -72,6 +73,7 @@ class EdgeIndexIterator final : public IndexIterator {
   std::vector<IndexElement*> _buffer;
   size_t _posInBuffer;
   size_t _batchSize;
+  IndexElement* _lastElement;
 };
 
 class AnyDirectionEdgeIndexIterator final : public IndexIterator {

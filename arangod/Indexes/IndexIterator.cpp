@@ -169,8 +169,9 @@ IndexElement* MultiIndexIterator::next() {
 ////////////////////////////////////////////////////////////////////////////////
 
 void MultiIndexIterator::nextBabies(std::vector<IndexElement*>& result, size_t limit) {
+  result.clear();
+
   if (_current == nullptr) {
-    result.clear();
     return;
   }
   _current->nextBabies(result, limit);

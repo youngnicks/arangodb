@@ -141,17 +141,19 @@ IndexElement* EdgeIndexIterator::next() {
         tmp = tmp.get(StaticStrings::IndexEq);
       }
       _index->lookupByKey(_trx, &tmp, _buffer, _batchSize);
-      // fallthrough intentional
     } else if (_posInBuffer >= _buffer.size()) {
       // We have to refill the buffer
-      auto last = _buffer.back();
+      TRI_ASSERT(_lastElement != nullptr);
       _buffer.clear();
 
       _posInBuffer = 0;
-      _index->lookupByKeyContinue(_trx, last, _buffer, _batchSize);
+      _index->lookupByKeyContinue(_trx, _lastElement, _buffer, _batchSize);
     }
-
-    if (!_buffer.empty()) {
+    
+    if (_buffer.empty()) {
+      _lastElement = nullptr;
+    } else {
+      _lastElement = _buffer.back();
       // found something
       return _buffer.at(_posInBuffer++);
     }
@@ -168,31 +170,39 @@ void EdgeIndexIterator::nextBabies(std::vector<IndexElement*>& buffer, size_t li
 
   if (atMost == 0) {
     // nothing to do
-    _buffer.clear();
+    buffer.clear();
+    _lastElement = nullptr;
     return;
   }
 
   while (_iterator.valid()) {
+    _buffer.clear();
     if (buffer.empty()) {
       VPackSlice tmp = _iterator.value();
       if (tmp.isObject()) {
         tmp = tmp.get(StaticStrings::IndexEq);
       }
-      _index->lookupByKey(_trx, &tmp, buffer, atMost);
+      _index->lookupByKey(_trx, &tmp, _buffer, atMost);
       // fallthrough intentional
     } else {
       // Continue the lookup
-      auto last = buffer.back();
       buffer.clear();
 
-      _index->lookupByKeyContinue(_trx, last, buffer, atMost);
+      _index->lookupByKeyContinue(_trx, _lastElement, _buffer, atMost);
     }
 
-    if (!buffer.empty()) {
+    for (auto& it : _buffer) {
+      buffer.emplace_back(it);
+    }
+    
+    if (_buffer.empty()) {
+      _lastElement = nullptr;
+    } else {
+      _lastElement = _buffer.back();
       // found something
       return;
     }
-
+    
     // found no result. now go to next lookup value in _keys
     _iterator.next();
   }
@@ -204,6 +214,7 @@ void EdgeIndexIterator::reset() {
   _posInBuffer = 0;
   _buffer.clear();
   _iterator.reset();
+  _lastElement = nullptr;
 }
 
 IndexElement* AnyDirectionEdgeIndexIterator::next() {

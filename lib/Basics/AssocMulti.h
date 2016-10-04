@@ -832,12 +832,11 @@ class AssocMulti {
   //////////////////////////////////////////////////////////////////////////////
 
   std::vector<Element>* lookupByKey(UserData* userData, Key const* key,
-                                     size_t limit = 0) const {
+                                    size_t limit = 0) const {
     auto result = std::make_unique<std::vector<Element>>();
     lookupByKey(userData, key, *result, limit);
     return result.release();
   }
-
 
   //////////////////////////////////////////////////////////////////////////////
   /// @brief lookups an element given a key
