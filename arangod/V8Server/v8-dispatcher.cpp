@@ -265,7 +265,6 @@ void V8Task::start(boost::asio::io_service* ioService) {
 void V8Task::cancel() {
   boost::system::error_code ec;
   _timer->cancel(ec);
-  _vocbaseGuard.reset();
 }
 
 std::shared_ptr<VPackBuilder> V8Task::toVelocyPack() const {
