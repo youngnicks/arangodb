@@ -89,8 +89,7 @@ SocketTask::~SocketTask() {
   boost::system::error_code err;
   _keepAliveTimer.cancel(err);
   if (err) {
-    LOG_TOPIC(ERROR, Logger::COMMUNICATION)
-        << "unable to cancel _keepAliveTimer";
+    LOG_TOPIC(ERR, Logger::COMMUNICATION) << "unable to cancel _keepAliveTimer";
   }
 }
 
