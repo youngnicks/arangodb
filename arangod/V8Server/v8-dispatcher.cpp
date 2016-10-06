@@ -148,11 +148,11 @@ int V8Task::unregisterTask(std::string const& id, bool cancel) {
     return TRI_ERROR_TASK_NOT_FOUND;
   }
 
-  _tasks.erase(itr);
-
   if (cancel) {
     itr->second->cancel();
   }
+
+  _tasks.erase(itr);
 
   return TRI_ERROR_NO_ERROR;
 }
