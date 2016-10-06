@@ -46,7 +46,7 @@ include(CMakeDependentOption)
 
 project( CURL C )
 
-message(WARNING "the curl cmake build system is poorly maintained. Be aware")
+# message(WARNING "the curl cmake build system is poorly maintained. Be aware")
 
 file (READ ${CURL_SOURCE_DIR}/include/curl/curlver.h CURL_VERSION_H_CONTENTS)
 string (REGEX MATCH "#define LIBCURL_VERSION \"[^\"]*"
