@@ -39,6 +39,8 @@
 #include "Scheduler/JobQueue.h"
 #include "Scheduler/Task.h"
 
+#include <boost/asio/io_service.hpp>
+
 using namespace arangodb;
 using namespace arangodb::basics;
 using namespace arangodb::rest;
@@ -346,12 +348,26 @@ void Scheduler::beginShutdown() {
   _stopping = true;
 }
 
+template <typename Service>
+void cancelService(boost::asio::io_service* ioService) {
+  using namespace boost::asio;
+  while (has_service<Service>(*ioService)) {
+    auto& service = use_service<Service>(*ioService);
+    service.cancel();
+  }
+}
+
 void Scheduler::shutdown() {
   bool done = false;
 
   // consume outstanding handler
   while (_ioService->run_one())
     ;
+
+  cancelService<boost::asio::deadline_timer>(_ioService.get());
+  cancelService<boost::asio::ip::tcp::socket>(_ioService.get());
+  cancelService<boost::asio::ip::tcp::acceptor>(_ioService.get());
+  _ioService.reset();
 
   while (!done) {
     MUTEX_LOCKER(guard, _threadsLock);
