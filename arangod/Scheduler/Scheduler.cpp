@@ -349,6 +349,10 @@ void Scheduler::beginShutdown() {
 void Scheduler::shutdown() {
   bool done = false;
 
+  // consume outstanding handler
+  while (_ioService->run_one())
+    ;
+
   while (!done) {
     MUTEX_LOCKER(guard, _threadsLock);
     done = _threads.empty();

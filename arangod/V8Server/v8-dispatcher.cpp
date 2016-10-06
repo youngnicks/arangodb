@@ -607,6 +607,4 @@ void TRI_InitV8Dispatcher(v8::Isolate* isolate,
                                TRI_V8_ASCII_STRING("SYS_GET_TASK"), JS_GetTask);
 }
 
-void TRI_ShutdownV8Dispatcher() {
-  V8Task::shutdownTasks();
-}
+void TRI_ShutdownV8Dispatcher() { V8Task::shutdownTasks(); }

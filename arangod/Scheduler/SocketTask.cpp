@@ -88,6 +88,10 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
 SocketTask::~SocketTask() {
   boost::system::error_code err;
   _keepAliveTimer.cancel(err);
+  if (err) {
+    LOG_TOPIC(ERROR, Logger::COMMUNICATION)
+        << "unable to cancel _keepAliveTimer";
+  }
 }
 
 void SocketTask::start() {
