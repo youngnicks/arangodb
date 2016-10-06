@@ -114,19 +114,8 @@ void SchedulerFeature::start() {
 void SchedulerFeature::stop() {
   static size_t const MAX_TRIES = 10;
 
-  // shutdown user jobs (needs scheduler)
+  // shutdown user jobs (needs the scheduler)
   TRI_ShutdownV8Dispatcher();
-
-  // shut-down scheduler
-  _scheduler->beginShutdown();
-
-  for (size_t count = 0; count < MAX_TRIES && _scheduler->isRunning();
-       ++count) {
-    LOG_TOPIC(TRACE, Logger::STARTUP) << "waiting for scheduler to stop";
-    usleep(100000);
-  }
-
-  _scheduler->shutdown();
 
   // cancel signals
   if (_exitSignals != nullptr) {
@@ -140,6 +129,17 @@ void SchedulerFeature::stop() {
     _hangupSignals.reset();
   }
 #endif
+
+  // shut-down scheduler
+  _scheduler->beginShutdown();
+
+  for (size_t count = 0; count < MAX_TRIES && _scheduler->isRunning();
+       ++count) {
+    LOG_TOPIC(TRACE, Logger::STARTUP) << "waiting for scheduler to stop";
+    usleep(100000);
+  }
+
+  _scheduler->shutdown();
 }
 
 void SchedulerFeature::unprepare() { SCHEDULER = nullptr; }
