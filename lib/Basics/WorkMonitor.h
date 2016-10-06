@@ -66,6 +66,7 @@ class WorkMonitor : public Thread {
  public:
   static void initialize();
   static void shutdown();
+  static void clearHandlers();
 
  private:
   static WorkDescription* createWorkDescription(WorkType);
@@ -116,6 +117,9 @@ class WorkMonitor : public Thread {
 
  protected:
   void run() override;
+
+ private:
+  void clearAllHandlers();
 
  private:
   basics::ConditionVariable _waiter;

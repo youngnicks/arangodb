@@ -148,6 +148,16 @@ void WorkMonitor::run() {
   }
 }
 
+void WorkMonitor::clearAllHandlers() {
+  std::shared_ptr<rest::RestHandler>* shared;
+
+  while (_workOverview.pop(shared)) {
+    delete shared;
+  }
+
+  _waiter.broadcast();
+}
+
 bool WorkMonitor::cancelAql(WorkDescription* desc) {
   auto type = desc->_type;
 

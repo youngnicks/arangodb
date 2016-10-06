@@ -30,6 +30,7 @@
 
 #include "ApplicationFeatures/ApplicationServer.h"
 #include "Basics/ArangoGlobalContext.h"
+#include "Basics/WorkMonitor.h"
 #include "Logger/LogAppender.h"
 #include "ProgramOptions/ProgramOptions.h"
 #include "ProgramOptions/Section.h"
@@ -129,6 +130,9 @@ void SchedulerFeature::stop() {
     _hangupSignals.reset();
   }
 #endif
+
+  // clear the handlers stuck in the WorkMonitor
+  WorkMonitor::clearHandlers();
 
   // shut-down scheduler
   _scheduler->beginShutdown();

@@ -274,6 +274,14 @@ void WorkMonitor::shutdown() {
   WORK_MONITOR.beginShutdown();
 }
 
+void WorkMonitor::clearHandlers() {
+  if (_stopped.load()) {
+    return;
+  }
+  
+  WORK_MONITOR.clearHandlers();
+}
+
 // -----------------------------------------------------------------------------
 // --SECTION--                                            static private methods
 // -----------------------------------------------------------------------------

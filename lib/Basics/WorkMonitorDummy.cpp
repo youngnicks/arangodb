@@ -44,3 +44,7 @@ void WorkMonitor::addWorkOverview(std::shared_ptr<rest::RestHandler>,
                                   std::shared_ptr<Buffer<uint8_t>>) {
   TRI_ASSERT(false);
 }
+
+void WorkMonitor::clearAllHandlers() {
+  TRI_ASSERT(false);
+}
