@@ -26,6 +26,7 @@
 
 #include <velocypack/Builder.h>
 #include <velocypack/velocypack-aliases.h>
+
 #include "Scheduler/EventLoop.h"
 
 using namespace arangodb::rest;

@@ -85,9 +85,11 @@ SocketTask::SocketTask(arangodb::EventLoop loop,
 // -----------------------------------------------------------------------------
 // --SECTION--                                                    public methods
 // -----------------------------------------------------------------------------
+
 SocketTask::~SocketTask() {
   boost::system::error_code err;
   _keepAliveTimer.cancel(err);
+
   if (err) {
     LOG_TOPIC(ERR, Logger::COMMUNICATION) << "unable to cancel _keepAliveTimer";
   }
@@ -271,6 +273,7 @@ void SocketTask::completedWriteBuffer() {
 
 void SocketTask::closeStream() {
   boost::system::error_code err;
+
   if (!_closedSend) {
     _peer->_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_send, err);
 
@@ -298,6 +301,7 @@ void SocketTask::closeStream() {
   }
 
   _peer->_socket.close(err);
+
   if (err && err != boost::asio::error::not_connected) {
     LOG_TOPIC(DEBUG, Logger::COMMUNICATION)
         << "SocketTask::CloseStream - shutdown send stream "
@@ -305,14 +309,17 @@ void SocketTask::closeStream() {
   }
 
   _closeRequested = false;
+  _keepAliveTimer.cancel();
 }
 
 // -----------------------------------------------------------------------------
 // --SECTION--                                                   private methods
 // -----------------------------------------------------------------------------
+
 void SocketTask::resetKeepAlive(boost::system::error_code& err) {
   if (_useKeepAliveTimeout) {
     _keepAliveTimer.expires_from_now(_keepAliveTimeout, err);
+
     auto self = shared_from_this();
     _keepAliveTimer.async_wait(
         [this, self](const boost::system::error_code& error) {

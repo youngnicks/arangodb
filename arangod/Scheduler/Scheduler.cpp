@@ -336,6 +336,8 @@ void Scheduler::beginShutdown() {
 
   _jobQueue->beginShutdown();
 
+  _threadManager.reset();
+
   _managerGuard.reset();
   _managerService->stop();
 
