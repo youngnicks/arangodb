@@ -39,6 +39,7 @@ SslServerFeature::SslServerFeature(application_features::ApplicationServer* serv
       _cafile(),
       _keyfile(),
       _sessionCache(false),
+      _requestCert(false),
       _cipherList(),
       _sslProtocol(TLS_V1),
       _sslOptions(
@@ -70,6 +71,9 @@ void SslServerFeature::collectOptions(std::shared_ptr<ProgramOptions> options) {
   options->addOption("--ssl.session-cache",
                      "enable the session cache for connections",
                      new BooleanParameter(&_sessionCache));
+
+  options->addOption("--ssl.request-cert", "request client certificate",
+                     new BooleanParameter(&_requestCert));
 
   options->addOption("--ssl.cipher-list",
                      "ssl cipers to use, see OpenSSL documentation",
@@ -157,6 +161,14 @@ void SslServerFeature::createSslContext() {
 
   if (_sessionCache) {
     LOG(TRACE) << "using SSL session caching";
+  }
+
+  // set verify
+  SSL_CTX_set_verify(
+      _sslContext, _requestCert ? SSL_VERIFY_PEER : SSL_VERIFY_NONE, NULL);
+
+  if (_requestCert) {
+    LOG(TRACE) << "requesting client cert";
   }
 
   // set options
