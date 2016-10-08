@@ -55,16 +55,6 @@ class GeneralServerFeature final
                                      : 300.0;
   };
 
-  static int verificationMode() {
-    return GENERAL_SERVER != nullptr ? GENERAL_SERVER->_verificationMode
-                                     : SSL_VERIFY_NONE;
-  };
-
-  static verification_callback_fptr verificationCallback() {
-    return GENERAL_SERVER != nullptr ? GENERAL_SERVER->_verificationCallback
-                                     : nullptr;
-  };
-
   static bool authenticationEnabled() {
     return GENERAL_SERVER != nullptr && GENERAL_SERVER->_authentication;
   }

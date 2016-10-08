@@ -53,9 +53,6 @@ GeneralListenTask::GeneralListenTask(GeneralServer* server, Endpoint* endpoint,
   if (ssl != nullptr) {
     _sslContext = ssl->sslContext();
   }
-
-  _verificationMode = GeneralServerFeature::verificationMode();
-  _verificationCallback = GeneralServerFeature::verificationCallback();
 }
 
 bool GeneralListenTask::handleConnected(TRI_socket_t socket,
@@ -73,8 +70,7 @@ bool GeneralListenTask::handleConnected(TRI_socket_t socket,
       break;
     case ProtocolType::HTTPS:
       commTask = new HttpsCommTask(_server, socket, std::move(info),
-                                   _keepAliveTimeout, _sslContext,
-                                   _verificationMode, _verificationCallback);
+                                   _keepAliveTimeout, _sslContext);
       break;
     case ProtocolType::HTTP:
       commTask =

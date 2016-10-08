@@ -38,8 +38,7 @@ using namespace arangodb::rest;
 
 HttpsCommTask::HttpsCommTask(GeneralServer* server, TRI_socket_t socket,
                              ConnectionInfo&& info, double keepAliveTimeout,
-                             SSL_CTX* ctx, int verificationMode,
-                             int (*verificationCallback)(int, X509_STORE_CTX*))
+                             SSL_CTX* ctx)
     : Task("HttpsCommTask"),
       HttpCommTask(server, socket, std::move(info), keepAliveTimeout),
       _accepted(false),
@@ -47,9 +46,7 @@ HttpsCommTask::HttpsCommTask(GeneralServer* server, TRI_socket_t socket,
       _writeBlockedOnRead(false),
       _tmpReadBuffer(nullptr),
       _ssl(nullptr),
-      _ctx(ctx),
-      _verificationMode(verificationMode),
-      _verificationCallback(verificationCallback) {
+      _ctx(ctx) {
   _tmpReadBuffer = new char[READ_BLOCK_SIZE];
 }
 
@@ -81,10 +78,6 @@ bool HttpsCommTask::setup(Scheduler* scheduler, EventLoop loop) {
     shutdownSsl(false);
     return false;  // terminate ourselves, ssl is nullptr
   }
-
-  // enforce verification
-  ERR_clear_error();
-  SSL_set_verify(_ssl, _verificationMode, _verificationCallback);
 
   // with the file descriptor
   ERR_clear_error();

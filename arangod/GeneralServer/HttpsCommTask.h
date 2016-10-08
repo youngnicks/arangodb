@@ -43,8 +43,7 @@ class HttpsCommTask : public HttpCommTask {
 
  public:
   HttpsCommTask(GeneralServer*, TRI_socket_t, ConnectionInfo&&,
-                double keepAliveTimeout, SSL_CTX* ctx, int verificationMode,
-                int (*verificationCallback)(int, X509_STORE_CTX*));
+                double keepAliveTimeout, SSL_CTX* ctx);
 
  protected:
   ~HttpsCommTask();
