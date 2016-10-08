@@ -45,6 +45,7 @@ class SslServerFeature final : public application_features::ApplicationFeature {
   std::string _keyfile;
   bool _sessionCache;
   bool _requestCert;
+  bool _rejectUnauthorized;
   std::string _cipherList;
   uint64_t _sslProtocol;
   uint64_t _sslOptions;

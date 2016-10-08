@@ -40,6 +40,7 @@ SslServerFeature::SslServerFeature(application_features::ApplicationServer* serv
       _keyfile(),
       _sessionCache(false),
       _requestCert(false),
+      _rejectUnauthorized(false),
       _cipherList(),
       _sslProtocol(TLS_V1),
       _sslOptions(
@@ -74,6 +75,9 @@ void SslServerFeature::collectOptions(std::shared_ptr<ProgramOptions> options) {
 
   options->addOption("--ssl.request-cert", "request client certificate",
                      new BooleanParameter(&_requestCert));
+
+  options->addOption("--ssl.reject-unauthorized", "reject unauthorized certs",
+                     new BooleanParameter(&_rejectUnauthorized));
 
   options->addOption("--ssl.cipher-list",
                      "ssl cipers to use, see OpenSSL documentation",
@@ -165,10 +169,18 @@ void SslServerFeature::createSslContext() {
 
   // set verify
   SSL_CTX_set_verify(
-      _sslContext, _requestCert ? SSL_VERIFY_PEER : SSL_VERIFY_NONE, NULL);
+      _sslContext, _requestCert
+        ? _rejectUnauthorized
+          ? SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT
+          : SSL_VERIFY_PEER
+        : SSL_VERIFY_NONE, NULL);
 
   if (_requestCert) {
     LOG(TRACE) << "requesting client cert";
+  }
+
+  if (_rejectUnauthorized) {
+    LOG(TRACE) << "rejecting unauthorized certs";
   }
 
   // set options
