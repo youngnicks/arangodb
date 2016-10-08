@@ -176,11 +176,11 @@ void SslServerFeature::createSslContext() {
         : SSL_VERIFY_NONE, NULL);
 
   if (_requestCert) {
-    LOG(TRACE) << "requesting client cert";
-  }
+    LOG(INFO) << "requesting client cert";
 
-  if (_rejectUnauthorized) {
-    LOG(TRACE) << "rejecting unauthorized certs";
+    if (_rejectUnauthorized) {
+      LOG(INFO) << "rejecting unauthorized certs";
+    }
   }
 
   // set options
